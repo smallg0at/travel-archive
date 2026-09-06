@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { dataFile } from "./paths.js";
 import { dirname } from "node:path";
 import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
@@ -27,7 +28,7 @@ function emptyIndex(): ArchiveIndexFile {
 
 /** Mirrors everything written to OneDrive under pipeline/data/, pretty-printed for reading. */
 async function writeLocal(fileName: string, data: unknown): Promise<void> {
-  const localPath = `data/${fileName}`;
+  const localPath = dataFile(fileName);
   await mkdir(dirname(localPath), { recursive: true });
   await writeFile(localPath, JSON.stringify(data, null, 2), "utf-8");
 }

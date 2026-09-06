@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename } from "node:fs/promises";
+import { dataDir, dataFile, homeFile } from "./paths.js";
 
 /**
  * Trips are defined manually, not auto-detected — a mixed photo+screenshot
@@ -25,10 +26,10 @@ export interface TripDefinition {
  * jobs/trip.ts kept its own copy of this path, and two copies of a filename is
  * how a reader and a writer end up pointing at different files.
  */
-export const TRIPS_FILE = new URL("../data/trips.json", import.meta.url);
+export const TRIPS_FILE = dataFile("trips.json");
 
 /** Where it used to live, before it moved in with the rest of the data. */
-const LEGACY_TRIPS_FILE = new URL("../trips.json", import.meta.url);
+const LEGACY_TRIPS_FILE = homeFile("trips.json");
 
 /**
  * Moves an old root-level trips.json into data/ the first time it is seen.
@@ -49,7 +50,7 @@ async function migrateLegacyFile(): Promise<void> {
   } catch {
     return; // nothing to migrate
   }
-  await mkdir(new URL("../data/", import.meta.url), { recursive: true });
+  await mkdir(dataDir(), { recursive: true });
   await rename(LEGACY_TRIPS_FILE, TRIPS_FILE);
   console.log("Moved trips.json into pipeline/data/ — it is archive data, not configuration.");
 }

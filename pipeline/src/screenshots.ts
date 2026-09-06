@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { configFile } from "./paths.js";
 import type { PhotoRecord, ScreenshotPolicy } from "@travel-archive/shared";
 
 /**
@@ -28,7 +29,8 @@ import type { PhotoRecord, ScreenshotPolicy } from "@travel-archive/shared";
  * only the AI passes are held back.
  */
 
-const ALLOWLIST_FILE = new URL("../screenshot-apps.json", import.meta.url);
+// Config that ships with the build, not user state — see paths.ts.
+const ALLOWLIST_FILE = configFile("screenshot-apps.json");
 
 /** Android screenshot names end in the source app's package: `Screenshot_<when>_<package>.jpg`. */
 const PACKAGE_IN_NAME = /_([a-z][a-z0-9_]*(?:\.[a-z0-9_]+){1,})(?:-edit)?\.[a-z0-9]+$/i;

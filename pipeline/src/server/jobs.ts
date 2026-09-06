@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { dataFile } from "../paths.js";
 import { withArchiveLock } from "../lock.js";
 import { randomUUID } from "node:crypto";
 import type { JobKind, JobProgress, JobRecord } from "@travel-archive/shared";
@@ -18,7 +19,7 @@ import type { JobKind, JobProgress, JobRecord } from "@travel-archive/shared";
  * the process lives; the files are for reading afterwards.
  */
 
-const JOB_DIR = "data/jobs";
+const JOB_DIR = dataFile("jobs");
 const MAX_LOG_LINES = 200;
 /** Finished jobs kept in memory, so a reconnecting client can still read the outcome. */
 const MAX_REMEMBERED = 20;

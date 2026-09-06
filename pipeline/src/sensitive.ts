@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { homeFile } from "./paths.js";
 import type { PhotoRecord, SensitiveFlag, SensitiveKind } from "@travel-archive/shared";
 
 /**
@@ -26,7 +27,7 @@ import type { PhotoRecord, SensitiveFlag, SensitiveKind } from "@travel-archive/
  * Luhn-valid card numbers, Chinese national IDs) need no such corroboration.
  */
 
-const TERMS_FILE = new URL("../redaction-terms.json", import.meta.url);
+const TERMS_FILE = homeFile("redaction-terms.json");
 
 /** How far from a matched number a corroborating keyword may sit. */
 const CONTEXT_WINDOW = 48;

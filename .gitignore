@@ -35,6 +35,12 @@ redaction-terms.json
 # photographs embedded; one landing in the working tree must not be committed.
 *.pdf
 
+# Packaging output and staging. `staging/` holds the bundled pipeline server,
+# `release/` the installer; both are rebuilt by `npm run package`. The icon in
+# desktop/build/ IS committed — it is a source asset, not output.
+desktop/release/
+desktop/staging/
+
 # Local editor/tool settings
 *.local.json
 .vscode/

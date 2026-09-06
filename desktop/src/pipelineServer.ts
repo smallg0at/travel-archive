@@ -34,10 +34,16 @@ export async function waitForHealthy(port: number, timeoutMs = 20_000): Promise<
 }
 
 export interface StartOptions {
-  /** pipeline/ — see the note below on why this is not optional. */
+  /** A writable directory to run in. */
   cwd: string;
   /** pipeline/dist/serve.js */
   entry: string;
+  /**
+   * Passed through as `ARCHIVE_HOME` — where the pipeline keeps `.env`, the
+   * token cache and the `data/` mirror. Null when running from a checkout,
+   * where the pipeline's own default is already the right place.
+   */
+  archiveHome: string | null;
   port: number;
   onOutput: (line: string) => void;
 }
@@ -52,12 +58,13 @@ export interface StartOptions {
  * already bundles, so the shell depends on nothing outside itself. (This is
  * also why `run-preview.ps1` has to hardcode an absolute node path.)
  *
- * **`cwd` must be pipeline/.** `pipeline/src/env.ts` starts with
- * `import "dotenv/config"`, which reads `.env` relative to `process.cwd()`, and
- * the archive's own paths are cwd-relative too — `data/<month>.json`,
- * `data/.archive-lock`, `data/jobs/`. Spawned from the wrong directory the
- * server either refuses to start for want of `AZURE_CLIENT_ID` or, worse,
- * quietly writes a second archive somewhere else.
+ * **`ARCHIVE_HOME` decides where state goes**, not the working directory. That
+ * used to be the other way round — `.env` was read from `process.cwd()` and the
+ * archive mirror was written relative to it, so spawning from the wrong
+ * directory either refused to start for want of `AZURE_CLIENT_ID` or quietly
+ * wrote a second archive somewhere else. Packaging forced the fix, since an
+ * installed app has no checkout to be "in"; `cwd` is now only a fallback for
+ * anything that still resolves relatively.
  */
 export async function startPipelineServer(opts: StartOptions): Promise<PipelineServer> {
   if (await isHealthy(opts.port)) {
@@ -74,7 +81,11 @@ export async function startPipelineServer(opts: StartOptions): Promise<PipelineS
 
   const child = spawn(process.execPath, [opts.entry], {
     cwd: opts.cwd,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
+      ...(opts.archiveHome ? { ARCHIVE_HOME: opts.archiveHome } : {}),
+    },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });

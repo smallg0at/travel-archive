@@ -1,9 +1,12 @@
 import { PublicClientApplication, type AccountInfo, type ICachePlugin } from "@azure/msal-node";
+import { homeFile } from "./paths.js";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { env } from "./env.js";
 
-const CACHE_PATH = new URL("../token-cache.json", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+// Per-user state, so it follows home rather than the module: installed, the
+// module directory is read-only and writing the refresh token there fails.
+const CACHE_PATH = homeFile("token-cache.json");
 const GRAPH_SCOPES = ["Files.ReadWrite", "offline_access"];
 
 const cachePlugin: ICachePlugin = {

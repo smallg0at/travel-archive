@@ -1,4 +1,5 @@
 import { readFileSync, unlinkSync } from "node:fs";
+import { dataDir, dataFile } from "./paths.js";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 
 /**
@@ -20,7 +21,7 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
  * server — an idle server must not lock the owner out of their own CLI.
  */
 
-const LOCK_PATH = "data/.archive-lock";
+const LOCK_PATH = dataFile(".archive-lock");
 
 interface LockFile {
   pid: number;
@@ -84,7 +85,7 @@ export async function withArchiveLock<T>(owner: string, fn: () => Promise<T>): P
     throw new ArchiveBusyError(existing);
   }
 
-  await mkdir("data", { recursive: true });
+  await mkdir(dataDir(), { recursive: true });
   const mine: LockFile = { pid: process.pid, owner, startedAt: new Date().toISOString() };
 
   // `wx` fails if the file appeared between the check above and here. Two

@@ -11,6 +11,7 @@
     "shapefile": "^0.6.6"
   },
   "scripts": {
-    "desktop": "npm run --workspace desktop build && npm run --workspace desktop start"
+    "desktop": "npm run --workspace desktop build && npm run --workspace desktop start",
+    "package": "npm run --workspace app build && npm run --workspace pipeline build && npm run --workspace desktop dist"
   }
 }

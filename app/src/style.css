@@ -460,6 +460,13 @@ body.resizing { cursor: col-resize; user-select: none; }
   display: flex;
   gap: 2px;
   aspect-ratio: calc(var(--img-count, 1) * var(--card-cell, 1.5));
+  /* Without this the ratio above is advisory. `.card` is a column flex
+     container, so this strip's automatic minimum size is its content height —
+     a portrait photograph's natural height — and that wins over the ratio. It
+     showed up as a single tall photo stretching its card to 839px against the
+     420px the ratio asked for, and dragging its whole grid row with it. The
+     same rule bites `#main-column` for the same reason. */
+  min-height: 0;
 }
 .card-images img {
   flex: 1;

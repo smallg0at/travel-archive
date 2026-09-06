@@ -1,16 +1,58 @@
 {
   "name": "@travel-archive/desktop",
+  "productName": "Photo Archive",
   "version": "0.1.0",
   "private": true,
   "description": "Desktop shell: serves the built app, runs the job server, opens one window.",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "electron ."
+    "icon": "node scripts/make-icon.mjs",
+    "bundle": "node scripts/bundle-pipeline.mjs",
+    "start": "electron .",
+    "dist": "npm run build && npm run bundle && electron-builder"
   },
   "devDependencies": {
     "@types/node": "^24.9.0",
-    "electron": "^38.1.0",
-    "typescript": "^5.9.3"
-  }
+    "electron": "38.8.6",
+    "typescript": "^5.9.3",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.travelarchive.photoarchive",
+    "productName": "Photo Archive",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../app/dist",
+        "to": "app-dist"
+      },
+      {
+        "from": "staging/pipeline",
+        "to": "pipeline"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Photo Archive"
+    }
+  },
+  "author": "YC L"
 }

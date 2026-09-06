@@ -41,11 +41,34 @@ import {
 const APP_PORT = Number(process.env.DESKTOP_PORT ?? 17923);
 const PIPELINE_PORT = Number(process.env.SERVE_PORT ?? 4319);
 
-// desktop/dist/main.js -> the repository root.
-const ROOT = resolve(__dirname, "..", "..");
-const APP_DIST = join(ROOT, "app", "dist");
+/**
+ * Where the built app and the pipeline live, which differs once installed.
+ *
+ * From a checkout, `desktop/dist/main.js` sits two levels below the repo root.
+ * Packaged, both are copied into `resources/` as real directories rather than
+ * into the asar archive — the pipeline because a child process has to execute
+ * a real file on disk, and the app alongside it so the two stay consistent.
+ */
+const PACKAGED = app.isPackaged;
+const ROOT = PACKAGED ? process.resourcesPath : resolve(__dirname, "..", "..");
+const APP_DIST = PACKAGED ? join(ROOT, "app-dist") : join(ROOT, "app", "dist");
 const PIPELINE_DIR = join(ROOT, "pipeline");
-const PIPELINE_ENTRY = join(PIPELINE_DIR, "dist", "serve.js");
+// Packaged, the server is one bundled ESM file (workspace hoisting means there
+// is no pipeline/node_modules to ship); from a checkout it is the normal build.
+const PIPELINE_ENTRY = PACKAGED
+  ? join(PIPELINE_DIR, "dist", "server.mjs")
+  : join(PIPELINE_DIR, "dist", "serve.js");
+
+/**
+ * The pipeline's writable home — see pipeline/src/paths.ts.
+ *
+ * Installed, the program directory is read-only, so `.env`, `token-cache.json`
+ * and the whole `data/` mirror move to the per-user directory. Running from a
+ * checkout this is left unset, and the pipeline falls back to `pipeline/`,
+ * which is exactly where those files already are: nothing moves for anyone
+ * working from source.
+ */
+const ARCHIVE_HOME = PACKAGED ? app.getPath("userData") : null;
 
 const APP_URL = `http://localhost:${APP_PORT}`;
 const LOGIN_ORIGIN = "https://login.microsoftonline.com";
@@ -145,6 +168,32 @@ function createWindow(): void {
   mainWindow.on("closed", () => (mainWindow = null));
 }
 
+/**
+ * A fresh install has no `.env`, so the job server cannot start.
+ *
+ * That is not a broken state — the app signs in and reads the whole archive
+ * from OneDrive, because `VITE_AZURE_CLIENT_ID` is baked into the build at
+ * compile time. Only *generation* needs the pipeline's own credentials. But
+ * without a word of explanation the Generate controls would simply be absent,
+ * which reads as a bug rather than as "not configured yet".
+ */
+async function warnIfUnconfigured(): Promise<void> {
+  if (!ARCHIVE_HOME || existsSync(join(ARCHIVE_HOME, ".env"))) return;
+
+  const { response } = await dialog.showMessageBox({
+    type: "info",
+    title: "Generation not configured",
+    message: "The archive will open, but summaries cannot be generated yet.",
+    detail:
+      `Generating needs a .env file in:\n\n${ARCHIVE_HOME}\n\n` +
+      `Copy pipeline/.env.example there and fill in AZURE_CLIENT_ID and your ` +
+      `AI provider key. Browsing and reading the archive works without it.`,
+    buttons: ["Open that folder", "Continue"],
+    defaultId: 0,
+  });
+  if (response === 0) void shell.openPath(ARCHIVE_HOME);
+}
+
 async function startup(): Promise<void> {
   if (!existsSync(join(APP_DIST, "index.html"))) {
     dialog.showErrorBox(
@@ -162,26 +211,35 @@ async function startup(): Promise<void> {
   staticServer = await serveApp(APP_DIST, APP_PORT);
   log(staticServer ? `Serving ${APP_DIST} on ${APP_URL}` : `Reusing whatever already serves ${APP_URL}`);
 
-  try {
-    pipeline = await startPipelineServer({
-      cwd: PIPELINE_DIR,
-      entry: PIPELINE_ENTRY,
-      port: PIPELINE_PORT,
-      onOutput: log,
-    });
-  } catch (err) {
-    // A missing pipeline build is not fatal: the archive still reads from
-    // OneDrive, and only generation is unavailable. app/src/backend.ts already
-    // hides the generate controls when /health does not answer — the same path
-    // the phone takes.
-    log(`Job server unavailable: ${(err as Error).message}`);
-  }
-
-  if (pipeline && !(await waitForHealthy(PIPELINE_PORT))) {
-    log(`Job server did not become healthy on ${PIPELINE_PORT}; continuing read-only.`);
-  }
-
+  // The window opens as soon as the app can be served, and the job server
+  // starts behind it. Waiting for the server first cost a fresh install the
+  // full 20s health timeout staring at nothing — the one machine where it is
+  // guaranteed to fail is the one that has no `.env` yet. app/src/backend.ts
+  // polls /health and reveals the generate controls when it answers, so a
+  // server that arrives a second after the window is not a problem.
   createWindow();
+
+  void (async () => {
+    try {
+      pipeline = await startPipelineServer({
+        cwd: ARCHIVE_HOME ?? PIPELINE_DIR,
+        entry: PIPELINE_ENTRY,
+        archiveHome: ARCHIVE_HOME,
+        port: PIPELINE_PORT,
+        onOutput: log,
+      });
+    } catch (err) {
+      // Not fatal: the archive still reads from OneDrive and only generation
+      // is unavailable — the same read-only path the phone takes.
+      log(`Job server unavailable: ${(err as Error).message}`);
+      return;
+    }
+    if (!(await waitForHealthy(PIPELINE_PORT))) {
+      log(`Job server did not become healthy on ${PIPELINE_PORT}; continuing read-only.`);
+    }
+  })();
+
+  void warnIfUnconfigured();
 }
 
 // Electron allows a second instance to launch by default, which here would mean
