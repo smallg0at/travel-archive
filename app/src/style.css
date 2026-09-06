@@ -69,6 +69,12 @@ body.resizing { cursor: col-resize; user-select: none; }
 #main-column {
   flex: 1;
   min-width: 0;
+  /* `min-height: 0` is what lets this shrink below its content. Without it a
+     flex item's automatic minimum size is its content height, which is
+     harmless while #app is a row (height comes from stretch) and fatal once
+     the <=700px rule turns it into a column: the item grows past the viewport,
+     body has `overflow: hidden`, and the page simply cannot be scrolled. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -440,19 +446,39 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-radius: 8px;
   overflow: hidden;
 }
-.card-images { display: flex; gap: 2px; }
+/* The strip's height comes from its width, never from a pixel value.
+   A fixed height against a fluid width means the *shape* of a photograph
+   depends on the window: measured on one full card, the same three photos
+   rendered at a ratio of 3.1 on a desktop and 0.46 at 554px wide — landscape
+   shots sliced into vertical slivers.
+
+   The ratio scales with the number of photos, so what stays constant is the
+   shape of each cell rather than the shape of the strip. A card of three is
+   three cells wide and correspondingly shorter, and each photo is still framed
+   like a photo. `--img-count` is set in render.ts, where the count is known. */
+.card-images {
+  display: flex;
+  gap: 2px;
+  aspect-ratio: calc(var(--img-count, 1) * var(--card-cell, 1.5));
+}
 .card-images img {
   flex: 1;
   min-width: 0;
-  height: 170px;
+  height: 100%;
   object-fit: cover;
   cursor: zoom-in;
 }
-/* A full-width card is the thing that defines its stop, so it gets the height
-   the old hero row had. */
-.card-full .card-images img { height: 380px; }
-.card-half .card-images img { height: 240px; }
-.card-normal .card-images img { height: 130px; }
+/* Cell shapes. 3:2 matches most of this library; small cards get a wider cell
+   so a stop with twenty of them does not become a tall column. Chosen to leave
+   the desktop layout as it was — a two-photo full card computes to 395px tall
+   against the 380px it was hardcoded at — so only narrow widths change. */
+.card-full,
+.card-half {
+  --card-cell: 1.5;
+}
+.card-normal {
+  --card-cell: 1.778;
+}
 
 /* Twenty small cards to a stop, so their text has to stay compact or the grid
    becomes a wall again. */
@@ -1142,6 +1168,11 @@ body.map-expanded::after {
      380px hero would take a third of the page height at print scale. */
   .card {
     border-color: var(--border);
+  }
+  /* Print sizes images in mm for page geometry, so the screen ratio must not
+     also apply — the two would fight and the taller would win. */
+  .card-images {
+    aspect-ratio: auto;
   }
   .card-full .card-images img {
     height: 85mm;

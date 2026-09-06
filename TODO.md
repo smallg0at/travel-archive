@@ -28,12 +28,23 @@ narrative written, map rendering. Whole run cost **under £8**.
       `app/src/archiveData.ts` caches each month's shard per session and never
       invalidates, so a finished job updates OneDrive but not the open tab. The
       job panel already re-renders on completion; it needs to clear that cache.
-- [ ] Photos in cards are fixed height — poor in portrait.
+- [x] **Photos in cards are fixed height — poor in portrait.** Fixed
+      2026-09-06. The strip now takes `aspect-ratio: calc(var(--img-count) *
+      var(--card-cell))`, so height follows width and each *cell* keeps a
+      photograph's shape however many photos share the card. Measured at 554px
+      wide: cell ratios were 0.46-3.1 depending on width and count (three
+      landscape shots rendered as vertical slivers); now a stable 1.49-1.50 for
+      full/half and 1.76-1.78 for normal, at every count. Desktop geometry is
+      unchanged by design — a two-photo full card computes to 395px against the
+      380px it was hardcoded at.
 - [ ] **Burger menu**: generate/settings should sit in the same list as the
       photo months, always visible, rather than a popup. Like Task Manager.
 - [ ] Zoom-out reaches the whole world; cap at continental?
 - Mobile view:
-  - [ ] Portrait layout is broken and cannot scroll.
+  - [x] **Portrait layout cannot scroll.** Fixed 2026-09-06: `#main-column`
+        had no `min-height: 0`, so once the <=700px rule turned `#app` into a
+        column it could not shrink below its content, overflowed a `body` with
+        `overflow: hidden`, and nothing scrolled. One line.
   - [ ] Design needs rethinking; a Figma would help.
 
 ## Todo

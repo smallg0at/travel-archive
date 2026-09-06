@@ -44,7 +44,11 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
     </article>
   `);
 
-  const images = card.querySelector(".card-images")!;
+  const images = card.querySelector(".card-images") as HTMLElement;
+  // The strip's aspect ratio is a multiple of how many photos share it, so that
+  // each cell keeps the shape of a photograph however many there are — see the
+  // note on `.card-images` in style.css.
+  images.style.setProperty("--img-count", String(photos.length));
   for (const photo of photos) {
     const img = lazyImg(photo, "large");
     img.addEventListener("click", () => openFullPhoto(photo));
