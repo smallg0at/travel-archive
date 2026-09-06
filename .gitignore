@@ -1,0 +1,46 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# --- Anything that identifies the owner or their library -------------------
+#
+# This repo is code for reading a *personal* photo archive. Almost everything
+# it produces at runtime is private, so the default is to ignore rather than to
+# enumerate. If you add a file that holds archive content, add it here first.
+
+# API keys and the Azure client id. `.env.example` is deliberately not ignored:
+# it documents the keys with empty values.
+.env
+.env.*
+!.env.example
+
+# A live MSAL refresh token for the owner's OneDrive. Committing this hands
+# over the account, not just the archive.
+token-cache.json
+
+# The archive itself: index.json plus photos/<yyyy-mm>.json. ~22MB here, and
+# every record carries a filename, a OneDrive path, GPS coordinates, an AI
+# caption and any transcribed text — so it is a searchable location history of
+# the owner, not merely "generated data". Also covers data/jobs/ and
+# data/bakeoff/.
+data/
+
+# Literal personal terms — the owner's name, and anything else they want caught
+# by `redact`. The whole point of the file is that these strings cannot be found
+# by pattern, which is exactly why they must not be published.
+# See redaction-terms.example.json for the shape.
+redaction-terms.json
+
+# Exported trips. `Save as PDF` writes a self-contained document with the
+# photographs embedded; one landing in the working tree must not be committed.
+*.pdf
+
+# Local editor/tool settings
+*.local.json
+.vscode/
+.idea/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini

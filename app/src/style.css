@@ -1,0 +1,1193 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --bg-muted: #f4f3ef;
+  --text: #1a1a18;
+  --text-secondary: #5f5e5a;
+  --border: #e2e0d8;
+  --accent: #378ade;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161614;
+    --bg-muted: #211f1c;
+    --text: #f1efe8;
+    --text-secondary: #b4b2a9;
+    --border: #333330;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Column layout so the nav and the photo pane scroll independently — with
+   several hundred thumbnails in a month, scrolling the whole document would
+   drag the month tabs off screen. */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#app {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* --- Month nav ------------------------------------------------------- */
+
+/* The sidebar is the scrolling column; the nav and the job panel are its two
+   children so that re-rendering one never touches the other. */
+#sidebar {
+  width: var(--sidebar-width, 210px);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+
+/* A grab strip rather than a 1px border: a hairline target is unhittable, so
+   the handle is 5px wide with the border drawn inside it. */
+#sidebar-resize {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: var(--border);
+  background-clip: content-box;
+  border-left: 2px solid var(--bg-muted);
+  border-right: 2px solid var(--bg);
+}
+#sidebar-resize:hover { background: var(--accent); }
+body.resizing { cursor: col-resize; user-select: none; }
+
+#main-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#job-drawer {
+  flex-shrink: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg-muted);
+}
+/* Bottom left, clear of the photo grid and of the scrollbar. */
+#menu {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 6px;
+}
+#menu-toggle {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.22);
+}
+#menu-toggle:hover { border-color: var(--accent); }
+#menu-toggle.open { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* The expanded list: icon plus label per row, like a system menu. Icons alone
+   said nothing about what the buttons did. */
+#menu-items {
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
+}
+#menu-items[hidden] { display: none; }
+/* `:not([hidden])` matters here specifically: Generate is hidden until a
+   backend answers, and on the phone one never does. Without it, the read-only
+   client would offer a button that cannot work. */
+#menu-items button:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#menu-items button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+/* A left bar marks what is currently open, as a system menu marks its page. */
+#menu-items button.active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+#menu svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+#settings-panel {
+  position: fixed;
+  left: 190px;
+  bottom: 12px;
+  z-index: 60;
+  min-width: 230px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 0.28);
+  font-size: 12px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+.settings-row > span { color: var(--text-secondary); }
+#settings-reset-sidebar {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+/* The month list scrolls; the job panel stays pinned below it. With 61 months
+   in the nav, a panel that scrolled with them sat far below the fold and was
+   effectively invisible. */
+#month-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 8px;
+}
+
+.nav-year {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  padding: 12px 10px 4px;
+}
+.nav-year:first-child { padding-top: 2px; }
+
+.month-link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.month-link:hover { background: var(--bg); }
+.month-link.active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 500;
+}
+.month-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Content --------------------------------------------------------- */
+
+#content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 28px 60px;
+}
+.loading {
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 24px 0;
+}
+.loading code {
+  background: var(--bg-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.month-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+/* Pushes the density control to the right of the month title/count. */
+.month-heading .density-control { margin-left: auto; }
+
+.density-control {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  align-self: center;
+  flex-shrink: 0;
+}
+.density-control button {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.density-control button:hover { background: var(--bg-muted); }
+.density-control button.active {
+  background: var(--bg-muted);
+  color: var(--text);
+  font-weight: 500;
+}
+.month-heading h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+.month-heading span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.day-page {
+  margin-bottom: 26px;
+}
+.day-title { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+.day-meta { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+.day-summary {
+  font-size: 13px;
+  line-height: 1.7;
+  background: var(--bg-muted);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+/* --- Album grid ------------------------------------------------------ */
+
+/* Cell size is driven by the density control (album.ts), which sets
+   --album-cell on :root. Changing it reflows the existing grid without
+   refetching anything, since thumbnails are always fetched at Graph's
+   `large` size. */
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--album-cell, 120px), 1fr));
+  gap: 4px;
+}
+.album-cell {
+  position: relative;
+  aspect-ratio: 1;
+  background: var(--bg-muted);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.album-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: zoom-in;
+}
+
+/* Every photo carries its caption as `alt`, which a screen reader needs and a
+   sighted user must never see: when a thumbnail fails — an expired CDN link, a
+   throttled batch, an offline phone — the browser lays that sentence out
+   inside the cell. Observed live: grid tiles grew from 99x99 to 99x280 and the
+   hero collapsed to a 22px strip of text. `color: transparent` keeps the alt
+   attribute intact for assistive tech while rendering nothing, and the fixed
+   box below then holds its shape whether the image arrives or not. */
+/* Every photo carries its caption as `alt`, which a screen reader needs and a
+   sighted user must never see: when a thumbnail fails — an expired CDN link, a
+   throttled batch, an offline phone — the browser lays that sentence out inside
+   the cell. Observed live: grid tiles grew from 99x99 to 99x280. `color:
+   transparent` keeps the alt attribute intact for assistive tech while
+   rendering nothing.
+
+   Unloaded cells shimmer rather than sitting as flat grey squares, and fade in
+   on the `load` event, so a page of pending thumbnails reads as loading instead
+   of as broken. */
+.album-cell img,
+.stop-grid img,
+.card-images img {
+  color: transparent;
+  overflow: hidden;
+  /* Mixed against --bg-muted, which is what the card behind it is painted in.
+     Mixing against --bg made the placeholder *darker* than its own card, so it
+     read as a hole punched in the page rather than as a pending image. */
+  background-color: color-mix(in srgb, var(--text) 13%, var(--bg-muted));
+  background-image: linear-gradient(
+    100deg,
+    transparent 18%,
+    color-mix(in srgb, var(--text) 22%, transparent) 42%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  animation: shimmer 1.3s linear infinite;
+  border-radius: inherit;
+}
+/* The placeholder lives on the <img>'s own background, so it must NOT be hidden
+   with `opacity: 0` — that hides the background with it and leaves a flat void.
+   An <img> with no src paints only its background, which is exactly the effect
+   wanted; the decoded image then covers it. */
+.album-cell img.loaded,
+.stop-grid img.loaded,
+.card-images img.loaded {
+  background-image: none;
+  animation: none;
+}
+@keyframes shimmer {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .album-cell img, .stop-grid img, .card-images img { animation: none; }
+}
+
+/* --- Day > Place > { heroes, cards, grid } ---------------------------- */
+
+.stop { margin: 0 0 30px; }
+.stop-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 5px;
+  margin-bottom: 8px;
+}
+.stop-title { margin: 0; font-size: 15px; font-weight: 600; }
+.stop-meta { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.stop-summary {
+  margin: 0 0 12px;
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+/* A fixed 4-track grid so "full" and "half" mean something predictable. The
+   card's own size decides its span — there is no separate layout to choose,
+   which is what let a hero row and a card row disagree about the same photo. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.card-full { grid-column: span 4; }
+.card-half { grid-column: span 2; }
+.card-normal { grid-column: span 1; }
+
+@media (max-width: 1100px) {
+  .cards { grid-template-columns: repeat(2, 1fr); }
+  .card-full { grid-column: span 2; }
+  .card-half, .card-normal { grid-column: span 1; }
+}
+@media (max-width: 620px) {
+  .cards { grid-template-columns: 1fr; }
+  .card-full, .card-half, .card-normal { grid-column: span 1; }
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.card-images { display: flex; gap: 2px; }
+.card-images img {
+  flex: 1;
+  min-width: 0;
+  height: 170px;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+/* A full-width card is the thing that defines its stop, so it gets the height
+   the old hero row had. */
+.card-full .card-images img { height: 380px; }
+.card-half .card-images img { height: 240px; }
+.card-normal .card-images img { height: 130px; }
+
+/* Twenty small cards to a stop, so their text has to stay compact or the grid
+   becomes a wall again. */
+.card-normal .card-body { padding: 7px 9px 9px; }
+.card-normal .card-title { font-size: 12px; }
+.card-normal .card-desc { font-size: 11px; line-height: 1.5; }
+
+.card-placard {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+  background: var(--bg);
+  border-radius: 0 5px 5px 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.card-body { padding: 9px 11px 11px; }
+.card-title { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.card-desc { margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+.card-source { margin-top: 7px; }
+.card-source summary {
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+}
+.card-source summary::marker,
+.card-source summary::-webkit-details-marker { display: none; }
+.card-source-text {
+  margin-top: 5px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.stop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--album-cell, 120px), 1fr));
+  gap: 4px;
+  margin-top: 8px;
+}
+.stop-grid img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg-muted);
+  cursor: zoom-in;
+}
+
+.stop-more > summary,
+.transit summary {
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.transit { margin: 0 0 22px; }
+.transit summary { display: flex; gap: 8px; align-items: baseline; }
+.transit-title { font-size: 13px; color: var(--text); }
+
+/* --- Sign-in banner -------------------------------------------------- */
+
+.signin-banner {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  display: none;
+}
+/* Same bug class as .lightbox below: unconditional `display: flex` beats
+   the browser's `[hidden] { display: none }`, so this stayed visible (and
+   sign-in appeared to silently "do nothing" — it had actually succeeded,
+   tokens were in localStorage, the banner just never visually left). */
+.signin-banner:not([hidden]) {
+  display: flex;
+}
+.signin-banner button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* --- Lightbox -------------------------------------------------------- */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  cursor: zoom-out;
+  display: none;
+}
+/* `display: flex` here (author-origin) unconditionally overrode the
+   browser's own `[hidden] { display: none }` default, since that's a
+   non-!important UA rule and any author rule of equal specificity beats
+   it — so `.lightbox` stayed visually flex-rendered (and kept intercepting
+   clicks) regardless of the `hidden` attribute/property. Only apply flex
+   when NOT hidden. */
+.lightbox:not([hidden]) {
+  display: flex;
+}
+.lightbox img {
+  max-width: 92vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* --- Narrow screens: month tabs become a horizontal strip ------------- */
+
+@media (max-width: 700px) {
+  #app { flex-direction: column; }
+  #sidebar {
+    width: auto;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-y: visible;
+  }
+  /* No dragging a column that is now a horizontal strip. */
+  #sidebar-resize { display: none; }
+  /* The phone has no backend to talk to — the server binds to loopback — so
+     this is empty there in practice. Hidden anyway rather than left to collapse
+     to a stray border, since a desktop browser narrowed past this breakpoint
+     would otherwise get a full-width form under the month strip. */
+  #job-host { display: none; }
+  #month-nav {
+    width: auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-right: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  #month-nav::-webkit-scrollbar { display: none; }
+  .nav-year {
+    padding: 0 4px 0 8px;
+    align-self: center;
+    flex-shrink: 0;
+  }
+  .nav-year:first-child { padding-left: 4px; }
+  .month-link {
+    width: auto;
+    flex-shrink: 0;
+    padding: 6px 12px;
+    white-space: nowrap;
+  }
+  .month-count { display: none; }
+  #content { padding: 14px 12px 40px; }
+  .month-heading { flex-wrap: wrap; }
+}
+
+/* --- Trip pages ------------------------------------------------------- */
+
+.trip-heading h1 { font-size: 20px; }
+
+.trip-narrative {
+  max-width: 68ch;
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.trip-narrative p { margin: 0 0 10px; }
+
+.trip-places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.trip-places span {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+/* Trips sit above the year groups and are the only nav entries that are not a
+   month, so they get a marker rather than relying on position alone. */
+.trip-link .month-name::before {
+  content: "▸ ";
+  color: var(--accent);
+}
+
+/* --- Job panel (only present when `pipeline serve` is running) --------- */
+
+.job-panel {
+  border-top: 1px solid var(--border);
+  padding: 12px 10px 16px;
+  font-size: 12px;
+}
+
+.job-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.job-tabs button {
+  flex: 1;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 2px;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.job-tabs button.active {
+  color: var(--text);
+  background: var(--bg-muted);
+  border-color: var(--border);
+}
+
+/* `:not([hidden])`, for the third time in this file: an unconditional
+   `display: flex` in the author origin beats the UA sheet's
+   `[hidden] { display: none }`, so every tab pane rendered at once and the tabs
+   appeared to do nothing. Same bug previously hit .lightbox and .signin-banner. */
+.job-form:not([hidden]) { display: flex; flex-direction: column; gap: 8px; }
+.job-row { display: flex; flex-direction: column; gap: 8px; }
+
+.job-field { display: flex; flex-direction: column; gap: 3px; }
+.job-field span { color: var(--text-secondary); font-size: 11px; }
+.job-field input,
+.job-field textarea {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 6px;
+  width: 100%;
+}
+.job-field textarea { resize: vertical; }
+
+.job-check { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.job-check input { margin: 0; }
+
+.job-hint { font-size: 11px; opacity: 0.8; }
+.job-note code { font-size: 11px; background: var(--bg); padding: 1px 4px; border-radius: 3px; }
+.job-note { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.job-buttons { display: flex; gap: 6px; }
+.job-buttons button { flex: 1; }
+
+.job-form button[type="submit"],
+.job-estimate,
+.job-cancel {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  cursor: pointer;
+}
+.job-form button[type="submit"] { border-color: var(--accent); color: var(--accent); }
+
+.job-progress:not([hidden]) { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.job-phase { color: var(--text-secondary); }
+.job-bar {
+  height: 3px;
+  background: var(--bg-muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.job-bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.job-log {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+
+/* The job panel now spans the drawer, so its fields sit in a row rather than
+   stacking in a narrow column. */
+#job-drawer .job-panel { border-top: none; padding: 12px 16px 16px; }
+#job-drawer .job-tabs { max-width: 420px; }
+#job-drawer .job-row { flex-direction: row; flex-wrap: wrap; gap: 12px; }
+#job-drawer .job-row .job-field { flex: 1 1 190px; }
+#job-drawer .job-form > .job-field textarea { max-width: 640px; }
+#job-drawer .job-form button[type="submit"] { align-self: flex-start; padding: 6px 18px; }
+
+/* --- Photo viewer ----------------------------------------------------- */
+
+.lightbox-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 94vw;
+  max-height: 94vh;
+}
+.lightbox-stage { position: relative; display: flex; min-height: 0; }
+.lightbox img {
+  max-width: 94vw;
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+/* The instantly-available thumbnail, upscaled. Softened so the swap to full
+   resolution reads as sharpening rather than as the image changing. */
+.lightbox img.preview { filter: blur(0.5px); }
+
+.spinner {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.spinner[hidden] { display: none; }
+.spinner span {
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgb(255 255 255 / 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner span { animation-duration: 2.4s; }
+}
+
+#lightbox-caption {
+  max-width: min(720px, 94vw);
+  color: #f1efe8;
+  text-align: center;
+  cursor: auto;
+}
+.lightbox-caption-text { font-size: 13px; line-height: 1.55; }
+.lightbox-caption-meta { margin-top: 3px; font-size: 11px; color: rgb(241 239 232 / 0.6); }
+.lightbox-text { margin-top: 8px; text-align: left; }
+.lightbox-text summary { font-size: 11px; color: rgb(241 239 232 / 0.75); cursor: pointer; }
+.lightbox-text div {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.08);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  max-height: 22vh;
+  overflow: auto;
+}
+
+
+/* --- Trip map --------------------------------------------------------- */
+
+.trip-map {
+  position: relative;
+  margin: 0 0 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+.trip-map-loading { padding: 20px; font-size: 12px; color: var(--text-secondary); }
+.trip-map-svg {
+  display: block;
+  width: 100%;
+  height: 380px;
+  cursor: grab;
+  touch-action: none;
+  /* The sea. Land is drawn over it as filled country polygons. */
+  background: color-mix(in srgb, #4b7fb5 26%, var(--bg));
+}
+.trip-map-svg:active { cursor: grabbing; }
+
+/* Every size below is `base * --map-k`, where the base is a fraction of the
+   fitted view (set in tripMap.ts) and --map-k is how far you have zoomed. A
+   literal viewBox length cannot work for both a continent-wide trip and a
+   two-city one: the first version used one, and a single city disc covered the
+   entire map. */
+.trip-map-land {
+  fill: color-mix(in srgb, var(--text) 7%, var(--bg-muted));
+  stroke: none;
+}
+.trip-map-border {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 26%, transparent);
+  stroke-width: calc(var(--map-s, 1px) * var(--map-k, 1));
+  stroke-dasharray: calc(var(--map-s, 1px) * 3 * var(--map-k, 1)) calc(var(--map-s, 1px) * 2.5 * var(--map-k, 1));
+}
+
+/* Cities the trip did not visit: present for orientation, and styled so they
+   read as background — the same relationship the grey labels have to the route
+   on a rail-network map. */
+.trip-map-place {
+  fill: var(--text-secondary);
+  font-size: calc(var(--map-f, 12px) * 0.62 * var(--map-k, 1));
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: calc(var(--map-s, 1px) * 1.6 * var(--map-k, 1));
+  pointer-events: none;
+  transform: translate(calc(var(--map-f, 12px) * 0.34 * var(--map-k, 1)), calc(var(--map-f, 12px) * 0.22 * var(--map-k, 1)));
+}
+.trip-map-place-dot {
+  r: calc(var(--map-s, 1px) * 1.5 * var(--map-k, 1));
+  fill: var(--text-secondary);
+  opacity: 0.65;
+}
+/* Water is the thing that actually places a city on an overview map — country
+   borders alone left it blank. */
+.trip-map-lake {
+  fill: color-mix(in srgb, #4b7fb5 42%, var(--bg));
+  stroke: none;
+}
+.trip-map-river {
+  fill: none;
+  stroke: color-mix(in srgb, #4b7fb5 52%, var(--bg));
+  stroke-width: calc(var(--map-s, 1px) * 1.5 * var(--map-k, 1));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.trip-map-route {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: calc(var(--map-s, 1px) * 2.4 * var(--map-k, 1));
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+.trip-map-city { cursor: pointer; }
+.trip-map-city circle {
+  r: calc(var(--map-r, 6px) * var(--city-weight, 1) * var(--map-k, 1));
+  fill: var(--accent);
+  fill-opacity: 0.92;
+  stroke: var(--bg);
+  stroke-width: calc(var(--map-s, 1px) * 1.6 * var(--map-k, 1));
+}
+.trip-map-city:hover circle,
+.trip-map-city:focus circle { fill-opacity: 1; stroke: var(--text); }
+.trip-map-city text {
+  fill: var(--text);
+  font-size: calc(var(--map-f, 12px) * var(--map-k, 1));
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: calc(var(--map-s, 1px) * 2.2 * var(--map-k, 1));
+  pointer-events: none;
+  transform: translateY(calc(-1 * (var(--map-r, 6px) * var(--city-weight, 1) + var(--map-f, 12px) * 0.55) * var(--map-k, 1)));
+}
+.trip-map-city:focus { outline: none; }
+
+/* Expanded: an overlay over the page, not a browser fullscreen takeover. */
+.trip-map.is-expanded {
+  position: fixed;
+  inset: 3vh 3vw;
+  z-index: 90;
+  margin: 0;
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.55);
+}
+.trip-map.is-expanded .trip-map-svg { height: 94vh; }
+/* Stops the page scrolling behind the overlay. */
+body.map-expanded { overflow: hidden; }
+body.map-expanded::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 89;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.trip-map-expand {
+  position: absolute;
+  right: 62px;
+  bottom: 10px;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.trip-map-reset {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* --- Print / PDF ------------------------------------------------------ */
+
+/**
+ * Exists so a trip can be handed to someone who has no access to this archive.
+ * Chrome's "Save as PDF" rasterises the thumbnails into the file, so the output
+ * is self-contained — no sign-in, no token, no network, no Microsoft account.
+ *
+ * What is exported is narrower than what is on screen, and the narrowing lives
+ * here rather than in script so that it cannot be undone by expanding a section
+ * before printing. See app/src/print.ts for why.
+ */
+@media print {
+  /* The screen palette follows the reader's OS, and this one is set to dark.
+     Paper is white either way, so force the light tokens rather than printing
+     pale text onto it. Every colour in the app is derived from these six, which
+     is what makes a print theme six lines instead of an audit. */
+  :root {
+    --bg: #ffffff;
+    --bg-muted: #ffffff;
+    --text: #14140f;
+    --text-secondary: #4a4a43;
+    --border: #c9c7bd;
+    --accent: #1c5c9c;
+    color-scheme: light;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm;
+  }
+
+  /* The app is a fixed-height flex shell whose columns scroll independently.
+     Printed as it stands that emits exactly one page — the first 865px of a
+     153,000px document. Unwind it back into ordinary document flow. */
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+    display: block;
+    background: #fff;
+  }
+  #app {
+    display: block;
+    height: auto;
+    min-height: 0;
+  }
+  #main-column {
+    display: block;
+    min-width: 0;
+  }
+  #content {
+    display: block;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+  }
+
+  /* Furniture. Navigation, controls and overlays are not part of the document. */
+  #sidebar,
+  #sidebar-resize,
+  #menu,
+  #job-drawer,
+  #settings-panel,
+  #lightbox,
+  #signin-banner,
+  #print-progress,
+  .density-control,
+  .trip-map-expand,
+  .trip-map-reset {
+    display: none !important;
+  }
+
+  /* The sharing rule, enforced structurally: the unreviewed roll never leaves
+     the machine. `.stop-more` is the "N more photos" grid and `.transit` the
+     journey strips — between them they hold 114 of this trip's 125 screenshots,
+     none of which anyone has read. Hidden regardless of whether the reader
+     happened to expand one before printing. */
+  .stop-more,
+  .transit {
+    display: none !important;
+  }
+
+  /* A placard's English rendering is prose and prints. The verbatim transcript
+     behind its toggle is evidence for the owner, not content for a reader. */
+  .card-source {
+    display: none !important;
+  }
+
+  /* Any remaining <details> prints open — a collapsed section on paper is just
+     a missing one, since nobody can click it. */
+  details > summary {
+    display: none;
+  }
+
+  /* Page breaks. The rule throughout is that a heading never ends a page and a
+     card is never split across one. */
+  .day-page {
+    break-before: page;
+    margin-bottom: 0;
+  }
+  .day-page:first-of-type {
+    break-before: auto;
+  }
+  .day-header,
+  .stop-head,
+  .month-heading {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  .card,
+  .trip-map,
+  .day-summary,
+  .stop-summary {
+    break-inside: avoid;
+  }
+  .trip-narrative p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* The map is the trip's contents page, so it gets one of its own. */
+  .trip-map {
+    break-after: page;
+    border: none;
+  }
+  .trip-map-svg {
+    height: 150mm;
+    cursor: auto;
+  }
+
+  /* Cards. Four tracks is right for a wide screen and far too narrow for a
+     186mm page, so print drops to two — `full` spans both, `half` and `normal`
+     take one each. Without this a "normal" card is a 44mm column with a
+     three-word line wrap. */
+  .cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8mm 6mm;
+  }
+  .card-full {
+    grid-column: span 2;
+  }
+  .card-half,
+  .card-normal {
+    grid-column: span 1;
+  }
+
+  /* Heights in mm, not px: the screen values are tuned to a viewport, and a
+     380px hero would take a third of the page height at print scale. */
+  .card {
+    border-color: var(--border);
+  }
+  .card-full .card-images img {
+    height: 85mm;
+  }
+  .card-half .card-images img,
+  .card-normal .card-images img {
+    height: 52mm;
+  }
+
+  /* The shimmer placeholder is a loading state; on paper it is a grey box with
+     a diagonal stripe frozen across it. */
+  .card-images img {
+    background-image: none;
+    animation: none;
+    background-color: transparent;
+  }
+
+  /* The transcript box scrolls on screen; on paper a scroll box is a clipped
+     one. Nothing printed may have hidden overflow. */
+  .card-source-text {
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* Backgrounds and image rendering are the two things Chrome drops by default
+     and the two the layout depends on. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* The pre-print progress readout. Fixed and central because the pass it reports
+   can take a moment on a cold cache, and a print that appears to do nothing for
+   twenty seconds reads as a broken button. */
+#print-progress {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 90;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
+}

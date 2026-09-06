@@ -1,0 +1,25 @@
+{
+  "name": "@travel-archive/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "^5.21.0",
+    "@capacitor/core": "^7.4.4",
+    "@travel-archive/shared": "*"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}

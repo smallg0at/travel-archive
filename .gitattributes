@@ -1,0 +1,12 @@
+# Normalise line endings in the repository, whatever the working tree uses.
+# Added with the first commit deliberately: introducing it later rewrites every
+# file at once and buries a real change in a whole-repo diff.
+* text=auto eol=lf
+
+# Windows-only, and cmd/PowerShell want CRLF.
+*.ps1 text eol=crlf
+
+# Generated from Natural Earth shapefiles by app/scripts/build-basemap.mjs.
+# Committed because the source shapefiles are not in the repo and the app
+# imports this at build time. Marked so it does not clutter diffs.
+app/src/geo/basemap.json linguist-generated=true

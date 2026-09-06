@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "Apps whose screenshots may be described by an AI model. DEFAULT-DENY:",
+    "anything not listed here stays in the album but is never analyzed, never",
+    "summarized, and never sent to a cloud provider. That covers every browser",
+    "capture and the ~9% of screenshots with no app name in the filename.",
+    "",
+    "Entries are case-insensitive substrings of the Android package name, so",
+    "'hafas' covers both the German and Austrian rail apps. Add an app only if",
+    "you are comfortable with its contents leaving your machine.",
+    "",
+    "Deliberately absent, and worth keeping absent: messaging (tencent.mm,",
+    "whatsapp, telegram, mms), mail (outlook, gmail), banking and payments",
+    "(alipay), health, and all browsers. Airline apps too - 'klm' was listed",
+    "here and removed, because a boarding pass or baggage screen shows the",
+    "passenger's full name by design. Rail apps stay: their ticket screens do",
+    "not, on this library.",
+    "",
+    "Run `npm run --workspace pipeline scan` after editing to re-apply."
+  ],
+
+  "include": [
+    "google.android.apps.maps",
+    "citymapper",
+    "hafas",
+    "nationalrail",
+    "railmap",
+    "trainsplit",
+    "eurail",
+    "eurostar",
+    "oebb",
+    "tfl.gotfl",
+    "eastmidlandsrailway",
+    "nl.ns.android",
+    "seatfrog",
+    "flightradar24",
+    "speedviewgps"
+  ]
+}

@@ -1,0 +1,336 @@
+import type { DayRecord, DaySegment, PhotoRecord } from "@travel-archive/shared";
+import { CARD_BUDGET } from "@travel-archive/shared";
+import { getAccessToken } from "../auth.js";
+import { getProvider } from "../providers/index.js";
+import { loadAllShards, loadIndex, saveIndex } from "../archiveStore.js";
+import { dayKey, sameIds } from "../util.js";
+import { loadTripDefinitions } from "../tripDefs.js";
+import { bucketDays } from "./sections.js";
+import { detectStops } from "../stops.js";
+import { mayBeAnalyzed } from "../screenshots.js";
+import { withheldFromSummaries } from "../sensitive.js";
+import type { ProgressFn } from "./analyze.js";
+
+/**
+ * Groups analyzed photos into days, breaks each day into the stops it was
+ * spent at, writes a summary and highlights for every stop whose photo set
+ * changed, and sorts those days into either a defined trip
+ * (pipeline/trips.json — see tripDefs.ts for why trips are manual rather than
+ * inferred) or a month bucket. Output lands in index.json's `sections`; the
+ * photo shards aren't touched.
+ *
+ * Only days with at least one analyzed photo are summarized — there's nothing
+ * for the model to work from otherwise. The album view renders every day
+ * regardless, summary or not, so running this is purely additive.
+ *
+ * Callable by both the CLI and the job server; see ./analyze.ts for why.
+ */
+
+/**
+ * The day's place is the one most of its photos were taken in, not the first
+ * one seen.
+ *
+ * First-wins is wrong for exactly the days that matter: a day trip starts at
+ * home. This archive's 30 Aug has 263 photos in a city, 38 in a city and 11
+ * in a town, and the very first geotagged photo at 09:30 is the a city one —
+ * so the whole a city day was labelled "a city, Osterreich" in the app and
+ * handed to the summarizer as such.
+ */
+function dominantPlace(photos: PhotoRecord[]): string | null {
+  const counts = new Map<string, number>();
+  for (const photo of photos) {
+    if (photo.place) counts.set(photo.place, (counts.get(photo.place) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [place, count] of counts) {
+    if (count > bestCount) {
+      best = place;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Enforces that a photo is used once across a day, and that a card never shows
+ * the same shot twice.
+ *
+ * The prompt asks for both, but a prompt is not a guarantee and the failure is
+ * visible: the first run put Čumil in a hero row and again in a card, and a
+ * card titled "ÖBB Locomotive" showed two frames of the same locomotive side by
+ * side. Duplicate *files* are already known from the scan pass, so siblings of
+ * an already-used photo are dropped here too — `duplicateGroupId` is exact, not
+ * a similarity guess.
+ */
+/** Seconds within which two same-sized shots inside one card are the same press, twice. */
+const DOUBLE_TAP_SECONDS = 4;
+
+/**
+ * Two shots of the same thing, seconds apart at the same dimensions.
+ *
+ * `duplicateGroupId` cannot see these — it is deliberately exact-signal only
+ * (filename copy suffixes, the camera's own `_BURSTn`), because a timestamp
+ * heuristic once grouped an anime illustration with an unrelated sticker. But a
+ * double-tapped shutter produces two genuinely different files that are the same
+ * picture, and a card showing both side by side looks like a mistake.
+ *
+ * Applied **only inside a card**, where the model has already asserted the
+ * photos show one thing. That is what makes a time-and-size rule safe here and
+ * unsafe across a whole day.
+ */
+function sameShot(a: PhotoRecord, b: PhotoRecord): boolean {
+  if (!a.takenAt || !b.takenAt) return false;
+  if (a.width !== b.width || a.height !== b.height) return false;
+  const gap = Math.abs(new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime()) / 1000;
+  return gap <= DOUBLE_TAP_SECONDS;
+}
+
+function claimOnce(segments: DaySegment[], photos: Record<string, PhotoRecord>): DaySegment[] {
+  const usedPhotos = new Set<string>();
+  const usedGroups = new Set<string>();
+
+  const take = (ids: string[], dropRepeats: boolean): string[] => {
+    const kept: PhotoRecord[] = [];
+    for (const id of ids) {
+      const photo = photos[id];
+      if (!photo || usedPhotos.has(id)) continue;
+      const group = photo.duplicateGroupId;
+      if (group && usedGroups.has(group)) continue;
+      if (dropRepeats && kept.some((k) => sameShot(k, photo))) continue;
+      usedPhotos.add(id);
+      if (group) usedGroups.add(group);
+      kept.push(photo);
+    }
+    return kept.map((p) => p.id);
+  };
+
+  // The budget is enforced here rather than trusted to the prompt. Extra cards
+  // are demoted rather than dropped — a stop that named five "full" highlights
+  // still has five things worth showing.
+  const budgetFor = (highlights: DaySegment["highlights"]) => {
+    const remaining = { ...CARD_BUDGET };
+    const out: DaySegment["highlights"] = [];
+    for (const h of highlights) {
+      let size = h.size;
+      while (remaining[size] <= 0) {
+        if (size === "full") size = "half";
+        else if (size === "half") size = "normal";
+        else break;
+      }
+      if (remaining[size] <= 0) break;
+      remaining[size]--;
+      out.push({ ...h, size });
+    }
+    return out;
+  };
+
+  return segments.map((segment) => ({
+    ...segment,
+    highlights: budgetFor(
+      segment.highlights
+        .map((h) => ({
+          ...h,
+          photoIds: take(h.photoIds, true),
+          documentPhotoIds: take(h.documentPhotoIds, false),
+        }))
+        // A card whose picture was already spent elsewhere is not a card.
+        .filter((h) => h.photoIds.length > 0),
+    ),
+  }));
+}
+
+/**
+ * Whether stored segments match the shape this build writes.
+ *
+ * Every schema bump so far has caught me out the same way: the staleness check
+ * saw a day whose photos were unchanged, reused it, and the app rendered the
+ * old shape forever. v11 added segments, v12 added card sizes, and each time
+ * the day looked "unchanged" while missing the new field.
+ *
+ * **Update this whenever DaySegment or Highlight gains a required field.** It
+ * costs one re-summarize per affected day, which is the cheap direction.
+ */
+function segmentsAreCurrent(segments: DaySegment[] | undefined): boolean {
+  if (!segments?.length) return false;
+  return segments.every((seg) => seg.highlights.every((h) => h.size !== undefined && "documentTranslation" in h));
+}
+
+export interface OrganizeOptions {
+  /** Restrict to one date (`2026-09-01`) or month (`2026-09`); null does the lot. */
+  only: string | null;
+  /**
+   * Resummarize even when nothing about the day's photos changed.
+   *
+   * The staleness check compares inputs it can see — the photo set, the place,
+   * the stored shape. It cannot see the *prompt*, so tuning how days are written
+   * left every day looking unchanged and silently produced nothing. Pair it with
+   * `only`, since forcing the whole archive is 545 model calls.
+   */
+  force: boolean;
+}
+
+export interface OrganizeResult {
+  days: number;
+  summarized: number;
+  reused: number;
+  withheld: number;
+  trips: number;
+  months: number;
+}
+
+export async function runOrganize(
+  opts: OrganizeOptions,
+  onProgress: ProgressFn,
+  signal?: AbortSignal,
+): Promise<OrganizeResult> {
+  onProgress({ phase: "signing-in", message: "Signing in..." });
+  const token = await getAccessToken();
+
+  onProgress({ phase: "loading", message: "Loading index..." });
+  const index = await loadIndex(token);
+
+  onProgress({ phase: "loading", message: `Loading ${index.months.length} month shard(s)...` });
+  const shards = await loadAllShards(token, index);
+  const photos: Record<string, PhotoRecord> = {};
+  for (const shard of shards.values()) Object.assign(photos, shard.photos);
+
+  const provider = getProvider();
+  const tripDefs = await loadTripDefinitions();
+  const existingDaysByDate = new Map(index.sections.flatMap((s) => s.days).map((d) => [d.date, d] as const));
+
+  const byDay = new Map<string, string[]>();
+  for (const photo of Object.values(photos)) {
+    const key = dayKey(photo.takenAt);
+    const list = byDay.get(key) ?? [];
+    list.push(photo.id);
+    byDay.set(key, list);
+  }
+
+  const dates = [...byDay.keys()].sort();
+  const result: OrganizeResult = { days: 0, summarized: 0, reused: 0, withheld: 0, trips: 0, months: 0 };
+  const days: DayRecord[] = [];
+
+  onProgress({ phase: "summarizing", done: 0, total: dates.length, message: "Summarizing changed days..." });
+
+  for (const [i, date] of dates.entries()) {
+    if (signal?.aborted) break;
+    const photoIds = byDay.get(date)!;
+    const dayPhotos = photoIds.map((id) => photos[id]);
+
+    // Two exclusions, both about what may reach a model rather than what the
+    // user may see. Withheld screenshots never went to one in the first place.
+    // Redaction-flagged photos did — a camera photo of a passport looks like
+    // any other document — so their transcripts are kept out of the summarizer
+    // instead, where they would otherwise be paraphrased into readable prose.
+    const analyzed = dayPhotos.filter((p) => p.analyzedAt && mayBeAnalyzed(p) && !withheldFromSummaries(p));
+    const withheld = dayPhotos.filter(withheldFromSummaries).length;
+    const place = dominantPlace(dayPhotos);
+    result.withheld += withheld;
+
+    // Compare what the model will be shown, not what the day holds — see
+    // DayRecord.summarizedPhotoIds. A day summarized before v9 has no such
+    // list, so it resummarizes once; that is the safe direction, since the
+    // reason it might be missing is that something was withdrawn from it.
+    const summarizedIds = analyzed.map((p) => p.id);
+    const prior = existingDaysByDate.get(date);
+    const inScope = !opts.only || date.startsWith(opts.only);
+    // Place is an input to the summary, not just a label, so a day whose place
+    // changed is as stale as one whose photos changed — geocoding lands after
+    // captioning, and the dominant-place fix above moved several days.
+    const unchanged =
+      !opts.force &&
+      prior?.summarizedPhotoIds != null &&
+      sameIds(prior.summarizedPhotoIds, summarizedIds) &&
+      prior.place === place &&
+      segmentsAreCurrent(prior.segments);
+
+    let summary: string | null = null;
+    let segments: DaySegment[] = [];
+
+    if (prior && (unchanged || !inScope)) {
+      // Out of scope means "not this run's business" — keep whatever is there
+      // rather than dropping a summary the user already paid for.
+      summary = prior.summary;
+      segments = prior.segments ?? [];
+      result.reused++;
+    } else if (inScope && date !== "unknown-date" && analyzed.length > 0) {
+      onProgress({ phase: "summarizing", done: i, total: dates.length, message: `Summarizing ${date}...` });
+
+      // Stops are measured, not inferred: GPS and timestamps decide where the
+      // day was spent before a single token is spent naming it.
+      const stops = detectStops(analyzed).map((stop, index) => ({
+        id: `s${index + 1}`,
+        kind: stop.kind,
+        startTime: stop.startTime,
+        endTime: stop.endTime,
+        photos: stop.photos.map((p) => ({
+          id: p.id,
+          caption: p.caption ?? "",
+          tags: p.tags,
+          contentType: p.contentType ?? "other",
+        })),
+      }));
+
+      const summarized = await provider.summarizeDay({
+        date,
+        place,
+        // Both flags describe how much the model may lean on metadata; see
+        // SummarizeDayInput. A day is time-uncertain if any of its photos is.
+        timeUncertain: dayPhotos.some((p) => p.timeSuspect),
+        placeFromMetadataOnly: place !== null && !analyzed.some((p) => p.contentType === "document"),
+        stops,
+      });
+
+      summary = summarized.summary;
+      const bySegment = new Map(summarized.segments.map((seg) => [seg.id, seg] as const));
+      segments = stops.map((stop) => {
+        const written = bySegment.get(stop.id);
+        return {
+          id: stop.id,
+          kind: stop.kind,
+          // A stop the model skipped still renders — as a plain grid under a
+          // time range, which is better than dropping its photos silently.
+          title: written?.title ?? (stop.kind === "transit" ? "Travelling" : "Unnamed stop"),
+          summary: written?.summary ?? null,
+          startTime: stop.startTime,
+          endTime: stop.endTime,
+          photoIds: stop.photos.map((p) => p.id),
+          highlights: written?.highlights ?? [],
+        };
+      });
+
+      segments = claimOnce(segments, photos);
+
+      result.summarized++;
+      if (withheld > 0) {
+        onProgress({ message: `${date}: ${withheld} photo(s) withheld from the summary (redaction flag).` });
+      }
+    }
+
+    days.push({ date, place, summary, photoIds, segments, summarizedPhotoIds: summarizedIds });
+  }
+
+  // A cancelled run must not write a half-built `sections` — the days it never
+  // reached would lose the summaries they already had.
+  if (signal?.aborted) {
+    onProgress({ phase: "cancelled", message: "Cancelled before writing; index left untouched." });
+    return result;
+  }
+
+  onProgress({ phase: "saving", message: "Splitting into defined trips and month buckets..." });
+  index.sections = bucketDays(days, tripDefs, index.sections);
+  await saveIndex(token, index);
+
+  result.days = days.length;
+  result.trips = index.sections.filter((s) => s.kind === "trip").length;
+  result.months = index.sections.filter((s) => s.kind === "month").length;
+
+  onProgress({
+    phase: "done",
+    done: days.length,
+    total: dates.length,
+    message: `${result.summarized} day(s) summarized, ${result.reused} unchanged, across ${result.trips} trip(s) and ${result.months} month bucket(s).`,
+  });
+  return result;
+}

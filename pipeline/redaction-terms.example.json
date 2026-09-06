@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Literal strings that identify you, matched case-insensitively against text",
+    "the AI pass transcribed off your photos. A photo whose transcript contains",
+    "one is withheld from day summaries, so it can never be paraphrased into",
+    "generated prose. The photo, its caption and its transcript stay in the",
+    "archive and still show in the album - this hides nothing from you.",
+    "",
+    "Your own name is the main thing worth putting here: no pattern can find a",
+    "name generically, and it is what a boarding pass, a delivery label or a",
+    "hotel confirmation puts in large print. Passport and card numbers are",
+    "already detected by shape and need no entry.",
+    "",
+    "Entries under 3 characters are ignored. This file is local only - it is",
+    "never uploaded to OneDrive and never sent to a model.",
+    "",
+    "Run `npm run --workspace pipeline redact` after editing."
+  ],
+  "terms": [
+    "Your Name",
+    "A Name You Travel With",
+    "any other literal string redact should always withhold"
+  ]
+}

@@ -1,0 +1,253 @@
+# TODO
+
+State as of 2026-09-05 evening. The **the train 1** trip (2026-08-16 → 09-02,
+18 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
+narrative written, map rendering. Whole run cost **under £8**.
+
+## Open issues
+
+- [ ] **Koblenz is missing from the trip map.** It is in the trip's `places`
+      list but produces no city marker. Likely caught by the new
+      `MAX_PLACE_SPAN_KM` rule (a Rhine-valley train leg) or merged into
+      Boppard. Not yet investigated.
+- [x] **"Netherlands gets extra territory"** — basemap land/sea boundary looks
+      wrong around Zeeland/Zuid-Holland; markers sit in water. Not investigated.
+      Suspect the `ne_50m_land` outer-ring-only extraction, or the lakes layer.
+	  User: Issue is Hoek van Holland is in the middle of the sea, resolved
+- [ ] **the city airport never appears on the map.** The photos are correct and now
+      trusted (18 of 21 UK fixes), geocoded to the capital region / City of the capital.
+      They land in a single **transit** segment (13:42–21:58 "Flight to the capital
+      City") and `citiesOf` only builds markers from `place` segments. Needs a
+      decision, not a fix: either transit segments contribute markers (putting
+      airports/stations on the map generally), or `detectStops` splits a transit
+      block when it crosses a large distance.
+- [ ] **Label suppression is aggressive** — 7 of 23 shown at the fitted view.
+      Honest (they don't fit) and zooming reveals more, but the Randstad stays
+      anonymous. Leader lines or offset placement would beat dropping.
+- [ ] **Captions only appear after a page refresh.** `shardCache` in
+      `app/src/archiveData.ts` caches each month's shard per session and never
+      invalidates, so a finished job updates OneDrive but not the open tab. The
+      job panel already re-renders on completion; it needs to clear that cache.
+- [ ] Photos in cards are fixed height — poor in portrait.
+- [ ] **Burger menu**: generate/settings should sit in the same list as the
+      photo months, always visible, rather than a popup. Like Task Manager.
+- [ ] Zoom-out reaches the whole world; cap at continental?
+- Mobile view:
+  - [ ] Portrait layout is broken and cannot scroll.
+  - [ ] Design needs rethinking; a Figma would help.
+
+## Todo
+
+- [ ] Make this an app (Electron / WebView2 / whatever).
+- [ ] Light/dark mode toggle.
+- [ ] Trip management — rename, delete.
+- [x] **Print view / Save as PDF.** Menu entry on any view with cards. See
+      `app/src/print.ts` and the `@media print` block at the end of
+      `app/src/style.css`.
+- [ ] **Gemini Batch API** — roughly half price, async, up to 24h. Not worth it
+      for a 35-minute interactive run; worth building if backfilling the other
+      ~14,000 photos (£20 vs £40 overnight).
+
+## Sharing / export (2026-09-05)
+
+`Save as PDF` in the burger menu. Print-to-PDF was chosen because it is the one
+format this archive can emit that the *recipient* can open: Chrome rasterises
+every thumbnail into the file, so it needs no Microsoft account, no token and
+no network. Nothing in it points back at OneDrive.
+
+**What is exported is deliberately less than what is on screen**, and the rule
+is enforced in the stylesheet, not in script, so expanding a section by hand
+before printing still cannot put it in the file:
+
+- Cards only. The `.stop-more` grids and `.transit` strips are always hidden.
+  Measured reason: of the trip's 125 screenshots, **114 live in exactly those
+  two collapsed regions** and have never been reviewed. The 11 that reach cards
+  are all travel apps (DB Navigator, Eurail, rail maps) — checked by hand.
+- A placard's English rendering prints; the verbatim OCR behind `.card-source`
+  does not.
+- Zero photos in the trip carry a `sensitive` flag (all 4,064 checked).
+
+**Confirmed end to end on 2026-09-05**: produced a clean 95 MB PDF of the whole
+the train 1 trip. Verified by the owner; the file itself has not been opened
+here.
+
+Measured on the the train 1 trip:
+
+| | |
+|---|---|
+| images exported / in the page | **1,292 of 3,659** |
+| already in the local thumb cache | **1,292 of 1,292** — no Graph calls |
+| prepare pass (hydrate + decode) | **19.7s**, warm cache |
+| Chrome print render | **45-60s** before, **20s** after |
+| total wall clock | **~65-80s** before, **~53s** after |
+| output file | **95 MB** before, **47.47 MB** after |
+| image payload in the page | 92.5 MB JPEG, avg 73 KB |
+| pages at A4 | **214** (725 cards over 18 days) |
+
+### Rasterise-at-print-size — done, needs one hand-test
+
+The 95MB came from embedding every card image at Graph's `large` (800px box)
+while the slot it prints into is 46-95mm. `app/src/print.ts` now re-renders each
+image to its actual print slot at **200 dpi**, applying the same `object-fit:
+cover` crop the page does (pixels outside the crop were being embedded at full
+resolution despite never being visible), then re-encodes at **JPEG q0.70**.
+
+Quality chosen by measurement against the 50MB cap, over all 1,292 images:
+
+| quality | export |
+|---|---|
+| 0.82 | 54.3 MB — over |
+| 0.75 | 47.0 MB — 6% margin, too close |
+| **0.70** | **43.6 MB** — 13% margin |
+| 0.62 | 38.2 MB |
+
+Measured result of the shipped path: **1,187 images re-encoded to 36.8 MB**,
+105 left untouched, ~45 MB of images against 92.5 MB before. Prepare +
+sizing ran **33.2s**.
+
+**Confirmed 2026-09-06: 47.47 MB, Chrome render 20s.** Under AI Studio's 50MB
+cap. Against the 95 MB / 45-60s starting point: **half the size, a third of the
+render time**, no visible quality cost.
+
+- [ ] **The margin is thinner than it looks — 5%, not the 13% q0.70 was chosen
+      for.** Projected ~45-46 MB from the images alone; the finished PDF came in
+      at 47.47 MB, so page structure costs ~5% on top, not the ~3% assumed. A
+      slightly longer trip, or a few more `full` cards, will breach 50MB. If it
+      does, q0.62 measured 38.2 MB and is the next stop.
+
+Two findings worth keeping:
+
+- **A downscale can make a JPEG bigger.** Graph's thumbnails are already well
+  compressed, so re-encoding at q0.70 made **41% of `full` card images larger**
+  — they only shrink 800px -> 669px, where `half`/`normal` drop to ~409px and
+  shrink reliably. `rasterise()` now keeps whichever is smaller and returns
+  null otherwise. Worth 2.7MB, and it makes the pass safe by construction
+  rather than by tuning.
+- **`canvas.toBlob` is timer-throttled in a background tab.** Measured 1008ms
+  per image hidden vs 6.3ms for synchronous `toDataURL` — an export started and
+  then left for another tab would have taken 21 minutes instead of 33 seconds.
+  The encode is now synchronous, and the progress yield is skipped entirely when
+  `document.hidden` (nothing to repaint, and the yield is throttled too).
+  *This is also why my first timing of the pass was wrong:* I measured it in a
+  backgrounded tab and read the throttling as a real cost.
+
+- [ ] 45MB clears AI Studio (50MB) but not mail (25MB). An export scope choice
+      is still the lever for that.
+- [ ] For feeding Gemini specifically, a **text export** — narrative, day and
+      stop summaries, card titles/descriptions, OCR — is ~19,000 words and a
+      few hundred KB. Better than a PDF for questions about the trip; worse if
+      the model needs to see the photographs. Probably worth having both.
+- [ ] `window.print()` freezes the renderer while the dialog is open, so the
+      tab cannot be driven by automation during it. Test print by hand.
+
+## Correctness / safety backlog
+
+- [ ] **`analyze` (CLI) and `serve` can run at once and clobber the same
+      shard.** The one-job-at-a-time guard is in the server only; a CLI run
+      walks past it. Needs a lock file. *This actually happened on 2026-09-05.*
+- [ ] **`trip` proceeds when most days have no summary** — warns in a scrolling
+      log, then writes a full narrative anyway. Should refuse without an
+      explicit override. A paid-for result that reads as authoritative but is
+      ungrounded is the worst failure mode here.
+- [ ] Guard in `analysisTargets()` (pipeline/src/duplicates.ts): if a duplicate
+      group's representative is deleted at source, survivors keep a dead
+      `duplicateGroupId` and are never analyzed. Self-heals on the next scan.
+- [ ] `dedupe` command — delete duplicate files from OneDrive. sha256 only,
+      dry-run default, recycle bin. **Needs explicit approval and a shown dry
+      run.** Now worth more: real duplicate count is 1,357, not 324.
+- [ ] Re-run analyze for the 2 photos that failed `503 UNAVAILABLE` on
+      2026-09-05. Not lost — `analyzedAt` is still null — and the retry added
+      afterwards should prevent a repeat.
+
+## Repository (2026-09-06)
+
+`git init`, private repo. Nothing sensitive is tracked — verified with
+`git check-ignore` rather than by reading the ignore file.
+
+Ignored: `.env` / `.env.*` (keeping `.env.example`), `token-cache.json` (a live
+OneDrive refresh token — that is the account, not just the archive), `data/`
+(~22MB; every record carries a filename, OneDrive path, GPS fix, caption and
+transcript, so it is a searchable location history), `redaction-terms.json`
+(**the owner's name in plain text — the whole point of the file is that no
+pattern can find these strings**), and `*.pdf` so an exported trip cannot be
+committed by accident.
+
+- `pipeline/data/trips.json` — **moved** from `pipeline/trips.json` on
+  2026-09-06. It is travel history (trip names and exact date ranges), so it
+  belongs with the archive data, not beside the source. `tripDefs.ts` now owns
+  the path and exports it; `jobs/trip.ts` had kept a second copy of the same
+  filename, which is how a reader and a writer drift apart. A root-level file
+  is migrated into `data/` automatically on first read.
+- `pipeline/screenshot-apps.json` stays tracked: it is curated policy with a
+  long explanatory comment, and belongs in the repo. It does reveal which
+  travel apps are installed — acceptable in a private repo, worth revisiting if
+  it ever goes public.
+- **`TODO.md` is why the repo is private.** It is a travel history in prose —
+  exact dates, the full route, photo counts. Nothing secret line by line, but
+  on an account tied to a real name it publishes where the owner was and when.
+  Making it public means moving the trip specifics into a local-only file
+  first.
+
+## Operational notes
+
+- **`serve` does not pick up a rebuilt pipeline.** Restart it after any schema
+  or code change or it fails with a schema-version mismatch. Worth printing the
+  schema version at startup.
+- **`ANALYZE_CONCURRENCY`** (env, default 4) is read at server start, so
+  changing it needs a restart. 4 measured ~37 photos/min; the 2,991-photo run
+  averaged ~85/min. The ceiling has not been established — OneDrive throttling
+  is the expected limit, not Gemini.
+- **Run order is Analyze → Day summaries → Trip.** `trip` reads only day
+  summaries, never photos. Skipping the middle step is why an early trip
+  narrative covered 18 days with data for 4.
+- Empty "Limit to a date" in Day summaries means *consider* all days, not
+  rewrite all days. Days with no analyzed photos are skipped entirely.
+
+## Recently fixed (2026-09-05)
+
+- `gpsSuspect` rewritten from statistical to physical. It flagged anything
+  >100km from the day's median, so a travel day's minority end was discarded —
+  54 photos on 09-02 alone, including every the capital fix. Now flags only a fix
+  unreachable at >1200km/h from **both** temporal neighbours. Trip-wide: 26
+  suspects across 18 days.
+- The geocode sweep was **unreachable**: early returns in both `runAnalyze` and
+  the CLI skipped it whenever a month had nothing left to caption — exactly when
+  a previously-suspect photo needs it. 50 places filled in for 09-02.
+- **Journeys were becoming cities.** A long train with sparse indoor GPS looks
+  stationary to `detectStops`, became a "place", and was plotted at the journey
+  midpoint under a passed-through town's name — "a city to a city by ICE"
+  appeared as *a city*, 156km off. Now rejected by a 30km span limit plus a
+  40% place-name agreement threshold. Worst city error is now **2km**.
+- Duplicate detection: the copy-suffix regex made its separator optional, so it
+  mangled un-suffixed originals and only matched when *both* files had a suffix.
+  324 → **1,357** redundant copies library-wide.
+- Graph 429/401 backoff and token refresh; Gemini 429/5xx retry; shard
+  checkpoints every 150 photos.
+- Trip map: overlap-safe labels, country names no longer drawn as cities, coarse
+  points merged into nearby real cities, double-backs drawn, expand overlay.
+
+## Notes for future logging
+
+Traps that cost real time here, kept so they are not rediscovered:
+
+- **Measure before asserting.** Estimates on this project were wrong by an order
+  of magnitude, and several confident diagnoses were wrong: Ollama crashes read
+  as OOM twice; prompt field order blamed for a model failure (an A/B refuted
+  it); a layout enum blamed on the model when the schema allowed one value per
+  day; duplicates quoted at 1.9% when the detector's own regex was broken.
+- **A number produced by your own code is not a measurement** until checked
+  against an independent signal.
+- **`display: flex` in author CSS beats `[hidden]`.** Bitten three times —
+  `.lightbox`, `.signin-banner`, `.job-form`. Audit for rules setting a
+  non-`none` display on anything toggled via the `hidden` property.
+- **Natural Earth `scalerank` 0 is the most prominent tier**, not a missing
+  value. `?? 99`, never `|| 99`.
+- **Do not diagnose an animation from a screenshot.**
+- **Staleness checks must compare what the model was actually shown**, and must
+  be updated whenever a stored shape gains a required field (`segmentsAreCurrent`).
+- **Do not invent identity.** Renaming a coarse point after the nearest gazetteer
+  town produced plausible, wrong cities ("The Hague" beside "Den Haag"). Merge
+  into something known, or leave it unnamed.
+- **A larger stated maximum raises output even when it is never reached.**
+  Raising the card cap 20 → 30 took one stop from 10 cards to 28; nothing had
+  ever hit 20.

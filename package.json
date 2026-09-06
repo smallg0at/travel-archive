@@ -1,0 +1,12 @@
+{
+  "name": "travel-archive",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "pipeline",
+    "app"
+  ],
+  "devDependencies": {
+    "shapefile": "^0.6.6"
+  }
+}
