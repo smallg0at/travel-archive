@@ -27,10 +27,17 @@ import * as jobs from "./server/jobs.js";
  */
 
 const ALLOWED_ORIGINS = new Set([
+  // Vite dev and preview.
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:4173",
   "http://127.0.0.1:4173",
+  // The desktop shell, which serves the built app on its own port so it does
+  // not compete with a preview server. Without this the window loads and the
+  // archive renders from OneDrive, but every job request fails CORS and
+  // generation silently looks unavailable.
+  "http://localhost:17923",
+  "http://127.0.0.1:17923",
 ]);
 
 type Handler = (req: IncomingMessage, res: ServerResponse, params: string[]) => Promise<void> | void;

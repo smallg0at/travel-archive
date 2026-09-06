@@ -1,0 +1,111 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
+
+/**
+ * Runs `pipeline serve` as a child process, or adopts one already running.
+ */
+
+export interface PipelineServer {
+  /** null when an already-running server was adopted rather than started here. */
+  child: ChildProcess | null;
+  adopted: boolean;
+}
+
+/** Whether something is already answering as the job server on this port. */
+export async function isHealthy(port: number, timeoutMs = 1500): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolves once the server answers, or false if it never does. */
+export async function waitForHealthy(port: number, timeoutMs = 20_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isHealthy(port, 1000)) return true;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return false;
+}
+
+export interface StartOptions {
+  /** pipeline/ — see the note below on why this is not optional. */
+  cwd: string;
+  /** pipeline/dist/serve.js */
+  entry: string;
+  port: number;
+  onOutput: (line: string) => void;
+}
+
+/**
+ * Starts the job server, or adopts a healthy one.
+ *
+ * **Spawned through Electron's own Node, not `node`.** Node here is installed
+ * via fnm, which puts it on `PATH` only for shells that have run its init — and
+ * an app launched from an icon has run no shell at all. `process.execPath` with
+ * `ELECTRON_RUN_AS_NODE` runs the same JavaScript on the Node that Electron
+ * already bundles, so the shell depends on nothing outside itself. (This is
+ * also why `run-preview.ps1` has to hardcode an absolute node path.)
+ *
+ * **`cwd` must be pipeline/.** `pipeline/src/env.ts` starts with
+ * `import "dotenv/config"`, which reads `.env` relative to `process.cwd()`, and
+ * the archive's own paths are cwd-relative too — `data/<month>.json`,
+ * `data/.archive-lock`, `data/jobs/`. Spawned from the wrong directory the
+ * server either refuses to start for want of `AZURE_CLIENT_ID` or, worse,
+ * quietly writes a second archive somewhere else.
+ */
+export async function startPipelineServer(opts: StartOptions): Promise<PipelineServer> {
+  if (await isHealthy(opts.port)) {
+    opts.onOutput(`Adopted the job server already running on ${opts.port}.`);
+    return { child: null, adopted: true };
+  }
+
+  if (!existsSync(opts.entry)) {
+    throw new Error(
+      `The pipeline is not built: ${opts.entry} does not exist. ` +
+        `Run "npm run --workspace pipeline build" first.`,
+    );
+  }
+
+  const child = spawn(process.execPath, [opts.entry], {
+    cwd: opts.cwd,
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+
+  const forward = (buf: Buffer) => {
+    for (const line of buf.toString("utf-8").split(/\r?\n/)) {
+      if (line.trim()) opts.onOutput(line);
+    }
+  };
+  child.stdout?.on("data", forward);
+  child.stderr?.on("data", forward);
+
+  return { child, adopted: false };
+}
+
+/**
+ * Matches the device-code prompt MSAL prints, so the shell can put it on screen.
+ *
+ * `pipeline/src/auth.ts` emits this with `console.log` and then blocks until
+ * the user completes it. That is right for a CLI run somebody is watching, and
+ * invisible here — with no terminal the first sign-in would simply appear to
+ * hang forever. Matched on the URL rather than the wording, which MSAL has
+ * changed before.
+ */
+export function isDeviceCodePrompt(line: string): boolean {
+  return /microsoft\.com\/devicelogin/i.test(line) || /enter the code/i.test(line);
+}
+
+/** Stops a server this process started. An adopted one is left alone. */
+export function stopPipelineServer(server: PipelineServer | null): void {
+  if (!server?.child || server.adopted) return;
+  if (server.child.exitCode !== null || server.child.signalCode !== null) return;
+  server.child.kill();
+}

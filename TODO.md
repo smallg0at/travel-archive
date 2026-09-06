@@ -38,7 +38,7 @@ narrative written, map rendering. Whole run cost **under £8**.
 
 ## Todo
 
-- [ ] Make this an app (Electron / WebView2 / whatever).
+- [x] **Make this an app.** Electron shell in `desktop/`. `npm run desktop`.
 - [ ] Light/dark mode toggle.
 - [ ] Trip management — rename, delete.
 - [x] **Print view / Save as PDF.** Menu entry on any view with cards. See
@@ -139,6 +139,54 @@ Two findings worth keeping:
       the model needs to see the photographs. Probably worth having both.
 - [ ] `window.print()` freezes the renderer while the dialog is open, so the
       tab cannot be driven by automation during it. Test print by hand.
+
+## Desktop shell (2026-09-06)
+
+`npm run desktop`. One window; no terminals. `desktop/src/main.ts` serves
+`app/dist` on **17923**, starts (or adopts) `pipeline serve` on 4319, opens the
+window, and shuts down what it started. **Nothing in `app/src` changed**, so
+`dist/` still feeds a later Capacitor build.
+
+**The shell has its own port** rather than sharing 4173 with `run-preview.ps1`,
+so the desktop app and a dev preview can run at once. Changing it means two
+things move together: the Azure SPA redirect URI (MSAL derives it from
+`window.location.origin`) and `ALLOWED_ORIGINS` in `pipeline/src/serve.ts` —
+miss the second and the window loads and the archive renders, but every job
+request fails CORS and generation just looks unavailable. Registered as
+`http://localhost:17923/auth`.
+
+Electron over WebView2 despite WebView2 Runtime v153 and .NET 10 SDK both being
+installed and ~20x smaller: the job server is Node and must run either way.
+Electron bundles Node (v22.22.0, matching the project's 22.18), so
+`ELECTRON_RUN_AS_NODE` spawns it with no dependency on fnm's `node` being on
+`PATH` — which a GUI-launched app has never set up. Revisit if memory or start
+time becomes a real complaint.
+
+Verified: `/auth/` serves the bridge and `/auth` serves the app (matching Vite,
+and load-bearing for the popup handoff); sign-in completes and the archive
+renders; an existing job server is adopted, not duplicated, and is left running
+on quit; a server the shell started dies with it; no stale lock; and a job
+started from the app is refused while a CLI writer holds the archive lock —
+`"Another archive writer is running: analyze (CLI) ..."`.
+
+- [ ] Not packaged. No installer, no signing, no auto-update — `npm run
+      desktop` from a checkout is the whole story.
+- [ ] The static server reuses whatever already owns its port, but that path
+      was only reasoned about, not exercised. Much less likely to matter now
+      that the shell has a dedicated port; the single-instance lock covers the
+      realistic case.
+- [ ] Renderer shows Electron's "insecure resources / no CSP" warnings. Benign
+      over loopback HTTP, and they disappear once packaged, but a CSP would be
+      better than living with them.
+
+### Debugging Electron without a browser extension
+
+The window loads the same `http://localhost:4173` as a browser tab, so **UI
+work is still debugged in Chrome exactly as before**. For the renderer inside
+Electron, launch with `--remote-debugging-port=9222`; `127.0.0.1:9222/json`
+lists targets and a WebSocket to one drives CDP. Node 22 has a global
+`WebSocket`, so the client is ~40 lines and needs no dependencies. That is how
+the sign-in failure below was found.
 
 ## Correctness / safety backlog
 
@@ -251,3 +299,25 @@ Traps that cost real time here, kept so they are not rediscovered:
 - **A larger stated maximum raises output even when it is never reached.**
   Raising the card cap 20 → 30 took one stop from 10 cards to 28; nothing had
   ever hit 20.
+
+- **MSAL opens `about:blank` first.** It creates the popup synchronously so the
+  click's user activation is not spent building the authorize URL, then points
+  that window at the login origin. An Electron `setWindowOpenHandler` that only
+  allows the login origin therefore sends `about:blank` to `shell.openExternal`
+  — Windows asks which app should open it, MSAL gets a null window, and it
+  surfaces as `popup_window_error`, which looks like a popup blocker.
+- **A synthetic click is not a user gesture for the whole promise chain.**
+  Driving sign-in through CDP reproduced a *different* failure than the real
+  click: `signIn()` awaits `ensureInitialized()` before `loginPopup()`, and that
+  await spent the activation, so `window.open` returned null for reasons
+  unrelated to the actual bug. Two different causes, one error code — check
+  which one you are looking at before fixing anything.
+- **The trailing slash in the MSAL redirect URI is Vite's requirement, not
+  Azure's.** `msalConfig.ts` says the registration must match "including the
+  trailing slash", but the sentence that follows explains the real reason:
+  Vite's dev/preview server resolves `auth/index.html` only for the exact path
+  `/auth/`, and `/auth` falls through to the SPA fallback. Azure itself
+  tolerates the difference — every redirect URI in this app registration is
+  registered without the slash and all of them work. Read the whole comment
+  before quoting half of it as a constraint.
+

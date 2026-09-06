@@ -1,0 +1,16 @@
+{
+  "name": "@travel-archive/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop shell: serves the built app, runs the job server, opens one window.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.0",
+    "electron": "^38.1.0",
+    "typescript": "^5.9.3"
+  }
+}

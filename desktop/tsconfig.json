@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    // CommonJS, unlike the other workspaces. Electron's main process supports
+    // ESM only from v28 and with caveats around `app.whenReady()` timing; this
+    // is one isolated file that nothing imports, so the safe module format is
+    // worth more here than consistency with pipeline/ and app/.
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
