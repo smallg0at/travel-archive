@@ -1,8 +1,8 @@
-import { renderAlbum, renderDensityControl } from "./album";
+import { renderAlbum } from "./album";
 import { loadIndex, SignInRequiredError } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { mountJobPanel } from "./tripMode";
-import { initJobDrawer, initPrint, initSettings, initSidebarResize } from "./chrome";
+import { initJobDrawer, initSidebarResize } from "./chrome";
 
 let panelMounted = false;
 
@@ -55,8 +55,6 @@ async function loadAndRender(): Promise<void> {
 
 async function main() {
   initSidebarResize();
-  initSettings(renderDensityControl());
-  initPrint();
 
   // Photo/shard loads that hit an expired session ask for a re-auth click
   // via this event rather than popping a popup themselves — browsers block

@@ -158,13 +158,18 @@ export async function evictIfNeeded(protectedFiles?: Set<string>): Promise<void>
 }
 
 async function evictGroup(sizes: ThumbSize[], cap: number, protectedFiles?: Set<string>): Promise<void> {
-  const all = (await entries(sizes)).filter((e) => !protectedFiles?.has(e.path));
+  const all = await entries(sizes);
+
+  // Pinned files count towards the budget but are never the ones deleted.
+  // Excluding them from the total instead was wrong: with 4,685 of 5,767 files
+  // pinned, 386MB of cache measured as 70MB and nothing was ever evicted, so
+  // the cap silently stopped applying.
   let total = all.reduce((n, e) => n + e.bytes, 0);
   if (total <= cap) return;
 
+  const evictable = all.filter((e) => !protectedFiles?.has(e.path)).sort((a, b) => a.used - b.used);
   const target = cap * EVICT_TARGET;
-  all.sort((a, b) => a.used - b.used);
-  for (const entry of all) {
+  for (const entry of evictable) {
     if (total <= target) break;
     try {
       await unlink(entry.path);
@@ -173,6 +178,8 @@ async function evictGroup(sizes: ThumbSize[], cap: number, protectedFiles?: Set<
       // Already gone, or in use; either way stop counting it.
     }
   }
+  // Pinning more than the cap allows is legitimate — the user asked for it —
+  // so falling short of the target here is not an error.
 }
 
 /**

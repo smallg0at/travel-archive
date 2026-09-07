@@ -140,8 +140,8 @@ narrative written, map rendering. Whole run cost **under £8**.
       Graph + IndexedDB (the fallback, and the phone today), device filesystem
       (not built). Verified in the desktop app: all loaded thumbnails came from
       `127.0.0.1:4319`, no blob URLs, no CDN.
-- [ ] Cache status in Settings, distinguishing "empty" from "unavailable" —
-      still worth having for whichever source is active.
+- [x] Cache status in Settings — done. With no server the page says so plainly
+      rather than showing dead controls, which is the phone's normal state.
 
 
 - [ ] **Koblenz is missing from the trip map.** It is in the trip's `places`
@@ -175,8 +175,9 @@ narrative written, map rendering. Whole run cost **under £8**.
       full/half and 1.76-1.78 for normal, at every count. Desktop geometry is
       unchanged by design — a two-photo full card computes to 395px against the
       380px it was hardcoded at.
-- [ ] **Burger menu**: generate/settings should sit in the same list as the
-      photo months, always visible, rather than a popup. Like Task Manager.
+- [x] **Burger menu** — done 2026-09-07. Generate, Save as PDF and Settings are
+      rows in the sidebar now, always visible; the floating burger and the
+      230px settings popup are gone.
 - [ ] Zoom-out reaches the whole world; cap at continental?
 - Mobile view:
   - [x] **Portrait layout cannot scroll.** Fixed 2026-09-06: `#main-column`
@@ -401,6 +402,49 @@ Electron, launch with `--remote-debugging-port=9222`; `127.0.0.1:9222/json`
 lists targets and a WebSocket to one drives CDP. Node 22 has a global
 `WebSocket`, so the client is ~40 lines and needs no dependencies. That is how
 the sign-in failure below was found.
+
+## Sync and Settings (2026-09-07)
+
+One local library that syncs, replacing six caches that each answered "is this
+fresh?" differently. `npm run desktop` or the preview; Settings is a sidebar row.
+
+- **Freshness is an eTag.** `GET /sync/status` asks Graph for `index.json`'s
+  eTag without downloading it. The same question via `/content` is 2.4MB and
+  measured 1,237-3,289ms.
+- **Two-way.** clean+moved pulls, dirty+unchanged pushes, dirty+moved is a
+  conflict that stops and asks. The resolver is two buttons named for what they
+  do — *Upload mine (overwrites OneDrive)* and *Replace mine (discards local
+  changes)* — because "keep local" never says whether the other copy survives.
+- **Pins are OneDrive's "always keep on this device".** Cloud/filled markers in
+  the sidebar; pinned items are fetched on sync and never evicted.
+- **Warming only on dwell.** 2s on a view before the bounded 200-photo
+  look-ahead fires, cancelled on leaving. Measured: a 700ms glance costs
+  **0** requests; staying costs 1.
+
+Verified: launch metadata done at **644ms** with **0** Graph calls; pins
+round-trip and survive a 95MB cap against 309MB of cache; `behind` detected from
+a mismatched eTag; a pull fetched 62 files and returned to `in-sync`.
+
+Three bugs found by testing, not reasoning:
+
+- **Two routes could never share a path.** The dispatcher 405'd on the first
+  pattern match instead of continuing, so `GET /sync/pins` shadowed the POST.
+- **Eviction stopped applying entirely.** Filtering pinned files out *before*
+  summing meant 386MB of cache measured as 70MB, so the cap never triggered.
+  Pinned bytes now count toward the budget; only unpinned ones are deleted.
+- **A glance still warmed.** The dwell timer was cancelled by `showTrip` and
+  `showMonth` but not by navigating to Settings, so clicking away still fired
+  it two seconds later. Every exit cancels now.
+
+Still to build, all with a home in the Settings page now:
+
+- [ ] Light/dark toggle (Appearance section exists; only density and sidebar
+      width are in it).
+- [ ] Language / i18n section.
+- [ ] Trip rename and delete section.
+- [ ] The periodic sync timer — the setting is stored and honoured by the
+      server, but nothing in the UI sets the interval yet.
+- [ ] Pin "include originals" — the API takes it, the UI never sets it.
 
 ## Correctness / safety backlog
 

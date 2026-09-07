@@ -5,19 +5,49 @@ import { renderDayBody } from "./render";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
+import { setPin as savePin, syncStatus } from "./backend";
+import { releaseSettings, showSettings } from "./settings";
+import { toggleJobDrawer } from "./chrome";
+import { canPrint, printView } from "./print";
 
 /**
- * Ask the cache to fill itself for a whole view, before scrolling asks for any
- * of it.
+ * How long a view must be looked at before anything is fetched for it.
  *
- * A browser holds ~6 connections to one host, so a cold cache turns a fast
- * scroll into a queue: 169 requests measured at a p90 of 22 seconds. The server
- * has no such limit — 30 at once finished in 2.2s — so the fix is to fetch
- * early at a concurrency the browser cannot reach, after which every request is
- * a read from disk.
+ * Clicking the wrong trip and leaving immediately must cost nothing. The old
+ * `warmView` fired *during* render, so a misclick downloaded a batch — for a
+ * 4,998-photo month, a lot of Graph traffic bought by a wrong click.
  */
-function warmView(photoIds: string[]): void {
-  void thumbnailSource()?.warm?.(photoIds, "large");
+const DWELL_MS = 2000;
+
+/**
+ * How far ahead of the viewport to fetch. Bulk is sync's job now; this only
+ * smooths the next screen or two of scrolling.
+ */
+const LOOK_AHEAD = 200;
+
+let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Cancels any pending look-ahead. Called whenever the view changes. */
+function cancelLookAhead(): void {
+  if (dwellTimer) clearTimeout(dwellTimer);
+  dwellTimer = null;
+}
+
+/**
+ * Fetch a bounded slice ahead, but only once the view has been kept.
+ *
+ * Deliberately not the whole view: `warmView` used to ask for every photo in a
+ * trip or month on render, which is exactly the traffic that was competing with
+ * the app's own metadata fetches and making loads slower.
+ */
+function lookAhead(photoIds: string[]): void {
+  cancelLookAhead();
+  const source = thumbnailSource();
+  if (!source?.warm || photoIds.length === 0) return;
+  dwellTimer = setTimeout(() => {
+    dwellTimer = null;
+    void source.warm!(photoIds.slice(0, LOOK_AHEAD), "large");
+  }, DWELL_MS);
 }
 
 /**
@@ -212,6 +242,8 @@ function scrollToStop(anchor: string): void {
  */
 async function showTrip(trip: TripRecord): Promise<void> {
   const content = document.getElementById("content")!;
+  cancelLookAhead();
+  releaseSettings();
   releaseThumbnails();
   content.replaceChildren(el(`<div class="loading">Loading ${trip.name}…</div>`));
 
@@ -278,7 +310,8 @@ async function showTrip(trip: TripRecord): Promise<void> {
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
-  warmView(trip.days.flatMap((d) => d.photoIds));
+  lookAhead(trip.days.flatMap((d) => d.photoIds));
+  refreshPrintEntry();
 
   // After the page is on screen: the basemap is a ~750KB dynamic import, and
   // the trip should be readable before it lands.
@@ -289,6 +322,8 @@ async function showTrip(trip: TripRecord): Promise<void> {
 
 async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promise<void> {
   const content = document.getElementById("content")!;
+  cancelLookAhead();
+  releaseSettings();
   const label = formatMonthLabel(summary.month);
 
   // The outgoing month's thumbnails are about to be detached, so free their
@@ -338,7 +373,8 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
-  warmView(photos.map((p) => p.id));
+  lookAhead(photos.map((p) => p.id));
+  refreshPrintEntry();
 }
 
 function renderNav(index: ArchiveIndexFile): void {
@@ -354,19 +390,15 @@ function renderNav(index: ArchiveIndexFile): void {
     nav.appendChild(label);
 
     for (const trip of [...trips].sort((a, b) => b.startDate.localeCompare(a.startDate))) {
-      const link = el<HTMLButtonElement>(
-        `<button class="month-link trip-link" type="button"><span class="month-name"></span><span class="month-count"></span></button>`,
+      const row = navRow(
+        trip.name,
+        String(trip.days.reduce((n, d) => n + d.photoIds.length, 0)),
+        "trip",
+        trip.id,
+        () => void showTrip(trip),
       );
-      link.querySelector(".month-name")!.textContent = trip.name;
-      link.querySelector(".month-count")!.textContent = String(
-        trip.days.reduce((n, d) => n + d.photoIds.length, 0),
-      );
-      link.addEventListener("click", () => {
-        nav.querySelectorAll(".month-link").forEach((n) => n.classList.remove("active"));
-        link.classList.add("active");
-        void showTrip(trip);
-      });
-      nav.appendChild(link);
+      row.classList.add("trip-link");
+      nav.appendChild(row);
     }
   }
 
@@ -383,17 +415,140 @@ function renderNav(index: ArchiveIndexFile): void {
       nav.appendChild(label);
     }
 
-    const link = el<HTMLButtonElement>(`<button class="month-link" type="button"><span class="month-name"></span><span class="month-count"></span></button>`);
     // Month name without the year — the year is already the group heading above.
-    link.querySelector(".month-name")!.textContent = formatMonthLabel(summary.month, false);
-    link.querySelector(".month-count")!.textContent = String(summary.photoCount);
-    link.addEventListener("click", () => {
-      nav.querySelectorAll(".month-link").forEach((n) => n.classList.remove("active"));
-      link.classList.add("active");
-      link.scrollIntoView({ block: "nearest", inline: "nearest" });
-      void showMonth(summary, index);
-    });
-    nav.appendChild(link);
+    const row = navRow(
+      formatMonthLabel(summary.month, false),
+      String(summary.photoCount),
+      "month",
+      summary.month,
+      () => void showMonth(summary, index),
+    );
+    nav.appendChild(row);
+  }
+
+  // Generate and Settings live in the same list as everything else, always
+  // visible, rather than behind a floating burger — which is how this was asked
+  // for: "in the same list as the photo months, always visible. Like Task
+  // Manager."
+  nav.appendChild(el(`<div class="nav-sep"></div>`));
+
+  const generate = el<HTMLButtonElement>(
+    `<button class="month-link nav-tool" id="nav-generate" type="button" hidden><span class="month-name">Generate</span></button>`,
+  );
+  generate.addEventListener("click", () => {
+    generate.classList.toggle("active", toggleJobDrawer());
+  });
+  nav.appendChild(generate);
+
+  const print = el<HTMLButtonElement>(
+    `<button class="month-link nav-tool" id="nav-print" type="button" hidden><span class="month-name">Save as PDF</span></button>`,
+  );
+  print.addEventListener("click", () => void printView());
+  nav.appendChild(print);
+
+  const settings = el<HTMLButtonElement>(
+    `<button class="month-link nav-tool" type="button"><span class="month-name">Settings</span></button>`,
+  );
+  settings.addEventListener("click", () => {
+    // Leaving a view cancels its look-ahead. Without this, glancing at a trip
+    // and clicking straight to Settings still fired the warm two seconds later
+    // — the dwell delay only helps if every exit cancels it, not just the two
+    // that happen to render a view.
+    cancelLookAhead();
+    nav.querySelectorAll(".month-link").forEach((n) => n.classList.remove("active"));
+    settings.classList.add("active");
+    void showSettings();
+  });
+  nav.appendChild(settings);
+
+  void refreshPinMarks();
+}
+
+/**
+ * One sidebar row, with the pin marker OneDrive uses.
+ *
+ * A filled marker means kept on this device; a cloud means fetched when needed.
+ * The vocabulary is borrowed deliberately — the mental model is borrowed, so it
+ * should look it.
+ */
+function navRow(
+  name: string,
+  count: string,
+  kind: "trip" | "month",
+  id: string,
+  open: () => void,
+): HTMLButtonElement {
+  const row = el<HTMLButtonElement>(
+    `<button class="month-link" type="button">
+       <span class="month-name"></span>
+       <span class="month-count"></span>
+       <span class="pin-mark" role="button" tabindex="0" title="Keep on this device">☁</span>
+     </button>`,
+  );
+  row.querySelector(".month-name")!.textContent = name;
+  row.querySelector(".month-count")!.textContent = count;
+  row.dataset.pinKind = kind;
+  row.dataset.pinId = id;
+
+  row.addEventListener("click", (event) => {
+    // The pin marker sits inside the row so it lines up with the count; a click
+    // on it must toggle the pin rather than open the view.
+    if ((event.target as HTMLElement).classList.contains("pin-mark")) {
+      event.stopPropagation();
+      void togglePin(row);
+      return;
+    }
+    document.getElementById("month-nav")!.querySelectorAll(".month-link").forEach((n) => n.classList.remove("active"));
+    row.classList.add("active");
+    row.scrollIntoView({ block: "nearest", inline: "nearest" });
+    open();
+  });
+  return row;
+}
+
+async function togglePin(row: HTMLButtonElement): Promise<void> {
+  const kind = row.dataset.pinKind as "trip" | "month";
+  const id = row.dataset.pinId!;
+  const pinned = row.classList.contains("pinned");
+  row.classList.toggle("pinned", !pinned);
+  row.querySelector(".pin-mark")!.textContent = pinned ? "☁" : "▣";
+  try {
+    await savePin({ kind, id, originals: false, pinned: !pinned });
+  } catch {
+    // Put the marker back rather than showing a pin that was never saved.
+    row.classList.toggle("pinned", pinned);
+    row.querySelector(".pin-mark")!.textContent = pinned ? "▣" : "☁";
+  }
+}
+
+/**
+ * Shows the export row only where there is something to export.
+ *
+ * It depends on what is on screen rather than on the archive, so it is
+ * refreshed after each view renders — there is no navigation event to hook,
+ * since showing a month is just a click handler.
+ */
+export function refreshPrintEntry(): void {
+  const entry = document.getElementById("nav-print");
+  if (entry) (entry as HTMLElement).hidden = !canPrint();
+}
+
+/** Paints pin markers from the server's list, once it answers. */
+async function refreshPinMarks(): Promise<void> {
+  const status = await syncStatus();
+  if (!status) {
+    // No backend: pinning and generation are both meaningless, so neither is
+    // offered. This is the phone's normal state, not a failure.
+    document.querySelectorAll(".pin-mark").forEach((n) => n.remove());
+    return;
+  }
+  const generate = document.getElementById("nav-generate");
+  if (generate) generate.hidden = false;
+  for (const row of document.querySelectorAll<HTMLElement>(".month-link[data-pin-id]")) {
+    const on = status.pins.some((p) => p.kind === row.dataset.pinKind && p.id === row.dataset.pinId);
+    row.classList.toggle("pinned", on);
+    const mark = row.querySelector(".pin-mark");
+    if (mark) mark.textContent = on ? "▣" : "☁";
   }
 }
 

@@ -1229,3 +1229,137 @@ body.map-expanded::after {
   font-size: 12px;
   box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
 }
+
+/* --- Sidebar pins and tools ------------------------------------------- */
+
+/* OneDrive's vocabulary: a filled marker for kept on this device, a cloud for
+   fetched when needed. Borrowed model, borrowed symbols. */
+.pin-mark {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.45;
+  cursor: pointer;
+}
+.month-link:hover .pin-mark { opacity: 0.9; }
+.month-link.pinned .pin-mark { opacity: 1; color: var(--accent); }
+
+.nav-sep {
+  height: 1px;
+  margin: 8px 10px;
+  background: var(--border);
+}
+.nav-tool .month-name { color: var(--text-secondary); }
+.nav-tool.active .month-name { color: var(--text); }
+
+/* --- Settings page ---------------------------------------------------- */
+
+.set-section {
+  max-width: 640px;
+  margin: 0 0 26px;
+}
+.set-section h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.set-body {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 12px 12px;
+  background: var(--bg-muted);
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.set-row:last-child { border-bottom: none; }
+.set-row > span { color: var(--text-secondary); }
+.set-row > b { font-weight: 500; }
+
+.set-note {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* The sync state is the one thing on this page worth seeing from across the
+   room, so it is the only thing that carries colour. */
+.set-sync-state {
+  margin: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tone-ok { color: #2e7d4f; }
+.tone-warn { color: #9a6b12; }
+.tone-bad { color: #a33; }
+.tone-muted { color: var(--text-secondary); }
+
+.set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+.set-btn {
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.set-btn:hover { border-color: var(--accent); }
+.set-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+/* Both conflict choices destroy one copy, so neither gets to look like the
+   safe default. */
+.set-btn.danger { border-color: #a33; color: #a33; }
+
+.set-conflict {
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  border: 1px solid #a33;
+  border-radius: 8px;
+  background: color-mix(in srgb, #a33 6%, var(--bg));
+}
+.set-conflict-lead {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.set-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.set-progress {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.set-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.set-pin > span { color: var(--text); }

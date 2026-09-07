@@ -1,4 +1,4 @@
-import type { AnalyzePlan, ArchiveStatus, JobRecord } from "@travel-archive/shared";
+import type { AnalyzePlan, ArchiveStatus, JobRecord, Pin, SyncStatus } from "@travel-archive/shared";
 
 /**
  * Client for `pipeline serve` — the local job server that runs analysis,
@@ -57,6 +57,38 @@ export async function checkHealth(): Promise<Health | null> {
  */
 export function localThumbUrl(itemId: string, size: "medium" | "large" | "full"): string {
   return `${BACKEND}/thumb/${size}/${encodeURIComponent(itemId)}`;
+}
+
+/** How the local replica stands against OneDrive, plus pins and disk use. */
+export async function syncStatus(): Promise<SyncStatus | null> {
+  try {
+    const res = await fetch(`${BACKEND}/sync/status`);
+    return res.ok ? ((await res.json()) as SyncStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type ConflictChoice = "upload-mine" | "replace-mine";
+
+/** Starts a sync job. `resolve` is required only when the state is a conflict. */
+export function startSync(body: { checkOnly?: boolean; resolve?: ConflictChoice } = {}): Promise<JobRecord> {
+  return post<JobRecord>("/sync", body);
+}
+
+export function setPin(pin: Pin & { pinned?: boolean }): Promise<{ pins: Pin[] }> {
+  return post<{ pins: Pin[] }>("/sync/pins", pin);
+}
+
+export function clearCache(category: "thumbnails" | "originals"): Promise<{ removed: number }> {
+  return post<{ removed: number }>("/sync/clear", { category });
+}
+
+export function saveSyncSettings(body: {
+  autoSyncOnLaunch?: boolean;
+  intervalMinutes?: number;
+}): Promise<unknown> {
+  return post("/sync/settings", body);
 }
 
 /**
