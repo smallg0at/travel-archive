@@ -633,7 +633,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .lightbox {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.92);
   align-items: center;
   justify-content: center;
   z-index: 100;
@@ -850,19 +850,42 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 /* --- Photo viewer ----------------------------------------------------- */
 
+/**
+ * The viewer is a row: photograph on the left, everything written about it on
+ * the right.
+ *
+ * It used to be a column — image capped at 78vh with the caption beneath — and
+ * that wasted the shape of the screen twice over. A landscape photo left the
+ * bottom fifth empty; a museum placard's transcript, which runs to hundreds of
+ * words, expanded *downward* under the image and pushed the whole figure past
+ * the viewport, while the entire right half of a wide screen sat black.
+ *
+ * Side by side, the photograph gets the full height and the transcript scrolls
+ * in its own column, so a placard can be read while looking at the thing it
+ * describes. Below 900px it stacks again, because at that width a side panel
+ * would leave the photo too narrow to see.
+ */
 .lightbox-figure {
   margin: 0;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  max-width: 94vw;
-  max-height: 94vh;
+  align-items: stretch;
+  gap: 18px;
+  width: 94vw;
+  height: 92vh;
+  cursor: auto;
 }
-.lightbox-stage { position: relative; display: flex; min-height: 0; }
+
+.lightbox-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .lightbox img {
-  max-width: 94vw;
-  max-height: 78vh;
+  max-width: 100%;
+  max-height: 92vh;
   object-fit: contain;
   border-radius: 4px;
 }
@@ -899,27 +922,85 @@ body.resizing { cursor: col-resize; user-select: none; }
   .spinner span { animation-duration: 2.4s; }
 }
 
+/* The panel is only as wide as it needs to be, and only present at all when
+   there is something to put in it — a photo with no caption should not leave a
+   column of empty space beside it. */
 #lightbox-caption {
-  max-width: min(720px, 94vw);
+  flex: 0 0 clamp(260px, 26vw, 380px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  /* Its own surface rather than text floating on the dimmed page behind — at
+     92% black the archive still shows through, and a transcript is hard enough
+     to read without a museum wall behind the words. */
+  padding: 16px;
+  border-radius: 8px;
+  background: rgb(28 27 25 / 0.92);
+  border: 1px solid rgb(241 239 232 / 0.1);
   color: #f1efe8;
-  text-align: center;
+  text-align: left;
   cursor: auto;
+  scrollbar-width: thin;
 }
-.lightbox-caption-text { font-size: 13px; line-height: 1.55; }
-.lightbox-caption-meta { margin-top: 3px; font-size: 11px; color: rgb(241 239 232 / 0.6); }
-.lightbox-text { margin-top: 8px; text-align: left; }
-.lightbox-text summary { font-size: 11px; color: rgb(241 239 232 / 0.75); cursor: pointer; }
-.lightbox-text div {
-  margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 0.08);
+#lightbox-caption:empty { display: none; }
+
+.lightbox-caption-text { font-size: 14px; line-height: 1.6; }
+.lightbox-caption-meta { font-size: 11.5px; color: rgb(241 239 232 / 0.6); }
+
+/* Transcribed text is the reason this panel exists, so it is open by default
+   rather than behind a toggle — the toggle made sense when it expanded under
+   the photo and pushed it off screen. */
+/* The transcript takes whatever height the caption above it does not, and
+   scrolls inside that — rather than sitting in a short box with the rest of the
+   panel left empty. A placard runs to hundreds of words and is the reason this
+   column exists, so it should get the room. */
+.lightbox-text {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+  border-top: 1px solid rgb(241 239 232 / 0.18);
+  padding-top: 10px;
+}
+.lightbox-text h4 {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
   font-size: 11px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  max-height: 22vh;
-  overflow: auto;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(241 239 232 / 0.55);
 }
+.lightbox-text > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: rgb(241 239 232 / 0.85);
+  white-space: pre-wrap;
+  scrollbar-width: thin;
+}
+
+
+/* Narrow: stack, and cap the panel so the photo keeps most of the height. */
+@media (max-width: 900px) {
+  .lightbox-figure {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .lightbox-stage { min-height: 0; }
+  .lightbox img { max-height: 100%; }
+  #lightbox-caption {
+    flex: 0 1 auto;
+    max-height: 34vh;
+    padding: 0;
+  }
+}
+
 
 
 /* --- Trip map --------------------------------------------------------- */
@@ -1424,3 +1505,26 @@ body.map-expanded::after {
   cursor: pointer;
 }
 .set-pin > span { color: var(--text); }
+
+/* The viewer's close control. The figure fills the screen now, so the backdrop
+   is too small a target to be the only way out. */
+#lightbox-close {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  color: rgb(241 239 232 / 0.75);
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid rgb(241 239 232 / 0.18);
+  border-radius: 50%;
+  cursor: pointer;
+}
+#lightbox-close:hover {
+  color: #fff;
+  background: rgb(0 0 0 / 0.6);
+}

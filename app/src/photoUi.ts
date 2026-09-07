@@ -80,14 +80,22 @@ function stage(photo: PhotoRecord | null): {
     caption.appendChild(meta);
   }
   if (photo?.extractedText) {
-    const details = document.createElement("details");
-    details.className = "lightbox-text";
-    const summary = document.createElement("summary");
-    summary.textContent = "Transcribed text";
+    // A plain block, not a <details>. It is always open now that it has a
+    // column of its own, and Chrome lays a details' content out inside a
+    // `::details-content` box — so a child of it is not a flex item of the
+    // details, and the transcript refused to fill the height however it was
+    // told to.
+    const block = document.createElement("section");
+    block.className = "lightbox-text";
+
+    const label = document.createElement("h4");
+    label.textContent = "Transcribed text";
+
     const body = document.createElement("div");
     body.textContent = photo.extractedText;
-    details.append(summary, body);
-    caption.appendChild(details);
+
+    block.append(label, body);
+    caption.appendChild(block);
   }
 
   lightbox.hidden = false;
@@ -202,7 +210,12 @@ function closeLightbox(): void {
 // stops propagation so that selecting its text, or opening the transcript,
 // does not dismiss the photo being read about.
 document.getElementById("lightbox")?.addEventListener("click", closeLightbox);
+document.getElementById("lightbox-close")?.addEventListener("click", closeLightbox);
+// The panel stops propagation so selecting transcript text, or scrolling it,
+// does not dismiss the photo being read about. The figure does too now that it
+// fills the screen: clicking beside a portrait photo used to close the viewer.
 document.getElementById("lightbox-caption")?.addEventListener("click", (e) => e.stopPropagation());
+document.querySelector(".lightbox-figure")?.addEventListener("click", (e) => e.stopPropagation());
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeLightbox();
 });

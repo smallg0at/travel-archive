@@ -48,6 +48,9 @@
     </div>
 
     <div id="lightbox" class="lightbox" hidden>
+      <!-- The figure now fills most of the screen, so "click the backdrop to
+           close" is no longer a big enough target to rely on. -->
+      <button id="lightbox-close" type="button" aria-label="Close">&times;</button>
       <figure class="lightbox-figure">
         <div class="lightbox-stage">
           <img id="lightbox-img" alt="" />
