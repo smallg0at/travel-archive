@@ -51,7 +51,7 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
   images.style.setProperty("--img-count", String(photos.length));
   for (const photo of photos) {
     const img = lazyImg(photo, "large");
-    img.addEventListener("click", () => openFullPhoto(photo));
+    img.addEventListener("click", () => void openFullPhoto(photo));
     images.appendChild(img);
   }
 
@@ -95,7 +95,7 @@ function renderGrid(photos: PhotoRecord[]): HTMLElement {
   const grid = el<HTMLDivElement>(`<div class="stop-grid"></div>`);
   for (const photo of photos) {
     const img = lazyImg(photo, "large");
-    img.addEventListener("click", () => openFullPhoto(photo));
+    img.addEventListener("click", () => void openFullPhoto(photo));
     grid.appendChild(img);
   }
   return grid;

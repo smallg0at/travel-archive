@@ -102,36 +102,80 @@ export function openLightbox(url: string): void {
   openObjectUrl = url;
 }
 
-export function openFullPhoto(photo: PhotoRecord): void {
+export async function openFullPhoto(photo: PhotoRecord): Promise<void> {
   const token = ++openToken;
   const { img, spinner } = stage(photo);
-
-  // The thumbnail is already decoded in the cache, so this paints on the same
-  // frame as the click. It is upscaled, hence `preview` — the class only
-  // softens it so the swap to full resolution is not jarring.
-  void loadLarge(photo.id).then((preview) => {
-    if (token !== openToken || !preview || img.dataset.full === "1") return;
-    img.src = preview;
-    img.classList.add("preview");
-  });
 
   img.dataset.full = "0";
   spinner.hidden = false;
 
-  void loadFullPhoto(photo.id).then((url) => {
-    // A different photo was opened while this one was downloading; drop it
-    // rather than replacing what the user is now looking at.
-    if (token !== openToken) {
-      if (url) releaseFullPhoto(url);
-      return;
-    }
+  // **Preview first, and wait for it to paint.**
+  //
+  // These used to be started together, which worked while the full-size photo
+  // took seconds to download: the thumbnail always won. Served from the local
+  // cache, `loadFullPhoto` returns an address rather than bytes and settles in
+  // *fewer* microtask hops than `loadLarge`, so it won every time and the
+  // preview was never seen — a click gave a black frame with a spinner for
+  // three seconds. Sequencing them is what makes the preview reliable, and it
+  // costs nothing: the thumbnail is already in the browser's cache from the
+  // grid it was just clicked in.
+  const preview = await loadLarge(photo.id);
+  if (token !== openToken) return;
+  if (preview) {
+    img.src = preview;
+    img.classList.add("preview");
+    // Resolves once it is actually decoded, so the swap below cannot cancel a
+    // load that never painted.
+    await img.decode().catch(() => {});
+    if (token !== openToken) return;
+  }
+
+  const url = await loadFullPhoto(photo.id);
+  // A different photo was opened while this one was loading; drop it rather
+  // than replacing what the user is now looking at.
+  if (token !== openToken) {
+    if (url) releaseFullPhoto(url);
+    return;
+  }
+  if (!url) {
     spinner.hidden = true;
-    if (!url) return;
-    img.src = url;
-    img.dataset.full = "1";
-    img.classList.remove("preview");
-    openObjectUrl = url;
-  });
+    return;
+  }
+
+  // **Load it out of sight, then swap.**
+  //
+  // Assigning `img.src` starts a download and blanks the element while it runs,
+  // so pointing the visible image at the full-size URL threw the preview away
+  // and left an empty frame for as long as the photo took — which is exactly
+  // what the preview exists to prevent. Decoding into a detached Image keeps
+  // the preview on screen throughout; the swap afterwards is instant because
+  // the bytes are then in the browser's cache.
+  //
+  // The spinner is hidden on *that* load, not when the promise resolves.
+  // Resolving used to mean the bytes had arrived; served from the local cache
+  // it means only that an address is known.
+  const loader = new Image();
+  loader.addEventListener(
+    "load",
+    () => {
+      if (token !== openToken) return;
+      img.src = url;
+      img.dataset.full = "1";
+      img.classList.remove("preview");
+      spinner.hidden = true;
+    },
+    { once: true },
+  );
+  loader.addEventListener(
+    "error",
+    () => {
+      // Leave the preview on screen rather than blanking it.
+      if (token === openToken) spinner.hidden = true;
+    },
+    { once: true },
+  );
+  loader.src = url;
+  openObjectUrl = url;
 }
 
 function closeLightbox(): void {
