@@ -47,6 +47,31 @@ export async function checkHealth(): Promise<Health | null> {
   }
 }
 
+/**
+ * A stable, cacheable address for one thumbnail.
+ *
+ * Stable is the whole point: Graph issues a different short-lived CDN link
+ * every time, so the browser could never reuse one. This URL is keyed on the
+ * item id, and the server marks it immutable — so a second view of a photo
+ * costs neither a Graph call nor a request to the server.
+ */
+export function localThumbUrl(itemId: string, size: "medium" | "large"): string {
+  return `${BACKEND}/thumb/${size}/${encodeURIComponent(itemId)}`;
+}
+
+/** Byte sizes of thumbnails already on the server's disk. Absent ids are omitted. */
+export async function localThumbSizes(
+  ids: string[],
+  size: "medium" | "large",
+): Promise<Map<string, number>> {
+  try {
+    const { sizes } = await post<{ sizes: Record<string, number> }>("/thumb/sizes", { ids, size });
+    return new Map(Object.entries(sizes));
+  } catch {
+    return new Map();
+  }
+}
+
 export async function archiveStatus(): Promise<ArchiveStatus | null> {
   try {
     const res = await fetch(`${BACKEND}/archive/status`);

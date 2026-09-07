@@ -1,5 +1,6 @@
 import { hydrateAll } from "./photoUi";
 import { cachedSizes } from "./thumbCache";
+import { thumbnailSource } from "./photoSource";
 
 /**
  * Export the page as a document — a PDF via Chrome's "Save as PDF", or paper.
@@ -207,12 +208,25 @@ async function rasteriseAll(
   const swapped: Swapped[] = [];
 
   // One batched lookup so the encode loop below can stay synchronous — see the
-  // note on toDataURL for why that matters. A key missing here just means "no
+  // note on toDataURL for why that matters. A missing entry just means "no
   // opinion", and the image is re-encoded as normal.
-  const sizes = await cachedSizes(images.map((img) => `large:${img.dataset.photoId}`));
+  //
+  // Asked of whichever source actually holds the bytes: with a local server the
+  // browser cache is empty, so consulting IndexedDB alone would silently return
+  // nothing and re-encode every image, including the ~14% that come out bigger.
+  const ids = images.map((img) => img.dataset.photoId!).filter(Boolean);
+  const source = thumbnailSource();
+  const sizes = source?.sizes
+    ? await source.sizes(ids, "large")
+    : new Map(
+        [...(await cachedSizes(ids.map((id) => `large:${id}`)))].map(([k, v]) => [
+          k.replace(/^large:/, ""),
+          v,
+        ]),
+      );
 
   for (const [i, img] of images.entries()) {
-    const printUrl = rasterise(img, sizes.get(`large:${img.dataset.photoId}`));
+    const printUrl = rasterise(img, sizes.get(img.dataset.photoId!));
     if (printUrl) {
       swapped.push({ img, original: img.src });
       img.src = printUrl;

@@ -6,6 +6,61 @@ narrative written, map rendering. Whole run cost **under £8**.
 
 ## Open issues
 
+- [ ] **Photo captions are written with no context at all.** Confirmed at the
+      source: `CaptionPhotoInput` is `{ imageBase64, mediaType }` and nothing
+      else, so the model sees one image and a static prompt. It cannot know a
+      blue carriage is in the the railway museum; the *day* summarizer can, because
+      it sees every caption, the place and the placard OCR together. The photo
+      record already has `takenAt` and a geocoded `place` — passing those plus
+      the stop's other captions costs ~20 input tokens a photo.
+      Two cautions: context invites the model to assert things it cannot see
+      (the same worry `placeFromMetadataOnly` already encodes), so the prompt
+      must frame it as a hint for naming, not licence; and **the fix only helps
+      photos analyzed afterwards**, so the benefit needs a paid re-run over the
+      4,181 already captioned.
+      **Owner's decision: happy to redo, but not yet — small-scale test
+      first.** So: implement, run over one stop (~20 photos), compare captions
+      before and after by hand, and only then decide on the full re-run. Do it
+      in the same pass as the Chinese rerun below, not separately — otherwise
+      the library gets paid for twice.
+- [ ] **Day summaries are written in isolation.** `SummarizeDayInput` carries
+      the date, place and stops, and nothing about the days either side or the
+      trip they belong to — so day N cannot know N-1 ended in a city or that
+      N+1 is a city. Proposal (user's): two modes. `organize` keeps writing
+      standalone summaries for ordinary days, and the **trip** job re-summarizes
+      the days in its range with neighbouring context before writing the
+      narrative. ~18 extra calls for this trip.
+      **The context that matters most is the owner's own**, not just the
+      neighbouring days: `notes` and `documents` — the pasted itinerary or
+      trip-planning conversation — currently reach `summarizeTrip` and nothing
+      else. The day summarizer is guessing at things the owner already wrote
+      down. Passing those down into per-day summarization is the substance of
+      this change; neighbouring days are the smaller half. Needs a marker on `DayRecord`
+      for which mode produced it, and `segmentsAreCurrent()` extended so
+      switching modes counts as stale.
+- [x] **Thumbnails no longer depend on browser storage.** Fixed 2026-09-07.
+      The IndexedDB cache was written when there was no backend and the phone
+      was the target; with a local server it was the wrong place — per browser
+      (which is why Floorp refetched everything), erased when a privacy-minded
+      browser clears site data, and degrading to network-only *in silence*.
+      `pipeline/src/thumbStore.ts` now keeps a disk cache under
+      `data/thumbs/<size>/`, served by `GET /thumb/:size/:itemId`. Measured:
+      cold 2,726ms through Graph, warm **24ms** off disk. The URL is keyed on
+      the item id and never changes, so it is marked immutable and the
+      browser's own HTTP cache works on top — something the short-lived CDN
+      links could never allow, and the original reason a cache of our own
+      existed at all.
+      The seam is `app/src/photoSource.ts`, a `ThumbnailSource` rather than an
+      if/else, because **the phone should eventually read the camera folder off
+      the device** instead of fetching photographs back out of OneDrive that
+      are already sitting on it. Three implementations: local server (done),
+      Graph + IndexedDB (the fallback, and the phone today), device filesystem
+      (not built). Verified in the desktop app: all loaded thumbnails came from
+      `127.0.0.1:4319`, no blob URLs, no CDN.
+- [ ] Cache status in Settings, distinguishing "empty" from "unavailable" —
+      still worth having for whichever source is active.
+
+
 - [ ] **Koblenz is missing from the trip map.** It is in the trip's `places`
       list but produces no city marker. Likely caught by the new
       `MAX_PLACE_SPAN_KM` rule (a Rhine-valley train leg) or merged into
@@ -51,6 +106,27 @@ narrative written, map rendering. Whole run cost **under £8**.
 
 - [x] **Make this an app.** Electron shell in `desktop/`. `npm run desktop`.
 - [ ] Light/dark mode toggle.
+- [ ] **i18n — Chinese and English.** UI strings are the easy part and dates
+      are already locale-aware (`toLocaleDateString(undefined, ...)`). The hard
+      part is that **the archive's prose is model output stored in one
+      language**: captions, place and day summaries, the trip narrative, and
+      `documentTranslation` (which currently renders foreign placards *into
+      English*). Switching the UI does not translate any of it. Three options,
+      none free:
+      (a) generate both languages at analyze/organize time — doubles output
+      tokens and doubles the schema's prose fields;
+      (b) store one and translate on demand — cheap to store, a per-view cost,
+      and the translation is not stable between viewings;
+      (c) generate in the chosen language and regenerate to switch — cheapest,
+      but switching language means paying for the archive again.
+      Any of them turns the prose fields into per-locale maps, so it is a
+      schema break (v13 -> v14).
+      **Owner's sequencing: do this after captions and summarizers, and make
+      the large-scale rerun produce Chinese.** That makes the storage shape
+      decision blocking rather than optional — it has to be settled before the
+      rerun, because the rerun is the thing that would otherwise be paid for
+      twice. Note `documentTranslation` currently renders foreign placards
+      *into English* specifically; under a Chinese UI that target changes too.
 - [ ] Trip management — rename, delete.
 - [x] **Print view / Save as PDF.** Menu entry on any view with cards. See
       `app/src/print.ts` and the `@media print` block at the end of

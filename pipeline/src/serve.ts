@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { downloadThumbnailBuffer } from "./graph.js";
+import { readThumb, thumbSize, writeThumb, type ThumbSize } from "./thumbStore.js";
 import type { ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { env } from "./env.js";
 import { getCachedAccessToken } from "./auth.js";
@@ -163,6 +165,76 @@ const routes: [RegExp, string, Handler][] = [
     },
   ],
   [/^\/archive\/status$/, "GET", async (_req, res) => json(res, 200, await archiveStatus())],
+
+  /**
+   * A thumbnail, from disk when it has been fetched before.
+   *
+   * The app used to mint a short-lived CDN link per image through a Graph
+   * `$batch` and cache the bytes in IndexedDB. That is per-browser, vanishes
+   * when a privacy-minded browser clears site data, and degrades silently when
+   * it does. Serving from here instead makes the cache shared, durable and
+   * independent of the browser.
+   *
+   * The URL is keyed on the item id and never changes, which is what lets it
+   * be marked immutable — the CDN links it replaces were different every time,
+   * so ordinary HTTP caching could never help. A cached image therefore costs
+   * neither a Graph call nor a request to this server.
+   */
+  [
+    /^\/thumb\/(medium|large)\/(.+)$/,
+    "GET",
+    async (_req, res, [size, encodedId]) => {
+      const itemId = decodeURIComponent(encodedId);
+      const sendImage = (bytes: Buffer) => {
+        res.writeHead(200, {
+          "Content-Type": "image/jpeg",
+          "Content-Length": bytes.length,
+          // No CORS header here: cors() has already set it with setHeader, and
+          // headers passed to writeHead take precedence — repeating it would
+          // overwrite a correct origin with an empty one.
+          "Cache-Control": "public, max-age=31536000, immutable",
+        });
+        res.end(bytes);
+      };
+
+      const cached = await readThumb(size as ThumbSize, itemId);
+      if (cached) return sendImage(cached);
+
+      const token = await getCachedAccessToken();
+      if (!token) return json(res, 401, { error: "Not signed in" });
+
+      const bytes = await downloadThumbnailBuffer(token, itemId, size as ThumbSize);
+      if (!bytes) return json(res, 404, { error: "No thumbnail for that item" });
+
+      await writeThumb(size as ThumbSize, itemId, bytes);
+      sendImage(bytes);
+    },
+  ],
+
+  /**
+   * Byte sizes for thumbnails already on disk, for callers that need to compare
+   * against something they produced — the PDF export decides whether its
+   * re-encode is actually smaller than the original. One request rather than a
+   * HEAD per image, which at 1,292 images is the difference between a round
+   * trip and a thousand of them. Never fetches: absent ids are simply omitted.
+   */
+  [
+    /^\/thumb\/sizes$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ size?: string; ids?: string[] }>(req);
+      const size = body.size === "medium" ? "medium" : "large";
+      const ids = Array.isArray(body.ids) ? body.ids.slice(0, 5000) : [];
+      const sizes: Record<string, number> = {};
+      await Promise.all(
+        ids.map(async (id) => {
+          const bytes = await thumbSize(size as ThumbSize, id);
+          if (bytes !== null) sizes[id] = bytes;
+        }),
+      );
+      json(res, 200, { sizes });
+    },
+  ],
   [/^\/jobs$/, "GET", (_req, res) => json(res, 200, jobs.listJobs())],
 
   [

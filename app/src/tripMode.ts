@@ -1,5 +1,6 @@
 import type { JobRecord } from "@travel-archive/shared";
 import { el } from "./photoUi";
+import { localServerSource, setThumbnailSource } from "./photoSource";
 import {
   cancelJob,
   checkHealth,
@@ -252,6 +253,12 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
 export async function mountJobPanel(host: HTMLElement, refresh: Refresh): Promise<void> {
   const health = await checkHealth();
   if (!health?.ok) return;
+
+  // The same check that reveals the generation controls also decides where
+  // thumbnails come from: a server that can run jobs can serve images from its
+  // own disk cache, which is shared between browsers and survives one clearing
+  // its site data. Without a backend the built-in Graph path stays in use.
+  setThumbnailSource(localServerSource);
 
   const panel = renderJobPanel(refresh);
   host.appendChild(panel);

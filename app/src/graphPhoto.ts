@@ -1,5 +1,6 @@
 import { getAccessToken } from "./msAuth";
 import { getCached, putThumb, releaseObjectUrls } from "./thumbCache";
+import { thumbnailSource } from "./photoSource";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
@@ -153,6 +154,17 @@ function resolveCdnUrl(itemId: string, size: Size): Promise<string | null> {
 }
 
 async function thumbnail(itemId: string, size: Size): Promise<string | null> {
+  // Ask the active source first — the local server on a desktop, and one day
+  // the device's own camera folder on a phone, where fetching a photograph back
+  // out of OneDrive when it is already on disk would be absurd. Everything
+  // below is the built-in Graph source, and stays the fallback when there is
+  // none: a browser with no backend, which is the phone today.
+  const source = thumbnailSource();
+  if (source) {
+    const url = await source.url(itemId, size);
+    if (url) return url;
+  }
+
   const key = `${size}:${itemId}`;
 
   const pending = inFlight.get(key);

@@ -262,8 +262,12 @@ export async function listPhotosInFolder(token: string, folderPath: string, recu
  *
  * Returns null when Graph has no thumbnail for the item.
  */
-export async function downloadThumbnailBuffer(token: string, itemId: string): Promise<Buffer | null> {
-  const meta = await graphFetch(token, `/me/drive/items/${itemId}/thumbnails/0/large`);
+export async function downloadThumbnailBuffer(
+  token: string,
+  itemId: string,
+  size: "medium" | "large" = "large",
+): Promise<Buffer | null> {
+  const meta = await graphFetch(token, `/me/drive/items/${itemId}/thumbnails/0/${size}`);
   const { url } = (await meta.json()) as { url?: string };
   if (!url) return null;
 
