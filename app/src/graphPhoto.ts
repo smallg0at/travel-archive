@@ -211,6 +211,13 @@ export function loadLarge(itemId: string): Promise<string | null> {
  * it's revoked once the lightbox is done with it (see releaseFullPhoto).
  */
 export async function loadFullPhoto(itemId: string): Promise<string | null> {
+  // Through the local cache when there is one. The lightbox previously had no
+  // cache at any layer: a HAR of a single open showed a Graph 302 at 893ms
+  // followed by a 4.4MB download at 682ms, repeated in full every time the same
+  // photo was opened.
+  const source = thumbnailSource();
+  if (source?.fullUrl) return source.fullUrl(itemId);
+
   let token: string;
   try {
     token = await getAccessToken();

@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { downloadThumbnailBuffer } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer } from "./graph.js";
 import { readThumb, thumbSize, writeThumb, type ThumbSize } from "./thumbStore.js";
 import type { ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { env } from "./env.js";
@@ -155,6 +155,42 @@ function streamJob(res: ServerResponse, id: string): void {
   send(record);
 }
 
+/**
+ * Fetches one image and caches it, collapsing concurrent requests for the same
+ * one.
+ *
+ * Without this, a browser asking for the same thumbnail twice — easy during a
+ * fast scroll, and certain once warming runs alongside rendering — makes two
+ * Graph round trips for bytes that are about to be identical.
+ */
+const inFlight = new Map<string, Promise<Buffer | null>>();
+
+function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer | null> {
+  const key = `${size}:${itemId}`;
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const work = (async () => {
+    const token = await getCachedAccessToken();
+    if (!token) return null;
+    const bytes =
+      size === "full"
+        ? await downloadPhotoBuffer(token, itemId)
+        : await downloadThumbnailBuffer(token, itemId, size);
+    if (bytes) await writeThumb(size, itemId, bytes);
+    return bytes;
+  })().finally(() => inFlight.delete(key));
+
+  inFlight.set(key, work);
+  return work;
+}
+
+/** JPEG and PNG are the only things this library holds; sniffed, not assumed. */
+function imageType(bytes: Buffer): string {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
+  return "image/jpeg";
+}
+
 const routes: [RegExp, string, Handler][] = [
   [
     /^\/health$/,
@@ -181,13 +217,13 @@ const routes: [RegExp, string, Handler][] = [
    * neither a Graph call nor a request to this server.
    */
   [
-    /^\/thumb\/(medium|large)\/(.+)$/,
+    /^\/thumb\/(medium|large|full)\/(.+)$/,
     "GET",
     async (_req, res, [size, encodedId]) => {
       const itemId = decodeURIComponent(encodedId);
       const sendImage = (bytes: Buffer) => {
         res.writeHead(200, {
-          "Content-Type": "image/jpeg",
+          "Content-Type": imageType(bytes),
           "Content-Length": bytes.length,
           // No CORS header here: cors() has already set it with setHeader, and
           // headers passed to writeHead take precedence — repeating it would
@@ -200,17 +236,58 @@ const routes: [RegExp, string, Handler][] = [
       const cached = await readThumb(size as ThumbSize, itemId);
       if (cached) return sendImage(cached);
 
-      const token = await getCachedAccessToken();
-      if (!token) return json(res, 401, { error: "Not signed in" });
-
-      const bytes = await downloadThumbnailBuffer(token, itemId, size as ThumbSize);
-      if (!bytes) return json(res, 404, { error: "No thumbnail for that item" });
-
-      await writeThumb(size as ThumbSize, itemId, bytes);
+      const bytes = await fetchAndCache(size as ThumbSize, itemId);
+      if (!bytes) return json(res, 404, { error: "No image for that item, or not signed in" });
       sendImage(bytes);
     },
   ],
 
+
+  /**
+   * Fill the cache ahead of the browser.
+   *
+   * This is the actual fix for fast scrolling, and the measurement says why.
+   * A cold thumbnail costs a Graph round trip — ~2.7s — and a browser will only
+   * hold about six connections to one host on HTTP/1.1, so 169 requests issued
+   * during one fast scroll took 28 seconds to drain, with a p90 of 22s. The
+   * server itself is not the constraint: 30 requests fired straight at it
+   * finished in 2.2s, 13.6 per second.
+   *
+   * So the answer is not faster requests but earlier ones. Warming at a
+   * concurrency the browser cannot reach turns every later request into a 24ms
+   * read from disk, at which point the six-connection limit stops mattering.
+   *
+   * Returns immediately with what it will do; the work continues in the
+   * background. Already-cached ids are skipped without a Graph call.
+   */
+  [
+    /^\/thumb\/warm$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ size?: string; ids?: string[] }>(req);
+      const size = (body.size === "medium" || body.size === "full" ? body.size : "large") as ThumbSize;
+      const ids = Array.isArray(body.ids) ? body.ids.slice(0, 20000) : [];
+
+      const missing: string[] = [];
+      for (const id of ids) if ((await thumbSize(size, id)) === null) missing.push(id);
+
+      json(res, 202, { requested: ids.length, alreadyCached: ids.length - missing.length, warming: missing.length });
+
+      // Deliberately after the response. Bounded well below what the analyze
+      // pass uses against Graph, since this runs while the user is browsing and
+      // must not provoke throttling that would slow the thing it is helping.
+      void (async () => {
+        let next = 0;
+        const worker = async () => {
+          while (next < missing.length) {
+            const id = missing[next++];
+            await fetchAndCache(size, id).catch(() => null);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(8, missing.length) }, worker));
+      })();
+    },
+  ],
   /**
    * Byte sizes for thumbnails already on disk, for callers that need to compare
    * against something they produced — the PDF export decides whether its

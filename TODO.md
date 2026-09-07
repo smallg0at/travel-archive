@@ -6,6 +6,51 @@ narrative written, map rendering. Whole run cost **under £8**.
 
 ## Open issues
 
+- [x] **Fast scrolling floods the thumbnail server.** Fixed 2026-09-07 by
+      warming the cache ahead of the browser (`POST /thumb/warm`, called when a
+      trip or month renders). Measured on the same fast scroll to the bottom:
+
+      | | cold | warm |
+      |---|---|---|
+      | requests served | 169 | **883** |
+      | p50 | 10,608ms | **4ms** |
+      | p90 | 22,537ms | **7ms** |
+      | max | 24,586ms | **11ms** |
+
+      The diagnosis was worth measuring rather than guessing. The server was
+      never the constraint — 30 requests fired straight at it finished in 2.2s
+      (13.6/sec) with no queueing — it was the browser's ~6 connections per
+      host on HTTP/1.1, with each cold request costing a ~2.7s Graph round trip
+      behind it. Warming at a concurrency the browser cannot reach turns every
+      request into a disk read, at which point six at a time is ~1,500 images
+      per second and the cap stops mattering.
+      **WebSocket and per-day chunking were both considered and rejected on
+      that evidence**: they would optimise the disk-to-browser leg, which is
+      4ms, and both cost `<img src>` — bytes would arrive in JS, needing blob
+      URLs, their own lifecycle and their own cache, which is the IndexedDB
+      situation this work just removed. HTTP/2 would be the principled fix for
+      the connection cap but browsers require TLS, so localhost would need a
+      self-signed certificate and its warnings.
+- [x] **Full-resolution photos are never cached.** Fixed 2026-09-07: originals
+      go through the same store under `data/thumbs/full/`, with their own 4GB
+      budget so that a few hundred lightbox opens cannot evict tens of
+      thousands of thumbnails. Measured: **1,160ms cold, 36ms warm** for a
+      4.2MB original, against the HAR's 893ms Graph 302 plus a 682ms download
+      on *every* open.
+- [ ] **Tell the summarizer things, and correct what it wrote.** Two related
+      abilities, both missing:
+      (a) *before* — a free-text box on the Day summaries job, the way trips
+      already accept `notes`, so the owner can say "this is the the railway museum"
+      or "the morning was a write-off" and have it reach the model;
+      (b) *after* — regenerate a single day or stop with an added instruction,
+      and edit the resulting title, summary or card text **by hand**, with the
+      edit surviving the next `organize` run.
+      (b) is the one with teeth: `segmentsAreCurrent()` decides when to
+      re-summarize, so a hand-edited day needs a marker that means "leave this
+      alone", or the next run silently discards the correction. Any direct-edit
+      feature also needs somewhere to write to — the app is a pure reader today
+      and the server is the only writer.
+
 - [ ] **Photo captions are written with no context at all.** Confirmed at the
       source: `CaptionPhotoInput` is `{ imageBase64, mediaType }` and nothing
       else, so the model sees one image and a static prompt. It cannot know a

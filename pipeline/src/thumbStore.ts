@@ -26,7 +26,15 @@ import { dataDir } from "./paths.js";
  * server binds loopback and holds OneDrive credentials.
  */
 
-export type ThumbSize = "medium" | "large";
+/**
+ * `full` is the original file rather than a rendered thumbnail. It shares this
+ * store because the lightbox had no cache at any layer — every open cost a
+ * Graph 302 plus a 4.4MB download, measured at ~1.6s — and because the phone
+ * will eventually want originals available offline too.
+ */
+export type ThumbSize = "medium" | "large" | "full";
+
+const SIZES: ThumbSize[] = ["medium", "large", "full"];
 
 /**
  * Disk is cheap in a way a browser origin's quota is not, so this is far larger
@@ -34,6 +42,15 @@ export type ThumbSize = "medium" | "large";
  * holds the whole 18,400-photo library several times over.
  */
 const MAX_BYTES = Number(process.env.THUMB_CACHE_MAX_BYTES ?? 2 * 1024 * 1024 * 1024);
+
+/**
+ * Originals get their own budget rather than sharing one.
+ *
+ * At ~4.4MB each against ~73KB for a `large`, a few hundred lightbox opens
+ * would otherwise evict tens of thousands of thumbnails — the cheap, hot
+ * things thrown out to hold the expensive, cold ones.
+ */
+const MAX_FULL_BYTES = Number(process.env.PHOTO_CACHE_MAX_BYTES ?? 4 * 1024 * 1024 * 1024);
 const EVICT_TARGET = 0.8;
 
 /** Checking the whole directory on every write would serialise eviction against loading. */
@@ -51,7 +68,7 @@ function thumbDir(size: ThumbSize): string {
  */
 function fileFor(size: ThumbSize, itemId: string): string {
   const hash = createHash("sha256").update(itemId).digest("hex");
-  return join(thumbDir(size), `${hash}.jpg`);
+  return join(thumbDir(size), `${hash}.bin`);
 }
 
 export async function readThumb(size: ThumbSize, itemId: string): Promise<Buffer | null> {
@@ -92,9 +109,9 @@ interface Entry {
   used: number;
 }
 
-async function entries(): Promise<Entry[]> {
+async function entries(sizes: ThumbSize[] = SIZES): Promise<Entry[]> {
   const all: Entry[] = [];
-  for (const size of ["medium", "large"] as ThumbSize[]) {
+  for (const size of sizes) {
     let names: string[];
     try {
       names = await readdir(thumbDir(size));
@@ -114,13 +131,19 @@ async function entries(): Promise<Entry[]> {
   return all;
 }
 
-/** Least-recently-used eviction, by file mtime. */
+/** Least-recently-used eviction, by file mtime. Thumbnails and originals are
+ * budgeted separately — see MAX_FULL_BYTES. */
 export async function evictIfNeeded(): Promise<void> {
-  const all = await entries();
-  let total = all.reduce((n, e) => n + e.bytes, 0);
-  if (total <= MAX_BYTES) return;
+  await evictGroup(["medium", "large"], MAX_BYTES);
+  await evictGroup(["full"], MAX_FULL_BYTES);
+}
 
-  const target = MAX_BYTES * EVICT_TARGET;
+async function evictGroup(sizes: ThumbSize[], cap: number): Promise<void> {
+  const all = await entries(sizes);
+  let total = all.reduce((n, e) => n + e.bytes, 0);
+  if (total <= cap) return;
+
+  const target = cap * EVICT_TARGET;
   all.sort((a, b) => a.used - b.used);
   for (const entry of all) {
     if (total <= target) break;

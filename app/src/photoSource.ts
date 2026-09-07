@@ -1,4 +1,4 @@
-import { localThumbSizes, localThumbUrl } from "./backend";
+import { localThumbSizes, localThumbUrl, warmThumbnails } from "./backend";
 
 /**
  * Where thumbnail bytes come from.
@@ -37,6 +37,16 @@ export interface ThumbnailSource {
    * cannot answer cheaply should omit it rather than guess.
    */
   sizes?(ids: string[], size: ThumbSize): Promise<Map<string, number>>;
+  /**
+   * A URL for the original file, when this source can serve one. The lightbox
+   * had no cache at any layer before this existed.
+   */
+  fullUrl?(itemId: string): string;
+  /**
+   * Fetch these ahead of time, if the source can. Optional because it only
+   * makes sense where fetching is expensive and cached fetching is not.
+   */
+  warm?(ids: string[], size: ThumbSize): Promise<void>;
 }
 
 /**
@@ -48,6 +58,8 @@ export const localServerSource: ThumbnailSource = {
   name: "local server",
   url: async (itemId, size) => localThumbUrl(itemId, size),
   sizes: (ids, size) => localThumbSizes(ids, size),
+  fullUrl: (itemId) => localThumbUrl(itemId, "full"),
+  warm: (ids, size) => warmThumbnails(ids, size as "medium" | "large"),
 };
 
 /**

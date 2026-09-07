@@ -55,8 +55,23 @@ export async function checkHealth(): Promise<Health | null> {
  * item id, and the server marks it immutable — so a second view of a photo
  * costs neither a Graph call nor a request to the server.
  */
-export function localThumbUrl(itemId: string, size: "medium" | "large"): string {
+export function localThumbUrl(itemId: string, size: "medium" | "large" | "full"): string {
   return `${BACKEND}/thumb/${size}/${encodeURIComponent(itemId)}`;
+}
+
+/**
+ * Ask the server to fill its cache for these photos, ahead of the browser
+ * needing them.
+ *
+ * Fire and forget: the response says only what will be fetched, and the point
+ * is that by the time an image scrolls into view the bytes are already on disk.
+ */
+export async function warmThumbnails(ids: string[], size: "medium" | "large"): Promise<void> {
+  try {
+    await post("/thumb/warm", { ids, size });
+  } catch {
+    // Warming is an optimisation; a failure just means the normal path is slower.
+  }
 }
 
 /** Byte sizes of thumbnails already on the server's disk. Absent ids are omitted. */

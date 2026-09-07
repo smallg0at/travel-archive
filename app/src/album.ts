@@ -4,6 +4,21 @@ import { el, lazyImg, openFullPhoto } from "./photoUi";
 import { renderDayBody } from "./render";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
+import { thumbnailSource } from "./photoSource";
+
+/**
+ * Ask the cache to fill itself for a whole view, before scrolling asks for any
+ * of it.
+ *
+ * A browser holds ~6 connections to one host, so a cold cache turns a fast
+ * scroll into a queue: 169 requests measured at a p90 of 22 seconds. The server
+ * has no such limit — 30 at once finished in 2.2s — so the fix is to fetch
+ * early at a concurrency the browser cannot reach, after which every request is
+ * a read from disk.
+ */
+function warmView(photoIds: string[]): void {
+  void thumbnailSource()?.warm?.(photoIds, "large");
+}
 
 /**
  * The album: one tab per month, photos grouped by the day they were taken.
@@ -258,6 +273,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
+  warmView(trip.days.flatMap((d) => d.photoIds));
 
   // After the page is on screen: the basemap is a ~750KB dynamic import, and
   // the trip should be readable before it lands.
@@ -317,6 +333,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
+  warmView(photos.map((p) => p.id));
 }
 
 function renderNav(index: ArchiveIndexFile): void {
