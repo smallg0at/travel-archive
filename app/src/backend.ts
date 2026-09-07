@@ -60,6 +60,23 @@ export function localThumbUrl(itemId: string, size: "medium" | "large" | "full")
 }
 
 /**
+ * Archive metadata from the local server's mirror, or null when there is none.
+ *
+ * Short timeout and silent failure: an absent backend is the normal case on a
+ * phone, and this sits in front of the very first thing the app does.
+ */
+export async function localArchiveJson<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${BACKEND}/archive/${path}`, {
+      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+    });
+    return res.ok ? ((await res.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Ask the server to fill its cache for these photos, ahead of the browser
  * needing them.
  *

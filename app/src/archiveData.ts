@@ -1,6 +1,7 @@
 import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "./msAuth";
+import { localArchiveJson } from "./backend";
 
 /**
  * Archive metadata is read straight from OneDrive at runtime, not bundled.
@@ -34,7 +35,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * during a penalty window has to wait it out rather than surfacing "failed to
  * load archive" over what is really just backpressure.
  */
-async function fetchMetadataJson<T>(fileName: string): Promise<T | null> {
+async function fetchMetadataJson<T>(fileName: string, localPath: string): Promise<T | null> {
+  // The local server keeps a byte-identical mirror of everything the pipeline
+  // writes, so ask it first. `index.json` is 2.4MB and blocks the whole render
+  // — the months a trip spans are unknown until it arrives — and over Graph it
+  // measured between 1,237ms and 3,289ms against a few ms from disk.
+  //
+  // Tried before the health check rather than after, because loadIndex runs
+  // first: an absent server refuses the connection immediately, which is the
+  // phone's normal path and costs nothing.
+  const local = await localArchiveJson<T>(localPath);
+  if (local) return local;
+
   const path = encodeURI(`${METADATA_FOLDER}/${fileName}`);
 
   for (let attempt = 1; ; attempt++) {
@@ -62,7 +74,7 @@ async function fetchMetadataJson<T>(fileName: string): Promise<T | null> {
 }
 
 export async function loadIndex(): Promise<ArchiveIndexFile> {
-  const index = await fetchMetadataJson<ArchiveIndexFile>("index.json");
+  const index = await fetchMetadataJson<ArchiveIndexFile>("index.json", "index");
   if (!index) {
     throw new Error(
       `No index.json in OneDrive:/${METADATA_FOLDER}. Run "npm run --workspace pipeline scan" to build it.`,
@@ -85,7 +97,7 @@ export function loadMonth(month: string): Promise<PhotoShard> {
   const cached = shardCache.get(month);
   if (cached) return cached;
 
-  const pending = fetchMetadataJson<PhotoShard>(`photos/${month}.json`).then(
+  const pending = fetchMetadataJson<PhotoShard>(`photos/${month}.json`, `shard/${month}`).then(
     (shard) => shard ?? { month, generatedAt: "", photos: {} },
   );
   // Don't cache a rejection — a shard that failed because the token had

@@ -50,13 +50,27 @@ narrative written, map rendering. Whole run cost **under £8**.
       millisecond — though **not by wall clock**: Graph latency for a single
       file swung between 1,237ms and 3,289ms across runs, so single-sample
       timings here mean little.
-- [ ] **`index.json` is fetched from OneDrive on every load and blocks
-      everything.** Measured between 1,237ms and 3,289ms, and it is necessarily
-      sequential: the trip's months are not known until it arrives, so nothing
-      else can start. The server already keeps a local mirror at
-      `data/index.json` — serving that (with a revalidation against OneDrive
-      behind it) would take first render from seconds to near-instant. Probably
-      the largest remaining win on load time.
+- [x] **Archive metadata came from OneDrive on every load.** Fixed
+      2026-09-07. `index.json` is **2.4MB** and strictly blocking — the months
+      a trip spans are unknown until it lands — and every month shard came the
+      same way. Meanwhile every pipeline run had been writing byte-identical
+      copies to `data/`, sitting unused. Now served by `GET /archive/index` and
+      `GET /archive/shard/:month`:
+
+      | | over Graph | from the mirror |
+      |---|---|---|
+      | index.json | 1,237-3,289ms | **34ms** |
+      | all metadata | 4,253-5,745ms | **918ms** |
+      | OneDrive round trips | 3 | **0** |
+
+      Safe because the writer is singular: the server is the only thing that
+      writes the archive and the phone is read-only by design, so the mirror
+      can only go stale if the pipeline ran on another machine — where a `scan`
+      restores it. The app falls back to Graph when no server answers, which is
+      the phone's normal path.
+- [ ] The mirror is trusted without checking OneDrive at all. Worth a
+      background revalidation (compare `generatedAt`, refetch if OneDrive is
+      newer) once a second machine is ever in play.
 - [ ] Warming still fires for the whole view. For a 4,998-photo month that is a
       lot of Graph traffic triggered by opening a tab. Warm the first few days
       and extend on scroll.

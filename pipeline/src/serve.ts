@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readFile } from "node:fs/promises";
+import { dataFile } from "./paths.js";
 import { downloadPhotoBuffer, downloadThumbnailBuffer } from "./graph.js";
 import { readThumb, thumbSize, writeThumb, type ThumbSize } from "./thumbStore.js";
 import type { ArchiveStatus, JobRecord } from "@travel-archive/shared";
@@ -163,6 +165,27 @@ function streamJob(res: ServerResponse, id: string): void {
  * fast scroll, and certain once warming runs alongside rendering — makes two
  * Graph round trips for bytes that are about to be identical.
  */
+/**
+ * Reads a file from the archive mirror without parsing it — the app is going to
+ * parse it anyway, and `index.json` is 2.4MB.
+ */
+async function readLocalJson(relative: string): Promise<string | null> {
+  try {
+    return await readFile(dataFile(relative), "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+function sendJsonText(res: ServerResponse, body: string): void {
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    // Not immutable: a job rewrites these, and the app must see it on reload.
+    "Cache-Control": "no-cache",
+  });
+  res.end(body);
+}
+
 const inFlight = new Map<string, Promise<Buffer | null>>();
 
 /**
@@ -213,6 +236,43 @@ const routes: [RegExp, string, Handler][] = [
     },
   ],
   [/^\/archive\/status$/, "GET", async (_req, res) => json(res, 200, await archiveStatus())],
+
+  /**
+   * The archive metadata, from the local mirror.
+   *
+   * The app read `index.json` and every month shard straight from OneDrive on
+   * every load — a **2.4MB** download for the index alone, measured between
+   * 1,237ms and 3,289ms, and strictly blocking: the months a trip spans are
+   * not known until it lands, so nothing else can even start.
+   *
+   * Every pipeline run already writes the identical content to `data/`, so the
+   * bytes were sitting on the disk the whole time. Reading them locally is a
+   * few milliseconds.
+   *
+   * Safe because the writer is singular: this server is the only thing that
+   * ever writes the archive, and the phone is read-only by design. The mirror
+   * can only be stale if the pipeline was run on a *different* machine, in
+   * which case a `scan` here brings it back. The app still falls back to Graph
+   * when no server is running, which is the phone's normal path.
+   */
+  [
+    /^\/archive\/index$/,
+    "GET",
+    async (_req, res) => {
+      const local = await readLocalJson("index.json");
+      if (!local) return json(res, 404, { error: "No local index.json — run scan" });
+      sendJsonText(res, local);
+    },
+  ],
+  [
+    /^\/archive\/shard\/(\d{4}-\d{2})$/,
+    "GET",
+    async (_req, res, [month]) => {
+      const local = await readLocalJson(`photos/${month}.json`);
+      if (!local) return json(res, 404, { error: `No local shard for ${month}` });
+      sendJsonText(res, local);
+    },
+  ],
 
   /**
    * A thumbnail, from disk when it has been fetched before.
