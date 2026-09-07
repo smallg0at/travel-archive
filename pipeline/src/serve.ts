@@ -1,8 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { checkSync, protectedPaths, runSync, type ConflictChoice } from "./jobs/sync.js";
+import { pins, removePin, setPin, writeSync } from "./syncStore.js";
 import { readFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { downloadPhotoBuffer, downloadThumbnailBuffer } from "./graph.js";
-import { readThumb, thumbSize, writeThumb, type ThumbSize } from "./thumbStore.js";
+import { readThumb, setProtectedProvider, thumbSize, writeThumb, type ThumbSize } from "./thumbStore.js";
 import type { ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { env } from "./env.js";
 import { getCachedAccessToken } from "./auth.js";
@@ -220,6 +222,34 @@ function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer | null> 
   return work;
 }
 
+/** Deletes cached files of these sizes, skipping anything pinned. */
+async function clearCache(sizes: ThumbSize[], keep: Set<string>): Promise<number> {
+  const { readdir, unlink } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { dataFile } = await import("./paths.js");
+  let removed = 0;
+  for (const size of sizes) {
+    const dir = dataFile(`thumbs/${size}`);
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const path = join(dir, name);
+      if (keep.has(path)) continue;
+      try {
+        await unlink(path);
+        removed++;
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+  return removed;
+}
+
 /** JPEG and PNG are the only things this library holds; sniffed, not assumed. */
 function imageType(bytes: Buffer): string {
   if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
@@ -314,6 +344,78 @@ const routes: [RegExp, string, Handler][] = [
     },
   ],
 
+
+  /**
+   * How the replica stands against OneDrive, plus what is pinned and what disk
+   * it uses. Cheap: one eTag request, never a download.
+   */
+  [/^\/sync\/status$/, "GET", async (_req, res) => json(res, 200, await checkSync())],
+
+  /**
+   * Run a sync. `checkOnly` reports without downloading, which is what the app
+   * does on launch; `resolve` settles a conflict and is required when both
+   * sides changed, since this never picks for the user.
+   */
+  [
+    /^\/sync$/,
+    "POST",
+    async (req, res) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{ checkOnly?: boolean; resolve?: ConflictChoice }>(req);
+      const opts = { checkOnly: body.checkOnly === true, resolve: body.resolve };
+      json(
+        res,
+        202,
+        jobs.start({
+          kind: "sync",
+          run: (onProgress, signal) => runSync(opts, onProgress, signal, fetchAndCache),
+        }),
+      );
+    },
+  ],
+
+  [/^\/sync\/pins$/, "GET", async (_req, res) => json(res, 200, { pins: await pins() })],
+  [
+    /^\/sync\/pins$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ kind?: "trip" | "month"; id?: string; originals?: boolean; pinned?: boolean }>(req);
+      if (!body.kind || !body.id) return json(res, 400, { error: "kind and id are required" });
+      const next =
+        body.pinned === false
+          ? await removePin(body.kind, body.id)
+          : await setPin({ kind: body.kind, id: body.id, originals: body.originals === true });
+      json(res, 200, { pins: next });
+    },
+  ],
+
+  /**
+   * Drop cached media. Pinned items are excluded — clearing a cache should not
+   * silently undo "keep this on my device".
+   */
+  [
+    /^\/sync\/clear$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ category?: "thumbnails" | "originals" }>(req);
+      const sizes: ThumbSize[] = body.category === "originals" ? ["full"] : ["medium", "large"];
+      const removed = await clearCache(sizes, await protectedPaths());
+      json(res, 200, { removed });
+    },
+  ],
+
+  /** Auto-sync on launch, and the optional timer. */
+  [
+    /^\/sync\/settings$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ autoSyncOnLaunch?: boolean; intervalMinutes?: number }>(req);
+      const patch: Record<string, unknown> = {};
+      if (typeof body.autoSyncOnLaunch === "boolean") patch.autoSyncOnLaunch = body.autoSyncOnLaunch;
+      if (typeof body.intervalMinutes === "number") patch.intervalMinutes = Math.max(0, body.intervalMinutes);
+      json(res, 200, await writeSync(patch));
+    },
+  ],
 
   /**
    * Fill the cache ahead of the browser.
@@ -484,10 +586,19 @@ const server = createServer(async (req, res) => {
 
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
 
+  // Path first, then method — and keep looking. Bailing out with 405 on the
+  // first path match meant two routes could never share a pattern, so
+  // `GET /sync/pins` shadowed `POST /sync/pins` entirely and the POST answered
+  // "Use GET for /sync/pins".
+  let pathMatched: string[] | null = null;
+  const allowed: string[] = [];
+
   for (const [pattern, method, handler] of routes) {
     const match = pattern.exec(path);
     if (!match) continue;
-    if (req.method !== method) return json(res, 405, { error: `Use ${method} for ${path}` });
+    pathMatched = match.slice(1);
+    allowed.push(method);
+    if (req.method !== method) continue;
     try {
       await handler(req, res, match.slice(1));
     } catch (err) {
@@ -496,8 +607,15 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (pathMatched) {
+    res.setHeader("Allow", allowed.join(", "));
+    return json(res, 405, { error: `Use ${allowed.join(" or ")} for ${path}` });
+  }
   json(res, 404, { error: `No route for ${req.method} ${path}` });
 });
+
+// Eviction must know what is pinned before it ever runs.
+setProtectedProvider(protectedPaths);
 
 server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`pipeline serve — http://127.0.0.1:${env.servePort} (loopback only)`);

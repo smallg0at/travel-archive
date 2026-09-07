@@ -53,6 +53,19 @@ const MAX_BYTES = Number(process.env.THUMB_CACHE_MAX_BYTES ?? 2 * 1024 * 1024 * 
 const MAX_FULL_BYTES = Number(process.env.PHOTO_CACHE_MAX_BYTES ?? 4 * 1024 * 1024 * 1024);
 const EVICT_TARGET = 0.8;
 
+/**
+ * Supplies the files eviction must not touch.
+ *
+ * Injected rather than imported: the pin list is derived from the archive index
+ * by the sync job, and this module must not depend upward on that. Unset means
+ * nothing is protected, which is correct before any pin exists.
+ */
+let protectedProvider: (() => Promise<Set<string>>) | null = null;
+
+export function setProtectedProvider(fn: () => Promise<Set<string>>): void {
+  protectedProvider = fn;
+}
+
 /** Checking the whole directory on every write would serialise eviction against loading. */
 const WRITES_BETWEEN_EVICTION_CHECKS = 200;
 let writesSinceCheck = 0;
@@ -90,7 +103,7 @@ export async function writeThumb(size: ThumbSize, itemId: string, bytes: Buffer)
   await writeFile(fileFor(size, itemId), bytes);
   if (++writesSinceCheck >= WRITES_BETWEEN_EVICTION_CHECKS) {
     writesSinceCheck = 0;
-    void evictIfNeeded().catch(() => {});
+    void (async () => evictIfNeeded(await protectedProvider?.()))().catch(() => {});
   }
 }
 
@@ -131,15 +144,21 @@ async function entries(sizes: ThumbSize[] = SIZES): Promise<Entry[]> {
   return all;
 }
 
-/** Least-recently-used eviction, by file mtime. Thumbnails and originals are
- * budgeted separately — see MAX_FULL_BYTES. */
-export async function evictIfNeeded(): Promise<void> {
-  await evictGroup(["medium", "large"], MAX_BYTES);
-  await evictGroup(["full"], MAX_FULL_BYTES);
+/**
+ * Least-recently-used eviction, by file mtime. Thumbnails and originals are
+ * budgeted separately — see MAX_FULL_BYTES.
+ *
+ * **Pinned items are never evicted.** A pin is the user saying "keep this on
+ * this device"; browsing one large unpinned month would otherwise quietly
+ * discard the trip they asked to keep, and they would only find out offline.
+ */
+export async function evictIfNeeded(protectedFiles?: Set<string>): Promise<void> {
+  await evictGroup(["medium", "large"], MAX_BYTES, protectedFiles);
+  await evictGroup(["full"], MAX_FULL_BYTES, protectedFiles);
 }
 
-async function evictGroup(sizes: ThumbSize[], cap: number): Promise<void> {
-  const all = await entries(sizes);
+async function evictGroup(sizes: ThumbSize[], cap: number, protectedFiles?: Set<string>): Promise<void> {
+  const all = (await entries(sizes)).filter((e) => !protectedFiles?.has(e.path));
   let total = all.reduce((n, e) => n + e.bytes, 0);
   if (total <= cap) return;
 
@@ -156,7 +175,28 @@ async function evictGroup(sizes: ThumbSize[], cap: number): Promise<void> {
   }
 }
 
-export async function cacheStats(): Promise<{ count: number; bytes: number }> {
-  const all = await entries();
-  return { count: all.length, bytes: all.reduce((n, e) => n + e.bytes, 0) };
+/**
+ * Cached, because this walks the whole directory and `stat`s every file — 5,767
+ * of them here, measured at most of a 2,773ms status check. The status endpoint
+ * is polled, and a figure shown in Settings does not need to be to the byte.
+ */
+const STATS_TTL_MS = 30_000;
+const statsCache = new Map<string, { at: number; value: { count: number; bytes: number } }>();
+
+export async function cacheStats(
+  sizes: ThumbSize[] = SIZES,
+): Promise<{ count: number; bytes: number }> {
+  const key = sizes.join(",");
+  const hit = statsCache.get(key);
+  if (hit && Date.now() - hit.at < STATS_TTL_MS) return hit.value;
+
+  const all = await entries(sizes);
+  const value = { count: all.length, bytes: all.reduce((n, e) => n + e.bytes, 0) };
+  statsCache.set(key, { at: Date.now(), value });
+  return value;
+}
+
+/** The on-disk path for an item, so callers can mark it protected from eviction. */
+export function pathFor(size: ThumbSize, itemId: string): string {
+  return fileFor(size, itemId);
 }

@@ -5,6 +5,7 @@ import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { downloadMetadataJson, uploadMetadataJson } from "./graph.js";
 import { env } from "./env.js";
+import { markDirty, markSynced } from "./syncStore.js";
 
 /**
  * The archive is split across files rather than kept in one archive.json:
@@ -76,7 +77,13 @@ export async function saveIndex(token: string, index: ArchiveIndexFile): Promise
   index.schemaVersion = SCHEMA_VERSION;
   index.generatedAt = new Date().toISOString();
   await writeLocal(INDEX_FILE, index);
-  await uploadMetadataJson(token, env.metadataFolder, INDEX_FILE, index);
+  // Local first, then upload, then record. If the upload throws, `dirty` is
+  // left set and the next sync knows the replica holds something OneDrive does
+  // not — which is the whole reason the flag exists, since writes normally
+  // upload immediately and nothing would otherwise be out of step.
+  await markDirty();
+  const etag = await uploadMetadataJson(token, env.metadataFolder, INDEX_FILE, index);
+  await markSynced(etag);
 }
 
 /** One month's photo records. Returns an empty shard if that month has never been scanned. */

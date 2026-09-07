@@ -295,14 +295,50 @@ export async function downloadPhotoBuffer(token: string, itemId: string): Promis
  * minified: the local copy under pipeline/data/ is pretty-printed for
  * reading, but pretty-printing the uploaded copy inflated it ~40% for no
  * benefit, and this is re-uploaded in full on every run that touches it.
+ *
+ * Returns the new eTag so sync can record what it just wrote. Without that the
+ * next freshness check cannot tell "someone else changed this" from "we changed
+ * it ourselves a moment ago".
  */
-export async function uploadMetadataJson(token: string, metadataFolder: string, fileName: string, data: unknown): Promise<void> {
+export async function uploadMetadataJson(
+  token: string,
+  metadataFolder: string,
+  fileName: string,
+  data: unknown,
+): Promise<string | null> {
   const path = `${metadataFolder}/${fileName}`;
-  await graphFetch(token, `/me/drive/root:/${encodeURI(path)}:/content`, {
+  const res = await graphFetch(token, `/me/drive/root:/${encodeURI(path)}:/content`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+  const item = (await res.json().catch(() => null)) as { eTag?: string } | null;
+  return item?.eTag ?? null;
+}
+
+/**
+ * An item's eTag and modified time, without downloading it.
+ *
+ * This is what makes a freshness check cheap: the same question asked with
+ * `/content` costs 2.4MB and measured 1,237-3,289ms for index.json alone.
+ * Null when the file is not there — a fresh archive, not an error.
+ */
+export async function fetchItemMeta(
+  token: string,
+  metadataFolder: string,
+  fileName: string,
+): Promise<{ eTag: string | null; lastModifiedDateTime: string | null } | null> {
+  const path = `${metadataFolder}/${fileName}`;
+  try {
+    const res = await graphFetch(
+      token,
+      `/me/drive/root:/${encodeURI(path)}:?$select=eTag,lastModifiedDateTime`,
+    );
+    const item = (await res.json()) as { eTag?: string; lastModifiedDateTime?: string };
+    return { eTag: item.eTag ?? null, lastModifiedDateTime: item.lastModifiedDateTime ?? null };
+  } catch {
+    return null;
+  }
 }
 
 /** Downloads a metadata JSON file previously written by uploadMetadataJson. Returns null if it doesn't exist yet. */

@@ -329,7 +329,7 @@ export interface ArchiveIndexFile {
  * `trip` writes one trip's narrative from day summaries that already exist; it
  * is a single model call, so it finishes in seconds.
  */
-export type JobKind = "analyze" | "organize" | "trip";
+export type JobKind = "analyze" | "organize" | "trip" | "sync";
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
@@ -378,4 +378,46 @@ export interface ArchiveStatus {
   schemaVersion: number;
   months: { month: string; photoCount: number; representativeCount: number; analyzedCount: number }[];
   totals: { photos: number; analyzable: number; analyzed: number; days: number; sections: number };
+}
+
+/**
+ * A thing kept on this device, in the sense OneDrive means it.
+ *
+ * Pinning a trip or a month fetches its thumbnails during sync and exempts them
+ * from eviction. Everything unpinned stays on demand and is evictable, so the
+ * pin is the user's answer to "what should still work when I am offline".
+ */
+export interface Pin {
+  kind: "trip" | "month";
+  /** A trip id, or a `yyyy-mm` month. */
+  id: string;
+  /** Originals as well as thumbnails. Off by default: they are megabytes each. */
+  originals: boolean;
+}
+
+/** How the local replica stands against OneDrive. */
+export type SyncState =
+  | "in-sync"
+  | "behind"
+  /** Written locally but not yet uploaded — an upload that failed, normally. */
+  | "ahead"
+  /** Both changed since the last sync. Needs the user to choose; never resolved automatically. */
+  | "conflict"
+  | "never-synced"
+  | "offline";
+
+export interface SyncStatus {
+  state: SyncState;
+  /** When the eTag was last compared against OneDrive. */
+  checkedAt: string | null;
+  /** When metadata last actually moved in either direction. */
+  syncedAt: string | null;
+  localGeneratedAt: string | null;
+  remoteLastModified: string | null;
+  pins: Pin[];
+  storage: {
+    metadataBytes: number;
+    thumbnails: { count: number; bytes: number };
+    originals: { count: number; bytes: number };
+  };
 }
