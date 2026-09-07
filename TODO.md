@@ -1,8 +1,24 @@
 # TODO
 
-State as of 2026-09-05 evening. The **the train 1** trip (2026-08-16 → 09-02,
-18 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
-narrative written, map rendering. Whole run cost **under £8**.
+State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
+days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
+narrative written, map rendering. That run cost **under £8**.
+
+**29 open, 15 done.** The list grows because each session surfaces defects that
+were previously invisible — most of what has been closed was found by measuring
+rather than by planning. The cluster with real user-visible value still in it is
+captions and summarizers, and it has now been deferred three times.
+
+### Done 2026-09-07
+
+- Thumbnails and originals off browser storage onto a local disk cache, warmed
+  ahead of the browser: fast-scroll p50 **10,608ms → 4ms**.
+- Archive metadata served from the local mirror: `index.json` **1,237-3,289ms →
+  34ms**, zero OneDrive round trips on load.
+- Two-way sync with eTag freshness, pins ("always keep on this device"), and a
+  real Settings page. Sidebar gained pins and a fixed tool strip.
+- Light / dark / system theme.
+- Photo viewer rebuilt: card-scoped, two columns, image strip, zoom and pan.
 
 ## Open issues
 
@@ -471,6 +487,13 @@ no-card path.
 - [ ] The viewer is desktop-shaped. Below 900px it stacks, but that has not been
       exercised on a real phone.
 - [ ] Zoom is centre-origin, so zooming does not follow the cursor.
+
+Zoom resizes the photograph rather than scaling a layer. `transform: scale()`
+promotes it to a composited layer that is rasterised once and GPU-stretched, and
+those tile boundaries showed as thin lines across the picture at some levels.
+`will-change: transform` — the usual advice — made that worse, since it
+guarantees the very layer at fault. Setting a real width makes the browser
+resample from the source: no seams at 152% or 506%, and sharper.
 
 ## Correctness / safety backlog
 
