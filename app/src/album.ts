@@ -1,6 +1,7 @@
 import type { ArchiveIndexFile, DayRecord, MonthSummary, PhotoRecord, TripRecord } from "@travel-archive/shared";
 import { loadMonth, SignInRequiredError } from "./archiveData";
-import { el, lazyImg, openFullPhoto } from "./photoUi";
+import { el, lazyImg } from "./photoUi";
+import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
@@ -156,7 +157,7 @@ function renderAlbumGrid(photos: PhotoRecord[]): HTMLElement {
     // Always "large" — see the Density comment above for why "medium" can't
     // render a tall photo crisply at any usable cell size.
     const img = lazyImg(photo, "large");
-    img.addEventListener("click", () => void openFullPhoto(photo));
+    img.addEventListener("click", () => openPhoto(photo));
     cell.appendChild(img);
     grid.appendChild(cell);
   }

@@ -48,15 +48,28 @@
     </div>
 
     <div id="lightbox" class="lightbox" hidden>
-      <!-- The figure now fills most of the screen, so "click the backdrop to
-           close" is no longer a big enough target to rely on. -->
+      <!-- The figure fills most of the screen, so the backdrop is no longer a
+           big enough target to be the only way out. -->
       <button id="lightbox-close" type="button" aria-label="Close">&times;</button>
       <figure class="lightbox-figure">
         <div class="lightbox-stage">
-          <img id="lightbox-img" alt="" />
+          <img id="lightbox-img" alt="" draggable="false" />
           <div id="lightbox-spinner" class="spinner" hidden><span></span>Loading full resolution…</div>
+          <div id="lightbox-zoom">
+            <button type="button" data-zoom="out" aria-label="Zoom out">&minus;</button>
+            <span class="zoom-level">100%</span>
+            <button type="button" data-zoom="in" aria-label="Zoom in">+</button>
+            <button type="button" data-zoom="fit">Fit</button>
+          </div>
         </div>
-        <figcaption id="lightbox-caption"></figcaption>
+        <!-- Two contexts, not one: what the card is about, then what this
+             particular photograph is. An ordinary photo with no card shows only
+             the second, and the section simply is not rendered. -->
+        <aside id="lightbox-panel">
+          <section id="lightbox-card" hidden></section>
+          <section id="lightbox-photo"></section>
+          <div id="lightbox-strip" hidden></div>
+        </aside>
       </figure>
     </div>
 

@@ -1,5 +1,6 @@
 import type { DayRecord, DaySegment, Highlight, PhotoRecord } from "@travel-archive/shared";
-import { el, lazyImg, openFullPhoto } from "./photoUi";
+import { el, lazyImg } from "./photoUi";
+import { openCard, openPhoto } from "./viewer";
 import { anchorFor } from "./tripMap";
 
 /**
@@ -49,9 +50,13 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
   // each cell keeps the shape of a photograph however many there are — see the
   // note on `.card-images` in style.css.
   images.style.setProperty("--img-count", String(photos.length));
-  for (const photo of photos) {
+  for (const [i, photo] of photos.entries()) {
     const img = lazyImg(photo, "large");
-    img.addEventListener("click", () => void openFullPhoto(photo));
+    // Opening the *card*, at this image. A card is the unit the archive
+    // curates — its description, its placard and its other photographs all
+    // belong with the picture, and opening a lone image threw them away at the
+    // moment someone was looking closest.
+    img.addEventListener("click", () => openCard(highlight, byId, i));
     images.appendChild(img);
   }
 
@@ -95,7 +100,9 @@ function renderGrid(photos: PhotoRecord[]): HTMLElement {
   const grid = el<HTMLDivElement>(`<div class="stop-grid"></div>`);
   for (const photo of photos) {
     const img = lazyImg(photo, "large");
-    img.addEventListener("click", () => void openFullPhoto(photo));
+    // No card here: the collapsed "more photos" grid and the transit strips are
+    // ordinary photographs, and the viewer shows just the photo's own panel.
+    img.addEventListener("click", () => openPhoto(photo));
     grid.appendChild(img);
   }
   return grid;

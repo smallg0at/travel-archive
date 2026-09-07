@@ -851,19 +851,18 @@ body.resizing { cursor: col-resize; user-select: none; }
 /* --- Photo viewer ----------------------------------------------------- */
 
 /**
- * The viewer is a row: photograph on the left, everything written about it on
- * the right.
+ * The viewer: photograph on the left, what is known about it on the right.
  *
- * It used to be a column — image capped at 78vh with the caption beneath — and
- * that wasted the shape of the screen twice over. A landscape photo left the
- * bottom fifth empty; a museum placard's transcript, which runs to hundreds of
- * words, expanded *downward* under the image and pushed the whole figure past
- * the viewport, while the entire right half of a wide screen sat black.
+ * It was a column — image capped at 78vh with the caption beneath — which
+ * wasted the shape of the screen twice: a landscape photo left the bottom
+ * fifth empty, and a placard transcript expanded downward and pushed the figure
+ * past the viewport while the right half of a wide screen sat black.
  *
- * Side by side, the photograph gets the full height and the transcript scrolls
- * in its own column, so a placard can be read while looking at the thing it
- * describes. Below 900px it stacks again, because at that width a side panel
- * would leave the photo too narrow to see.
+ * The right column carries two contexts. What the **card** is about sits above,
+ * because that is the thing being looked at; what **this photograph** is sits
+ * below, because a card can hold several. An ordinary photo outside a card —
+ * an album month, a collapsed grid, a transit strip — has no card section at
+ * all and simply shows the second.
  */
 .lightbox-figure {
   margin: 0;
@@ -882,16 +881,54 @@ body.resizing { cursor: col-resize; user-select: none; }
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 .lightbox img {
   max-width: 100%;
   max-height: 92vh;
   object-fit: contain;
   border-radius: 4px;
+  transform-origin: center;
+  /* Panning is a drag, and without this the browser starts its own image drag
+     and a text selection instead. */
+  -webkit-user-drag: none;
+  user-select: none;
 }
 /* The instantly-available thumbnail, upscaled. Softened so the swap to full
    resolution reads as sharpening rather than as the image changing. */
 .lightbox img.preview { filter: blur(0.5px); }
+
+#lightbox-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.55);
+  border: 1px solid rgb(241 239 232 / 0.14);
+}
+#lightbox-zoom button {
+  font: inherit;
+  font-size: 12px;
+  min-width: 26px;
+  padding: 3px 7px;
+  color: rgb(241 239 232 / 0.85);
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+#lightbox-zoom button:hover { background: rgb(255 255 255 / 0.12); color: #fff; }
+.zoom-level {
+  min-width: 40px;
+  text-align: center;
+  font-size: 11px;
+  color: rgb(241 239 232 / 0.6);
+  font-variant-numeric: tabular-nums;
+}
 
 .spinner {
   position: absolute;
@@ -922,589 +959,146 @@ body.resizing { cursor: col-resize; user-select: none; }
   .spinner span { animation-duration: 2.4s; }
 }
 
-/* The panel is only as wide as it needs to be, and only present at all when
-   there is something to put in it — a photo with no caption should not leave a
-   column of empty space beside it. */
-#lightbox-caption {
-  flex: 0 0 clamp(260px, 26vw, 380px);
+#lightbox-panel {
+  flex: 0 0 clamp(280px, 27vw, 400px);
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  /* Its own surface rather than text floating on the dimmed page behind — at
-     92% black the archive still shows through, and a transcript is hard enough
-     to read without a museum wall behind the words. */
-  padding: 16px;
+  gap: 12px;
+  min-height: 0;
+  color: #f1efe8;
+  cursor: auto;
+}
+
+/* Each section is its own surface rather than text floating on the dimmed page
+   — a transcript is hard enough to read without a museum wall behind it. */
+#lightbox-card,
+#lightbox-photo {
+  padding: 14px 16px;
   border-radius: 8px;
   background: rgb(28 27 25 / 0.92);
   border: 1px solid rgb(241 239 232 / 0.1);
-  color: #f1efe8;
-  text-align: left;
-  cursor: auto;
-  scrollbar-width: thin;
-}
-#lightbox-caption:empty { display: none; }
-
-.lightbox-caption-text { font-size: 14px; line-height: 1.6; }
-.lightbox-caption-meta { font-size: 11.5px; color: rgb(241 239 232 / 0.6); }
-
-/* Transcribed text is the reason this panel exists, so it is open by default
-   rather than behind a toggle — the toggle made sense when it expanded under
-   the photo and pushed it off screen. */
-/* The transcript takes whatever height the caption above it does not, and
-   scrolls inside that — rather than sitting in a short box with the rest of the
-   panel left empty. A placard runs to hundreds of words and is the reason this
-   column exists, so it should get the room. */
-.lightbox-text {
-  flex: 1 1 auto;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 2px;
-  border-top: 1px solid rgb(241 239 232 / 0.18);
-  padding-top: 10px;
+  gap: 8px;
+  min-height: 0;
 }
-.lightbox-text h4 {
-  flex: 0 0 auto;
-  margin: 0 0 6px;
-  font-size: 11px;
+#lightbox-card { flex: 0 0 auto; max-height: 40%; overflow-y: auto; }
+/* The photograph's own section takes the remaining height, because the
+   transcript lives in it and that is what needs the room. */
+#lightbox-photo { flex: 1 1 auto; overflow-y: auto; }
+#lightbox-card[hidden] { display: none; }
+
+#lightbox-card h3 {
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  line-height: 1.35;
+}
+.viewer-section-label {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: rgb(241 239 232 / 0.45);
+}
+.viewer-desc,
+.viewer-caption {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.viewer-caption { color: rgb(241 239 232 / 0.92); }
+.viewer-meta {
+  margin: 0;
+  font-size: 11.5px;
   color: rgb(241 239 232 / 0.55);
 }
-.lightbox-text > div {
-  flex: 1 1 auto;
+/* A placard's English rendering: prose, so it reads as a quotation. */
+.viewer-placard {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: rgb(241 239 232 / 0.8);
+}
+
+.viewer-block {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 6px;
+  border-top: 1px solid rgb(241 239 232 / 0.14);
+  padding-top: 9px;
+}
+.viewer-block h4 {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(241 239 232 / 0.45);
+}
+.viewer-block > div {
   font-size: 12.5px;
   line-height: 1.65;
   color: rgb(241 239 232 / 0.85);
   white-space: pre-wrap;
+}
+/* The transcript is the reason this column is wide, so it gets the leftovers
+   and scrolls in place rather than sitting in a fixed box. */
+.viewer-transcript {
+  flex: 1 1 auto;
+}
+.viewer-transcript > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
   scrollbar-width: thin;
 }
 
+/* The card's other photographs, one click away. Absent when there is only one,
+   which is every ordinary photo. */
+#lightbox-strip {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+#lightbox-strip[hidden] { display: none; }
+#lightbox-strip img {
+  width: 74px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  opacity: 0.55;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+#lightbox-strip img:hover { opacity: 0.85; }
+#lightbox-strip img.current {
+  opacity: 1;
+  border-color: var(--accent);
+}
 
-/* Narrow: stack, and cap the panel so the photo keeps most of the height. */
+/* Narrow: stack, and cap the panel so the photograph keeps most of the height. */
 @media (max-width: 900px) {
   .lightbox-figure {
     flex-direction: column;
     gap: 10px;
   }
-  .lightbox-stage { min-height: 0; }
   .lightbox img { max-height: 100%; }
-  #lightbox-caption {
+  #lightbox-panel {
     flex: 0 1 auto;
-    max-height: 34vh;
-    padding: 0;
+    max-height: 40vh;
   }
+  #lightbox-card { max-height: none; }
 }
-
-
-
-/* --- Trip map --------------------------------------------------------- */
-
-.trip-map {
-  position: relative;
-  margin: 0 0 22px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-muted);
-  overflow: hidden;
-}
-.trip-map-loading { padding: 20px; font-size: 12px; color: var(--text-secondary); }
-.trip-map-svg {
-  display: block;
-  width: 100%;
-  height: 380px;
-  cursor: grab;
-  touch-action: none;
-  /* The sea. Land is drawn over it as filled country polygons. */
-  background: color-mix(in srgb, #4b7fb5 26%, var(--bg));
-}
-.trip-map-svg:active { cursor: grabbing; }
-
-/* Every size below is `base * --map-k`, where the base is a fraction of the
-   fitted view (set in tripMap.ts) and --map-k is how far you have zoomed. A
-   literal viewBox length cannot work for both a continent-wide trip and a
-   two-city one: the first version used one, and a single city disc covered the
-   entire map. */
-.trip-map-land {
-  fill: color-mix(in srgb, var(--text) 7%, var(--bg-muted));
-  stroke: none;
-}
-.trip-map-border {
-  fill: none;
-  stroke: color-mix(in srgb, var(--text) 26%, transparent);
-  stroke-width: calc(var(--map-s, 1px) * var(--map-k, 1));
-  stroke-dasharray: calc(var(--map-s, 1px) * 3 * var(--map-k, 1)) calc(var(--map-s, 1px) * 2.5 * var(--map-k, 1));
-}
-
-/* Cities the trip did not visit: present for orientation, and styled so they
-   read as background — the same relationship the grey labels have to the route
-   on a rail-network map. */
-.trip-map-place {
-  fill: var(--text-secondary);
-  font-size: calc(var(--map-f, 12px) * 0.62 * var(--map-k, 1));
-  paint-order: stroke;
-  stroke: var(--bg);
-  stroke-width: calc(var(--map-s, 1px) * 1.6 * var(--map-k, 1));
-  pointer-events: none;
-  transform: translate(calc(var(--map-f, 12px) * 0.34 * var(--map-k, 1)), calc(var(--map-f, 12px) * 0.22 * var(--map-k, 1)));
-}
-.trip-map-place-dot {
-  r: calc(var(--map-s, 1px) * 1.5 * var(--map-k, 1));
-  fill: var(--text-secondary);
-  opacity: 0.65;
-}
-/* Water is the thing that actually places a city on an overview map — country
-   borders alone left it blank. */
-.trip-map-lake {
-  fill: color-mix(in srgb, #4b7fb5 42%, var(--bg));
-  stroke: none;
-}
-.trip-map-river {
-  fill: none;
-  stroke: color-mix(in srgb, #4b7fb5 52%, var(--bg));
-  stroke-width: calc(var(--map-s, 1px) * 1.5 * var(--map-k, 1));
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.trip-map-route {
-  fill: none;
-  stroke: var(--text-secondary);
-  stroke-width: calc(var(--map-s, 1px) * 2.4 * var(--map-k, 1));
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  opacity: 0.8;
-}
-.trip-map-city { cursor: pointer; }
-.trip-map-city circle {
-  r: calc(var(--map-r, 6px) * var(--city-weight, 1) * var(--map-k, 1));
-  fill: var(--accent);
-  fill-opacity: 0.92;
-  stroke: var(--bg);
-  stroke-width: calc(var(--map-s, 1px) * 1.6 * var(--map-k, 1));
-}
-.trip-map-city:hover circle,
-.trip-map-city:focus circle { fill-opacity: 1; stroke: var(--text); }
-.trip-map-city text {
-  fill: var(--text);
-  font-size: calc(var(--map-f, 12px) * var(--map-k, 1));
-  font-weight: 600;
-  paint-order: stroke;
-  stroke: var(--bg);
-  stroke-width: calc(var(--map-s, 1px) * 2.2 * var(--map-k, 1));
-  pointer-events: none;
-  transform: translateY(calc(-1 * (var(--map-r, 6px) * var(--city-weight, 1) + var(--map-f, 12px) * 0.55) * var(--map-k, 1)));
-}
-.trip-map-city:focus { outline: none; }
-
-/* Expanded: an overlay over the page, not a browser fullscreen takeover. */
-.trip-map.is-expanded {
-  position: fixed;
-  inset: 3vh 3vw;
-  z-index: 90;
-  margin: 0;
-  box-shadow: 0 18px 60px rgb(0 0 0 / 0.55);
-}
-.trip-map.is-expanded .trip-map-svg { height: 94vh; }
-/* Stops the page scrolling behind the overlay. */
-body.map-expanded { overflow: hidden; }
-body.map-expanded::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 89;
-  background: rgb(0 0 0 / 0.55);
-}
-
-.trip-map-expand {
-  position: absolute;
-  right: 62px;
-  bottom: 10px;
-  font: inherit;
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.trip-map-reset {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  font: inherit;
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  color: var(--text);
-  cursor: pointer;
-}
-
-/* --- Print / PDF ------------------------------------------------------ */
-
-/**
- * Exists so a trip can be handed to someone who has no access to this archive.
- * Chrome's "Save as PDF" rasterises the thumbnails into the file, so the output
- * is self-contained — no sign-in, no token, no network, no Microsoft account.
- *
- * What is exported is narrower than what is on screen, and the narrowing lives
- * here rather than in script so that it cannot be undone by expanding a section
- * before printing. See app/src/print.ts for why.
- */
-@media print {
-  /* The screen palette follows the reader's OS, and this one is set to dark.
-     Paper is white either way, so force the light tokens rather than printing
-     pale text onto it. Every colour in the app is derived from these six, which
-     is what makes a print theme six lines instead of an audit. */
-  /* `:root[data-theme]` outranks a bare `:root`, so printing while the app is
-     in dark mode would otherwise come out dark however many tokens are
-     re-declared here. Matching the attribute form keeps specificity level. */
-  :root,
-  :root[data-theme] {
-    --bg: #ffffff;
-    --bg-muted: #ffffff;
-    --text: #14140f;
-    --text-secondary: #4a4a43;
-    --border: #c9c7bd;
-    --accent: #1c5c9c;
-    color-scheme: light;
-  }
-
-  @page {
-    size: A4;
-    margin: 14mm 12mm 16mm;
-  }
-
-  /* The app is a fixed-height flex shell whose columns scroll independently.
-     Printed as it stands that emits exactly one page — the first 865px of a
-     153,000px document. Unwind it back into ordinary document flow. */
-  html,
-  body {
-    height: auto;
-    overflow: visible;
-    display: block;
-    background: #fff;
-  }
-  #app {
-    display: block;
-    height: auto;
-    min-height: 0;
-  }
-  #main-column {
-    display: block;
-    min-width: 0;
-  }
-  #content {
-    display: block;
-    height: auto;
-    overflow: visible;
-    padding: 0;
-  }
-
-  /* Furniture. Navigation, controls and overlays are not part of the document. */
-  #sidebar,
-  #sidebar-resize,
-  #menu,
-  #job-drawer,
-  #settings-panel,
-  #lightbox,
-  #signin-banner,
-  #print-progress,
-  .density-control,
-  .trip-map-expand,
-  .trip-map-reset {
-    display: none !important;
-  }
-
-  /* The sharing rule, enforced structurally: the unreviewed roll never leaves
-     the machine. `.stop-more` is the "N more photos" grid and `.transit` the
-     journey strips — between them they hold 114 of this trip's 125 screenshots,
-     none of which anyone has read. Hidden regardless of whether the reader
-     happened to expand one before printing. */
-  .stop-more,
-  .transit {
-    display: none !important;
-  }
-
-  /* A placard's English rendering is prose and prints. The verbatim transcript
-     behind its toggle is evidence for the owner, not content for a reader. */
-  .card-source {
-    display: none !important;
-  }
-
-  /* Any remaining <details> prints open — a collapsed section on paper is just
-     a missing one, since nobody can click it. */
-  details > summary {
-    display: none;
-  }
-
-  /* Page breaks. The rule throughout is that a heading never ends a page and a
-     card is never split across one. */
-  .day-page {
-    break-before: page;
-    margin-bottom: 0;
-  }
-  .day-page:first-of-type {
-    break-before: auto;
-  }
-  .day-header,
-  .stop-head,
-  .month-heading {
-    break-after: avoid;
-    break-inside: avoid;
-  }
-  .card,
-  .trip-map,
-  .day-summary,
-  .stop-summary {
-    break-inside: avoid;
-  }
-  .trip-narrative p {
-    orphans: 3;
-    widows: 3;
-  }
-
-  /* The map is the trip's contents page, so it gets one of its own. */
-  .trip-map {
-    break-after: page;
-    border: none;
-  }
-  .trip-map-svg {
-    height: 150mm;
-    cursor: auto;
-  }
-
-  /* Cards. Four tracks is right for a wide screen and far too narrow for a
-     186mm page, so print drops to two — `full` spans both, `half` and `normal`
-     take one each. Without this a "normal" card is a 44mm column with a
-     three-word line wrap. */
-  .cards {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8mm 6mm;
-  }
-  .card-full {
-    grid-column: span 2;
-  }
-  .card-half,
-  .card-normal {
-    grid-column: span 1;
-  }
-
-  /* Heights in mm, not px: the screen values are tuned to a viewport, and a
-     380px hero would take a third of the page height at print scale. */
-  .card {
-    border-color: var(--border);
-  }
-  /* Print sizes images in mm for page geometry, so the screen ratio must not
-     also apply — the two would fight and the taller would win. */
-  .card-images {
-    aspect-ratio: auto;
-  }
-  .card-full .card-images img {
-    height: 85mm;
-  }
-  .card-half .card-images img,
-  .card-normal .card-images img {
-    height: 52mm;
-  }
-
-  /* The shimmer placeholder is a loading state; on paper it is a grey box with
-     a diagonal stripe frozen across it. */
-  .card-images img {
-    background-image: none;
-    animation: none;
-    background-color: transparent;
-  }
-
-  /* The transcript box scrolls on screen; on paper a scroll box is a clipped
-     one. Nothing printed may have hidden overflow. */
-  .card-source-text {
-    max-height: none;
-    overflow: visible;
-  }
-
-  /* Backgrounds and image rendering are the two things Chrome drops by default
-     and the two the layout depends on. */
-  * {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
-
-/* The pre-print progress readout. Fixed and central because the pass it reports
-   can take a moment on a cold cache, and a print that appears to do nothing for
-   twenty seconds reads as a broken button. */
-#print-progress {
-  position: fixed;
-  left: 50%;
-  bottom: 28px;
-  transform: translateX(-50%);
-  z-index: 90;
-  padding: 9px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  color: var(--text);
-  font-size: 12px;
-  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
-}
-
-/* --- Sidebar pins and tools ------------------------------------------- */
-
-/* OneDrive's vocabulary: a filled marker for kept on this device, a cloud for
-   fetched when needed. Borrowed model, borrowed symbols. */
-.pin-mark {
-  flex-shrink: 0;
-  width: 16px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--text-secondary);
-  opacity: 0.45;
-  cursor: pointer;
-}
-.month-link:hover .pin-mark { opacity: 0.9; }
-.month-link.pinned .pin-mark { opacity: 1; color: var(--accent); }
-
-/* Pinned to the bottom of the sidebar rather than the end of the list. */
-#nav-tools {
-  flex-shrink: 0;
-  padding: 6px 8px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-muted);
-}
-.nav-tool .month-name { color: var(--text-secondary); }
-.nav-tool.active .month-name { color: var(--text); }
-
-/* --- Settings page ---------------------------------------------------- */
-
-.set-section {
-  max-width: 640px;
-  margin: 0 0 26px;
-}
-.set-section h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.set-body {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px 12px 12px;
-  background: var(--bg-muted);
-}
-.set-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 0;
-  font-size: 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-}
-.set-row:last-child { border-bottom: none; }
-.set-row > span { color: var(--text-secondary); }
-.set-row > b { font-weight: 500; }
-
-.set-note {
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--text-secondary);
-}
-
-/* The sync state is the one thing on this page worth seeing from across the
-   room, so it is the only thing that carries colour. */
-.set-sync-state {
-  margin: 8px 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-/* Status colours are the one place not driven by the six tokens, so they need
-   their own light and dark values — #a33 on near-black is barely legible, and
-   a lightened set on white is washed out. */
-.tone-ok { color: #1f6b41; }
-.tone-warn { color: #8a5d0a; }
-.tone-bad { color: #a3282a; }
-.tone-muted { color: var(--text-secondary); }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .tone-ok { color: #5fbd88; }
-  :root:not([data-theme="light"]) .tone-warn { color: #d7a04a; }
-  :root:not([data-theme="light"]) .tone-bad { color: #e08183; }
-}
-:root[data-theme="dark"] .tone-ok { color: #5fbd88; }
-:root[data-theme="dark"] .tone-warn { color: #d7a04a; }
-:root[data-theme="dark"] .tone-bad { color: #e08183; }
-
-.set-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 0 2px;
-}
-.set-btn {
-  font: inherit;
-  font-size: 11.5px;
-  padding: 5px 11px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  cursor: pointer;
-}
-.set-btn:hover { border-color: var(--accent); }
-.set-btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-/* Both conflict choices destroy one copy, so neither gets to look like the
-   safe default. */
-.set-btn.danger { border-color: #a33; color: #a33; }
-
-.set-conflict {
-  margin: 10px 0 2px;
-  padding: 10px 12px;
-  border: 1px solid #a33;
-  border-radius: 8px;
-  background: color-mix(in srgb, #a33 6%, var(--bg));
-}
-.set-conflict-lead {
-  margin: 0 0 8px;
-  font-size: 12px;
-  line-height: 1.55;
-}
-.set-conflict-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.set-progress {
-  margin-top: 10px;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-.set-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 0 2px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.set-pin > span { color: var(--text); }
 
 /* The viewer's close control. The figure fills the screen now, so the backdrop
    is too small a target to be the only way out. */

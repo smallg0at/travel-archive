@@ -448,6 +448,30 @@ above rather than repeated here; the Settings page is simply where they land.
       server, but nothing in the UI sets the interval yet.
 - [ ] Pin "include originals" — the API takes it, the UI never sets it.
 
+## Photo viewer (2026-09-07)
+
+Opened from a **card**, not a lone image. A card is the unit the archive
+curates — one subject, its description, the placard that explains it and one to
+three photographs — and opening a single image threw all of that away at the
+moment someone was looking closest.
+
+Layout is a row: photograph left at full height, two panels right. What the
+*card* is about above, what *this photograph* is below, and the card's other
+images in a strip beneath. Arrow keys and the strip move between them; zoom is
+wheel or the controls, with drag to pan.
+
+**Ordinary photographs still work as before** — album months, collapsed "more
+photos" grids and transit strips have no card, so `openPhoto` hides the card
+section and the strip entirely rather than showing an empty one.
+
+Verified: card panel with placard text, per-image panel switching, strip
+selection, arrows wrapping 2-1-2-0, zoom 100/150/fit, panning, and the
+no-card path.
+
+- [ ] The viewer is desktop-shaped. Below 900px it stacks, but that has not been
+      exercised on a real phone.
+- [ ] Zoom is centre-origin, so zooming does not follow the cursor.
+
 ## Correctness / safety backlog
 
 - [x] **`analyze` (CLI) and `serve` can run at once and clobber the same
