@@ -1,5 +1,19 @@
+/**
+ * Six tokens drive every colour in the app, which is what makes a theme switch
+ * six declarations rather than an audit.
+ *
+ * Three states, not two. `data-theme` is set only when the reader has chosen;
+ * with nothing set the OS decides, which is the default and is what "System"
+ * means. The dark media query is guarded so an explicit *light* choice still
+ * wins on a dark OS, and the explicit dark block comes last so the toggle wins
+ * in both directions.
+ *
+ * `color-scheme` follows the same three states so scrollbars, form controls and
+ * the canvas the browser paints behind the page match the choice — without it
+ * a light page on a dark OS gets dark scrollbars.
+ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #ffffff;
   --bg-muted: #f4f3ef;
   --text: #1a1a18;
@@ -7,14 +21,30 @@
   --border: #e2e0d8;
   --accent: #378ade;
 }
+
+/* System preference, unless the reader explicitly asked for light. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #161614;
     --bg-muted: #211f1c;
     --text: #f1efe8;
     --text-secondary: #b4b2a9;
     --border: #333330;
   }
+}
+
+/* An explicit choice, which must win on any OS. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #161614;
+  --bg-muted: #211f1c;
+  --text: #f1efe8;
+  --text-secondary: #b4b2a9;
+  --border: #333330;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -1041,7 +1071,11 @@ body.map-expanded::after {
      Paper is white either way, so force the light tokens rather than printing
      pale text onto it. Every colour in the app is derived from these six, which
      is what makes a print theme six lines instead of an audit. */
-  :root {
+  /* `:root[data-theme]` outranks a bare `:root`, so printing while the app is
+     in dark mode would otherwise come out dark however many tokens are
+     re-declared here. Matching the attribute form keeps specificity level. */
+  :root,
+  :root[data-theme] {
     --bg: #ffffff;
     --bg-muted: #ffffff;
     --text: #14140f;
@@ -1298,10 +1332,22 @@ body.map-expanded::after {
   font-size: 13px;
   font-weight: 600;
 }
-.tone-ok { color: #2e7d4f; }
-.tone-warn { color: #9a6b12; }
-.tone-bad { color: #a33; }
+/* Status colours are the one place not driven by the six tokens, so they need
+   their own light and dark values — #a33 on near-black is barely legible, and
+   a lightened set on white is washed out. */
+.tone-ok { color: #1f6b41; }
+.tone-warn { color: #8a5d0a; }
+.tone-bad { color: #a3282a; }
 .tone-muted { color: var(--text-secondary); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tone-ok { color: #5fbd88; }
+  :root:not([data-theme="light"]) .tone-warn { color: #d7a04a; }
+  :root:not([data-theme="light"]) .tone-bad { color: #e08183; }
+}
+:root[data-theme="dark"] .tone-ok { color: #5fbd88; }
+:root[data-theme="dark"] .tone-warn { color: #d7a04a; }
+:root[data-theme="dark"] .tone-bad { color: #e08183; }
 
 .set-actions {
   display: flex;

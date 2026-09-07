@@ -12,6 +12,7 @@ import {
 import { el } from "./photoUi";
 import { renderDensityControl } from "./album";
 import { resetSidebarWidth } from "./chrome";
+import { renderThemeControl } from "./theme";
 
 /**
  * Settings, as a page rather than a popup.
@@ -257,6 +258,10 @@ function offlineSection(status: SyncStatus): HTMLElement {
 function appearanceSection(): HTMLElement {
   const s = section("Appearance");
   const body = s.querySelector(".set-body")!;
+
+  const theme = el<HTMLDivElement>(`<div class="set-row"><span>Theme</span></div>`);
+  theme.appendChild(renderThemeControl());
+  body.appendChild(theme);
 
   const density = el<HTMLDivElement>(`<div class="set-row"><span>Thumbnail size</span></div>`);
   density.appendChild(renderDensityControl());

@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Photo Archive</title>
     <link rel="stylesheet" href="/src/style.css" />
+    <script>
+      // Before the stylesheet paints, not from a module. A reader who chose
+      // dark on a light system would otherwise see the page render light and
+      // then flip — the flash is more objectionable than the setting is useful.
+      // Absence of the attribute means "system", which the media query handles.
+      try {
+        var t = localStorage.getItem("theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {
+        /* storage blocked; the system preference still applies */
+      }
+    </script>
   </head>
   <body>
     <div id="signin-banner" class="signin-banner" hidden>

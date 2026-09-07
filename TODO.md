@@ -189,7 +189,12 @@ narrative written, map rendering. Whole run cost **under £8**.
 ## Todo
 
 - [x] **Make this an app.** Electron shell in `desktop/`. `npm run desktop`.
-- [ ] Light/dark mode toggle.
+- [x] **Light/dark mode toggle.** Done 2026-09-07, in Settings > Appearance.
+      Three states, not two: Light, Dark and System, where System is the
+      *absence* of `data-theme` so the media query keeps following the OS.
+      Applied by an inline script in `index.html` before the stylesheet paints,
+      or a reader who chose dark on a light system watches the page render
+      light and flip.
 - [ ] **i18n — Chinese and English.** UI strings are the easy part and dates
       are already locale-aware (`toLocaleDateString(undefined, ...)`). The hard
       part is that **the archive's prose is model output stored in one
@@ -436,21 +441,19 @@ Three bugs found by testing, not reasoning:
   `showMonth` but not by navigating to Settings, so clicking away still fired
   it two seconds later. Every exit cancels now.
 
-Still to build, all with a home in the Settings page now:
+Still to build. Light/dark, i18n and trip management are tracked under **Todo**
+above rather than repeated here; the Settings page is simply where they land.
 
-- [ ] Light/dark toggle (Appearance section exists; only density and sidebar
-      width are in it).
-- [ ] Language / i18n section.
-- [ ] Trip rename and delete section.
 - [ ] The periodic sync timer — the setting is stored and honoured by the
       server, but nothing in the UI sets the interval yet.
 - [ ] Pin "include originals" — the API takes it, the UI never sets it.
 
 ## Correctness / safety backlog
 
-- [ ] **`analyze` (CLI) and `serve` can run at once and clobber the same
-      shard.** The one-job-at-a-time guard is in the server only; a CLI run
-      walks past it. Needs a lock file. *This actually happened on 2026-09-05.*
+- [x] **`analyze` (CLI) and `serve` can run at once and clobber the same
+      shard.** Fixed 2026-09-06 by `pipeline/src/lock.ts` — a pid lock at
+      `data/.archive-lock`, held per write by all five CLI entry points, every
+      server job and sync. See "Desktop shell" for the details.
 - [ ] **`trip` proceeds when most days have no summary** — warns in a scrolling
       log, then writes a full narrative anyway. Should refuse without an
       explicit override. A paid-for result that reads as authoritative but is
