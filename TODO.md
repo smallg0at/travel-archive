@@ -4,7 +4,7 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**29 open, 15 done.** The list grows because each session surfaces defects that
+**32 open, 16 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -23,8 +23,23 @@ captions and summarizers, and it has now been deferred three times.
   furniture are gone. Save as PDF moved into the page heading, so it cannot be
   pressed while a trip is still loading.
 
+See `HANDOFF.md` for how to run the project, the invariants that bite, and the
+working practice this list was built with.
+
 ## Open issues
 
+
+- [ ] [User] Settings pane have performance issue, takes half a second to load and will reload every single time user hit one of the sync buttons.
+- [x] **Map styling gone.** Fixed 2026-09-07. Same cause as the Settings
+      regression: a CSS edit that replaced the slice between two text markers
+      took the `.trip-map` block with it. Recovered from `c65bc5b` and
+      verified in the browser — 380px canvas, sea fill, 23 city circles,
+      expand button. A selector diff against the pre-rewrite stylesheet found
+      nothing else missing.
+      **Never edit CSS by slicing between markers.** Twice now it has silently
+      deleted unrelated blocks.
+- [ ] There is no method to update the pic list in app.
+- [ ] [App]Still asks for making an .env with no change in text. This should go into settings eventually
 - [x] **Fast scrolling floods the thumbnail server.** Fixed 2026-09-07 by
       warming the cache ahead of the browser (`POST /thumb/warm`, called when a
       trip or month renders). Measured on the same fast scroll to the bottom:
