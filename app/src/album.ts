@@ -426,11 +426,22 @@ function renderNav(index: ArchiveIndexFile): void {
     nav.appendChild(row);
   }
 
-  // Generate and Settings live in the same list as everything else, always
-  // visible, rather than behind a floating burger — which is how this was asked
-  // for: "in the same list as the photo months, always visible. Like Task
-  // Manager."
-  nav.appendChild(el(`<div class="nav-sep"></div>`));
+  renderNavTools(index);
+  void refreshPinMarks();
+}
+
+/**
+ * Generate, Save as PDF and Settings — in a strip below the scrolling list.
+ *
+ * They read as part of the same list but do not scroll with it: at 61 months
+ * of navigation, entries at the end of the list are entries you cannot reach
+ * without scrolling to the bottom, which is no better than the floating menu
+ * they replaced.
+ */
+function renderNavTools(index: ArchiveIndexFile): void {
+  void index;
+  const tools = document.getElementById("nav-tools")!;
+  tools.replaceChildren();
 
   const generate = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" id="nav-generate" type="button" hidden><span class="month-name">Generate</span></button>`,
@@ -438,13 +449,13 @@ function renderNav(index: ArchiveIndexFile): void {
   generate.addEventListener("click", () => {
     generate.classList.toggle("active", toggleJobDrawer());
   });
-  nav.appendChild(generate);
+  tools.appendChild(generate);
 
   const print = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" id="nav-print" type="button" hidden><span class="month-name">Save as PDF</span></button>`,
   );
   print.addEventListener("click", () => void printView());
-  nav.appendChild(print);
+  tools.appendChild(print);
 
   const settings = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" type="button"><span class="month-name">Settings</span></button>`,
@@ -455,13 +466,16 @@ function renderNav(index: ArchiveIndexFile): void {
     // — the dwell delay only helps if every exit cancels it, not just the two
     // that happen to render a view.
     cancelLookAhead();
-    nav.querySelectorAll(".month-link").forEach((n) => n.classList.remove("active"));
+    clearActive();
     settings.classList.add("active");
     void showSettings();
   });
-  nav.appendChild(settings);
+  tools.appendChild(settings);
+}
 
-  void refreshPinMarks();
+/** The selected row can now be in either container, so clear across both. */
+function clearActive(): void {
+  document.querySelectorAll(".month-link.active").forEach((n) => n.classList.remove("active"));
 }
 
 /**
@@ -498,7 +512,7 @@ function navRow(
       void togglePin(row);
       return;
     }
-    document.getElementById("month-nav")!.querySelectorAll(".month-link").forEach((n) => n.classList.remove("active"));
+    clearActive();
     row.classList.add("active");
     row.scrollIntoView({ block: "nearest", inline: "nearest" });
     open();

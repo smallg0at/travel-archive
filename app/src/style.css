@@ -262,7 +262,20 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   font-weight: 500;
 }
+/* The name takes the slack and the count is a right-aligned column, so digits
+   line up down the list. With `space-between` alone the count floated wherever
+   the month name ended, and 4,998 sat well left of 2. */
+.month-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .month-count {
+  flex: 0 0 auto;
+  min-width: 3.4em;
+  text-align: right;
   font-size: 11px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -1280,10 +1293,12 @@ body.map-expanded::after {
 .month-link:hover .pin-mark { opacity: 0.9; }
 .month-link.pinned .pin-mark { opacity: 1; color: var(--accent); }
 
-.nav-sep {
-  height: 1px;
-  margin: 8px 10px;
-  background: var(--border);
+/* Pinned to the bottom of the sidebar rather than the end of the list. */
+#nav-tools {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-muted);
 }
 .nav-tool .month-name { color: var(--text-secondary); }
 .nav-tool.active .month-name { color: var(--text); }
