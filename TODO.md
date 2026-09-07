@@ -19,6 +19,9 @@ captions and summarizers, and it has now been deferred three times.
   real Settings page. Sidebar gained pins and a fixed tool strip.
 - Light / dark / system theme.
 - Photo viewer rebuilt: card-scoped, two columns, image strip, zoom and pan.
+- Generate is a page like Settings; the drawer and the last of the floating
+  furniture are gone. Save as PDF moved into the page heading, so it cannot be
+  pressed while a trip is still loading.
 
 ## Open issues
 
@@ -485,7 +488,7 @@ selection, arrows wrapping 2-1-2-0, zoom 100/150/fit, panning, and the
 no-card path.
 
 - [ ] The viewer is desktop-shaped. Below 900px it stacks, but that has not been
-      exercised on a real phone.
+      exercised on a real phone.User: Tested, layout does not scroll.
 - [ ] Zoom is centre-origin, so zooming does not follow the cursor.
 
 Zoom resizes the photograph rather than scaling a layer. `transform: scale()`

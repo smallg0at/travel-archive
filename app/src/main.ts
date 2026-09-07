@@ -1,8 +1,8 @@
 import { renderAlbum } from "./album";
 import { loadIndex, SignInRequiredError } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
-import { mountJobPanel } from "./tripMode";
-import { initJobDrawer, initSidebarResize } from "./chrome";
+import { initGeneration } from "./tripMode";
+import { initSidebarResize } from "./chrome";
 
 let panelMounted = false;
 
@@ -33,15 +33,14 @@ async function loadAndRender(): Promise<void> {
   try {
     renderAlbum(await loadIndex());
 
-    // Mounted once, into a host outside the nav: a finished job re-renders the
-    // album, and if the panel lived in the nav that render would delete the
-    // very result line the user is waiting to read. The backend is optional and
-    // its health check runs after first paint — absent simply means no panel,
-    // which is the phone's experience and needs no separate code path.
+    // Built once and kept: a finished job re-renders the album, and rebuilding
+    // the panel would delete the result line the user is waiting to read — or a
+    // half-filled form. The backend is optional and its health check runs after
+    // first paint; absent simply means no Generate page, which is the phone's
+    // experience and needs no separate code path.
     if (!panelMounted) {
       panelMounted = true;
-      const host = initJobDrawer();
-      if (host) void mountJobPanel(host, () => void loadAndRender());
+      void initGeneration(() => void loadAndRender());
     }
   } catch (err) {
     if (err instanceof SignInRequiredError) {

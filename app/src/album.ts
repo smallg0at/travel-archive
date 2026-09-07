@@ -8,7 +8,7 @@ import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
 import { setPin as savePin, syncStatus } from "./backend";
 import { releaseSettings, showSettings } from "./settings";
-import { toggleJobDrawer } from "./chrome";
+import { showGenerate } from "./tripMode";
 import { canPrint, printView } from "./print";
 
 /**
@@ -117,6 +117,21 @@ export function renderDensityControl(): HTMLElement {
     wrap.appendChild(button);
   }
   return wrap;
+}
+
+/**
+ * Puts the export control in the page's own heading.
+ *
+ * It used to be a sidebar row, which meant it could be pressed while a trip was
+ * still loading — and it would then export whatever half of the page had
+ * rendered. Living in the heading, it cannot exist before the content it
+ * exports does, because this is called after the page is built.
+ */
+function addExportButton(heading: HTMLElement): void {
+  if (!canPrint()) return;
+  const button = el<HTMLButtonElement>(`<button class="page-export" type="button">Save as PDF</button>`);
+  button.addEventListener("click", () => void printView());
+  heading.appendChild(button);
 }
 
 function dayOf(photo: PhotoRecord): string {
@@ -311,8 +326,8 @@ async function showTrip(trip: TripRecord): Promise<void> {
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
+  addExportButton(header);
   lookAhead(trip.days.flatMap((d) => d.photoIds));
-  refreshPrintEntry();
 
   // After the page is on screen: the basemap is a ~750KB dynamic import, and
   // the trip should be readable before it lands.
@@ -374,8 +389,8 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
+  addExportButton(heading);
   lookAhead(photos.map((p) => p.id));
-  refreshPrintEntry();
 }
 
 function renderNav(index: ArchiveIndexFile): void {
@@ -448,15 +463,13 @@ function renderNavTools(index: ArchiveIndexFile): void {
     `<button class="month-link nav-tool" id="nav-generate" type="button" hidden><span class="month-name">Generate</span></button>`,
   );
   generate.addEventListener("click", () => {
-    generate.classList.toggle("active", toggleJobDrawer());
+    cancelLookAhead();
+    releaseSettings();
+    clearActive();
+    generate.classList.add("active");
+    showGenerate();
   });
   tools.appendChild(generate);
-
-  const print = el<HTMLButtonElement>(
-    `<button class="month-link nav-tool" id="nav-print" type="button" hidden><span class="month-name">Save as PDF</span></button>`,
-  );
-  print.addEventListener("click", () => void printView());
-  tools.appendChild(print);
 
   const settings = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" type="button"><span class="month-name">Settings</span></button>`,
@@ -534,18 +547,6 @@ async function togglePin(row: HTMLButtonElement): Promise<void> {
     row.classList.toggle("pinned", pinned);
     row.querySelector(".pin-mark")!.textContent = pinned ? "▣" : "☁";
   }
-}
-
-/**
- * Shows the export row only where there is something to export.
- *
- * It depends on what is on screen rather than on the archive, so it is
- * refreshed after each view renders — there is no navigation event to hook,
- * since showing a month is just a click handler.
- */
-export function refreshPrintEntry(): void {
-  const entry = document.getElementById("nav-print");
-  if (entry) (entry as HTMLElement).hidden = !canPrint();
 }
 
 /** Paints pin markers from the server's list, once it answers. */

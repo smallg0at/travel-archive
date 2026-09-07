@@ -1,14 +1,10 @@
 /**
- * Window furniture: a draggable sidebar edge, and the drawer the job panel
- * lives in.
+ * Window furniture: the draggable sidebar edge.
  *
- * The drawer exists because the panel was originally squeezed into a fixed
- * 200px sidebar alongside 61 months of navigation — a form with three date
- * fields and a notes box does not belong in a column that narrow.
- *
- * The floating burger and settings popup that used to live here are gone:
- * Generate, Settings and Save as PDF are rows in the sidebar now, always
- * visible, which is how it was asked for.
+ * The burger menu, the settings popup and the generation drawer that used to
+ * live here are all gone. Settings and Generate are pages reached from the
+ * sidebar, and Save as PDF sits in the heading of the page it exports — where
+ * it cannot be pressed before that page exists.
  */
 
 const WIDTH_KEY = "sidebar-width";
@@ -79,30 +75,6 @@ export function initSidebarResize(): void {
       /* see above */
     }
   });
-}
-
-/**
- * The generation drawer, opened from the menu. Returns the element the job
- * panel mounts into, or null when there is no drawer — which is the phone,
- * where there is no backend to generate with.
- */
-export function initJobDrawer(): HTMLElement | null {
-  const drawer = document.getElementById("job-drawer");
-  if (!drawer) return null;
-  return document.getElementById("job-host");
-}
-
-/**
- * Opens or closes the generation drawer.
- *
- * Called from the sidebar now rather than a floating burger: Generate and
- * Settings belong in the same list as the months, always visible.
- */
-export function toggleJobDrawer(): boolean {
-  const drawer = document.getElementById("job-drawer");
-  if (!drawer) return false;
-  drawer.hidden = !drawer.hidden;
-  return !drawer.hidden;
 }
 
 /**

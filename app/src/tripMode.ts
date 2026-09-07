@@ -250,7 +250,31 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
  * running — either a job this tab started before a reload, or one started
  * elsewhere (the CLI, another tab), which the health check reports.
  */
-export async function mountJobPanel(host: HTMLElement, refresh: Refresh): Promise<void> {
+/**
+ * The panel, built once and kept.
+ *
+ * Generate is a page now rather than a drawer, and a page is re-rendered every
+ * time it is opened — but this panel holds a form someone may have half filled
+ * in and the live progress of a running job. Both would be thrown away by a
+ * rebuild, so the element is created once and moved into the page instead.
+ */
+let panel: HTMLElement | null = null;
+let refreshFn: Refresh = () => {};
+
+/** Shows Generate as a page, like Settings. False when there is no backend. */
+export function showGenerate(): boolean {
+  if (!panel) return false;
+  document.getElementById("content")!.replaceChildren(panel);
+  return true;
+}
+
+/**
+ * Decides where thumbnails come from, and builds the Generate panel if a
+ * backend answers. Called once at startup; the panel itself is shown by
+ * `showGenerate`.
+ */
+export async function initGeneration(refresh: Refresh): Promise<void> {
+  refreshFn = refresh;
   const health = await checkHealth();
   if (!health?.ok) return;
 
@@ -260,13 +284,11 @@ export async function mountJobPanel(host: HTMLElement, refresh: Refresh): Promis
   // its site data. Without a backend the built-in Graph path stays in use.
   setThumbnailSource(localServerSource);
 
-  const panel = renderJobPanel(refresh);
-  host.appendChild(panel);
+  panel = renderJobPanel(refresh);
 
   const running = health.running ?? (await (async () => {
     const id = rememberedJob();
     return id ? await getJob(id) : null;
   })());
-
   if (running) attach(panel, running);
 }
