@@ -894,6 +894,9 @@ body.resizing { cursor: col-resize; user-select: none; }
   -webkit-user-drag: none;
   user-select: none;
 }
+/* Zoomed, the stage clips it square, so a rounded photo inside a square frame
+   is simply a mismatch. */
+.lightbox img.zoomed { border-radius: 0; }
 /* The instantly-available thumbnail, upscaled. Softened so the swap to full
    resolution reads as sharpening rather than as the image changing. */
 .lightbox img.preview { filter: blur(0.5px); }

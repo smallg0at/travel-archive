@@ -178,10 +178,56 @@ let scale = 1;
 let panX = 0;
 let panY = 0;
 
+/** The photograph's size when fitted, measured once per image at 100%. */
+let baseW = 0;
+let baseH = 0;
+
+function measureBase(): void {
+  const { img } = dom();
+  const r = img.getBoundingClientRect();
+  if (r.width > 0) {
+    baseW = r.width;
+    baseH = r.height;
+  }
+}
+
+/**
+ * Zoom by changing the rendered size, not with `transform: scale()`.
+ *
+ * A scaled transform promotes the photo to a composited layer that is
+ * rasterised once and stretched by the GPU, and its tile boundaries then show
+ * as thin horizontal and vertical lines across the picture — clearly visible at
+ * 506% on a 3072x4096 image. Giving the element a real width makes the browser
+ * resample from the source instead, which removes the seams and is sharper at
+ * high zoom, which is the whole point of zooming.
+ *
+ * Panning stays a transform, snapped to whole device pixels: a fractional
+ * offset resamples across pixel boundaries and softens the image for no reason.
+ */
 function applyZoom(): void {
   const { img, zoom } = dom();
-  img.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  const dpr = window.devicePixelRatio || 1;
+  const snap = (v: number) => Math.round(v * dpr) / dpr;
+
+  if (scale === 1) {
+    img.style.width = "";
+    img.style.height = "";
+    img.style.maxWidth = "";
+    img.style.maxHeight = "";
+    img.style.transform = "";
+  } else {
+    if (baseW === 0) measureBase();
+    img.style.maxWidth = "none";
+    img.style.maxHeight = "none";
+    img.style.width = `${Math.round(baseW * scale)}px`;
+    img.style.height = `${Math.round(baseH * scale)}px`;
+    img.style.transform = `translate3d(${snap(panX)}px, ${snap(panY)}px, 0)`;
+  }
+
   img.style.cursor = scale > 1 ? "grab" : "";
+  // The 4px radius is a mask, and once zoomed the stage clips the photo square
+  // anyway — a rounded photo inside a square frame is just a mismatch.
+  img.classList.toggle("zoomed", scale > 1);
   zoom.querySelector(".zoom-level")!.textContent = `${Math.round(scale * 100)}%`;
 }
 
@@ -300,6 +346,9 @@ async function show(index: number): Promise<void> {
       img.dataset.full = "1";
       img.classList.remove("preview");
       spinner.hidden = true;
+      // The fitted size is the basis every zoom level is computed from, and it
+      // differs per photograph.
+      measureBase();
     },
     { once: true },
   );
