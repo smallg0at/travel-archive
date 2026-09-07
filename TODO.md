@@ -37,6 +37,30 @@ narrative written, map rendering. Whole run cost **under £8**.
       thousands of thumbnails. Measured: **1,160ms cold, 36ms warm** for a
       4.2MB original, against the HAR's 893ms Graph 302 plus a 682ms download
       on *every* open.
+- [x] **Warming made page loads slower.** Reported and confirmed 2026-09-07.
+      Background warming competes with the app's own Graph traffic — the
+      `index.json` and month shards it must have before it can render at all.
+      One sample each: 5,745ms of shard fetches with a previous warm run still
+      going, against 4,021ms with the loop killed, one shard inflating from
+      1,335ms to 3,313ms. Fixed by superseding: a new warm request cancels the
+      previous run, so a reload replaces rather than adds, and concurrency
+      dropped 8 -> 4 since this runs while the user is waiting.
+      Also parallelised the month shards in `showTrip`, which were awaited one
+      at a time. Confirmed structurally — the two shards now start on the same
+      millisecond — though **not by wall clock**: Graph latency for a single
+      file swung between 1,237ms and 3,289ms across runs, so single-sample
+      timings here mean little.
+- [ ] **`index.json` is fetched from OneDrive on every load and blocks
+      everything.** Measured between 1,237ms and 3,289ms, and it is necessarily
+      sequential: the trip's months are not known until it arrives, so nothing
+      else can start. The server already keeps a local mirror at
+      `data/index.json` — serving that (with a revalidation against OneDrive
+      behind it) would take first render from seconds to near-instant. Probably
+      the largest remaining win on load time.
+- [ ] Warming still fires for the whole view. For a 4,998-photo month that is a
+      lot of Graph traffic triggered by opening a tab. Warm the first few days
+      and extend on scroll.
+
 - [ ] **Tell the summarizer things, and correct what it wrote.** Two related
       abilities, both missing:
       (a) *before* — a free-text box on the Day summaries job, the way trips

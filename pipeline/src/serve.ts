@@ -165,6 +165,18 @@ function streamJob(res: ServerResponse, id: string): void {
  */
 const inFlight = new Map<string, Promise<Buffer | null>>();
 
+/**
+ * Only the most recent warm run may continue.
+ *
+ * Warming competes with the app's own Graph calls — the month shards it needs
+ * before it can render anything at all — and measurably so: with a previous
+ * run still going, loading a trip took 5,745ms of shard fetches against
+ * 4,021ms with the warm loop dead, one shard inflating from 1,335ms to
+ * 3,313ms. A reload should supersede whatever the last page load started
+ * rather than adding to it.
+ */
+let warmGeneration = 0;
+
 function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer | null> {
   const key = `${size}:${itemId}`;
   const existing = inFlight.get(key);
@@ -273,18 +285,20 @@ const routes: [RegExp, string, Handler][] = [
 
       json(res, 202, { requested: ids.length, alreadyCached: ids.length - missing.length, warming: missing.length });
 
-      // Deliberately after the response. Bounded well below what the analyze
-      // pass uses against Graph, since this runs while the user is browsing and
-      // must not provoke throttling that would slow the thing it is helping.
+      // Deliberately after the response. Concurrency 4, not 8: this runs while
+      // the user is browsing, and the thing it competes with is the app's own
+      // Graph traffic, so being greedy here slows down the very load it is
+      // meant to help.
+      const generation = ++warmGeneration;
       void (async () => {
         let next = 0;
         const worker = async () => {
-          while (next < missing.length) {
+          while (next < missing.length && generation === warmGeneration) {
             const id = missing[next++];
             await fetchAndCache(size, id).catch(() => null);
           }
         };
-        await Promise.all(Array.from({ length: Math.min(8, missing.length) }, worker));
+        await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
       })();
     },
   ],
