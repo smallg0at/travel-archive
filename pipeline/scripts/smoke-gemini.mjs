@@ -27,9 +27,42 @@ try {
   const summary = await geminiProvider.summarizeDay({
     date: "2024-04-15",
     place: "a city, South Korea",
-    photos: [
-      { id: "p1", caption: "Museum placard about celadon pottery.", tags: ["museum", "ceramics"], contentType: "document", notable: true },
-      { id: "p2", caption: "Bowl of tteokbokki at a street stall.", tags: ["food", "street-food"], contentType: "food", notable: false },
+    timeUncertain: false,
+    placeFromMetadataOnly: false,
+    // Days are passed as the stops they were spent at, not as a flat photo
+    // list — this script still sent the pre-v11 `photos` shape long after that
+    // changed, so `stops.map` threw and the check silently stopped checking.
+    // Being .mjs, nothing typechecked it. Keep this in step with
+    // SummarizeDayInput in ../src/providers/types.ts.
+    stops: [
+      {
+        id: "s1",
+        kind: "place",
+        startTime: "2024-04-15T10:12:00Z",
+        endTime: "2024-04-15T11:40:00Z",
+        photos: [
+          {
+            id: "p1",
+            caption: "Museum placard about celadon pottery.",
+            tags: ["museum", "ceramics"],
+            contentType: "document",
+          },
+        ],
+      },
+      {
+        id: "s2",
+        kind: "place",
+        startTime: "2024-04-15T12:30:00Z",
+        endTime: "2024-04-15T13:05:00Z",
+        photos: [
+          {
+            id: "p2",
+            caption: "Bowl of tteokbokki at a street stall.",
+            tags: ["food", "street-food"],
+            contentType: "food",
+          },
+        ],
+      },
     ],
   });
   console.log("OK:", summary);

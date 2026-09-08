@@ -11,8 +11,25 @@ import type {
   TripSummaryResult,
 } from "./types.js";
 
-const client = new Anthropic(env.anthropicApiKey ? { apiKey: env.anthropicApiKey } : {});
-const MODEL = env.anthropicModel;
+/**
+ * Built on first use and rebuilt when the key changes, rather than once at
+ * import.
+ *
+ * The key can now arrive at runtime — the Settings config form writes it and
+ * calls `reloadEnv()` — and a client constructed at import would hold the old
+ * one (usually none at all) for the life of the process, so saving a key would
+ * appear to do nothing until a restart.
+ */
+let client: Anthropic | null = null;
+let clientKey: string | undefined;
+
+function api(): Anthropic {
+  if (!client || clientKey !== env.anthropicApiKey) {
+    clientKey = env.anthropicApiKey;
+    client = new Anthropic(clientKey ? { apiKey: clientKey } : {});
+  }
+  return client;
+}
 
 const CAPTION_SCHEMA = {
   type: "object",
@@ -42,8 +59,8 @@ const CAPTION_PROMPT = `You are cataloging a personal photo library that mixes t
 - notable: true only if this photo should get its own write-up; false for routine snapshots that can be folded into a day summary.`;
 
 async function captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult> {
-  const response = await client.messages.create({
-    model: MODEL,
+  const response = await api().messages.create({
+    model: env.anthropicModel,
     max_tokens: 1024,
     thinking: { type: "disabled" },
     output_config: {
@@ -162,8 +179,8 @@ function stopBlocks(input: SummarizeDayInput): string {
 }
 
 async function summarizeDay(input: SummarizeDayInput): Promise<DaySummaryResult> {
-  const response = await client.messages.create({
-    model: MODEL,
+  const response = await api().messages.create({
+    model: env.anthropicModel,
     max_tokens: 4000,
     thinking: { type: "disabled" },
     output_config: { effort: "low", format: { type: "json_schema", schema: DAY_SCHEMA } },
@@ -298,8 +315,8 @@ async function summarizeTrip(input: SummarizeTripInput): Promise<TripSummaryResu
     ? `The traveller calls this trip "${input.name}". Use that name verbatim.`
     : `The traveller has not named this trip. Propose a short name from where they actually went.`;
 
-  const response = await client.messages.create({
-    model: MODEL,
+  const response = await api().messages.create({
+    model: env.anthropicModel,
     max_tokens: 2000,
     thinking: { type: "disabled" },
     output_config: { effort: "low", format: { type: "json_schema", schema: TRIP_SCHEMA } },

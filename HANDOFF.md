@@ -5,8 +5,8 @@ For whoever picks this up next. Read `README.md` for how the pipeline works and
 would otherwise have to learn by breaking them.
 
 `TODO.md` is the live checklist and the only place that should be trusted for
-what is outstanding. Four items at the very top were written by the owner and
-have not been triaged yet — two of them are regressions, described below.
+what is outstanding — open items are listed first in each section, with fixes
+kept below under "Resolved" for the measurement detail they record.
 
 ---
 
@@ -77,6 +77,21 @@ app there instead and sign-in breaks in a way that looks like an MSAL problem.
 health check means: no Generate page, no pins, thumbnails via Graph + IndexedDB.
 Every feature needs that path to degrade rather than error.
 
+**Config can be written at runtime, so nothing may capture it at import.**
+`POST /config` writes `.env` and calls `reloadEnv()`, which updates the `env`
+object in place. That reaches every `env.x` read at call time — but a
+module-level `const KEY = env.key` would hold the old value for the life of the
+process, which is why both providers build their clients lazily. `/config`
+writes only an **allowlist** of names: it turns a request into environment
+variables the process reads on next start, so an unrestricted version would let
+`NODE_OPTIONS` run arbitrary code.
+
+**`process.env` beats `.env`, silently.** dotenv never overrides a real
+environment variable, so a key saved in Settings works until the next restart
+and then loses to the machine's own setting. This machine has `GEMINI_API_KEY`
+set system-wide, which is exactly the case; `configStatus.shadowed` reports it
+and the form warns.
+
 **Nothing personal is committed.** `.env`, `token-cache.json`,
 `redaction-terms.json` and all of `data/` are ignored. Check with
 `git check-ignore`, not by reading `.gitignore`. The repo is private because
@@ -92,6 +107,7 @@ Every feature needs that path to degrade rather than error.
 | photo viewer (card-scoped, zoom) | `app/src/viewer.ts` |
 | sidebar, pins, look-ahead | `app/src/album.ts` |
 | Settings page | `app/src/settings.ts` |
+| generation config (`.env` at runtime) | `pipeline/src/configStore.ts` |
 | Generate page | `app/src/tripMode.ts` |
 | PDF export rules | `app/src/print.ts` + the `@media print` block |
 | trip map | `app/src/tripMap.ts` |
@@ -100,24 +116,21 @@ Every feature needs that path to degrade rather than error.
 
 ---
 
-## Open regressions the owner has flagged
+## Past regressions, now fixed
 
-Two of the four items at the top of `TODO.md` were caused by one bad edit of
+Two things reported by the owner turned out to trace back to one bad edit of
 mine: I replaced a slice of `app/src/style.css` between two text markers and it
 silently took everything in between.
 
 - **Map styling** — recovered from `c65bc5b` and verified (380px canvas, sea
-  colour, 23 city markers). Believed fixed; worth a look.
-- **Settings performance** — takes ~half a second and rebuilds completely on
-  every sync button press. `showSettings()` re-renders the whole page and
-  re-runs `syncStatus()` + `archiveStatus()`; the sync status check costs a
-  Graph round trip (~880ms) because it asks OneDrive for an eTag. It should
-  render from cached state and update in place.
+  colour, 23 city markers).
+- **Settings performance** — fixed 2026-09-08. See `TODO.md`'s Resolved list
+  for the two separate causes and the numbers.
 
-The other two are genuine gaps: there is no way to trigger a `scan` from the app
-(Generate offers Trip / Analyze / Day summaries only), and the missing-`.env`
-dialog still tells you to create a file by hand when it should be a Settings
-form.
+The other two gaps were closed the same day: `scan` can now be triggered from
+the app (`POST /jobs/scan`, three modes in Settings), and the missing-`.env`
+dialog is now a **Settings > Generation** form that writes the key and applies
+it without a restart. Both are in `TODO.md`'s Resolved list.
 
 ---
 

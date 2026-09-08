@@ -18,7 +18,18 @@ import type {
 // before — if this throws on your first run, check the current Gemini API
 // docs for GenerateContentConfig.responseSchema before assuming the prompt
 // or schema content itself is wrong.
-const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
+// Built on first use and rebuilt when the key changes — see the same note in
+// anthropic.ts. The key can arrive at runtime from the Settings config form.
+let genai: GoogleGenAI | null = null;
+let genaiKey: string | undefined;
+
+function ai(): GoogleGenAI {
+  if (!genai || genaiKey !== env.geminiApiKey) {
+    genaiKey = env.geminiApiKey;
+    genai = new GoogleGenAI({ apiKey: genaiKey });
+  }
+  return genai;
+}
 
 /**
  * Retries a call that failed for a reason time can fix.
@@ -135,7 +146,7 @@ function usageOf(response: { usageMetadata?: UsageMetadata }): CallUsage {
 }
 
 async function captionPhoto(model: string, thinkingBudget: number | undefined, input: CaptionPhotoInput): Promise<CaptionResult> {
-  const response = await withRetry("caption", () => ai.models.generateContent({
+  const response = await withRetry("caption", () => ai().models.generateContent({
     model,
     contents: [
       {
@@ -174,7 +185,7 @@ async function captionPhoto(model: string, thinkingBudget: number | undefined, i
   // those few photos but keeps the caption, tags and classification, which is a
   // far better outcome than leaving the photo undescribed entirely.
   if (!text && response.candidates?.[0]?.finishReason === "RECITATION") {
-    const retry = await withRetry("caption-recitation", () => ai.models.generateContent({
+    const retry = await withRetry("caption-recitation", () => ai().models.generateContent({
       model,
       contents: [
         {
@@ -350,7 +361,7 @@ function stopBlocks(input: SummarizeDayInput): string {
 }
 
 async function summarizeDay(model: string, thinkingBudget: number | undefined, input: SummarizeDayInput): Promise<DaySummaryResult> {
-  const response = await withRetry("day-summary", () => ai.models.generateContent({
+  const response = await withRetry("day-summary", () => ai().models.generateContent({
     model,
     contents: [
       {
@@ -500,7 +511,7 @@ async function summarizeTrip(
     ? `The traveller calls this trip "${input.name}". Use that name verbatim.`
     : `The traveller has not named this trip. Propose a short name from where they actually went.`;
 
-  const response = await withRetry("trip-narrative", () => ai.models.generateContent({
+  const response = await withRetry("trip-narrative", () => ai().models.generateContent({
     model,
     contents: [
       {

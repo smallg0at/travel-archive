@@ -176,6 +176,13 @@ function createWindow(): void {
  * compile time. Only *generation* needs the pipeline's own credentials. But
  * without a word of explanation the Generate controls would simply be absent,
  * which reads as a bug rather than as "not configured yet".
+ *
+ * This fires only when `ARCHIVE_HOME` is set, which is only in a packaged
+ * build — and a packaged build has every non-secret setting baked in (see
+ * desktop/scripts/bundle-pipeline.mjs), so the job server does start and the
+ * one genuinely missing value is the AI provider's key. That is why this can
+ * now send you to Settings > Generation instead of asking you to write a file:
+ * the server that serves that form is already running.
  */
 async function warnIfUnconfigured(): Promise<void> {
   if (!ARCHIVE_HOME || existsSync(join(ARCHIVE_HOME, ".env"))) return;
@@ -185,13 +192,15 @@ async function warnIfUnconfigured(): Promise<void> {
     title: "Generation not configured",
     message: "The archive will open, but summaries cannot be generated yet.",
     detail:
-      `Generating needs a .env file in:\n\n${ARCHIVE_HOME}\n\n` +
-      `Copy pipeline/.env.example there and fill in AZURE_CLIENT_ID and your ` +
-      `AI provider key. Browsing and reading the archive works without it.`,
-    buttons: ["Open that folder", "Continue"],
+      `Add your AI provider's API key under Settings > Generation and you are ` +
+      `done — everything else is already configured in this build.\n\n` +
+      `Browsing and reading the archive works without it.`,
+    buttons: ["Continue", "Open the settings folder"],
     defaultId: 0,
   });
-  if (response === 0) void shell.openPath(ARCHIVE_HOME);
+  // The folder is the second button now rather than the first: it is the escape
+  // hatch for editing `.env` by hand, not the instruction it used to be.
+  if (response === 1) void shell.openPath(ARCHIVE_HOME);
 }
 
 async function startup(): Promise<void> {

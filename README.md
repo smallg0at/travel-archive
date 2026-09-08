@@ -217,6 +217,18 @@ time. Pattern to follow: default the class to `display: none`, then add
 3. `cp app/.env.example app/.env` — same client ID as `VITE_AZURE_CLIENT_ID`, and `VITE_ONEDRIVE_METADATA_FOLDER` matching `ONEDRIVE_METADATA_FOLDER`.
 4. `npm install` at the repo root (installs all three workspaces).
 
+**On a packaged install there is no step 2.** The installer bakes every
+non-secret setting (see the allowlist in `desktop/scripts/bundle-pipeline.mjs`),
+so the only thing missing is the AI provider's API key — set it under
+**Settings > Generation**, which writes `.env` beside the archive and applies it
+to the running server without a restart. Keys are write-only across that
+boundary: the server reports whether one is set and never returns it.
+
+One caveat worth knowing, because it is silent: `process.env` beats `.env`, so
+if the key is also set as a **system environment variable**, a key saved in the
+form works until the next restart and then loses to the machine's setting.
+Settings says so when it detects one.
+
 ## Known simplifications
 
 - **Shards are held in memory for the session, not persisted client-side.** Flipping between month tabs is instant after first load, but a reload re-fetches. An IndexedDB cache keyed on `generatedAt` would fix that; not worth it until the app is actually on a phone.

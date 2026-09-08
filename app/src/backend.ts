@@ -1,4 +1,4 @@
-import type { AnalyzePlan, ArchiveStatus, JobRecord, Pin, SyncStatus } from "@travel-archive/shared";
+import type { AnalyzePlan, ArchiveStatus, ConfigStatus, JobRecord, Pin, SyncStatus } from "@travel-archive/shared";
 
 /**
  * Client for `pipeline serve` — the local job server that runs analysis,
@@ -163,6 +163,29 @@ export function planAnalyze(body: { from?: string; to?: string; limit?: number }
  * `mode` decides the range and the server resolves it; `from`/`to` (months,
  * `yyyy-mm`) are read only when the mode is "range".
  */
+/**
+ * The generation settings. Returns null with no backend, like the other reads —
+ * a phone has nothing to configure, since generation needs the server anyway.
+ */
+export async function getConfig(): Promise<ConfigStatus | null> {
+  try {
+    const res = await fetch(`${BACKEND}/config`);
+    return res.ok ? ((await res.json()) as ConfigStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes generation settings and applies them to the running server.
+ *
+ * Keys travel in one direction only: they are sent here and never read back,
+ * so the form shows "saved" rather than a value it could not have fetched.
+ */
+export function saveConfig(patch: Record<string, string>): Promise<ConfigStatus> {
+  return post<ConfigStatus>("/config", patch);
+}
+
 export type ScanMode = "full" | "range" | "incremental";
 
 export function startScan(body: { mode: ScanMode; from?: string; to?: string }): Promise<JobRecord> {

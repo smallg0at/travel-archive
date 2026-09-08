@@ -395,6 +395,32 @@ export interface Pin {
   originals: boolean;
 }
 
+/**
+ * The generation settings, as reported by the local server.
+ *
+ * **Never carries an API key back out** — `keys` says only whether each one is
+ * set. Keys are write-only across this boundary.
+ */
+export interface ConfigStatus {
+  /** Where `.env` lives, so the UI can name it. */
+  path: string;
+  exists: boolean;
+  provider: string;
+  /** Whether the *selected* provider has a key — what decides if generation works. */
+  ready: boolean;
+  keys: { anthropic: boolean; gemini: boolean };
+  photosFolder: string;
+  metadataFolder: string;
+  geocodeContactEmail: string;
+  anthropicModel: string;
+  geminiModel: string;
+  /**
+   * Settings whose value comes from a real environment variable, which beats
+   * `.env`. Saving one of these works now and is undone by the next restart.
+   */
+  shadowed: string[];
+}
+
 /** How the local replica stands against OneDrive. */
 export type SyncState =
   | "in-sync"

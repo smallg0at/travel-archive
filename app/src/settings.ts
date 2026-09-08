@@ -1,10 +1,12 @@
-import type { ArchiveStatus, JobRecord, SyncState, SyncStatus } from "@travel-archive/shared";
+import type { ArchiveStatus, ConfigStatus, JobRecord, SyncState, SyncStatus } from "@travel-archive/shared";
 import {
   archiveStatus,
   checkHealth,
+  getConfig,
   clearCache,
   saveSyncSettings,
   setPin,
+  saveConfig,
   startSync,
   startScan,
   syncStatus,
@@ -247,6 +249,7 @@ export async function showSettings(): Promise<void> {
 
   frag.appendChild(librarySection(archive));
   frag.appendChild(scanSection(sync));
+  frag.appendChild(generationSection());
   frag.appendChild(syncSection(sync));
   frag.appendChild(offlineSection(sync));
   frag.appendChild(storageSection(sync));
@@ -391,6 +394,136 @@ function scanSection(status: SyncStatus): HTMLElement {
   body.appendChild(progress);
 
   updaters.push((next) => setRowValue(lastScan, relative(next.lastScanAt)));
+  return s;
+}
+
+/**
+ * Configuring generation, which used to mean being told to write a `.env` by
+ * hand.
+ *
+ * The old missing-config dialog could not say what was already correct, and
+ * pointed at a file in a directory most people would never otherwise open. It
+ * only ever appeared on a packaged install, and a packaged install carries
+ * every non-secret setting baked in — so the one thing genuinely missing there
+ * is the AI provider's key, which is what this asks for.
+ *
+ * **The key is write-only.** The server reports whether one is set and never
+ * returns it, so this shows "saved" rather than a value.
+ */
+function generationSection(): HTMLElement {
+  const s = section("Generation");
+  const body = s.querySelector(".set-body")!;
+
+  const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
+  body.appendChild(state);
+
+  const providerRow = el<HTMLDivElement>(`<div class="set-row"><span>AI provider</span></div>`);
+  const provider = el<HTMLSelectElement>(`
+    <select class="set-select">
+      <option value="anthropic">Claude (Anthropic)</option>
+      <option value="gemini">Gemini (Google)</option>
+    </select>
+  `);
+  providerRow.appendChild(provider);
+  body.appendChild(providerRow);
+
+  const keyField = el<HTMLLabelElement>(`
+    <label class="set-scan-field set-key-field">
+      <span>API key</span>
+      <input type="password" name="key" autocomplete="off" spellcheck="false" />
+    </label>
+  `);
+  const key = keyField.querySelector("input") as HTMLInputElement;
+  body.appendChild(keyField);
+
+  const note = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
+  const warning = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
+  body.append(note, warning);
+
+  const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
+  const save = button(
+    "Save",
+    () => {
+      const value = key.value.trim();
+      const patch: Record<string, string> = { AI_PROVIDER: provider.value };
+      if (value) patch[provider.value === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"] = value;
+      status.hidden = false;
+      status.textContent = "Saving…";
+      save.disabled = true;
+      void saveConfig(patch)
+        .then((next) => {
+          // Cleared on success so a key is never left sitting in the DOM.
+          key.value = "";
+          status.textContent = next.ready ? "Saved. Generation is ready." : "Saved.";
+          apply(next);
+        })
+        .catch((err: Error) => (status.textContent = err.message))
+        .finally(() => (save.disabled = false));
+    },
+    "primary",
+  );
+
+  const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  actions.appendChild(save);
+  body.append(actions, status);
+
+  /**
+   * The last status from the server. Kept so the display can be recomputed
+   * when the *selection* changes without asking again.
+   */
+  let latest: ConfigStatus | null = null;
+
+  /**
+   * Describes the provider currently **selected**, not the one last saved.
+   *
+   * Keying this on the saved provider was wrong in a way that lied: selecting
+   * Anthropic while Gemini was the configured one still read "Ready", still
+   * offered "Saved — type a new key to replace it", and still showed Gemini's
+   * shadow warning — for a provider with no key at all.
+   */
+  const render = () => {
+    const selected = provider.value;
+    if (!latest) {
+      state.textContent = "Unavailable";
+      state.className = "set-sync-state tone-muted";
+      return;
+    }
+    const hasKey = selected === "gemini" ? latest.keys.gemini : latest.keys.anthropic;
+    const ready = hasKey && selected === latest.provider;
+
+    state.textContent = hasKey
+      ? selected === latest.provider
+        ? "Ready"
+        : "Ready once saved"
+      : "No API key — generation is unavailable";
+    state.className = `set-sync-state tone-${ready ? "ok" : hasKey ? "warn" : "warn"}`;
+
+    key.placeholder = hasKey ? "Saved — type a new key to replace it" : "Paste your API key";
+    note.textContent = `Stored in ${latest.path}. Only generation needs this; browsing and reading the archive do not.`;
+
+    // dotenv never overrides a real environment variable, so a key saved here
+    // would work until the next restart and then quietly lose to the machine's
+    // own setting. Better said than discovered.
+    const name = selected === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY";
+    const shadowed = latest.shadowed.includes(name);
+    warning.hidden = !shadowed;
+    if (shadowed) {
+      warning.textContent = `${name} is also set as a system environment variable, which wins over this file when the app restarts. Change it there, or unset it, for a key saved here to survive.`;
+    }
+  };
+
+  const apply = (config: ConfigStatus | null) => {
+    latest = config;
+    // Only a fresh answer from the server moves the selection; a reload must not
+    // undo a choice the user is part-way through making.
+    if (config) provider.value = config.provider === "gemini" ? "gemini" : "anthropic";
+    render();
+  };
+
+  provider.addEventListener("change", render);
+
+  apply(null);
+  void getConfig().then(apply);
   return s;
 }
 

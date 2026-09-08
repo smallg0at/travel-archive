@@ -16,6 +16,7 @@ import type { ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive
 import { env } from "./env.js";
 import { getCachedAccessToken } from "./auth.js";
 import { loadIndex } from "./archiveStore.js";
+import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { runOrganize } from "./jobs/organize.js";
@@ -288,6 +289,37 @@ const routes: [RegExp, string, Handler][] = [
     },
   ],
   [/^\/archive\/status$/, "GET", async (_req, res) => json(res, 200, await archiveStatus())],
+
+  /**
+   * The generation settings, so a fresh install can be configured from the app
+   * instead of being told to hand-write a `.env`.
+   *
+   * **The response never carries a key back out.** `keys` reports only whether
+   * each one is set: a value that arrives here should be write-only, and a
+   * readable-secrets endpoint on a server with no authentication of its own is
+   * not worth the convenience.
+   */
+  [/^\/config$/, "GET", (_req, res) => json(res, 200, configStatus())],
+  [
+    /^\/config$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<Record<string, unknown>>(req);
+      const patch: Record<string, string> = {};
+      for (const [key, value] of Object.entries(body)) {
+        if (typeof value !== "string") continue;
+        // Unknown names are refused rather than ignored, so a typo in the form
+        // is a visible error instead of a setting that silently never applies.
+        if (!isWritableKey(key)) return json(res, 400, { error: `${key} is not a configurable setting` });
+        patch[key] = value;
+      }
+      try {
+        json(res, 200, await saveConfig(patch));
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
 
   /**
    * The archive metadata, from the local mirror.
@@ -675,6 +707,8 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`pipeline serve — http://127.0.0.1:${env.servePort} (loopback only)`);
   console.log(`  GET  /health`);
   console.log(`  GET  /archive/status`);
+  console.log(`  GET  /config              generation settings; never returns keys`);
+  console.log(`  POST /config              {AI_PROVIDER,ANTHROPIC_API_KEY,...}`);
   console.log(`  POST /jobs/scan           {mode,from,to}    free, Graph listing only`);
   console.log(`  POST /jobs/analyze/plan   {from,to,limit}   what it would cost, spends nothing`);
   console.log(`  POST /jobs/analyze        {from,to,limit}`);

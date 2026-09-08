@@ -4,30 +4,163 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**31 open, 18 done.** The list grows because each session surfaces defects that
+**30 open, 20 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
 
-### Done 2026-09-07
-
-- Thumbnails and originals off browser storage onto a local disk cache, warmed
-  ahead of the browser: fast-scroll p50 **10,608ms → 4ms**.
-- Archive metadata served from the local mirror: `index.json` **1,237-3,289ms →
-  34ms**, zero OneDrive round trips on load.
-- Two-way sync with eTag freshness, pins ("always keep on this device"), and a
-  real Settings page. Sidebar gained pins and a fixed tool strip.
-- Light / dark / system theme.
-- Photo viewer rebuilt: card-scoped, two columns, image strip, zoom and pan.
-- Generate is a page like Settings; the drawer and the last of the floating
-  furniture are gone. Save as PDF moved into the page heading, so it cannot be
-  pressed while a trip is still loading.
-
-See `HANDOFF.md` for how to run the project, the invariants that bite, and the
+Open items are listed first in each section; fixes are kept below them
+(collapsed under "Resolved") for the measurement detail they record — see
+`HANDOFF.md` for how to run the project, the invariants that bite, and the
 working practice this list was built with.
 
 ## Open issues
 
+- [ ] **A month emptied on OneDrive leaves a ghost month.** Deleting the *last*
+      photo of a month folder (or the folder itself) leaves its records and its
+      sidebar entry in place forever, with a photo count for photos that no
+      longer exist.
+
+      The deletion sweep in `jobs/scan.ts` only visits months present in
+      `scannedByShard`, and that map is built from photos actually *found* — so
+      a month with zero photos is never loaded, never swept and never
+      rewritten. `index.months` is then rebuilt from a `summaries` map seeded
+      with the existing `index.months`, so the stale entry survives the
+      `photoCount > 0` filter.
+
+      Deleting *some* photos from a month is handled correctly; this is only
+      the emptied-month case. **Read from the code, not reproduced** —
+      confirming it means deleting real photos from OneDrive. Judged unlikely
+      enough to defer. The fix, when wanted: on an unbounded run, sweep every
+      month in the index rather than only the touched ones.
+- [x] **The missing-`.env` dialog told you to write a file by hand.** Fixed
+      2026-09-08. It is now a **Settings > Generation** form: pick the provider,
+      paste the API key, save. `GET /config` reports what is set, `POST /config`
+      merges into `.env` and applies it to the running server.
+
+      What made this tractable was checking when the dialog actually fires:
+      `ARCHIVE_HOME` is set only in a **packaged** build, and a packaged build
+      bakes every non-secret setting (`bundle-pipeline.mjs`), so the job server
+      always starts and the one genuinely missing value is the provider's API
+      key. No shell-side config server was needed — the server that serves the
+      form is already running. Had that not held there would have been a
+      chicken-and-egg: `env.ts` throws on a missing `AZURE_CLIENT_ID` at import,
+      so with no baked config there is no backend to serve a form at all.
+
+      Three things this needed beyond a form:
+
+      - **The key has to take effect without a restart.** Both provider clients
+        were built at import from `env`, so a key saved at runtime would have
+        been ignored until the process restarted — the same "nothing happened"
+        the form exists to avoid. They are now built lazily and rebuilt when the
+        key changes, and `reloadEnv()` re-reads config in place.
+      - **A strict allowlist of writable names.** This turns an HTTP request
+        into lines the process reads as environment variables on next start;
+        without it a request could set `NODE_OPTIONS` and get arbitrary code
+        run. `AZURE_CLIENT_ID` is deliberately excluded — `auth.ts` builds MSAL
+        once at import, so the form would be promising something it cannot do.
+      - **Keys are write-only.** `/config` reports `keys: {anthropic, gemini}`
+        as booleans and never returns a value.
+
+      Also surfaced a real footgun on this machine: `GEMINI_API_KEY` is set as a
+      **system environment variable**, and dotenv never overrides one — so a key
+      saved in the form would work until the next restart and then silently lose
+      to the machine's setting. `configStatus.shadowed` reports this and the
+      form warns. Confirmed live: the real `/config` returns
+      `shadowed: ["GEMINI_API_KEY"]`.
+
+      Verified: fresh-install status; save writes `.env` and flips `ready` in
+      the same process; `NODE_OPTIONS` rejected; a newline in a value rejected;
+      and — the actual claim — a key written by the form reached Google, which
+      answered `API key not valid` for the fake key, proving
+      form → `.env` → reload → rebuilt client → real request with no restart.
+      Then verified in the browser — which caught a defect that the diff would
+      not have. The display was keyed on the **saved** provider rather than the
+      **selected** one, so choosing Anthropic while Gemini was configured still
+      read "Ready", still offered "Saved — type a new key to replace it", and
+      still showed *Gemini's* shadow warning, for a provider with no key at all.
+      It now describes the selection, with a distinct "Ready once saved" for a
+      provider that has a key but is not the active one. Checked in both
+      directions.
+- [x] **The Gemini smoke test had silently stopped testing.** Fixed 2026-09-08,
+      found by running it as the README says to after changing `gemini.ts`.
+      `smoke-gemini.mjs` still passed the pre-v11 flat `photos` list where
+      `SummarizeDayInput` has wanted `stops` for several schema versions, so
+      `stops.map` threw on every run. Being `.mjs` nothing typechecked it. Both
+      halves now pass against the real API.
+- [ ] The mirror is trusted without checking OneDrive at all. Worth a
+      background revalidation (compare `generatedAt`, refetch if OneDrive is
+      newer) once a second machine is ever in play.
+- [ ] Warming still fires for the whole view. For a 4,998-photo month that is a
+      lot of Graph traffic triggered by opening a tab. Warm the first few days
+      and extend on scroll.
+- [ ] **Tell the summarizer things, and correct what it wrote.** Two related
+      abilities, both missing:
+      (a) *before* — a free-text box on the Day summaries job, the way trips
+      already accept `notes`, so the owner can say "this is the the railway museum"
+      or "the morning was a write-off" and have it reach the model;
+      (b) *after* — regenerate a single day or stop with an added instruction,
+      and edit the resulting title, summary or card text **by hand**, with the
+      edit surviving the next `organize` run.
+      (b) is the one with teeth: `segmentsAreCurrent()` decides when to
+      re-summarize, so a hand-edited day needs a marker that means "leave this
+      alone", or the next run silently discards the correction. Any direct-edit
+      feature also needs somewhere to write to — the app is a pure reader today
+      and the server is the only writer.
+- [ ] **Photo captions are written with no context at all.** Confirmed at the
+      source: `CaptionPhotoInput` is `{ imageBase64, mediaType }` and nothing
+      else, so the model sees one image and a static prompt. It cannot know a
+      blue carriage is in the the railway museum; the *day* summarizer can, because
+      it sees every caption, the place and the placard OCR together. The photo
+      record already has `takenAt` and a geocoded `place` — passing those plus
+      the stop's other captions costs ~20 input tokens a photo.
+      Two cautions: context invites the model to assert things it cannot see
+      (the same worry `placeFromMetadataOnly` already encodes), so the prompt
+      must frame it as a hint for naming, not licence; and **the fix only helps
+      photos analyzed afterwards**, so the benefit needs a paid re-run over the
+      4,181 already captioned.
+      **Owner's decision: happy to redo, but not yet — small-scale test
+      first.** So: implement, run over one stop (~20 photos), compare captions
+      before and after by hand, and only then decide on the full re-run. Do it
+      in the same pass as the Chinese rerun below, not separately — otherwise
+      the library gets paid for twice.
+- [ ] **Day summaries are written in isolation.** `SummarizeDayInput` carries
+      the date, place and stops, and nothing about the days either side or the
+      trip they belong to — so day N cannot know N-1 ended in a city or that
+      N+1 is a city. Proposal (user's): two modes. `organize` keeps writing
+      standalone summaries for ordinary days, and the **trip** job re-summarizes
+      the days in its range with neighbouring context before writing the
+      narrative. ~18 extra calls for this trip.
+      **The context that matters most is the owner's own**, not just the
+      neighbouring days: `notes` and `documents` — the pasted itinerary or
+      trip-planning conversation — currently reach `summarizeTrip` and nothing
+      else. The day summarizer is guessing at things the owner already wrote
+      down. Passing those down into per-day summarization is the substance of
+      this change; neighbouring days are the smaller half. Needs a marker on
+      `DayRecord` for which mode produced it, and `segmentsAreCurrent()`
+      extended so switching modes counts as stale.
+- [ ] **Koblenz is missing from the trip map.** It is in the trip's `places`
+      list but produces no city marker. Likely caught by the new
+      `MAX_PLACE_SPAN_KM` rule (a Rhine-valley train leg) or merged into
+      Boppard. Not yet investigated.
+- [ ] **the city airport never appears on the map.** The photos are correct and now
+      trusted (18 of 21 UK fixes), geocoded to the capital region / City of the capital.
+      They land in a single **transit** segment (13:42–21:58 "Flight to the capital
+      City") and `citiesOf` only builds markers from `place` segments. Needs a
+      decision, not a fix: either transit segments contribute markers (putting
+      airports/stations on the map generally), or `detectStops` splits a transit
+      block when it crosses a large distance.
+- [ ] **Label suppression is aggressive** — 7 of 23 shown at the fitted view.
+      Honest (they don't fit) and zooming reveals more, but the Randstad stays
+      anonymous. Leader lines or offset placement would beat dropping.
+- [ ] **Captions only appear after a page refresh.** `shardCache` in
+      `app/src/archiveData.ts` caches each month's shard per session and never
+      invalidates, so a finished job updates OneDrive but not the open tab. The
+      job panel already re-renders on completion; it needs to clear that cache.
+- [ ] Zoom-out reaches the whole world; cap at continental?
+- [ ] Mobile view: design needs rethinking; a Figma would help.
+
+### Resolved
 
 - [x] **Settings is slow and rebuilds on every button press.** Fixed 2026-09-08.
       Two separate causes, both measured before anything was changed:
@@ -124,25 +257,6 @@ working practice this list was built with.
       Verified against the live scan: progress on first open (81 of 123),
       gone to Generate, back to Settings still ticking (74 → 76 of 123), with
       the button correctly disabled throughout.
-
-- [ ] **A month emptied on OneDrive leaves a ghost month.** Deleting the *last*
-      photo of a month folder (or the folder itself) leaves its records and its
-      sidebar entry in place forever, with a photo count for photos that no
-      longer exist.
-
-      The deletion sweep in `jobs/scan.ts` only visits months present in
-      `scannedByShard`, and that map is built from photos actually *found* — so
-      a month with zero photos is never loaded, never swept and never
-      rewritten. `index.months` is then rebuilt from a `summaries` map seeded
-      with the existing `index.months`, so the stale entry survives the
-      `photoCount > 0` filter.
-
-      Deleting *some* photos from a month is handled correctly; this is only
-      the emptied-month case. **Read from the code, not reproduced** —
-      confirming it means deleting real photos from OneDrive. Judged unlikely
-      enough to defer. The fix, when wanted: on an unbounded run, sweep every
-      month in the index rather than only the touched ones.
-- [ ] [App]Still asks for making an .env with no change in text. This should go into settings eventually
 - [x] **Fast scrolling floods the thumbnail server.** Fixed 2026-09-07 by
       warming the cache ahead of the browser (`POST /thumb/warm`, called when a
       trip or month renders). Measured on the same fast scroll to the bottom:
@@ -205,59 +319,6 @@ working practice this list was built with.
       can only go stale if the pipeline ran on another machine — where a `scan`
       restores it. The app falls back to Graph when no server answers, which is
       the phone's normal path.
-- [ ] The mirror is trusted without checking OneDrive at all. Worth a
-      background revalidation (compare `generatedAt`, refetch if OneDrive is
-      newer) once a second machine is ever in play.
-- [ ] Warming still fires for the whole view. For a 4,998-photo month that is a
-      lot of Graph traffic triggered by opening a tab. Warm the first few days
-      and extend on scroll.
-
-- [ ] **Tell the summarizer things, and correct what it wrote.** Two related
-      abilities, both missing:
-      (a) *before* — a free-text box on the Day summaries job, the way trips
-      already accept `notes`, so the owner can say "this is the the railway museum"
-      or "the morning was a write-off" and have it reach the model;
-      (b) *after* — regenerate a single day or stop with an added instruction,
-      and edit the resulting title, summary or card text **by hand**, with the
-      edit surviving the next `organize` run.
-      (b) is the one with teeth: `segmentsAreCurrent()` decides when to
-      re-summarize, so a hand-edited day needs a marker that means "leave this
-      alone", or the next run silently discards the correction. Any direct-edit
-      feature also needs somewhere to write to — the app is a pure reader today
-      and the server is the only writer.
-
-- [ ] **Photo captions are written with no context at all.** Confirmed at the
-      source: `CaptionPhotoInput` is `{ imageBase64, mediaType }` and nothing
-      else, so the model sees one image and a static prompt. It cannot know a
-      blue carriage is in the the railway museum; the *day* summarizer can, because
-      it sees every caption, the place and the placard OCR together. The photo
-      record already has `takenAt` and a geocoded `place` — passing those plus
-      the stop's other captions costs ~20 input tokens a photo.
-      Two cautions: context invites the model to assert things it cannot see
-      (the same worry `placeFromMetadataOnly` already encodes), so the prompt
-      must frame it as a hint for naming, not licence; and **the fix only helps
-      photos analyzed afterwards**, so the benefit needs a paid re-run over the
-      4,181 already captioned.
-      **Owner's decision: happy to redo, but not yet — small-scale test
-      first.** So: implement, run over one stop (~20 photos), compare captions
-      before and after by hand, and only then decide on the full re-run. Do it
-      in the same pass as the Chinese rerun below, not separately — otherwise
-      the library gets paid for twice.
-- [ ] **Day summaries are written in isolation.** `SummarizeDayInput` carries
-      the date, place and stops, and nothing about the days either side or the
-      trip they belong to — so day N cannot know N-1 ended in a city or that
-      N+1 is a city. Proposal (user's): two modes. `organize` keeps writing
-      standalone summaries for ordinary days, and the **trip** job re-summarizes
-      the days in its range with neighbouring context before writing the
-      narrative. ~18 extra calls for this trip.
-      **The context that matters most is the owner's own**, not just the
-      neighbouring days: `notes` and `documents` — the pasted itinerary or
-      trip-planning conversation — currently reach `summarizeTrip` and nothing
-      else. The day summarizer is guessing at things the owner already wrote
-      down. Passing those down into per-day summarization is the substance of
-      this change; neighbouring days are the smaller half. Needs a marker on `DayRecord`
-      for which mode produced it, and `segmentsAreCurrent()` extended so
-      switching modes counts as stale.
 - [x] **Thumbnails no longer depend on browser storage.** Fixed 2026-09-07.
       The IndexedDB cache was written when there was no backend and the phone
       was the target; with a local server it was the wrong place — per browser
@@ -279,30 +340,10 @@ working practice this list was built with.
       `127.0.0.1:4319`, no blob URLs, no CDN.
 - [x] Cache status in Settings — done. With no server the page says so plainly
       rather than showing dead controls, which is the phone's normal state.
-
-
-- [ ] **Koblenz is missing from the trip map.** It is in the trip's `places`
-      list but produces no city marker. Likely caught by the new
-      `MAX_PLACE_SPAN_KM` rule (a Rhine-valley train leg) or merged into
-      Boppard. Not yet investigated.
 - [x] **"Netherlands gets extra territory"** — basemap land/sea boundary looks
       wrong around Zeeland/Zuid-Holland; markers sit in water. Not investigated.
       Suspect the `ne_50m_land` outer-ring-only extraction, or the lakes layer.
 	  User: Issue is Hoek van Holland is in the middle of the sea, resolved
-- [ ] **the city airport never appears on the map.** The photos are correct and now
-      trusted (18 of 21 UK fixes), geocoded to the capital region / City of the capital.
-      They land in a single **transit** segment (13:42–21:58 "Flight to the capital
-      City") and `citiesOf` only builds markers from `place` segments. Needs a
-      decision, not a fix: either transit segments contribute markers (putting
-      airports/stations on the map generally), or `detectStops` splits a transit
-      block when it crosses a large distance.
-- [ ] **Label suppression is aggressive** — 7 of 23 shown at the fitted view.
-      Honest (they don't fit) and zooming reveals more, but the Randstad stays
-      anonymous. Leader lines or offset placement would beat dropping.
-- [ ] **Captions only appear after a page refresh.** `shardCache` in
-      `app/src/archiveData.ts` caches each month's shard per session and never
-      invalidates, so a finished job updates OneDrive but not the open tab. The
-      job panel already re-renders on completion; it needs to clear that cache.
 - [x] **Photos in cards are fixed height — poor in portrait.** Fixed
       2026-09-06. The strip now takes `aspect-ratio: calc(var(--img-count) *
       var(--card-cell))`, so height follows width and each *cell* keeps a
@@ -315,23 +356,13 @@ working practice this list was built with.
 - [x] **Burger menu** — done 2026-09-07. Generate, Save as PDF and Settings are
       rows in the sidebar now, always visible; the floating burger and the
       230px settings popup are gone.
-- [ ] Zoom-out reaches the whole world; cap at continental?
-- Mobile view:
-  - [x] **Portrait layout cannot scroll.** Fixed 2026-09-06: `#main-column`
-        had no `min-height: 0`, so once the <=700px rule turned `#app` into a
-        column it could not shrink below its content, overflowed a `body` with
-        `overflow: hidden`, and nothing scrolled. One line.
-  - [ ] Design needs rethinking; a Figma would help.
+- [x] Mobile view — **portrait layout cannot scroll.** Fixed 2026-09-06:
+      `#main-column` had no `min-height: 0`, so once the <=700px rule turned
+      `#app` into a column it could not shrink below its content, overflowed a
+      `body` with `overflow: hidden`, and nothing scrolled. One line.
 
 ## Todo
 
-- [x] **Make this an app.** Electron shell in `desktop/`. `npm run desktop`.
-- [x] **Light/dark mode toggle.** Done 2026-09-07, in Settings > Appearance.
-      Three states, not two: Light, Dark and System, where System is the
-      *absence* of `data-theme` so the media query keeps following the OS.
-      Applied by an inline script in `index.html` before the stylesheet paints,
-      or a reader who chose dark on a light system watches the page render
-      light and flip.
 - [ ] **i18n — Chinese and English.** UI strings are the easy part and dates
       are already locale-aware (`toLocaleDateString(undefined, ...)`). The hard
       part is that **the archive's prose is model output stored in one
@@ -354,12 +385,22 @@ working practice this list was built with.
       twice. Note `documentTranslation` currently renders foreign placards
       *into English* specifically; under a Chinese UI that target changes too.
 - [ ] Trip management — rename, delete.
-- [x] **Print view / Save as PDF.** Menu entry on any view with cards. See
-      `app/src/print.ts` and the `@media print` block at the end of
-      `app/src/style.css`.
 - [ ] **Gemini Batch API** — roughly half price, async, up to 24h. Not worth it
       for a 35-minute interactive run; worth building if backfilling the other
       ~14,000 photos (£20 vs £40 overnight).
+
+### Resolved
+
+- [x] **Make this an app.** Electron shell in `desktop/`. `npm run desktop`.
+- [x] **Light/dark mode toggle.** Done 2026-09-07, in Settings > Appearance.
+      Three states, not two: Light, Dark and System, where System is the
+      *absence* of `data-theme` so the media query keeps following the OS.
+      Applied by an inline script in `index.html` before the stylesheet paints,
+      or a reader who chose dark on a light system watches the page render
+      light and flip.
+- [x] **Print view / Save as PDF.** Menu entry on any view with cards. See
+      `app/src/print.ts` and the `@media print` block at the end of
+      `app/src/style.css`.
 
 ## Sharing / export (2026-09-05)
 
@@ -606,7 +647,7 @@ selection, arrows wrapping 2-1-2-0, zoom 100/150/fit, panning, and the
 no-card path.
 
 - [ ] The viewer is desktop-shaped. Below 900px it stacks, but that has not been
-      exercised on a real phone.User: Tested, layout does not scroll.
+      exercised on a real phone. User: Tested, layout does not scroll.
 - [ ] Zoom is centre-origin, so zooming does not follow the cursor.
 
 Zoom resizes the photograph rather than scaling a layer. `transform: scale()`
@@ -618,10 +659,6 @@ resample from the source: no seams at 152% or 506%, and sharper.
 
 ## Correctness / safety backlog
 
-- [x] **`analyze` (CLI) and `serve` can run at once and clobber the same
-      shard.** Fixed 2026-09-06 by `pipeline/src/lock.ts` — a pid lock at
-      `data/.archive-lock`, held per write by all five CLI entry points, every
-      server job and sync. See "Desktop shell" for the details.
 - [ ] **`trip` proceeds when most days have no summary** — warns in a scrolling
       log, then writes a full narrative anyway. Should refuse without an
       explicit override. A paid-for result that reads as authoritative but is
@@ -635,6 +672,10 @@ resample from the source: no seams at 152% or 506%, and sharper.
 - [ ] Re-run analyze for the 2 photos that failed `503 UNAVAILABLE` on
       2026-09-05. Not lost — `analyzedAt` is still null — and the retry added
       afterwards should prevent a repeat.
+- [x] **`analyze` (CLI) and `serve` can run at once and clobber the same
+      shard.** Fixed 2026-09-06 by `pipeline/src/lock.ts` — a pid lock at
+      `data/.archive-lock`, held per write by all five CLI entry points, every
+      server job and sync. See "Desktop shell" for the details.
 
 ## Repository (2026-09-06)
 
@@ -749,4 +790,3 @@ Traps that cost real time here, kept so they are not rediscovered:
   tolerates the difference — every redirect URI in this app registration is
   registered without the slash and all of them work. Read the whole comment
   before quoting half of it as a constraint.
-
