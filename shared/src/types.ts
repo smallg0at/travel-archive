@@ -34,7 +34,14 @@ export type PhotoQuality = "good" | "poor";
  * `filesystem` means OneDrive's own write time — which phone sync rewrites,
  * so it says when the file landed, not when the photo was taken.
  */
-export type DateSource = "exif" | "filename" | "filesystem" | "none";
+/**
+ * Where a photo's capture time came from.
+ *
+ * `filename-date` is separate from `filename` because it carries a date but no
+ * clock time: the stored time is a midnight nobody measured. Anything reasoning
+ * about *when in the day* something happened must ignore it — see stops.ts.
+ */
+export type DateSource = "exif" | "filename" | "filename-date" | "filesystem" | "none";
 
 /**
  * Why a photo is considered a redundant copy. `exact` is the same file

@@ -212,7 +212,11 @@ function takenAtOf(item: DriveItem): { takenAt: string | null; dateSource: DateS
   // UTC+1 viewer, and stops.ts opens the day with a stop that never happened.
   // The day is still right, which is what the album files on.
   if (fromName) {
-    return { takenAt: fromName.iso, dateSource: "filename", timeSuspect: timeSuspect || !fromName.hasTime };
+    return {
+      takenAt: fromName.iso,
+      dateSource: fromName.hasTime ? "filename" : "filename-date",
+      timeSuspect: timeSuspect || !fromName.hasTime,
+    };
   }
 
   // Last resort, and the one sync actually rewrites: a filesystem timestamp

@@ -74,11 +74,44 @@ function pointOf(photo: PhotoRecord): [number, number] | null {
  * with it and never trip the threshold, so a whole afternoon of wandering would
  * read as one place.
  */
+/**
+ * Whether this photo's clock time was measured rather than invented.
+ *
+ * `filename-date` means the name carried a date and no time, so the stored
+ * moment is midnight. Sorted in with everything else it lands *first*, and the
+ * gap rule below then opens the day with a stop that never happened — 125
+ * WhatsApp saves in this archive did exactly that. Their day is still right,
+ * which is what they are grouped under; only their position within it is
+ * unknown.
+ */
+function timeIsReal(photo: PhotoRecord): boolean {
+  return photo.dateSource !== "filename-date";
+}
+
 export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
-  const ordered = dayPhotos
-    .filter((p) => p.takenAt)
+  const dated = dayPhotos.filter((p) => p.takenAt);
+  const ordered = dated
+    .filter(timeIsReal)
     .sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? ""));
-  if (ordered.length === 0) return [];
+
+  // Kept, not dropped: a summarized day renders only its segments, so a photo
+  // in no stop is a photo that vanishes from the album. They are attached to
+  // the day's last stop below, after the real ones have decided its shape.
+  const untimed = dated.filter((p) => !timeIsReal(p));
+
+  if (ordered.length === 0) {
+    // Nothing measured all day. One stop rather than none, so the photos still
+    // appear; the times are the midnights, which is all there is.
+    if (untimed.length === 0) return [];
+    return [
+      {
+        kind: "place",
+        photos: untimed,
+        startTime: untimed[0].takenAt!,
+        endTime: untimed[untimed.length - 1].takenAt!,
+      },
+    ];
+  }
 
   const clusters: PhotoRecord[][] = [];
   let current: PhotoRecord[] = [];
@@ -135,6 +168,26 @@ export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
     }
   }
   flushTransit();
+
+  // The untimed photos join the day's last *place*. Their own start/end are not
+  // merged in, so the stop keeps the times that were actually measured rather
+  // than being stretched back to midnight.
+  //
+  // A place rather than simply the last stop: transit collapses behind a single
+  // line in the app, and 2026-09-07 ends in transit — which would have buried
+  // 119 photos there. Falling back to the last stop only when the day has no
+  // place at all. Appending rather than prepending because it cannot then
+  // change how the day opens, and because a WhatsApp save is dated when it
+  // landed rather than when it was taken.
+  //
+  // It does associate them with that stop's place, which is a guess. The day is
+  // flagged `timeUncertain` so the summarizer is told not to narrate when
+  // things happened, but the guess is why this is worth revisiting if these
+  // ever become more than a fraction of a day.
+  if (untimed.length > 0 && stops.length > 0) {
+    const lastPlace = stops.map((s, i) => (s.kind === "place" ? i : -1)).filter((i) => i >= 0).pop();
+    stops[lastPlace ?? stops.length - 1].photos.push(...untimed);
+  }
 
   return stops;
 }
