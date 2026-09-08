@@ -42,12 +42,17 @@ export function formatMonthLabel(month: string): string {
 const FILENAME_DATE = /(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})(?:[-_.T ]?(\d{2})[-_.:]?(\d{2})[-_.:]?(\d{2}))?/;
 
 /**
- * Pulls a capture date out of a filename. Returns an ISO string, or null if
- * the filename doesn't contain a valid-looking date. The time portion is
- * optional — a date alone is still enough to file the photo on the right day,
- * which is all the album needs.
+ * Pulls a capture date out of a filename.
+ *
+ * `hasTime` says whether the name actually carried a clock time, because when
+ * it does not the returned ISO string reads `T00:00:00Z` — a real-looking
+ * midnight that nothing invented. WhatsApp saves (`IMG-20260907-WA0012.jpg`)
+ * are the common case: 138 photos in this archive carry that fabricated
+ * midnight, it renders as "01:00" once a UTC+1 viewer formats it, and
+ * `stops.ts` splits the day on it as though the day genuinely began there.
+ * Callers must know the difference; see `takenAtOf` in graph.ts.
  */
-export function parseDateFromFileName(fileName: string): string | null {
+export function parseDateFromFileName(fileName: string): { iso: string; hasTime: boolean } | null {
   const match = FILENAME_DATE.exec(fileName);
   if (!match) return null;
 
@@ -63,5 +68,5 @@ export function parseDateFromFileName(fileName: string): string | null {
   // Rejects things like 2025-02-31, which the constructor would silently roll over.
   if (date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
 
-  return date.toISOString();
+  return { iso: date.toISOString(), hasTime: hour !== undefined };
 }

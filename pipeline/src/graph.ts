@@ -202,12 +202,18 @@ function takenAtOf(item: DriveItem): { takenAt: string | null; dateSource: DateS
   // right), but nothing downstream should treat the clock time as precise.
   let timeSuspect = false;
   if (exif && fromName) {
-    const driftMs = Math.abs(Date.parse(exif) - Date.parse(fromName));
+    const driftMs = Math.abs(Date.parse(exif) - Date.parse(fromName.iso));
     timeSuspect = Number.isFinite(driftMs) && driftMs > 60 * 60 * 1000;
   }
 
   if (exif) return { takenAt: exif, dateSource: "exif", timeSuspect };
-  if (fromName) return { takenAt: fromName, dateSource: "filename", timeSuspect };
+  // A filename with a date but no clock time gives a midnight nobody measured.
+  // Left unflagged it reads as a precise time — it renders as "01:00" to a
+  // UTC+1 viewer, and stops.ts opens the day with a stop that never happened.
+  // The day is still right, which is what the album files on.
+  if (fromName) {
+    return { takenAt: fromName.iso, dateSource: "filename", timeSuspect: timeSuspect || !fromName.hasTime };
+  }
 
   // Last resort, and the one sync actually rewrites: a filesystem timestamp
   // reflects when OneDrive last wrote the file, not when the photo was taken.
