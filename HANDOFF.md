@@ -57,6 +57,15 @@ the duration of a write. Two writers clobbering the same shard has actually
 happened. If you add a way for the app to change the archive, route it through
 the server or you break sync's dirty flag.
 
+**A read-only path must read the mirror, not OneDrive.** `saveIndex` and
+`saveShard` write local first and upload second, so `pipeline/data/` holds
+identical bytes. Use `loadIndexForReading` / `loadShardForReading` for anything
+that only reads; `loadIndex` / `loadShard` stay on Graph for write paths, where
+a mirror gone stale on another machine would be merged onto and uploaded over
+the newer copy. This has now been found in three separate places
+(`/archive/status`, `planAnalyze`, `loadAllShards`), each time as a
+multi-second wait with an instant answer sitting on disk.
+
 **Paths split two ways** (`pipeline/src/paths.ts`). Writable per-user state
 resolves from `ARCHIVE_HOME`; read-only config that ships with the build
 resolves from the module. Get this wrong and an installed app writes into a

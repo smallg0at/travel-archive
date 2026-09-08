@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { dirname } from "node:path";
 import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
@@ -99,14 +99,62 @@ export async function saveShard(token: string, shard: PhotoShard): Promise<void>
 }
 
 /**
+ * A metadata file from the local mirror, or null when it is not there.
+ *
+ * `saveIndex` and `saveShard` write local first and upload second, so anything
+ * this machine has written is here — the same guarantee `/archive/index` in
+ * serve.ts already relies on to serve the app. Used only on **read-only**
+ * paths: a write path must keep going through Graph, because a mirror made
+ * stale by a run on another machine would otherwise be merged onto and
+ * uploaded over the newer copy.
+ */
+async function readLocal<T>(fileName: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(dataFile(fileName), "utf-8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Read-only shard load: the mirror if it has it, Graph if not. */
+export async function loadShardForReading(token: string, month: string): Promise<PhotoShard> {
+  const local = await readLocal<PhotoShard>(shardFile(month));
+  return local ?? (await loadShard(token, month));
+}
+
+/** Read-only index load: the mirror if it has it, Graph if not. */
+export async function loadIndexForReading(token: string): Promise<ArchiveIndexFile> {
+  const local = await readLocal<ArchiveIndexFile>(INDEX_FILE);
+  return local ?? (await loadIndex(token));
+}
+
+/**
  * Every shard named in the index, loaded at once. Only for whole-archive
  * passes (organize) — the whole point of sharding is that scan and analyze
  * don't need this.
+ *
+ * **From the mirror, and in parallel.** This used to download all of them from
+ * OneDrive one at a time: at 123 months that is 123 sequential round trips
+ * before the pass could begin, which is what "Loading 123 month shard(s)..."
+ * sat on for over a minute. Reading a shard locally is a few milliseconds
+ * against ~650ms over the network.
+ *
+ * The count itself is not reducible: `organize` rebuilds `index.sections` from
+ * the full set of days, so loading only the months in `--only` would drop every
+ * other month's day pages from the index.
  */
+const SHARD_READ_CONCURRENCY = 8;
+
 export async function loadAllShards(token: string, index: ArchiveIndexFile): Promise<Map<string, PhotoShard>> {
   const shards = new Map<string, PhotoShard>();
-  for (const summary of index.months) {
-    shards.set(summary.month, await loadShard(token, summary.month));
-  }
+  const months = index.months.map((m) => m.month);
+  let next = 0;
+  const worker = async () => {
+    while (next < months.length) {
+      const month = months[next++];
+      shards.set(month, await loadShardForReading(token, month));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(SHARD_READ_CONCURRENCY, months.length) }, worker));
   return shards;
 }

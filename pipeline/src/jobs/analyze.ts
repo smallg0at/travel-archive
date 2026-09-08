@@ -4,7 +4,14 @@ import { downloadThumbnailBuffer } from "../graph.js";
 import { reverseGeocode } from "../exif.js";
 import { getProvider } from "../providers/index.js";
 import { env } from "../env.js";
-import { loadIndex, loadShard, saveIndex, saveShard } from "../archiveStore.js";
+import {
+  loadIndex,
+  loadIndexForReading,
+  loadShard,
+  loadShardForReading,
+  saveIndex,
+  saveShard,
+} from "../archiveStore.js";
 import { mediaTypeFor } from "../util.js";
 import { analysisTargets } from "../duplicates.js";
 import { mayBeAnalyzed } from "../screenshots.js";
@@ -166,7 +173,11 @@ async function geocodePending(
  */
 export async function planAnalyze(opts: AnalyzeOptions): Promise<AnalyzePlan> {
   const token = await getAccessToken();
-  const index = await loadIndex(token);
+  // Read-only, so it reads the mirror: this is the "what would it cost"
+  // button, and it was downloading index.json plus one shard per month in
+  // range from OneDrive to answer — 3.3s for a two-month range, 7.2s for nine,
+  // and well over a minute for the whole library.
+  const index = await loadIndexForReading(token);
 
   const months = index.months.filter(
     (m) => (!opts.from || m.month >= opts.from.slice(0, 7)) && (!opts.to || m.month <= opts.to.slice(0, 7)),
@@ -174,7 +185,7 @@ export async function planAnalyze(opts: AnalyzeOptions): Promise<AnalyzePlan> {
 
   const counted: { month: string; count: number }[] = [];
   for (const summary of months) {
-    const shard = await loadShard(token, summary.month);
+    const shard = await loadShardForReading(token, summary.month);
     const count = selectTargets(shard, opts).length;
     if (count > 0) counted.push({ month: summary.month, count });
   }

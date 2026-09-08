@@ -4,7 +4,7 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**30 open, 22 done.** The list grows because each session surfaces defects that
+**30 open, 23 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -33,6 +33,40 @@ working practice this list was built with.
       confirming it means deleting real photos from OneDrive. Judged unlikely
       enough to defer. The fix, when wanted: on an unbounded run, sweep every
       month in the index rather than only the touched ones.
+- [x] **Whole-archive reads went to OneDrive with the mirror sitting on disk.**
+      Fixed 2026-09-08, spotted by the owner watching `organize` sit on
+      "Loading 123 month shard(s)…" after limiting the run to `2026-09`.
+
+      Two separate things, and only one was a bug. **The count is not
+      reducible**: `organize` rebuilds `index.sections` from the full set of
+      days, so loading only the months named in `--only` would drop every other
+      month's day pages from the index. The bug was the *source* —
+      `loadAllShards` downloaded all 123 shards from OneDrive, one at a time,
+      when byte-identical copies were in `pipeline/data/`.
+
+      | | before | after |
+      |---|---|---|
+      | `loadIndexForReading` | ~1,200ms | **11ms** |
+      | `loadAllShards`, 123 shards / 31,374 photos | ~123 × 650ms ≈ **80s** | **162ms** |
+      | Estimate cost, trip range | 3,326ms | **278ms** |
+      | Estimate cost, 9 months | 7,188ms | **269ms** |
+      | Estimate cost, whole library | minutes | **318ms** |
+
+      Read-only paths now use `loadIndexForReading` / `loadShardForReading`,
+      which try the mirror and fall back to Graph. **Write paths deliberately
+      still go through Graph**: a mirror made stale by a run on another machine
+      would otherwise be merged onto and uploaded over the newer copy. Verified
+      with an invalid token, so any Graph call would have failed loudly rather
+      than passing silently — all 123 shards came from disk.
+
+      Third time this exact mistake has been found in a different place
+      (`/archive/status`, then `planAnalyze`, then `loadAllShards`). **If a code
+      path only reads metadata, it should be reading the mirror.**
+
+      Side effect worth knowing: a whole-library estimate is now practical,
+      which is the number the analyze decision turns on — **23,401 photos**
+      outstanding.
+
 - [x] **PDF export was broken, in two independent ways.** Reported by the owner
       2026-09-08, fixed the same day.
 
