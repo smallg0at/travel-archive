@@ -84,7 +84,11 @@ the browser then hands that copy to a later CORS request, which fails because it
 carries no `Access-Control-Allow-Origin`. It presents as "some images load and
 some do not", it fails in ~4ms so it does not look like a network problem, and
 it survives clearing the server's cache because the bad copy is in the browser's.
-A fix here needs a browser cache clear *afterwards* to take effect.
+A fix here cannot repair entries already cached, so `THUMB_CACHE_VERSION` in
+`app/src/backend.ts` exists to retire them: bump it and every thumbnail URL
+changes, which abandons the poisoned entries without asking anyone to clear a
+browser cache — and clearing one *before* the server fix just re-poisons on the
+next load.
 
 **Images must be CORS-clean or the PDF export dies.** The export draws every
 card image onto a canvas and calls `toDataURL`; a cross-origin image loaded

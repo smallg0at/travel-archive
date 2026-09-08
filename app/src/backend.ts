@@ -55,8 +55,27 @@ export async function checkHealth(): Promise<Health | null> {
  * item id, and the server marks it immutable — so a second view of a photo
  * costs neither a Graph call nor a request to the server.
  */
+/**
+ * Bumped when a cached response must be abandoned rather than reused.
+ *
+ * These URLs are served `immutable, max-age=31536000`, which is exactly what
+ * makes them cheap — and also means a *bad* cached entry survives for a year
+ * and cannot be fixed from the server. That happened: thumbnails fetched
+ * before `Vary: Origin` was sent were cached with no record that CORS mattered,
+ * so every later CORS request was answered from a copy carrying no
+ * `Access-Control-Allow-Origin` and failed in ~4ms. Measured on this archive:
+ * 63 of 200 images failed from cache while the same 200 succeeded with
+ * `cache: "reload"`.
+ *
+ * Changing the URL changes the cache key, which retires every poisoned entry
+ * at once instead of asking each person to clear their browser cache — and
+ * clearing it *before* the server fix simply re-poisons on the next load, which
+ * is the trap this avoids.
+ */
+const THUMB_CACHE_VERSION = 2;
+
 export function localThumbUrl(itemId: string, size: "medium" | "large" | "full"): string {
-  return `${BACKEND}/thumb/${size}/${encodeURIComponent(itemId)}`;
+  return `${BACKEND}/thumb/${size}/${encodeURIComponent(itemId)}?v=${THUMB_CACHE_VERSION}`;
 }
 
 /**

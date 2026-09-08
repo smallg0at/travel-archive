@@ -91,9 +91,15 @@ working practice this list was built with.
       the canvas is clean. Cache-busted URLs always worked, which is what
       isolated it to caching rather than to the server.
 
-      Note for anyone hitting this again: the fix cannot heal entries already
-      cached, so one cache clear is needed *after* the server change — clearing
-      before it just re-poisons on the next load.
+      The server fix alone was not enough: entries already cached are immutable
+      for a year and a clear done *before* the fix just re-poisons on the next
+      load. Measured after the `Vary` fix, on the app's own URLs: **63 of 200
+      failed from cache while the same 200 succeeded with `cache: "reload"`**.
+      So `THUMB_CACHE_VERSION` was added to `localThumbUrl` — bumping it changes
+      every thumbnail URL and retires the poisoned entries outright, with no
+      manual cache clearing. After it: 200/200 on a cold pass *and* 200/200 on a
+      second pass served from cache, and 50/50 as real `<img crossorigin>` with
+      a clean canvas.
 
       Still worth confirming by eye: that an actual exported PDF paginates
       correctly and excludes the roll. The stylesheet is restored and verified
