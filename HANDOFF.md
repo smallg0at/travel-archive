@@ -188,6 +188,13 @@ overrides the UA's `[hidden] { display: none }`. This has bitten three times —
 `.lightbox`, `.signin-banner`, `.job-form`. The remedy in the stylesheet is to
 qualify the rule (`.job-progress:not([hidden]) { display: flex }`).
 
+**A browser you are driving is not a browser someone is looking at.** A
+backgrounded tab stops rendering, so `IntersectionObserver` never fires and lazy
+images never load — which reads exactly like a regression. Twice now a "fix"
+has been reported on the strength of such a reading. If a measurement says
+nothing loaded, check that a *fresh* observer fires on an element you can see
+before believing it.
+
 **Verify in the browser, not in the diff.** Chrome is driven through the
 `claude-in-chrome` tools; the desktop shell can be inspected with
 `--remote-debugging-port=9222` and a ~40-line CDP client, since it is not Chrome

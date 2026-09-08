@@ -109,10 +109,8 @@ working practice this list was built with.
       against `cache: "reload"` over the same 200 URLs**, and it would have
       found the cause immediately had it been run first.
 
-      Still open, and the last piece: no actual PDF has been exported since the
-      print stylesheet was restored. The stylesheet is verified present and the
-      canvas is verified clean, but whether the finished file paginates
-      correctly and excludes the roll wants one look by eye.
+      Export confirmed good by the owner 2026-09-08 — a real PDF, produced
+      after the stylesheet was restored. Closed.
 
 - [x] **The pin control moved from the sidebar row into the page heading.**
       Done 2026-09-08 at the owner's request. It used to be a 16px glyph inside
