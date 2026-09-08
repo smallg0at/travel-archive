@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import type { Pin } from "@travel-archive/shared";
+import type { Pin, SyncState } from "@travel-archive/shared";
 import { dataDir, dataFile } from "./paths.js";
 
 /**
@@ -28,6 +28,22 @@ interface SyncFile {
    * upload that failed, and any future edit made locally without pushing.
    */
   dirty: boolean;
+  /**
+   * The state `checkSync` last computed, so Settings can paint an answer before
+   * the Graph round trip that would confirm it. Persisted rather than derived:
+   * "behind" and "conflict" cannot be re-derived from the fields above without
+   * the remote eTag.
+   */
+  lastState: SyncState | null;
+  /**
+   * When a scan last completed. What "incremental" is measured from: the next
+   * incremental run starts at this timestamp's month, so a month that was only
+   * partly filled when it was scanned is covered again rather than skipped.
+   *
+   * Null means never scanned, which makes incremental fall back to a full run —
+   * there is no sensible lower bound otherwise.
+   */
+  lastScanAt: string | null;
   autoSyncOnLaunch: boolean;
   /** Minutes between automatic checks while running. 0 means never. */
   intervalMinutes: number;
@@ -39,6 +55,8 @@ const DEFAULTS: SyncFile = {
   syncedAt: null,
   checkedAt: null,
   dirty: false,
+  lastState: null,
+  lastScanAt: null,
   autoSyncOnLaunch: true,
   intervalMinutes: 0,
 };

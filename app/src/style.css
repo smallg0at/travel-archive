@@ -1249,6 +1249,37 @@ body.resizing { cursor: col-resize; user-select: none; }
   margin-top: 10px;
 }
 
+/* The month pickers, shown only for the "a month range" mode.
+
+   Defaulted to `display: none` and re-enabled with `:not([hidden])`, never the
+   other way round: an unconditional `display` on the class would beat the UA's
+   own `[hidden] { display: none }` and the row would be stuck open. That has
+   bitten `.lightbox`, `.signin-banner` and `.job-form` already. */
+.set-scan-range {
+  display: none;
+}
+.set-scan-range:not([hidden]) {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0 2px;
+}
+.set-scan-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.set-select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 6px;
+}
+
 .set-progress {
   margin-top: 10px;
   font-size: 11.5px;

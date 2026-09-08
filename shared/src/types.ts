@@ -329,7 +329,7 @@ export interface ArchiveIndexFile {
  * `trip` writes one trip's narrative from day summaries that already exist; it
  * is a single model call, so it finishes in seconds.
  */
-export type JobKind = "analyze" | "organize" | "trip" | "sync";
+export type JobKind = "scan" | "analyze" | "organize" | "trip" | "sync";
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
@@ -408,6 +408,18 @@ export type SyncState =
 
 export interface SyncStatus {
   state: SyncState;
+  /**
+   * True when `state` is the last computed answer replayed from disk rather
+   * than one just checked against OneDrive.
+   *
+   * The comparison costs a Graph round trip (measured 687-1,365ms), which is
+   * too slow to open a page behind. Settings paints the stale answer at once
+   * and replaces it when the real check lands, so this is what lets the UI say
+   * "as of ten minutes ago" instead of asserting something it has not verified.
+   */
+  stale: boolean;
+  /** When a scan last completed; null means never. */
+  lastScanAt: string | null;
   /** When the eTag was last compared against OneDrive. */
   checkedAt: string | null;
   /** When metadata last actually moved in either direction. */

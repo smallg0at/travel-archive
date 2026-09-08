@@ -1,15 +1,23 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { checkSync, protectedPaths, runSync, type ConflictChoice } from "./jobs/sync.js";
+import { cachedSync, checkSync, protectedPaths, runSync, type ConflictChoice } from "./jobs/sync.js";
 import { pins, removePin, setPin, writeSync } from "./syncStore.js";
 import { readFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { downloadPhotoBuffer, downloadThumbnailBuffer } from "./graph.js";
-import { readThumb, setProtectedProvider, thumbSize, writeThumb, type ThumbSize } from "./thumbStore.js";
-import type { ArchiveStatus, JobRecord } from "@travel-archive/shared";
+import {
+  invalidateCacheStats,
+  readThumb,
+  setProtectedProvider,
+  thumbSize,
+  writeThumb,
+  type ThumbSize,
+} from "./thumbStore.js";
+import type { ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { env } from "./env.js";
 import { getCachedAccessToken } from "./auth.js";
 import { loadIndex } from "./archiveStore.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
+import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { runOrganize } from "./jobs/organize.js";
 import { runTrip } from "./jobs/trip.js";
 import * as jobs from "./server/jobs.js";
@@ -85,6 +93,19 @@ function refuseIfBusy(res: ServerResponse): boolean {
   return true;
 }
 
+/**
+ * Totals for the Settings page, from the local mirror.
+ *
+ * This used to call `loadIndex(token)`, which downloads the whole of
+ * `index.json` from OneDrive — **2.5MB, measured at 1,043-1,762ms** — to report
+ * five counts. `/archive/index` above already established that the mirror holds
+ * identical bytes because this server is the only writer; the same reasoning
+ * applies here, and reading it locally parses in **8-11ms**.
+ *
+ * `signedIn` still comes from the token, since it describes the session rather
+ * than the archive, and it is a cache lookup (~2ms) rather than a round trip.
+ * The Graph path stays as the fallback for a machine that has never scanned.
+ */
 async function archiveStatus(): Promise<ArchiveStatus> {
   const token = await getCachedAccessToken();
   if (!token) {
@@ -96,7 +117,8 @@ async function archiveStatus(): Promise<ArchiveStatus> {
     };
   }
 
-  const index = await loadIndex(token);
+  const local = await readLocalJson("index.json");
+  const index = local ? (JSON.parse(local) as ArchiveIndexFile) : await loadIndex(token);
   const months = index.months.map((m) => ({
     month: m.month,
     photoCount: m.photoCount,
@@ -349,7 +371,19 @@ const routes: [RegExp, string, Handler][] = [
    * How the replica stands against OneDrive, plus what is pinned and what disk
    * it uses. Cheap: one eTag request, never a download.
    */
-  [/^\/sync\/status$/, "GET", async (_req, res) => json(res, 200, await checkSync())],
+  /**
+   * `?cached=1` answers from disk with no Graph call, so Settings can paint
+   * immediately; the page then asks again without it to get a checked answer.
+   * The two differ only in `stale`.
+   */
+  [
+    /^\/sync\/status$/,
+    "GET",
+    async (req, res) => {
+      const cached = new URL(req.url ?? "", "http://localhost").searchParams.has("cached");
+      json(res, 200, cached ? await cachedSync() : await checkSync());
+    },
+  ],
 
   /**
    * Run a sync. `checkOnly` reports without downloading, which is what the app
@@ -400,6 +434,9 @@ const routes: [RegExp, string, Handler][] = [
       const body = await readJsonBody<{ category?: "thumbnails" | "originals" }>(req);
       const sizes: ThumbSize[] = body.category === "originals" ? ["full"] : ["medium", "large"];
       const removed = await clearCache(sizes, await protectedPaths());
+      // Otherwise Settings redraws the figures it just invalidated, from a memo
+      // that outlives the files by up to 30s.
+      invalidateCacheStats();
       json(res, 200, { removed });
     },
   ],
@@ -501,6 +538,23 @@ const routes: [RegExp, string, Handler][] = [
         limit: body.limit ?? Number.MAX_SAFE_INTEGER,
       };
       json(res, 200, await planAnalyze(opts));
+    },
+  ],
+  /**
+   * Indexing, which the app previously had no way to trigger — Generate offered
+   * only the three passes that cost money or depend on one that does, so adding
+   * photos to OneDrive meant dropping to a terminal. Free: Graph listing only.
+   */
+  [
+    /^\/jobs\/scan$/,
+    "POST",
+    async (req, res) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{ mode?: ScanMode; from?: string; to?: string }>(req);
+      // Resolved on the server so that what "incremental" means lives next to
+      // the deletion rule it interacts with, rather than in the page.
+      const range = await resolveRange(body.mode ?? "full", { from: body.from ?? null, to: body.to ?? null });
+      json(res, 202, jobs.start({ kind: "scan", run: (onProgress, signal) => runScan(range, onProgress, signal) }));
     },
   ],
   [
@@ -621,6 +675,7 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`pipeline serve — http://127.0.0.1:${env.servePort} (loopback only)`);
   console.log(`  GET  /health`);
   console.log(`  GET  /archive/status`);
+  console.log(`  POST /jobs/scan           {mode,from,to}    free, Graph listing only`);
   console.log(`  POST /jobs/analyze/plan   {from,to,limit}   what it would cost, spends nothing`);
   console.log(`  POST /jobs/analyze        {from,to,limit}`);
   console.log(`  POST /jobs/organize       {only}`);

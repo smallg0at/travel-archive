@@ -1,13 +1,16 @@
-import type { ArchiveStatus, SyncState, SyncStatus } from "@travel-archive/shared";
+import type { ArchiveStatus, JobRecord, SyncState, SyncStatus } from "@travel-archive/shared";
 import {
   archiveStatus,
+  checkHealth,
   clearCache,
   saveSyncSettings,
   setPin,
   startSync,
+  startScan,
   syncStatus,
   watchJob,
   type ConflictChoice,
+  type ScanMode,
 } from "./backend";
 import { el } from "./photoUi";
 import { renderDensityControl } from "./album";
@@ -71,6 +74,11 @@ function row(label: string, value: string): HTMLElement {
   return node;
 }
 
+/** Rewrites a row built by `row()`, so a refresh does not rebuild the section. */
+function setRowValue(node: HTMLElement, value: string): void {
+  node.querySelector("b")!.textContent = value;
+}
+
 function button(label: string, onClick: () => void, kind = ""): HTMLButtonElement {
   const b = el<HTMLButtonElement>(`<button type="button" class="set-btn ${kind}"></button>`);
   b.textContent = label;
@@ -109,10 +117,107 @@ function conflictBlock(status: SyncStatus, rerun: (r: ConflictChoice) => void): 
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Where the page keeps its live state.
+ *
+ * Settings used to rebuild itself by calling `showSettings()` again after every
+ * button press, which meant a full teardown plus both status round trips — the
+ * reason a sync button felt like a page load. Sections now register an updater
+ * and the page mutates in place; nothing below re-renders `#content`.
+ */
+const updaters: ((status: SyncStatus) => void)[] = [];
+/**
+ * Live job subscriptions, dropped when the page is left.
+ *
+ * Settings is rebuilt on every open — unlike the Generate panel, which is
+ * constructed once and moved into the page precisely so a running job survives
+ * being navigated away from. Without these the streams would pile up one per
+ * visit; without the reattach in `followRunningJob` the progress would vanish
+ * the moment you closed Settings during a scan, which is what happened.
+ */
+const watchers: (() => void)[] = [];
+
+/**
+ * Shows a job's progress in `line`, and re-enables `busy` when it ends.
+ *
+ * Used both for a job this page just started and for one found already running,
+ * so a reattached scan looks exactly like one you watched from the beginning.
+ */
+function followJob(job: JobRecord, line: HTMLElement, busy: HTMLButtonElement | null, onDone: () => void): void {
+  line.hidden = false;
+  if (busy) busy.disabled = true;
+  const stop = watchJob(job.id, (j) => {
+    const p = j.progress;
+    line.textContent =
+      j.status === "running" || j.status === "queued"
+        ? `${p.message ?? p.phase}${p.total ? ` — ${p.done} of ${p.total}` : ""}`
+        : j.status === "failed"
+          ? `Failed: ${j.error}`
+          : (p.message ?? "Finished.");
+    if (j.status !== "running" && j.status !== "queued") {
+      stop();
+      if (busy) busy.disabled = false;
+      onDone();
+    }
+  });
+  watchers.push(stop);
+}
+
+/**
+ * Reattaches to a job of this kind that is already running.
+ *
+ * Asked of `/health` rather than remembered locally, so it also finds a job
+ * started from the CLI, from another tab, or from an earlier visit to this
+ * page — the case that made closing Settings mid-scan lose the progress.
+ */
+function followRunningJob(kind: JobRecord["kind"], line: HTMLElement, busy: HTMLButtonElement | null, onDone: () => void): void {
+  void checkHealth().then((health) => {
+    const running = health?.running;
+    if (running && running.kind === kind && document.querySelector(".set-section")) {
+      followJob(running, line, busy, onDone);
+    }
+  });
+}
+
+/** Separate from the sync updaters: these are fed by `archiveStatus`, not `syncStatus`. */
+const archiveUpdaters: ((archive: ArchiveStatus | null) => void)[] = [];
+let inFlight = false;
+
+/** Re-reads the library totals. Cheap now that they come from the local mirror. */
+async function refreshArchive(): Promise<void> {
+  const next = await archiveStatus();
+  if (document.querySelector(".set-section")) for (const update of archiveUpdaters) update(next);
+}
+
+function applyStatus(status: SyncStatus): void {
+  for (const update of updaters) update(status);
+}
+
+/**
+ * Asks for a checked status and applies it.
+ *
+ * Guarded against overlap because this is called from the poll, from every
+ * button, and once on open: two eTag comparisons in flight would race to write
+ * the same labels, and the loser could be the older answer.
+ */
+async function refreshStatus(): Promise<void> {
+  if (inFlight) return;
+  inFlight = true;
+  try {
+    const next = await syncStatus();
+    if (next && document.querySelector(".set-section")) applyStatus(next);
+  } finally {
+    inFlight = false;
+  }
+}
+
 /** Stops the panel's polling. Called when the view changes. */
 export function releaseSettings(): void {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = null;
+  updaters.length = 0;
+  archiveUpdaters.length = 0;
+  for (const stop of watchers.splice(0)) stop();
 }
 
 export async function showSettings(): Promise<void> {
@@ -120,7 +225,9 @@ export async function showSettings(): Promise<void> {
   releaseSettings();
   content.replaceChildren(el(`<div class="loading">Loading settings…</div>`));
 
-  const [sync, archive] = await Promise.all([syncStatus(), archiveStatus()]);
+  // The cached status costs no Graph call, so the page paints from disk. The
+  // checked one is fetched below and swapped in when it lands.
+  const [sync, archive] = await Promise.all([syncStatus({ cached: true }), archiveStatus()]);
   const frag = document.createDocumentFragment();
   frag.appendChild(el(`<div class="month-heading"><h1>Settings</h1><span></span></div>`));
 
@@ -139,6 +246,7 @@ export async function showSettings(): Promise<void> {
   }
 
   frag.appendChild(librarySection(archive));
+  frag.appendChild(scanSection(sync));
   frag.appendChild(syncSection(sync));
   frag.appendChild(offlineSection(sync));
   frag.appendChild(storageSection(sync));
@@ -146,15 +254,13 @@ export async function showSettings(): Promise<void> {
 
   content.replaceChildren(frag);
 
+  void refreshStatus();
+
   // The status changes underneath while a sync runs; a page showing "Behind"
   // after it finished would be worse than no page.
   refreshTimer = setInterval(() => {
     if (!document.querySelector(".set-section")) return releaseSettings();
-    void syncStatus().then((next) => {
-      if (!next) return;
-      const stale = document.querySelector(".set-sync-state");
-      if (stale) applyState(stale as HTMLElement, next);
-    });
+    void refreshStatus();
   }, 5000);
 }
 
@@ -166,15 +272,125 @@ function applyState(node: HTMLElement, status: SyncStatus): void {
 function librarySection(archive: ArchiveStatus | null): HTMLElement {
   const s = section("Library");
   const body = s.querySelector(".set-body")!;
-  if (!archive?.signedIn) {
-    body.appendChild(el(`<p class="set-note">Not signed in.</p>`));
-    return s;
-  }
-  body.appendChild(row("Photos", archive.totals.photos.toLocaleString()));
-  body.appendChild(row("Described by AI", archive.totals.analyzed.toLocaleString()));
-  body.appendChild(row("Days summarised", archive.totals.days.toLocaleString()));
-  body.appendChild(row("Trips and months", archive.totals.sections.toLocaleString()));
-  body.appendChild(row("Schema version", `v${archive.schemaVersion}`));
+  const note = el<HTMLParagraphElement>(`<p class="set-note">Not signed in.</p>`);
+  const rows = {
+    photos: row("Photos", ""),
+    analyzed: row("Described by AI", ""),
+    days: row("Days summarised", ""),
+    sections: row("Trips and months", ""),
+    schema: row("Schema version", ""),
+  };
+  body.append(note, ...Object.values(rows));
+
+  const update = (next: ArchiveStatus | null) => {
+    const signedIn = Boolean(next?.signedIn);
+    note.hidden = signedIn;
+    for (const r of Object.values(rows)) r.hidden = !signedIn;
+    if (!next?.signedIn) return;
+    setRowValue(rows.photos, next.totals.photos.toLocaleString());
+    setRowValue(rows.analyzed, next.totals.analyzed.toLocaleString());
+    setRowValue(rows.days, next.totals.days.toLocaleString());
+    setRowValue(rows.sections, next.totals.sections.toLocaleString());
+    setRowValue(rows.schema, `v${next.schemaVersion}`);
+  };
+  update(archive);
+  archiveUpdaters.push(update);
+  return s;
+}
+
+/**
+ * Re-indexing the library.
+ *
+ * Lives here rather than on Generate because it is maintenance, not
+ * generation: it costs nothing, spends no tokens, and is the thing you run
+ * routinely. Generate is for the passes that cost money.
+ */
+function scanSection(status: SyncStatus): HTMLElement {
+  const s = section("Scan");
+  const body = s.querySelector(".set-body")!;
+
+  const lastScan = row("Last scanned", relative(status.lastScanAt));
+  body.appendChild(lastScan);
+
+  const modeRow = el<HTMLDivElement>(`<div class="set-row"><span>What to scan</span></div>`);
+  const mode = el<HTMLSelectElement>(`
+    <select class="set-select">
+      <option value="incremental">Since the last scan</option>
+      <option value="full">The whole library</option>
+      <option value="range">A month range</option>
+    </select>
+  `);
+  modeRow.appendChild(mode);
+  body.appendChild(modeRow);
+
+  const range = el<HTMLDivElement>(`
+    <div class="set-scan-range" hidden>
+      <label class="set-scan-field"><span>From</span><input type="month" name="from" /></label>
+      <label class="set-scan-field"><span>To</span><input type="month" name="to" /></label>
+    </div>
+  `);
+  body.appendChild(range);
+
+  const note = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
+  body.appendChild(note);
+
+  // Said plainly because it is the one surprise in how scanning works: a run
+  // only reaps photos deleted from OneDrive inside the folders it listed, so
+  // an incremental run leaves deletions in older months in place.
+  const NOTES: Record<string, string> = {
+    incremental: "Scans from the month of the last scan onwards. Photos deleted from OneDrive in earlier months are not noticed — run a full scan occasionally to catch those.",
+    full: "Lists every month folder. The only mode that notices photos deleted from OneDrive anywhere in the library.",
+    range: "Scans only the months you pick. Photos deleted outside that range are left alone.",
+  };
+  const applyMode = () => {
+    range.hidden = mode.value !== "range";
+    note.textContent = NOTES[mode.value] ?? "";
+  };
+  mode.addEventListener("change", applyMode);
+  applyMode();
+
+  const progress = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
+
+  // Both change when a scan ends: the totals come from the index it rewrote,
+  // and `lastScanAt` is what the next incremental run starts from.
+  const afterScan = () => {
+    void refreshArchive();
+    void refreshStatus();
+  };
+
+  const run = button(
+    "Scan now",
+    () => {
+      const from = range.querySelector<HTMLInputElement>('input[name="from"]')!.value.trim();
+      const to = range.querySelector<HTMLInputElement>('input[name="to"]')!.value.trim();
+      progress.hidden = false;
+      progress.textContent = "Starting…";
+      run.disabled = true;
+      void startScan({
+        mode: mode.value as ScanMode,
+        ...(mode.value === "range" && from ? { from } : {}),
+        ...(mode.value === "range" && to ? { to } : {}),
+      })
+        .then((job) => followJob(job, progress, run, afterScan))
+        .catch((err: Error) => {
+          progress.textContent = err.message;
+          run.disabled = false;
+        });
+    },
+    "primary",
+  );
+
+  // A scan takes minutes over a whole library, so it long outlives a visit to
+  // this page. Closing Settings and reopening it used to show an idle button
+  // with the scan still running underneath.
+  followRunningJob("scan", progress, run, afterScan);
+
+  const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  actions.appendChild(run);
+  body.appendChild(actions);
+  body.appendChild(progress);
+
+  updaters.push((next) => setRowValue(lastScan, relative(next.lastScanAt)));
   return s;
 }
 
@@ -185,65 +401,97 @@ function syncSection(status: SyncStatus): HTMLElement {
   const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
   applyState(state, status);
   body.appendChild(state);
-  body.appendChild(row("Last checked", relative(status.checkedAt)));
-  body.appendChild(row("Last synced", relative(status.syncedAt)));
+
+  // A stale answer is labelled rather than silently presented as current: it is
+  // the last state measured, not one just confirmed against OneDrive.
+  const checking = el<HTMLParagraphElement>(`<p class="set-note">Checking OneDrive…</p>`);
+  checking.hidden = !status.stale;
+  body.appendChild(checking);
+
+  const checked = row("Last checked", relative(status.checkedAt));
+  const synced = row("Last synced", relative(status.syncedAt));
+  body.appendChild(checked);
+  body.appendChild(synced);
 
   const progress = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
+
+  const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  const conflictHost = el<HTMLDivElement>(`<div class="set-conflict-host"></div>`);
+
+  // Update in place. This used to call `showSettings()`, which tore the page
+  // down and paid for both status round trips again.
+  const afterSync = () => void refreshStatus();
 
   const run = (resolve?: ConflictChoice) => {
     progress.hidden = false;
     progress.textContent = "Starting…";
     void startSync(resolve ? { resolve } : {})
-      .then((job) => {
-        const stop = watchJob(job.id, (j) => {
-          const p = j.progress;
-          progress.textContent =
-            j.status === "running"
-              ? `${p.message ?? p.phase}${p.total ? ` — ${p.done} of ${p.total}` : ""}`
-              : j.status === "failed"
-                ? `Failed: ${j.error}`
-                : "Sync complete.";
-          if (j.status !== "running" && j.status !== "queued") {
-            stop();
-            void showSettings();
-          }
-        });
-      })
+      .then((job) => followJob(job, progress, null, afterSync))
       .catch((err: Error) => (progress.textContent = err.message));
   };
 
-  const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
-  actions.appendChild(button("Check now", () => run(), ""));
-  if (status.state !== "conflict") actions.appendChild(button("Sync now", () => run(), "primary"));
-  body.appendChild(actions);
+  // Same reattach as the scan section: a sync outlives a visit to this page.
+  followRunningJob("sync", progress, null, afterSync);
 
-  if (status.state === "conflict") body.appendChild(conflictBlock(status, run));
+  actions.appendChild(button("Check now", () => void refreshStatus(), ""));
+  const syncNow = button("Sync now", () => run(), "primary");
+  body.appendChild(actions);
+  body.appendChild(conflictHost);
   body.appendChild(progress);
+
+  /** Everything on this section that a fresh status can change. */
+  const update = (next: SyncStatus) => {
+    applyState(state, next);
+    checking.hidden = !next.stale;
+    setRowValue(checked, relative(next.checkedAt));
+    setRowValue(synced, relative(next.syncedAt));
+
+    // "Sync now" is meaningless in a conflict — the user has to choose a side
+    // first — so the resolver replaces it rather than sitting beside it.
+    const conflict = next.state === "conflict";
+    if (conflict && !conflictHost.firstChild) conflictHost.appendChild(conflictBlock(next, run));
+    if (!conflict) conflictHost.replaceChildren();
+    if (conflict) syncNow.remove();
+    else if (!syncNow.isConnected) actions.appendChild(syncNow);
+  };
+  updaters.push(update);
+
+  update(status);
   return s;
 }
 
 function offlineSection(status: SyncStatus): HTMLElement {
   const s = section("Kept on this device");
   const body = s.querySelector(".set-body")!;
+  const list = el<HTMLDivElement>(`<div class="set-pins"></div>`);
+  body.appendChild(list);
 
-  if (status.pins.length === 0) {
-    body.appendChild(
-      el(
-        `<p class="set-note">Nothing is pinned. Pin a trip or a month in the sidebar to keep its photos on this device — they are fetched when you sync and are never evicted to make room.</p>`,
-      ),
-    );
-  } else {
-    for (const pin of status.pins) {
+  const renderPins = (pins: SyncStatus["pins"]) => {
+    if (pins.length === 0) {
+      list.replaceChildren(
+        el(
+          `<p class="set-note">Nothing is pinned. Pin a trip or a month in the sidebar to keep its photos on this device — they are fetched when you sync and are never evicted to make room.</p>`,
+        ),
+      );
+      return;
+    }
+    const rows = pins.map((pin) => {
       const r = el<HTMLDivElement>(`<div class="set-row set-pin"><span></span></div>`);
       r.querySelector("span")!.textContent = `${pin.kind === "trip" ? "Trip" : "Month"} · ${pin.id}${pin.originals ? " · with originals" : ""}`;
       r.appendChild(
         button("Unpin", () => {
-          void setPin({ ...pin, pinned: false }).then(() => showSettings());
+          // The server answers with the new pin list, so the section can be
+          // rebuilt from that alone rather than reloading the whole page.
+          void setPin({ ...pin, pinned: false }).then((res) => renderPins(res.pins));
         }),
       );
-      body.appendChild(r);
-    }
-  }
+      return r;
+    });
+    list.replaceChildren(...rows);
+  };
+
+  renderPins(status.pins);
+  updaters.push((next) => renderPins(next.pins));
 
   const auto = el<HTMLLabelElement>(
     `<label class="set-check"><input type="checkbox"><span>Check for changes when the app starts</span></label>`,
@@ -276,13 +524,23 @@ function appearanceSection(): HTMLElement {
 function storageSection(status: SyncStatus): HTMLElement {
   const s = section("Local storage");
   const body = s.querySelector(".set-body")!;
-  const { metadataBytes, thumbnails, originals } = status.storage;
 
-  body.appendChild(row("Archive metadata", mb(metadataBytes)));
   const files = (n: number) => `${n.toLocaleString()} file${n === 1 ? "" : "s"}`;
-  body.appendChild(row("Thumbnails", `${files(thumbnails.count)} · ${mb(thumbnails.bytes)}`));
-  body.appendChild(row("Full-size photos", `${files(originals.count)} · ${mb(originals.bytes)}`));
-  body.appendChild(row("Total", mb(metadataBytes + thumbnails.bytes + originals.bytes)));
+  const metadata = row("Archive metadata", "");
+  const thumbs = row("Thumbnails", "");
+  const originals = row("Full-size photos", "");
+  const total = row("Total", "");
+  body.append(metadata, thumbs, originals, total);
+
+  const update = (next: SyncStatus) => {
+    const st = next.storage;
+    setRowValue(metadata, mb(st.metadataBytes));
+    setRowValue(thumbs, `${files(st.thumbnails.count)} · ${mb(st.thumbnails.bytes)}`);
+    setRowValue(originals, `${files(st.originals.count)} · ${mb(st.originals.bytes)}`);
+    setRowValue(total, mb(st.metadataBytes + st.thumbnails.bytes + st.originals.bytes));
+  };
+  update(status);
+  updaters.push(update);
 
   const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
   // Pinned files survive: clearing a cache must not silently undo "keep this".
@@ -292,7 +550,7 @@ function storageSection(status: SyncStatus): HTMLElement {
   ] as const) {
     actions.appendChild(
       button(label, () => {
-        void clearCache(category).then(() => showSettings());
+        void clearCache(category).then(() => refreshStatus());
       }),
     );
   }

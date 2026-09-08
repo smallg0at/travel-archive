@@ -4,7 +4,7 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**32 open, 16 done.** The list grows because each session surfaces defects that
+**31 open, 18 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -29,16 +29,119 @@ working practice this list was built with.
 ## Open issues
 
 
-- [ ] [User] Settings pane have performance issue, takes half a second to load and will reload every single time user hit one of the sync buttons.
-- [x] **Map styling gone.** Fixed 2026-09-07. Same cause as the Settings
-      regression: a CSS edit that replaced the slice between two text markers
-      took the `.trip-map` block with it. Recovered from `c65bc5b` and
-      verified in the browser — 380px canvas, sea fill, 23 city circles,
-      expand button. A selector diff against the pre-rewrite stylesheet found
-      nothing else missing.
-      **Never edit CSS by slicing between markers.** Twice now it has silently
-      deleted unrelated blocks.
-- [ ] There is no method to update the pic list in app.
+- [x] **Settings is slow and rebuilds on every button press.** Fixed 2026-09-08.
+      Two separate causes, both measured before anything was changed:
+
+      | | before | after |
+      |---|---|---|
+      | `GET /archive/status` | 668-1,835ms | **19-30ms** |
+      | opening Settings (blocking, from the app origin) | ~1.0-1.8s, one sample 10.4s | **30-104ms** |
+      | `GET /sync/status` (checked) | 687-1,365ms | unchanged, now off the critical path |
+
+      `archive/status` was calling `loadIndex(token)`, which **downloads the
+      whole 2.5MB `index.json` from OneDrive** to report five counts. The
+      identical bytes were already on disk — `/archive/index` had been moved to
+      the local mirror in the previous session and this endpoint was simply left
+      behind. Reading locally parses in 8-11ms.
+
+      The eTag comparison is genuinely a Graph round trip and cannot be made
+      fast, so it was taken off the open path instead: `GET /sync/status?cached=1`
+      replays the last computed state from `sync.json` (new `lastState` field)
+      and marks it `stale`, the page paints that, and the checked answer replaces
+      it in place when it lands. The label says "Checking OneDrive…" meanwhile
+      rather than presenting an unverified state as current.
+
+      The re-render was separate: every button called `showSettings()`, which
+      tore down `#content` and repaid both round trips. Sections now register an
+      updater and the page mutates in place.
+
+      Two things measuring caught that guessing would not have:
+      **the 4,727 `stat` calls were not the bottleneck** — 231-296ms serially and
+      memoised anyway (parallelised to 43-53ms regardless, since it grows with
+      the library); and `clearCache` never invalidated that 30s memo, so the
+      storage figures would have redrawn stale — the same trap as the "0 files
+      evicted" reading when 1,082 had gone. Now invalidated explicitly on both
+      clear and evict.
+
+      Verified in the browser by the owner after a signed-in pass. The numbers
+      above are from the server and from `fetch` on the app's own origin, which
+      also confirms CORS still passes.
+- [x] **No way to re-index the library from the app.** Fixed 2026-09-08.
+      `scan` was CLI-only: all its logic sat in a private `runMain()` reading
+      `process.argv` and writing to the console, unlike `analyze` and
+      `organize`, which were already split so the CLI and the job server run
+      the same code. Extracted to `pipeline/src/jobs/scan.ts` (`runScan`), with
+      `pipeline/src/scan.ts` reduced to the CLI front end; `POST /jobs/scan`
+      runs it as a normal cancellable job.
+
+      It lives in **Settings, not Generate** — it is maintenance, costs nothing
+      and is the thing you run routinely, where Generate is for the passes that
+      spend money. Three modes:
+
+      | mode | range |
+      |---|---|
+      | Since the last scan | from the month of `lastScanAt`, open upper bound |
+      | The whole library | unbounded |
+      | A month range | what you pick |
+
+      The mode is resolved **on the server** (`resolveRange`), so what
+      "incremental" means lives next to the deletion rule it interacts with
+      rather than in the page. Incremental starts at the month of the last scan
+      rather than the one after it, because that month was still being added to
+      when it ran. Never scanned degrades to a full run. `lastScanAt` is
+      recorded only when a run actually completes — moving the baseline past a
+      cancelled run's unlisted months would strand them forever.
+
+      Verified: mode resolution against a throwaway `ARCHIVE_HOME` (all four
+      cases); the route started, reported phases and cancelled cleanly with the
+      archive's mtimes unchanged; the CLI still range-filters identically; and
+      the range pickers toggle in both directions in the browser.
+
+      One measurement lesson repeated: the first probe reported the
+      never-scanned case wrongly, because `syncStore` memoises `sync.json` in a
+      module-level `cached` and the cache-busting import only reloaded
+      `scan.js`, not its static import. One process per case gave the right
+      answer. **A number your own probe produced still needs its own check.**
+- [x] **Closing Settings during a scan lost the progress.** Reported and fixed
+      2026-09-08, caught by the owner running a whole-library scan. Reopening
+      Settings showed an idle Scan button with the job still running
+      underneath, and no way to see how far along it was.
+
+      Cause: Settings is rebuilt on every open, so the `watchJob` subscription
+      died with the old DOM. The Generate panel does not have this bug because
+      it is deliberately constructed **once** and moved into the page — the
+      note in `tripMode.ts` says exactly that, and the new Settings sections
+      did not inherit it.
+
+      Fixed by asking `/health` for the running job on open and reattaching to
+      it (`followRunningJob`), rather than remembering an id locally — so it
+      also picks up a job started from the CLI, from another tab, or before a
+      page reload. Subscriptions are now tracked and dropped in
+      `releaseSettings`, which they were not before: every visit leaked one.
+
+      The Sync section had the identical defect and got the identical fix.
+
+      Verified against the live scan: progress on first open (81 of 123),
+      gone to Generate, back to Settings still ticking (74 → 76 of 123), with
+      the button correctly disabled throughout.
+
+- [ ] **A month emptied on OneDrive leaves a ghost month.** Deleting the *last*
+      photo of a month folder (or the folder itself) leaves its records and its
+      sidebar entry in place forever, with a photo count for photos that no
+      longer exist.
+
+      The deletion sweep in `jobs/scan.ts` only visits months present in
+      `scannedByShard`, and that map is built from photos actually *found* — so
+      a month with zero photos is never loaded, never swept and never
+      rewritten. `index.months` is then rebuilt from a `summaries` map seeded
+      with the existing `index.months`, so the stale entry survives the
+      `photoCount > 0` filter.
+
+      Deleting *some* photos from a month is handled correctly; this is only
+      the emptied-month case. **Read from the code, not reproduced** —
+      confirming it means deleting real photos from OneDrive. Judged unlikely
+      enough to defer. The fix, when wanted: on an unbounded run, sweep every
+      month in the index rather than only the touched ones.
 - [ ] [App]Still asks for making an .env with no change in text. This should go into settings eventually
 - [x] **Fast scrolling floods the thumbnail server.** Fixed 2026-09-07 by
       warming the cache ahead of the browser (`POST /thumb/warm`, called when a

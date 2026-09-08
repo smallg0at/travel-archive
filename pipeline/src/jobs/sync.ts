@@ -47,6 +47,57 @@ async function metadataBytes(): Promise<number> {
 }
 
 /**
+ * Everything a status answer holds that does not require asking OneDrive.
+ *
+ * Split out so the cached and the checked answer are the same shape built by
+ * the same code — the cached one is a real status with `state` replayed from
+ * disk, not a reduced object the UI has to special-case.
+ */
+async function localStatus(): Promise<{ status: SyncStatus; local: ArchiveIndexFile | null }> {
+  const state = await readSync();
+  const local = await readLocalIndex();
+  return {
+    local,
+    status: {
+      state: "offline",
+      stale: true,
+      lastScanAt: state.lastScanAt,
+      checkedAt: state.checkedAt,
+      syncedAt: state.syncedAt,
+      localGeneratedAt: local?.generatedAt ?? null,
+      remoteLastModified: null,
+      pins: state.pins,
+      storage: {
+        metadataBytes: await metadataBytes(),
+        thumbnails: await cacheStats(["medium", "large"]),
+        originals: await cacheStats(["full"]),
+      },
+    },
+  };
+}
+
+/**
+ * The last answer `checkSync` computed, with no Graph call at all.
+ *
+ * Opening Settings used to block on the eTag comparison below — measured at
+ * 687-1,365ms, and seen as high as 10s on a slow link — before it could paint
+ * anything. Nothing on the page needs that to render: the state was already
+ * known, and `checkedAt` says how old it is. The page paints this and then
+ * replaces it with the checked answer when it arrives.
+ *
+ * `state` is whatever was last *measured* rather than re-derived from `dirty`,
+ * because "behind" and "conflict" are not knowable without the remote eTag and
+ * guessing "in-sync" here would assert something no one checked.
+ */
+export async function cachedSync(): Promise<SyncStatus> {
+  const { status, local } = await localStatus();
+  const state = await readSync();
+  if (!(await getCachedAccessToken())) return status;
+  status.state = state.lastState ?? (local === null ? "never-synced" : "in-sync");
+  return status;
+}
+
+/**
  * Compares the replica against OneDrive without downloading it.
  *
  * The whole design rests on this being cheap: the same question asked by
@@ -55,21 +106,9 @@ async function metadataBytes(): Promise<number> {
  */
 export async function checkSync(): Promise<SyncStatus> {
   const state = await readSync();
-  const local = await readLocalIndex();
 
-  const status: SyncStatus = {
-    state: "offline",
-    checkedAt: state.checkedAt,
-    syncedAt: state.syncedAt,
-    localGeneratedAt: local?.generatedAt ?? null,
-    remoteLastModified: null,
-    pins: state.pins,
-    storage: {
-      metadataBytes: await metadataBytes(),
-      thumbnails: await cacheStats(["medium", "large"]),
-      originals: await cacheStats(["full"]),
-    },
-  };
+  const { status, local } = await localStatus();
+  status.stale = false;
 
   const token = await getCachedAccessToken();
   if (!token) return status;
@@ -79,6 +118,7 @@ export async function checkSync(): Promise<SyncStatus> {
     // Signed in but the file is not there: a fresh archive, or the wrong
     // metadata folder. Either way there is nothing to be behind.
     status.state = local ? "ahead" : "never-synced";
+    await writeSync({ lastState: status.state });
     return status;
   }
 
@@ -106,6 +146,9 @@ export async function checkSync(): Promise<SyncStatus> {
   else if (state.dirty) status.state = "ahead";
   else status.state = "in-sync";
 
+  // Recorded so the next page open can paint this answer without paying for the
+  // round trip that produced it.
+  await writeSync({ lastState: status.state });
   return status;
 }
 

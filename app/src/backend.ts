@@ -59,10 +59,16 @@ export function localThumbUrl(itemId: string, size: "medium" | "large" | "full")
   return `${BACKEND}/thumb/${size}/${encodeURIComponent(itemId)}`;
 }
 
-/** How the local replica stands against OneDrive, plus pins and disk use. */
-export async function syncStatus(): Promise<SyncStatus | null> {
+/**
+ * How the local replica stands against OneDrive, plus pins and disk use.
+ *
+ * `cached` skips the eTag comparison — a Graph round trip measured at
+ * 687-1,365ms — and replays the last computed answer instead, marked `stale`.
+ * Settings opens on that and then calls again without it.
+ */
+export async function syncStatus(opts: { cached?: boolean } = {}): Promise<SyncStatus | null> {
   try {
-    const res = await fetch(`${BACKEND}/sync/status`);
+    const res = await fetch(`${BACKEND}/sync/status${opts.cached ? "?cached=1" : ""}`);
     return res.ok ? ((await res.json()) as SyncStatus) : null;
   } catch {
     return null;
@@ -148,6 +154,19 @@ export async function archiveStatus(): Promise<ArchiveStatus | null> {
 /** What an analyze run would cost. Spends nothing — shown before the user commits. */
 export function planAnalyze(body: { from?: string; to?: string; limit?: number }): Promise<AnalyzePlan> {
   return post<AnalyzePlan>("/jobs/analyze/plan", body);
+}
+
+/**
+ * Indexing. Free — Graph listing calls only, no downloads and no model calls —
+ * which is why it has no plan/estimate step of its own.
+ *
+ * `mode` decides the range and the server resolves it; `from`/`to` (months,
+ * `yyyy-mm`) are read only when the mode is "range".
+ */
+export type ScanMode = "full" | "range" | "incremental";
+
+export function startScan(body: { mode: ScanMode; from?: string; to?: string }): Promise<JobRecord> {
+  return post<JobRecord>("/jobs/scan", body);
 }
 
 export function startAnalyze(body: { from?: string; to?: string; limit?: number }): Promise<JobRecord> {
