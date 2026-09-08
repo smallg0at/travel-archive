@@ -58,10 +58,20 @@ const ALLOWED_ORIGINS = new Set([
 type Handler = (req: IncomingMessage, res: ServerResponse, params: string[]) => Promise<void> | void;
 
 function cors(req: IncomingMessage, res: ServerResponse): void {
+  // **Always `Vary: Origin`, even with no Origin on the request.**
+  //
+  // Thumbnails are served `immutable, max-age=31536000`. Without this header a
+  // response fetched *without* CORS is cached with no record that CORS mattered,
+  // and the browser then satisfies a later CORS request from that same entry —
+  // which has no `Access-Control-Allow-Origin`, so the check fails and the image
+  // dies instantly. That presented as "some images load and some do not",
+  // splitting on whichever URLs happened to be fetched no-CORS first, and it
+  // survives clearing the *server's* cache because the poisoned copy is in the
+  // browser's.
+  res.setHeader("Vary", "Origin");
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");

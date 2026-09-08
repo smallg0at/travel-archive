@@ -77,6 +77,15 @@ app there instead and sign-in breaks in a way that looks like an MSAL problem.
 health check means: no Generate page, no pins, thumbnails via Graph + IndexedDB.
 Every feature needs that path to degrade rather than error.
 
+**`Vary: Origin` must be sent whether or not the request had an Origin.**
+Thumbnails are cached `immutable` for a year. Send it only when an `Origin` is
+present and a no-CORS fetch caches a copy with no record that CORS mattered —
+the browser then hands that copy to a later CORS request, which fails because it
+carries no `Access-Control-Allow-Origin`. It presents as "some images load and
+some do not", it fails in ~4ms so it does not look like a network problem, and
+it survives clearing the server's cache because the bad copy is in the browser's.
+A fix here needs a browser cache clear *afterwards* to take effect.
+
 **Images must be CORS-clean or the PDF export dies.** The export draws every
 card image onto a canvas and calls `toDataURL`; a cross-origin image loaded
 without `crossOrigin` taints it and that throws. Thumbnails come from the local

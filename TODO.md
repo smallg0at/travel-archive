@@ -76,6 +76,25 @@ working practice this list was built with.
       images loading normally. Two earlier entries in this list are the same
       mistake in different clothes.
 
+      **A third cause, found only because the owner kept pushing.** After the
+      CORS opt-in, some images loaded and some did not, and clearing the
+      *server's* cache made no difference — because the broken copies were in
+      the *browser's*. `cors()` set `Vary: Origin` only when the request carried
+      an `Origin`. A thumbnail fetched without CORS was therefore cached
+      `immutable, max-age=31536000` with no record that CORS mattered, and the
+      browser then satisfied a later CORS request from that same entry, which
+      has no `Access-Control-Allow-Origin`. The check failed in ~4ms — far too
+      fast to look like a network problem, which is what made it read as random.
+
+      Fixed by always sending `Vary: Origin`. Proven: before, `no-CORS <img>`
+      then `CORS <img>` on one URL failed; after, the same sequence loads and
+      the canvas is clean. Cache-busted URLs always worked, which is what
+      isolated it to caching rather than to the server.
+
+      Note for anyone hitting this again: the fix cannot heal entries already
+      cached, so one cache clear is needed *after* the server change — clearing
+      before it just re-poisons on the next load.
+
       Still worth confirming by eye: that an actual exported PDF paginates
       correctly and excludes the roll. The stylesheet is restored and verified
       present, but no PDF has been produced since.
