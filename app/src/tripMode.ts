@@ -6,6 +6,7 @@ import {
   checkHealth,
   forgetJob,
   getJob,
+  archiveStatus,
   planAnalyze,
   planOrganize,
   rememberJob,
@@ -145,22 +146,18 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
           names them, and picks what to show. One text-only model call per day — no images, so it is cheap.
           <strong>Run this after Analyze and before Trip.</strong>
         </p>
-        <label class="job-field">
-          <span>Limit to a date (optional)</span>
-          <input type="text" name="only" placeholder="Leave empty — all days" />
-        </label>
-        <p class="job-note job-hint">
-          Empty means every day is <em>considered</em>, not rewritten: only days whose photos changed cost
-          anything, and days with nothing analyzed are skipped. Narrow it with <code>2026-08</code> for a
-          month or <code>2026-08-30</code> for one day.
-        </p>
-        <label class="job-check">
-          <input type="checkbox" name="force" />
-          <span>Rewrite days that have not changed</span>
-        </label>
+        <div class="job-row job-scope">
+          <label class="job-field">
+            <span>Months</span>
+            <select name="scope" class="job-select"><option value="">Everything</option></select>
+          </label>
+          <label class="job-check">
+            <input type="checkbox" name="force" />
+            <span>Include days that have not changed</span>
+          </label>
+        </div>
         <div class="job-buttons">
-          <button type="button" class="job-preview">Preview</button>
-          <button type="submit">Write day summaries</button>
+          <button type="button" class="job-preview">Find days to summarise</button>
         </div>
         <div class="job-plan" hidden></div>
       </form>
@@ -175,7 +172,9 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   `);
 
   for (const form of panel.querySelectorAll<HTMLFormElement>(".job-form")) {
-    const row = form.querySelector(".job-row");
+    // Day summaries picks a month from a list, not a date range, so it has no
+    // date row to fill — and its scope row is not one.
+    const row = form.querySelector(".job-row:not(.job-scope)");
     if (!row) continue;
     row.appendChild(field("From", `<input type="date" name="from" required />`));
     row.appendChild(field("To", `<input type="date" name="to" required />`));
@@ -240,63 +239,104 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   });
 
   const organizeForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="organize"]')!;
+  const planBox = organizeForm.querySelector<HTMLDivElement>(".job-plan")!;
+  const scope = organizeForm.querySelector<HTMLSelectElement>('select[name="scope"]')!;
+
+  // The month list comes from the archive rather than being typed. The old
+  // field was free text where "2026-09" and "2026-09-01" meant different things
+  // and only the prose below it said so.
+  void archiveStatus().then((archive) => {
+    for (const m of [...(archive?.months ?? [])].reverse()) {
+      // Not el(): an <option> parsed inside a <div> is dropped on the floor.
+      const option = document.createElement("option");
+      option.value = m.month;
+      option.textContent = `${m.month} · ${m.photoCount.toLocaleString()} photos`;
+      scope.appendChild(option);
+    }
+  });
 
   /**
-   * What the run would do, before it does any of it.
+   * Finds the days a run would touch and offers them for selection.
    *
-   * Added because "0 day(s) summarized" was the only feedback and it means
-   * three different things — nothing changed, nothing in scope, or nothing in
-   * range has been analyzed. On this archive the third is overwhelmingly the
-   * common one, and it was indistinguishable from a broken button.
+   * The preview *is* the input. Naming particular days used to mean typing one
+   * date, running, and repeating — nine times, for nine days — with no way to
+   * tell a day that was skipped from one that did not exist. Here every
+   * candidate is listed with how many analyzed photos it has, ticked by
+   * default, and the run takes exactly what is ticked.
    */
-  const planBox = organizeForm.querySelector<HTMLDivElement>(".job-plan")!;
+  const runSelected = (dates: string[]) => {
+    void start(() => startOrganize({ days: dates, force: true }));
+  };
+
   organizeForm.querySelector<HTMLButtonElement>(".job-preview")!.addEventListener("click", async () => {
-    const data = new FormData(organizeForm);
-    const only = String(data.get("only") ?? "").trim();
+    const force = organizeForm.querySelector<HTMLInputElement>('input[name="force"]')!.checked;
     planBox.hidden = false;
     planBox.textContent = "Checking…";
     try {
-      const plan = await planOrganize({ ...(only ? { only } : {}), force: data.get("force") === "on" });
+      const plan = await planOrganize({ ...(scope.value ? { only: scope.value } : {}), force });
       planBox.replaceChildren();
 
       const lead = el<HTMLParagraphElement>(`<p class="job-plan-lead"></p>`);
       lead.textContent =
         plan.rewrite === 0
-          ? "Nothing would be rewritten."
-          : `${plan.rewrite} day${plan.rewrite === 1 ? "" : "s"} would be rewritten — that is what this run would cost.`;
+          ? "No days need summarising here."
+          : `${plan.rewrite} day${plan.rewrite === 1 ? "" : "s"} can be summarised.`;
       planBox.appendChild(lead);
 
-      // Every day is accounted for, and each reason named. A day that is
-      // skipped because none of its photos have been analyzed is the case
-      // worth spelling out: Analyze has to run first, and nothing said so.
-      const reasons: [number, string][] = [
+      // Every day accounted for, each reason named. "No analyzed photos" is the
+      // one worth spelling out: Analyze has to run first, and nothing said so.
+      for (const [n, label] of [
         [plan.reuse, "already up to date, or outside this scope"],
-        [plan.skippedNoAnalyzed, "skipped — no analyzed photos yet, so run Analyze on them first"],
+        [plan.skippedNoAnalyzed, "have no analyzed photos yet — run Analyze on them first"],
         [plan.skippedOutOfScope, "outside this scope"],
-        [plan.skippedUndated, "skipped — no usable date"],
-      ];
-      for (const [n, label] of reasons) {
+        [plan.skippedUndated, "have no usable date"],
+      ] as [number, string][]) {
         if (n === 0) continue;
         const row = el<HTMLParagraphElement>(`<p class="job-plan-row"></p>`);
         row.textContent = `${n.toLocaleString()} ${label}`;
         planBox.appendChild(row);
       }
 
-      if (plan.days.length > 0) {
-        const list = el<HTMLParagraphElement>(`<p class="job-plan-days"></p>`);
-        list.textContent =
-          plan.days.map((d) => `${d.date} (${d.analyzed})`).join(", ") + (plan.truncated ? ", and more" : "");
-        planBox.appendChild(list);
+      if (plan.rewrite === 0) return;
+
+      const list = el<HTMLDivElement>(`<div class="job-plan-days"></div>`);
+      for (const day of plan.days) {
+        const row = el<HTMLLabelElement>(`<label class="job-day"><input type="checkbox" checked><span></span></label>`);
+        row.querySelector("input")!.value = day.date;
+        row.querySelector("span")!.textContent = `${day.date} · ${day.analyzed} photo${day.analyzed === 1 ? "" : "s"}`;
+        list.appendChild(row);
       }
+      planBox.appendChild(list);
+
+      if (plan.truncated) {
+        const more = el<HTMLParagraphElement>(`<p class="job-plan-row"></p>`);
+        more.textContent = "Only the first 300 are listed — narrow it by month to see the rest.";
+        planBox.appendChild(more);
+      }
+
+      const ticked = () => [...list.querySelectorAll<HTMLInputElement>("input:checked")].map((i) => i.value);
+      const actions = el<HTMLDivElement>(`<div class="job-buttons"></div>`);
+      const none = el<HTMLButtonElement>(`<button type="button">Select none</button>`);
+      const go = el<HTMLButtonElement>(`<button type="button" class="job-go"></button>`);
+      const label = () => {
+        const n = ticked().length;
+        go.textContent = n === 0 ? "Nothing selected" : `Summarise ${n} day${n === 1 ? "" : "s"}`;
+        go.disabled = n === 0;
+      };
+      none.addEventListener("click", () => {
+        const on = ticked().length > 0;
+        list.querySelectorAll<HTMLInputElement>("input").forEach((i) => (i.checked = !on));
+        none.textContent = on ? "Select all" : "Select none";
+        label();
+      });
+      list.addEventListener("change", label);
+      go.addEventListener("click", () => runSelected(ticked()));
+      actions.append(none, go);
+      planBox.appendChild(actions);
+      label();
     } catch (err) {
       planBox.textContent = `Could not check: ${(err as Error).message}`;
     }
-  });
-  organizeForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(organizeForm);
-    const only = String(data.get("only") ?? "").trim();
-    void start(() => startOrganize({ ...(only ? { only } : {}), force: data.get("force") === "on" }));
   });
 
   return panel;

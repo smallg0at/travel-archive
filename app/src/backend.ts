@@ -234,7 +234,7 @@ export function planOrganize(body: { only?: string; force?: boolean } = {}): Pro
   return post<OrganizePlan>("/jobs/organize/plan", body);
 }
 
-export function startOrganize(body: { only?: string; force?: boolean }): Promise<JobRecord> {
+export function startOrganize(body: { only?: string; force?: boolean; days?: string[] }): Promise<JobRecord> {
   return post<JobRecord>("/jobs/organize", body);
 }
 

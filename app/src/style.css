@@ -1346,18 +1346,48 @@ body.resizing { cursor: col-resize; user-select: none; }
   line-height: 1.6;
   color: var(--text-secondary);
 }
+.job-scope {
+  align-items: flex-end;
+}
+.job-select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 6px;
+}
+
+/* The candidate days, ticked by default. A column that wraps rather than a
+   long single list: 300 dates in one column is a scroll, in three it is a
+   glance. */
+.job-plan-days {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 2px 12px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.job-day {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 0;
+  cursor: pointer;
+  color: var(--text);
+}
+.job-go:disabled { opacity: 0.55; cursor: default; }
+
 .job-plan-lead {
   margin: 0 0 4px;
   color: var(--text);
   font-weight: 600;
 }
 .job-plan-row { margin: 0; }
-.job-plan-days {
-  margin: 6px 0 0;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
-  word-break: break-word;
-}
 
 /* The pin control, moved out of the sidebar row into the page heading.
 

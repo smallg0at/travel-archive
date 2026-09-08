@@ -184,7 +184,7 @@ function decideDay(args: {
   opts: OrganizeOptions;
 }): DayOutcome {
   const { date, prior, analyzedCount, place, summarizedIds, opts } = args;
-  const inScope = !opts.only || date.startsWith(opts.only);
+  const inScope = opts.days?.length ? opts.days.includes(date) : !opts.only || date.startsWith(opts.only);
   // Place is an input to the summary, not just a label, so a day whose place
   // changed is as stale as one whose photos changed — geocoding lands after
   // captioning, and the dominant-place fix above moved several days.
@@ -206,6 +206,14 @@ export interface OrganizeOptions {
   /** Restrict to one date (`2026-09-01`) or month (`2026-09`); null does the lot. */
   only: string | null;
   /**
+   * An explicit set of dates to run, which wins over `only` when present.
+   *
+   * `only` is a single prefix, so naming nine particular days meant nine runs.
+   * The app now previews the candidates and sends back the ones you ticked;
+   * the CLI keeps `--only` because a prefix is the natural thing to type.
+   */
+  days?: string[] | null;
+  /**
    * Resummarize even when nothing about the day's photos changed.
    *
    * The staleness check compares inputs it can see — the photo set, the place,
@@ -226,7 +234,7 @@ export interface OrganizeResult {
 }
 
 /** Days listed by name in a plan before it just says "and N more". */
-const PLAN_DAY_CAP = 60;
+const PLAN_DAY_CAP = 300;
 
 /**
  * What `runOrganize` would do, for the same options, spending nothing.

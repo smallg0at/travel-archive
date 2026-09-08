@@ -622,8 +622,12 @@ const routes: [RegExp, string, Handler][] = [
     /^\/jobs\/organize\/plan$/,
     "POST",
     async (req, res) => {
-      const body = await readJsonBody<{ only?: string; force?: boolean }>(req);
-      json(res, 200, await planOrganize({ only: body.only ?? null, force: body.force === true }));
+      const body = await readJsonBody<{ only?: string; force?: boolean; days?: string[] }>(req);
+      json(
+        res,
+        200,
+        await planOrganize({ only: body.only ?? null, force: body.force === true, days: body.days ?? null }),
+      );
     },
   ],
   [
@@ -631,8 +635,8 @@ const routes: [RegExp, string, Handler][] = [
     "POST",
     async (req, res) => {
       if (refuseIfBusy(res)) return;
-      const body = await readJsonBody<{ only?: string; force?: boolean }>(req);
-      const opts = { only: body.only ?? null, force: body.force === true };
+      const body = await readJsonBody<{ only?: string; force?: boolean; days?: string[] }>(req);
+      const opts = { only: body.only ?? null, force: body.force === true, days: body.days ?? null };
       json(
         res,
         202,
