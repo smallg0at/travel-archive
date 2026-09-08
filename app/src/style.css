@@ -1328,6 +1328,37 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .page-export:hover { border-color: var(--accent); color: var(--text); }
 
+/* The organize preview. Defaults to display:none and is re-enabled with
+   :not([hidden]) rather than carrying an unconditional display, which would
+   beat the UA's own [hidden] rule — the trap that has caught .lightbox,
+   .signin-banner and .job-form here already. */
+.job-plan {
+  display: none;
+}
+.job-plan:not([hidden]) {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.job-plan-lead {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-weight: 600;
+}
+.job-plan-row { margin: 0; }
+.job-plan-days {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  word-break: break-word;
+}
+
 /* The pin control, moved out of the sidebar row into the page heading.
 
    The empty slot is placed synchronously and carries the auto margin, so the

@@ -428,6 +428,27 @@ export interface ConfigStatus {
   shadowed: string[];
 }
 
+/**
+ * What an `organize` run would do, without doing any of it.
+ *
+ * Exists because "0 day(s) summarized" is the same message whether nothing
+ * changed, nothing was in scope, or nothing in range has been analyzed yet —
+ * and on an archive where 4,386 of 31,374 photos have captions, the last is by
+ * far the most common and the least guessable.
+ */
+export interface OrganizePlan {
+  /** Days that would be summarized, i.e. what this run would cost. */
+  rewrite: number;
+  /** Days kept as they are — unchanged, or outside the scope. */
+  reuse: number;
+  skippedNoAnalyzed: number;
+  skippedOutOfScope: number;
+  skippedUndated: number;
+  /** The dates that would be rewritten. Capped; `truncated` says if there are more. */
+  days: { date: string; analyzed: number }[];
+  truncated: boolean;
+}
+
 /** How the local replica stands against OneDrive. */
 export type SyncState =
   | "in-sync"

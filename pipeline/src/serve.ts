@@ -19,7 +19,7 @@ import { loadIndex } from "./archiveStore.js";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
-import { runOrganize } from "./jobs/organize.js";
+import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { runTrip } from "./jobs/trip.js";
 import * as jobs from "./server/jobs.js";
 
@@ -613,6 +613,19 @@ const routes: [RegExp, string, Handler][] = [
       json(res, 202, jobs.start({ kind: "analyze", run: (onProgress, signal) => runAnalyze(opts, onProgress, signal) }));
     },
   ],
+  /**
+   * What an organize run would do, spending nothing. Same shape as the analyze
+   * plan, and for the same reason: this is the step that costs money, so it
+   * should be possible to look before paying.
+   */
+  [
+    /^\/jobs\/organize\/plan$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ only?: string; force?: boolean }>(req);
+      json(res, 200, await planOrganize({ only: body.only ?? null, force: body.force === true }));
+    },
+  ],
   [
     /^\/jobs\/organize$/,
     "POST",
@@ -722,7 +735,8 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`  POST /jobs/scan           {mode,from,to}    free, Graph listing only`);
   console.log(`  POST /jobs/analyze/plan   {from,to,limit}   what it would cost, spends nothing`);
   console.log(`  POST /jobs/analyze        {from,to,limit}`);
-  console.log(`  POST /jobs/organize       {only}`);
+  console.log(`  POST /jobs/organize/plan  {only,force}      what it would rewrite, spends nothing`);
+  console.log(`  POST /jobs/organize       {only,force}`);
   console.log(`  POST /jobs/trip           {startDate,endDate,name?,notes?,documents?}`);
   console.log(`  GET  /jobs/:id/events     SSE progress`);
   console.log(`  POST /jobs/:id/cancel`);

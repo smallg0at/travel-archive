@@ -4,7 +4,7 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**30 open, 23 done.** The list grows because each session surfaces defects that
+**30 open, 24 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -33,6 +33,35 @@ working practice this list was built with.
       confirming it means deleting real photos from OneDrive. Judged unlikely
       enough to defer. The fix, when wanted: on an unbounded run, sweep every
       month in the index rather than only the touched ones.
+- [x] **Day summaries had no way to see what a run would do.** Fixed
+      2026-09-08, after running nine forced organize commands by hand and
+      being unable to tell why six of them did nothing.
+
+      `POST /jobs/organize/plan` answers the same question `runOrganize` asks,
+      without spending anything, and Generate gained a **Preview** button beside
+      "Write day summaries" — the counterpart to Analyze's estimate.
+
+      The decision itself was factored into one `decideDay`, called by both the
+      plan and the run, so a preview cannot drift from what the run will do.
+
+      What it fixes, in the words of the cases that caused it:
+
+      | scope | preview says |
+      |---|---|
+      | `2022-06-09` forced, which silently did nothing | `1 skipped — no analyzed photos yet, so run Analyze on them first` |
+      | `2026-09-07` forced | `1 day would be rewritten` · `2026-09-07 (169)` |
+      | `2026-09` forced | `5 days would be rewritten` with each date and count |
+      | whole archive, unforced | `30 already up to date` · `1,983 skipped — no analyzed photos` |
+
+      That last line is the shape of the archive: 2,013 days, ~30 with any
+      analyzed photos. **"0 day(s) summarized" was the same message for
+      "nothing changed", "nothing in scope" and "nothing here is analyzed"** —
+      and the third is overwhelmingly the common one here, which is what made a
+      working button look broken.
+
+      Still not addressed, and the reason nine runs were needed: `--only` takes
+      a single date or month, so there is no way to name several days at once.
+
 - [x] **Whole-archive reads went to OneDrive with the mirror sitting on disk.**
       Fixed 2026-09-08, spotted by the owner watching `organize` sit on
       "Loading 123 month shard(s)…" after limiting the run to `2026-09`.

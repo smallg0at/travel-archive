@@ -7,6 +7,7 @@ import {
   forgetJob,
   getJob,
   planAnalyze,
+  planOrganize,
   rememberJob,
   rememberedJob,
   startAnalyze,
@@ -157,7 +158,11 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
           <input type="checkbox" name="force" />
           <span>Rewrite days that have not changed</span>
         </label>
-        <button type="submit">Write day summaries</button>
+        <div class="job-buttons">
+          <button type="button" class="job-preview">Preview</button>
+          <button type="submit">Write day summaries</button>
+        </div>
+        <div class="job-plan" hidden></div>
       </form>
 
       <div class="job-progress" hidden>
@@ -235,6 +240,58 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   });
 
   const organizeForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="organize"]')!;
+
+  /**
+   * What the run would do, before it does any of it.
+   *
+   * Added because "0 day(s) summarized" was the only feedback and it means
+   * three different things — nothing changed, nothing in scope, or nothing in
+   * range has been analyzed. On this archive the third is overwhelmingly the
+   * common one, and it was indistinguishable from a broken button.
+   */
+  const planBox = organizeForm.querySelector<HTMLDivElement>(".job-plan")!;
+  organizeForm.querySelector<HTMLButtonElement>(".job-preview")!.addEventListener("click", async () => {
+    const data = new FormData(organizeForm);
+    const only = String(data.get("only") ?? "").trim();
+    planBox.hidden = false;
+    planBox.textContent = "Checking…";
+    try {
+      const plan = await planOrganize({ ...(only ? { only } : {}), force: data.get("force") === "on" });
+      planBox.replaceChildren();
+
+      const lead = el<HTMLParagraphElement>(`<p class="job-plan-lead"></p>`);
+      lead.textContent =
+        plan.rewrite === 0
+          ? "Nothing would be rewritten."
+          : `${plan.rewrite} day${plan.rewrite === 1 ? "" : "s"} would be rewritten — that is what this run would cost.`;
+      planBox.appendChild(lead);
+
+      // Every day is accounted for, and each reason named. A day that is
+      // skipped because none of its photos have been analyzed is the case
+      // worth spelling out: Analyze has to run first, and nothing said so.
+      const reasons: [number, string][] = [
+        [plan.reuse, "already up to date, or outside this scope"],
+        [plan.skippedNoAnalyzed, "skipped — no analyzed photos yet, so run Analyze on them first"],
+        [plan.skippedOutOfScope, "outside this scope"],
+        [plan.skippedUndated, "skipped — no usable date"],
+      ];
+      for (const [n, label] of reasons) {
+        if (n === 0) continue;
+        const row = el<HTMLParagraphElement>(`<p class="job-plan-row"></p>`);
+        row.textContent = `${n.toLocaleString()} ${label}`;
+        planBox.appendChild(row);
+      }
+
+      if (plan.days.length > 0) {
+        const list = el<HTMLParagraphElement>(`<p class="job-plan-days"></p>`);
+        list.textContent =
+          plan.days.map((d) => `${d.date} (${d.analyzed})`).join(", ") + (plan.truncated ? ", and more" : "");
+        planBox.appendChild(list);
+      }
+    } catch (err) {
+      planBox.textContent = `Could not check: ${(err as Error).message}`;
+    }
+  });
   organizeForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(organizeForm);

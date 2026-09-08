@@ -1,4 +1,12 @@
-import type { AnalyzePlan, ArchiveStatus, ConfigStatus, JobRecord, Pin, SyncStatus } from "@travel-archive/shared";
+import type {
+  AnalyzePlan,
+  ArchiveStatus,
+  ConfigStatus,
+  JobRecord,
+  OrganizePlan,
+  Pin,
+  SyncStatus,
+} from "@travel-archive/shared";
 
 /**
  * Client for `pipeline serve` — the local job server that runs analysis,
@@ -213,6 +221,17 @@ export function startScan(body: { mode: ScanMode; from?: string; to?: string }):
 
 export function startAnalyze(body: { from?: string; to?: string; limit?: number }): Promise<JobRecord> {
   return post<JobRecord>("/jobs/analyze", body);
+}
+
+/**
+ * What an organize run would rewrite, spending nothing.
+ *
+ * The counterpart to `planAnalyze`. Day summaries cost money per rewritten day,
+ * and "0 day(s) summarized" cannot distinguish "nothing changed" from "nothing
+ * here is analyzed yet" — this can.
+ */
+export function planOrganize(body: { only?: string; force?: boolean } = {}): Promise<OrganizePlan> {
+  return post<OrganizePlan>("/jobs/organize/plan", body);
 }
 
 export function startOrganize(body: { only?: string; force?: boolean }): Promise<JobRecord> {

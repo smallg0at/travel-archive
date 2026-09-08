@@ -1,8 +1,8 @@
-import type { DayRecord, DaySegment, PhotoRecord } from "@travel-archive/shared";
+import type { DayRecord, DaySegment, OrganizePlan, PhotoRecord } from "@travel-archive/shared";
 import { CARD_BUDGET } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { getProvider } from "../providers/index.js";
-import { loadAllShards, loadIndex, saveIndex } from "../archiveStore.js";
+import { loadAllShards, loadIndex, loadIndexForReading, saveIndex } from "../archiveStore.js";
 import { dayKey, sameIds } from "../util.js";
 import { loadTripDefinitions } from "../tripDefs.js";
 import { bucketDays } from "./sections.js";
@@ -156,6 +156,52 @@ function segmentsAreCurrent(segments: DaySegment[] | undefined): boolean {
   return segments.every((seg) => seg.highlights.every((h) => h.size !== undefined && "documentTranslation" in h));
 }
 
+/**
+ * What a run would do with one day, and why.
+ *
+ * Factored out so the preview and the run cannot drift: both call this, so a
+ * preview that says "3 days would be rewritten" is answering with the same rule
+ * the run will apply. Reporting the *reason* is the point — "0 day(s)
+ * summarized" is indistinguishable between "nothing changed", "not in scope"
+ * and "nothing here has been analyzed", and the third is the common one on this
+ * archive, where 4,386 of 31,374 photos have captions.
+ */
+export type DayOutcome = "rewrite" | "reuse" | "skip-out-of-scope" | "skip-no-analyzed" | "skip-undated";
+
+export interface DayDecision {
+  date: string;
+  outcome: DayOutcome;
+  /** Photos that would actually be shown to the model. */
+  analyzed: number;
+}
+
+function decideDay(args: {
+  date: string;
+  prior: DayRecord | undefined;
+  analyzedCount: number;
+  place: string | null;
+  summarizedIds: string[];
+  opts: OrganizeOptions;
+}): DayOutcome {
+  const { date, prior, analyzedCount, place, summarizedIds, opts } = args;
+  const inScope = !opts.only || date.startsWith(opts.only);
+  // Place is an input to the summary, not just a label, so a day whose place
+  // changed is as stale as one whose photos changed — geocoding lands after
+  // captioning, and the dominant-place fix above moved several days.
+  const unchanged =
+    !opts.force &&
+    prior?.summarizedPhotoIds != null &&
+    sameIds(prior.summarizedPhotoIds, summarizedIds) &&
+    prior.place === place &&
+    segmentsAreCurrent(prior.segments);
+
+  if (prior && (unchanged || !inScope)) return "reuse";
+  if (inScope && date !== "unknown-date" && analyzedCount > 0) return "rewrite";
+  if (!inScope) return "skip-out-of-scope";
+  if (date === "unknown-date") return "skip-undated";
+  return "skip-no-analyzed";
+}
+
 export interface OrganizeOptions {
   /** Restrict to one date (`2026-09-01`) or month (`2026-09`); null does the lot. */
   only: string | null;
@@ -177,6 +223,68 @@ export interface OrganizeResult {
   withheld: number;
   trips: number;
   months: number;
+}
+
+/** Days listed by name in a plan before it just says "and N more". */
+const PLAN_DAY_CAP = 60;
+
+/**
+ * What `runOrganize` would do, for the same options, spending nothing.
+ *
+ * Costs no tokens and makes no model calls — it stops at the decision. The
+ * metadata it needs comes from the local mirror, so this is disk reads rather
+ * than a round trip per month.
+ */
+export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan> {
+  const token = await getAccessToken();
+  const index = await loadIndexForReading(token);
+  const shards = await loadAllShards(token, index);
+  const photos: Record<string, PhotoRecord> = {};
+  for (const shard of shards.values()) Object.assign(photos, shard.photos);
+
+  const existingDaysByDate = new Map(index.sections.flatMap((s) => s.days).map((d) => [d.date, d] as const));
+
+  const byDay = new Map<string, PhotoRecord[]>();
+  for (const photo of Object.values(photos)) {
+    const key = dayKey(photo.takenAt);
+    const list = byDay.get(key) ?? [];
+    list.push(photo);
+    byDay.set(key, list);
+  }
+
+  const plan: OrganizePlan = {
+    rewrite: 0,
+    reuse: 0,
+    skippedNoAnalyzed: 0,
+    skippedOutOfScope: 0,
+    skippedUndated: 0,
+    days: [],
+    truncated: false,
+  };
+
+  for (const date of [...byDay.keys()].sort()) {
+    const dayPhotos = byDay.get(date)!;
+    const analyzed = dayPhotos.filter((p) => p.analyzedAt && mayBeAnalyzed(p) && !withheldFromSummaries(p));
+    const outcome = decideDay({
+      date,
+      prior: existingDaysByDate.get(date),
+      analyzedCount: analyzed.length,
+      place: dominantPlace(dayPhotos),
+      summarizedIds: analyzed.map((p) => p.id),
+      opts,
+    });
+
+    if (outcome === "rewrite") {
+      plan.rewrite++;
+      if (plan.days.length < PLAN_DAY_CAP) plan.days.push({ date, analyzed: analyzed.length });
+      else plan.truncated = true;
+    } else if (outcome === "reuse") plan.reuse++;
+    else if (outcome === "skip-no-analyzed") plan.skippedNoAnalyzed++;
+    else if (outcome === "skip-out-of-scope") plan.skippedOutOfScope++;
+    else plan.skippedUndated++;
+  }
+
+  return plan;
 }
 
 export async function runOrganize(
@@ -234,27 +342,25 @@ export async function runOrganize(
     // reason it might be missing is that something was withdrawn from it.
     const summarizedIds = analyzed.map((p) => p.id);
     const prior = existingDaysByDate.get(date);
-    const inScope = !opts.only || date.startsWith(opts.only);
-    // Place is an input to the summary, not just a label, so a day whose place
-    // changed is as stale as one whose photos changed — geocoding lands after
-    // captioning, and the dominant-place fix above moved several days.
-    const unchanged =
-      !opts.force &&
-      prior?.summarizedPhotoIds != null &&
-      sameIds(prior.summarizedPhotoIds, summarizedIds) &&
-      prior.place === place &&
-      segmentsAreCurrent(prior.segments);
+    const outcome = decideDay({
+      date,
+      prior,
+      analyzedCount: analyzed.length,
+      place,
+      summarizedIds,
+      opts,
+    });
 
     let summary: string | null = null;
     let segments: DaySegment[] = [];
 
-    if (prior && (unchanged || !inScope)) {
+    if (outcome === "reuse" && prior) {
       // Out of scope means "not this run's business" — keep whatever is there
       // rather than dropping a summary the user already paid for.
       summary = prior.summary;
       segments = prior.segments ?? [];
       result.reused++;
-    } else if (inScope && date !== "unknown-date" && analyzed.length > 0) {
+    } else if (outcome === "rewrite") {
       onProgress({ phase: "summarizing", done: i, total: dates.length, message: `Summarizing ${date}...` });
 
       // Stops are measured, not inferred: GPS and timestamps decide where the
