@@ -47,6 +47,22 @@ export interface ThumbnailSource {
    * makes sense where fetching is expensive and cached fetching is not.
    */
   warm?(ids: string[], size: ThumbSize): Promise<void>;
+  /**
+   * Set on the `<img>` before its `src`, when this source's URLs are
+   * cross-origin *and* answer with CORS headers.
+   *
+   * The PDF export draws every thumbnail onto a canvas and calls `toDataURL`.
+   * A cross-origin image loaded without this taints the canvas and that throws
+   * `SecurityError`, which is exactly what happened once thumbnails moved from
+   * same-origin `blob:` URLs onto the local server's own origin — the export
+   * stopped at "Preparing" with an unhandled rejection.
+   *
+   * **Opt-in per source, never blanket.** Setting it on a source whose host
+   * does not send `Access-Control-Allow-Origin` makes the image fail to load
+   * outright, so the Graph path — whose CDN links are not ours to guarantee —
+   * deliberately leaves it unset.
+   */
+  readonly crossOrigin?: "anonymous";
 }
 
 /**
@@ -56,6 +72,10 @@ export interface ThumbnailSource {
  */
 export const localServerSource: ThumbnailSource = {
   name: "local server",
+  // Loopback, but a different origin from the page (port 4319 against the
+  // app's own), so canvas export needs the opt-in. serve.ts already answers
+  // with Access-Control-Allow-Origin for every registered app origin.
+  crossOrigin: "anonymous",
   url: async (itemId, size) => localThumbUrl(itemId, size),
   sizes: (ids, size) => localThumbSizes(ids, size),
   fullUrl: (itemId) => localThumbUrl(itemId, "full"),

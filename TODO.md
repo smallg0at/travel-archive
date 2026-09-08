@@ -4,7 +4,7 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**30 open, 21 done.** The list grows because each session surfaces defects that
+**30 open, 22 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -33,6 +33,53 @@ working practice this list was built with.
       confirming it means deleting real photos from OneDrive. Judged unlikely
       enough to defer. The fix, when wanted: on an unbounded run, sweep every
       month in the index rather than only the touched ones.
+- [x] **PDF export was broken, in two independent ways.** Reported by the owner
+      2026-09-08, fixed the same day.
+
+      **The feature: a tainted canvas.** The export draws every card image onto
+      a canvas and calls `toDataURL`. When thumbnails moved off same-origin
+      `blob:` URLs onto the local server's own origin (port 4319 against the
+      app's 4173), every image began tainting the canvas, and `toDataURL` threw
+      `SecurityError`. The rejection escaped `printView`, so the export stopped
+      at "Preparing" and never reached `window.print()` — no error surfaced,
+      because nothing was listening for an unhandled rejection.
+
+      Fixed with `crossOrigin: "anonymous"`, declared **per source** rather than
+      blanket: `serve.ts` already answers with `Access-Control-Allow-Origin` for
+      every registered app origin, but the Graph CDN links are not ours to
+      guarantee, and setting it on a host that does not send the header makes
+      the image fail to load outright. Proven on one image, one URL: plain
+      `<img>` loads and the canvas is **tainted**; with the attribute it loads
+      and the canvas is **clean**.
+
+      **The UI: the print stylesheet did not exist.** `@media print` blocks by
+      commit: `c65bc5b` 1 (1,426 css lines) → `268d217` **0** (1,124) →
+      `9e8e2e4` 1, but only the `.page-export` one-liner. ~300 lines went in the
+      marker-slicing accident HANDOFF warns about, and the later "restore
+      Settings CSS" pass recovered the Settings half and missed this one. So the
+      export had been running with no print stylesheet at all: the page printed
+      as the on-screen flex shell (one page of a 170,947px document), the
+      unreviewed roll (`.stop-more`, `.transit`) and verbatim OCR
+      (`.card-source`) were no longer excluded from a file whose entire purpose
+      is sharing, and `#print-progress` rendered as bare text in document flow
+      instead of a centred pill. Recovered from `c65bc5b`, furniture list
+      updated: `#menu`, `#job-drawer` and `#settings-panel` are gone, and
+      `.page-pin` / `.page-pin-slot` needed adding.
+
+      **A measurement lesson, again.** Mid-diagnosis the app appeared to load
+      **zero** of 1,292 images, which looked like a fresh regression from the
+      CORS change. It was not: a newly created `IntersectionObserver` also fired
+      zero times on nine images sitting in the viewport, which cannot be true of
+      a page that is painting. The tab was backgrounded and not rendering, so
+      lazy loading never ran. **A browser being driven headless-ish is not a
+      browser someone is looking at** — the owner's visible window showed the
+      images loading normally. Two earlier entries in this list are the same
+      mistake in different clothes.
+
+      Still worth confirming by eye: that an actual exported PDF paginates
+      correctly and excludes the roll. The stylesheet is restored and verified
+      present, but no PDF has been produced since.
+
 - [x] **The pin control moved from the sidebar row into the page heading.**
       Done 2026-09-08 at the owner's request. It used to be a 16px glyph inside
       the nav row, which put a per-item *action* in a list whose job is

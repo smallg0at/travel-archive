@@ -1,5 +1,6 @@
 import type { PhotoRecord } from "@travel-archive/shared";
 import { loadThumbnail, loadLarge } from "./graphPhoto";
+import { thumbnailSource } from "./photoSource";
 
 /** Builds an element from an HTML string. Used everywhere in place of a template engine. */
 export function el<T extends HTMLElement>(html: string): T {
@@ -86,6 +87,11 @@ function hydrate(img: HTMLImageElement): Promise<void> {
           },
           { once: true },
         );
+        // Before `src`, always: setting it afterwards has no effect on a load
+        // already under way, and the whole point is that the bytes arrive with
+        // CORS so the print export can read them back off a canvas.
+        const crossOrigin = thumbnailSource()?.crossOrigin;
+        if (crossOrigin) img.crossOrigin = crossOrigin;
         img.src = url;
       });
     })

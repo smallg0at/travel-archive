@@ -1327,7 +1327,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   flex-shrink: 0;
 }
 .page-export:hover { border-color: var(--accent); color: var(--text); }
-@media print { .page-export { display: none !important; } }
 
 /* The pin control, moved out of the sidebar row into the page heading.
 
@@ -1358,7 +1357,6 @@ body.resizing { cursor: col-resize; user-select: none; }
 .page-pin:hover { border-color: var(--accent); color: var(--text); }
 .page-pin.pinned { color: var(--accent); border-color: var(--accent); }
 .page-pin:disabled { opacity: 0.6; cursor: default; }
-@media print { .page-pin, .page-pin-slot { display: none !important; } }
 
 /* Generate is a page now, not a drawer across the bottom. A form is easier to
    read in a column than stretched over a 1,500px window. */
@@ -1516,4 +1514,217 @@ body.map-expanded::after {
   background: var(--bg-muted);
   color: var(--text);
   cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   Print / PDF export.
+
+   Restored 2026-09-08. This whole block, and the `#print-progress` rule above
+   it, were lost at 268d217 when a CSS edit replaced the slice between two text
+   markers and silently took ~300 unrelated lines with it. The later "restore
+   Settings CSS" pass brought back the Settings half and missed this one, so the
+   export had been running with no print stylesheet at all: the page printed as
+   the on-screen flex shell, the unreviewed roll and verbatim OCR were no longer
+   excluded, and the progress toast rendered as bare text in document flow.
+
+   Recovered from c65bc5b, with the furniture list brought up to date.
+   --------------------------------------------------------------------------- */
+
+#print-progress {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 90;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
+}
+
+@media print {
+  /* The screen palette follows the reader's OS, and this one is set to dark.
+     Paper is white either way, so force the light tokens rather than printing
+     pale text onto it. Every colour in the app is derived from these six, which
+     is what makes a print theme six lines instead of an audit. */
+  /* `:root[data-theme]` outranks a bare `:root`, so printing while the app is
+     in dark mode would otherwise come out dark however many tokens are
+     re-declared here. Matching the attribute form keeps specificity level. */
+  :root,
+  :root[data-theme] {
+    --bg: #ffffff;
+    --bg-muted: #ffffff;
+    --text: #14140f;
+    --text-secondary: #4a4a43;
+    --border: #c9c7bd;
+    --accent: #1c5c9c;
+    color-scheme: light;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm;
+  }
+
+  /* The app is a fixed-height flex shell whose columns scroll independently.
+     Printed as it stands that emits exactly one page — the first 865px of a
+     153,000px document. Unwind it back into ordinary document flow. */
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+    display: block;
+    background: #fff;
+  }
+  #app {
+    display: block;
+    height: auto;
+    min-height: 0;
+  }
+  #main-column {
+    display: block;
+    min-width: 0;
+  }
+  #content {
+    display: block;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+  }
+
+  /* Furniture. Navigation, controls and overlays are not part of the document. */
+  #sidebar,
+  #sidebar-resize,
+  #lightbox,
+  #signin-banner,
+  #print-progress,
+  .density-control,
+  .trip-map-expand,
+  .trip-map-reset,
+  /* Page-level controls live in the heading now. `#menu`, `#job-drawer` and
+     `#settings-panel` used to be listed here and are gone — Generate and
+     Settings became pages, and neither is printable (`canPrint()` is false
+     without card images), so they need no rule of their own. */
+  .page-export,
+  .page-pin,
+  .page-pin-slot {
+    display: none !important;
+  }
+
+  /* The sharing rule, enforced structurally: the unreviewed roll never leaves
+     the machine. `.stop-more` is the "N more photos" grid and `.transit` the
+     journey strips — between them they hold 114 of this trip's 125 screenshots,
+     none of which anyone has read. Hidden regardless of whether the reader
+     happened to expand one before printing. */
+  .stop-more,
+  .transit {
+    display: none !important;
+  }
+
+  /* A placard's English rendering is prose and prints. The verbatim transcript
+     behind its toggle is evidence for the owner, not content for a reader. */
+  .card-source {
+    display: none !important;
+  }
+
+  /* Any remaining <details> prints open — a collapsed section on paper is just
+     a missing one, since nobody can click it. */
+  details > summary {
+    display: none;
+  }
+
+  /* Page breaks. The rule throughout is that a heading never ends a page and a
+     card is never split across one. */
+  .day-page {
+    break-before: page;
+    margin-bottom: 0;
+  }
+  .day-page:first-of-type {
+    break-before: auto;
+  }
+  .day-header,
+  .stop-head,
+  .month-heading {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  .card,
+  .trip-map,
+  .day-summary,
+  .stop-summary {
+    break-inside: avoid;
+  }
+  .trip-narrative p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* The map is the trip's contents page, so it gets one of its own. */
+  .trip-map {
+    break-after: page;
+    border: none;
+  }
+  .trip-map-svg {
+    height: 150mm;
+    cursor: auto;
+  }
+
+  /* Cards. Four tracks is right for a wide screen and far too narrow for a
+     186mm page, so print drops to two — `full` spans both, `half` and `normal`
+     take one each. Without this a "normal" card is a 44mm column with a
+     three-word line wrap. */
+  .cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8mm 6mm;
+  }
+  .card-full {
+    grid-column: span 2;
+  }
+  .card-half,
+  .card-normal {
+    grid-column: span 1;
+  }
+
+  /* Heights in mm, not px: the screen values are tuned to a viewport, and a
+     380px hero would take a third of the page height at print scale. */
+  .card {
+    border-color: var(--border);
+  }
+  /* Print sizes images in mm for page geometry, so the screen ratio must not
+     also apply — the two would fight and the taller would win. */
+  .card-images {
+    aspect-ratio: auto;
+  }
+  .card-full .card-images img {
+    height: 85mm;
+  }
+  .card-half .card-images img,
+  .card-normal .card-images img {
+    height: 52mm;
+  }
+
+  /* The shimmer placeholder is a loading state; on paper it is a grey box with
+     a diagonal stripe frozen across it. */
+  .card-images img {
+    background-image: none;
+    animation: none;
+    background-color: transparent;
+  }
+
+  /* The transcript box scrolls on screen; on paper a scroll box is a clipped
+     one. Nothing printed may have hidden overflow. */
+  .card-source-text {
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* Backgrounds and image rendering are the two things Chrome drops by default
+     and the two the layout depends on. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

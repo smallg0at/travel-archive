@@ -77,6 +77,14 @@ app there instead and sign-in breaks in a way that looks like an MSAL problem.
 health check means: no Generate page, no pins, thumbnails via Graph + IndexedDB.
 Every feature needs that path to degrade rather than error.
 
+**Images must be CORS-clean or the PDF export dies.** The export draws every
+card image onto a canvas and calls `toDataURL`; a cross-origin image loaded
+without `crossOrigin` taints it and that throws. Thumbnails come from the local
+server's own origin now, so `ThumbnailSource.crossOrigin` opts in — **per
+source, never blanket**: setting it on a host that does not send
+`Access-Control-Allow-Origin` makes the image fail to load outright, which is
+why the Graph CDN path leaves it unset.
+
 **Config can be written at runtime, so nothing may capture it at import.**
 `POST /config` writes `.env` and calls `reloadEnv()`, which updates the `env`
 object in place. That reaches every `env.x` read at call time — but a
@@ -156,7 +164,10 @@ counting images inside collapsed `<details>` that are never meant to load.
 "0 of 3,659 loaded" was a test jumping `scrollTop` before layout settled.
 
 **Never edit CSS by slicing between markers.** Twice now that has silently
-deleted unrelated blocks. Use anchored replacements of exact text and verify the
+deleted unrelated blocks — and the second one was not fully found for weeks.
+The whole `@media print` block went at `268d217` and the export ran without a
+print stylesheet until 2026-09-08. **After any CSS edit, count `@media` blocks
+and braces**, not just the selectors you meant to touch. Use anchored replacements of exact text and verify the
 selector count afterwards.
 
 **Watch for `display: …` beating `[hidden]`.** An author-origin `display` rule
