@@ -101,9 +101,18 @@ working practice this list was built with.
       second pass served from cache, and 50/50 as real `<img crossorigin>` with
       a clean canvas.
 
-      Still worth confirming by eye: that an actual exported PDF paginates
-      correctly and excludes the roll. The stylesheet is restored and verified
-      present, but no PDF has been produced since.
+      Image loading confirmed normal by the owner 2026-09-08, after three
+      rounds — twice it was called fixed while it was not. The first miss
+      trusted a backgrounded tab that was not rendering; the second fixed what
+      *creates* bad cache entries without retiring the year's worth already
+      stored. **The comparison that actually isolated it was default-cache
+      against `cache: "reload"` over the same 200 URLs**, and it would have
+      found the cause immediately had it been run first.
+
+      Still open, and the last piece: no actual PDF has been exported since the
+      print stylesheet was restored. The stylesheet is verified present and the
+      canvas is verified clean, but whether the finished file paginates
+      correctly and excludes the roll wants one look by eye.
 
 - [x] **The pin control moved from the sidebar row into the page heading.**
       Done 2026-09-08 at the owner's request. It used to be a 16px glyph inside
