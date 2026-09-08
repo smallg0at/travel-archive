@@ -4,7 +4,7 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**30 open, 20 done.** The list grows because each session surfaces defects that
+**30 open, 21 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -33,6 +33,33 @@ working practice this list was built with.
       confirming it means deleting real photos from OneDrive. Judged unlikely
       enough to defer. The fix, when wanted: on an unbounded run, sweep every
       month in the index rather than only the touched ones.
+- [x] **The pin control moved from the sidebar row into the page heading.**
+      Done 2026-09-08 at the owner's request. It used to be a 16px glyph inside
+      the nav row, which put a per-item *action* in a list whose job is
+      navigation: it needed a click-target exception inside the row's own
+      handler, carried no label, and acted on something other than what you were
+      looking at. It now sits beside "Save as PDF" with the words to say what it
+      does — `☁ Keep on this device` / `▣ Kept on this device` — keeping the
+      borrowed OneDrive vocabulary.
+
+      Two things the browser caught that the diff did not:
+
+      - It first used the **checked** `syncStatus()`, costing a Graph eTag round
+        trip on every month and trip opened — **1,344ms against 181ms** for the
+        cached call. Pins are local state in `sync.json`, so the comparison is
+        irrelevant to them. This is the same mistake Settings made, found the
+        same way. Revealing the Generate tool now asks `/health` instead, which
+        is milliseconds.
+      - Adding a second control to the heading squeezed the flex row and left a
+        long trip name **wrapping mid-word**. The title is the last thing that
+        should be squeezed, so it no longer shrinks and the meta line takes it
+        instead; the heading also wraps rather than overflowing when narrow.
+        Checked at 1288px and 747px, with no sideways overflow.
+
+      Trade-off, deliberate: the sidebar no longer shows at a glance which
+      months are pinned. Settings > Kept on this device still lists them.
+      Verified: toggle on and off from both a trip and a month, with the
+      server's pin list agreeing at each step and ending as it started.
 - [x] **The missing-`.env` dialog told you to write a file by hand.** Fixed
       2026-09-08. It is now a **Settings > Generation** form: pick the provider,
       paste the API key, save. `GET /config` reports what is set, `POST /config`

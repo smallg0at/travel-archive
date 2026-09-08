@@ -6,7 +6,7 @@ import { renderDayBody } from "./render";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
-import { setPin as savePin, syncStatus } from "./backend";
+import { checkHealth, setPin as savePin, syncStatus } from "./backend";
 import { releaseSettings, showSettings } from "./settings";
 import { showGenerate } from "./tripMode";
 import { canPrint, printView } from "./print";
@@ -326,6 +326,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
+  addPinControl(header, "trip", trip.id);
   addExportButton(header);
   lookAhead(trip.days.flatMap((d) => d.photoIds));
 
@@ -389,6 +390,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
 
   content.replaceChildren(frag);
   content.scrollTop = 0;
+  addPinControl(heading, "month", summary.month);
   addExportButton(heading);
   lookAhead(photos.map((p) => p.id));
 }
@@ -443,7 +445,7 @@ function renderNav(index: ArchiveIndexFile): void {
   }
 
   renderNavTools(index);
-  void refreshPinMarks();
+  void revealBackendTools();
 }
 
 /**
@@ -510,7 +512,6 @@ function navRow(
     `<button class="month-link" type="button">
        <span class="month-name"></span>
        <span class="month-count"></span>
-       <span class="pin-mark" role="button" tabindex="0" title="Keep on this device">☁</span>
      </button>`,
   );
   row.querySelector(".month-name")!.textContent = name;
@@ -518,14 +519,7 @@ function navRow(
   row.dataset.pinKind = kind;
   row.dataset.pinId = id;
 
-  row.addEventListener("click", (event) => {
-    // The pin marker sits inside the row so it lines up with the count; a click
-    // on it must toggle the pin rather than open the view.
-    if ((event.target as HTMLElement).classList.contains("pin-mark")) {
-      event.stopPropagation();
-      void togglePin(row);
-      return;
-    }
+  row.addEventListener("click", () => {
     clearActive();
     row.classList.add("active");
     row.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -534,38 +528,77 @@ function navRow(
   return row;
 }
 
-async function togglePin(row: HTMLButtonElement): Promise<void> {
-  const kind = row.dataset.pinKind as "trip" | "month";
-  const id = row.dataset.pinId!;
-  const pinned = row.classList.contains("pinned");
-  row.classList.toggle("pinned", !pinned);
-  row.querySelector(".pin-mark")!.textContent = pinned ? "☁" : "▣";
-  try {
-    await savePin({ kind, id, originals: false, pinned: !pinned });
-  } catch {
-    // Put the marker back rather than showing a pin that was never saved.
-    row.classList.toggle("pinned", pinned);
-    row.querySelector(".pin-mark")!.textContent = pinned ? "▣" : "☁";
-  }
+/**
+ * The pin control, in the page heading rather than the sidebar row.
+ *
+ * It lived in the row so it lined up with the count, next to the OneDrive-style
+ * marker. That put a per-item *action* in a list whose job is navigation: it
+ * needed a click-target exception inside the row's own handler, it was a 16px
+ * glyph with no label, and the thing it acted on was not the thing you were
+ * looking at. Here it sits beside "Save as PDF", where the other page-level
+ * actions are, and can afford to say what it does.
+ *
+ * The vocabulary is still OneDrive's — filled means kept on this device, cloud
+ * means fetched when needed — because the mental model is borrowed.
+ *
+ * With no backend there is nothing to pin to, so the slot is simply left empty:
+ * the phone reads the archive from OneDrive and caches in the browser, which is
+ * a supported state rather than a failure.
+ */
+function addPinControl(heading: HTMLElement, kind: "trip" | "month", id: string): void {
+  // An empty slot, placed synchronously so it holds its position in the flex
+  // row while the server is asked. Without it the button would arrive after
+  // "Save as PDF" and land on the wrong side of it.
+  const slot = el<HTMLSpanElement>(`<span class="page-pin-slot"></span>`);
+  heading.appendChild(slot);
+
+  // `cached`, deliberately. Pins are local state — they live in sync.json — so
+  // the eTag comparison the checked call makes is irrelevant to them, and it
+  // costs a Graph round trip: measured 1,344ms against 181ms, on every month
+  // and trip you open. Settings learned the same lesson the same way.
+  void syncStatus({ cached: true }).then((status) => {
+    if (!status) return;
+    const button = el<HTMLButtonElement>(`<button class="page-pin" type="button"></button>`);
+    let pinned = status.pins.some((p) => p.kind === kind && p.id === id);
+
+    const paint = () => {
+      button.textContent = pinned ? "▣ Kept on this device" : "☁ Keep on this device";
+      button.classList.toggle("pinned", pinned);
+      button.title = pinned
+        ? "Photos here are kept on this device and are never evicted to make room."
+        : "Fetch these photos and keep them on this device.";
+    };
+    paint();
+
+    button.addEventListener("click", () => {
+      const next = !pinned;
+      pinned = next;
+      paint();
+      button.disabled = true;
+      void savePin({ kind, id, originals: false, pinned: next })
+        .catch(() => {
+          // Put the marker back rather than showing a pin that was never saved.
+          pinned = !next;
+          paint();
+        })
+        .finally(() => (button.disabled = false));
+    });
+
+    slot.appendChild(button);
+  });
 }
 
-/** Paints pin markers from the server's list, once it answers. */
-async function refreshPinMarks(): Promise<void> {
-  const status = await syncStatus();
-  if (!status) {
-    // No backend: pinning and generation are both meaningless, so neither is
-    // offered. This is the phone's normal state, not a failure.
-    document.querySelectorAll(".pin-mark").forEach((n) => n.remove());
-    return;
-  }
+/**
+ * Reveals the Generate tool once a backend answers.
+ *
+ * `/health` rather than a status call: the question is only whether a server is
+ * there, and health is a few milliseconds where a checked sync status is over a
+ * second.
+ */
+async function revealBackendTools(): Promise<void> {
+  if (!(await checkHealth())) return;
   const generate = document.getElementById("nav-generate");
   if (generate) generate.hidden = false;
-  for (const row of document.querySelectorAll<HTMLElement>(".month-link[data-pin-id]")) {
-    const on = status.pins.some((p) => p.kind === row.dataset.pinKind && p.id === row.dataset.pinId);
-    row.classList.toggle("pinned", on);
-    const mark = row.querySelector(".pin-mark");
-    if (mark) mark.textContent = on ? "▣" : "☁";
-  }
 }
 
 export function renderAlbum(index: ArchiveIndexFile): void {
