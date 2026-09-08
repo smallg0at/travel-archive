@@ -395,19 +395,134 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   lookAhead(photos.map((p) => p.id));
 }
 
+const OPEN_GROUPS_KEY = "nav-open-groups";
+
+/**
+ * Which nav groups are expanded, remembered per browser.
+ *
+ * `null` means nothing has been stored yet, which is not the same as "nothing
+ * is open" — the caller falls back to a sensible first-run set instead of
+ * showing twelve collapsed years to someone who has never touched the pane.
+ */
+function storedOpenGroups(): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(OPEN_GROUPS_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+  } catch {
+    // Storage blocked, or a value from an older shape. The default set applies.
+    return null;
+  }
+}
+
+function rememberOpenGroups(open: Set<string>): void {
+  try {
+    localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify([...open]));
+  } catch {
+    // Not persisting is fine; the pane still works for this session.
+  }
+}
+
+/**
+ * One collapsible section of the nav: a sticky heading and the rows under it.
+ *
+ * Returns the body so the caller can fill it. The heading stays put while its
+ * own rows scroll past, which is the other half of the problem — in a flat
+ * list the year you are looking at scrolls off the top and the months below
+ * are just numbers with no year attached.
+ */
+/**
+ * How to expand a group without recording the choice.
+ *
+ * A group opened *for* you — because the row selected on load lives in it — is
+ * not a group you chose to open, and writing it back would mean a collapsed
+ * Trips section reopened itself on every reload, since the row opened
+ * automatically is always a trip.
+ */
+const expanders = new WeakMap<HTMLElement, () => void>();
+
+function navGroup(nav: HTMLElement, id: string, title: string, count: number, open: Set<string>): HTMLDivElement {
+  const header = el<HTMLButtonElement>(
+    `<button class="nav-year" type="button">
+       <span class="nav-year-twisty" aria-hidden="true"></span>
+       <span class="nav-year-name"></span>
+       <span class="nav-year-count"></span>
+     </button>`,
+  );
+  header.querySelector(".nav-year-name")!.textContent = title;
+  header.querySelector(".nav-year-count")!.textContent = count.toLocaleString();
+
+  const body = el<HTMLDivElement>(`<div class="nav-months"></div>`);
+  body.dataset.group = id;
+
+  const apply = () => {
+    const isOpen = open.has(id);
+    body.hidden = !isOpen;
+    header.setAttribute("aria-expanded", String(isOpen));
+    header.querySelector(".nav-year-twisty")!.textContent = isOpen ? "▾" : "▸";
+  };
+  apply();
+
+  expanders.set(body, () => {
+    open.add(id);
+    apply();
+  });
+
+  header.addEventListener("click", () => {
+    if (open.has(id)) open.delete(id);
+    else open.add(id);
+    apply();
+    rememberOpenGroups(open);
+  });
+
+  // Each group is its own section rather than a flat run of siblings: sticky
+  // positioning is bounded by the containing block, so with one shared parent
+  // every heading would pin to the top of the nav and sit on top of the last.
+  // Boxed, a heading is pushed out by the next section, which is the behaviour
+  // people expect from a sticky list header.
+  const section = el<HTMLElement>(`<section class="nav-group"></section>`);
+  section.appendChild(header);
+  section.appendChild(body);
+  nav.appendChild(section);
+  return body;
+}
+
+/**
+ * Opens whichever group a row lives in, so a row reached in code — the month
+ * opened automatically on load — is not selected inside a collapsed section.
+ */
+function revealRow(row: HTMLElement): void {
+  const body = row.closest<HTMLDivElement>(".nav-months");
+  if (body?.hidden) expanders.get(body)?.();
+}
+
 function renderNav(index: ArchiveIndexFile): void {
   const nav = document.getElementById("month-nav")!;
   nav.replaceChildren();
 
+  const trips = index.sections.filter((s): s is TripRecord => s.kind === "trip");
+  const years = [...new Set(index.months.map((m) => m.month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+
+  // First run opens the trips and the newest year only. Everything expanded is
+  // how this pane got to 123 rows of scroll; everything collapsed would hide
+  // the two things almost every visit wants.
+  const open = storedOpenGroups() ?? new Set([...(trips.length ? ["trips"] : []), ...years.slice(0, 1)]);
+
   // Trips first: they are the things a person looks for by name. Months below
   // are the fallback for everything that was not part of one.
-  const trips = index.sections.filter((s): s is TripRecord => s.kind === "trip");
   if (trips.length) {
-    const label = el<HTMLDivElement>(`<div class="nav-year"></div>`);
-    label.textContent = "Trips";
-    nav.appendChild(label);
+    const sorted = [...trips].sort((a, b) => b.startDate.localeCompare(a.startDate));
+    const body = navGroup(
+      nav,
+      "trips",
+      "Trips",
+      sorted.reduce((n, t) => n + t.days.reduce((d, day) => d + day.photoIds.length, 0), 0),
+      open,
+    );
 
-    for (const trip of [...trips].sort((a, b) => b.startDate.localeCompare(a.startDate))) {
+    for (const trip of sorted) {
       const row = navRow(
         trip.name,
         String(trip.days.reduce((n, d) => n + d.photoIds.length, 0)),
@@ -416,32 +531,35 @@ function renderNav(index: ArchiveIndexFile): void {
         () => void showTrip(trip),
       );
       row.classList.add("trip-link");
-      nav.appendChild(row);
+      body.appendChild(row);
     }
   }
 
   // Newest first — a photo library is browsed from the recent end.
   const months = [...index.months].sort((a, b) => b.month.localeCompare(a.month));
-  let currentYear = "";
 
-  for (const summary of months) {
-    const year = summary.month.slice(0, 4);
-    if (year !== currentYear) {
-      currentYear = year;
-      const label = el<HTMLDivElement>(`<div class="nav-year"></div>`);
-      label.textContent = year;
-      nav.appendChild(label);
-    }
-
-    // Month name without the year — the year is already the group heading above.
-    const row = navRow(
-      formatMonthLabel(summary.month, false),
-      String(summary.photoCount),
-      "month",
-      summary.month,
-      () => void showMonth(summary, index),
+  for (const year of years) {
+    const inYear = months.filter((m) => m.month.startsWith(year));
+    const body = navGroup(
+      nav,
+      year,
+      year,
+      inYear.reduce((n, m) => n + m.photoCount, 0),
+      open,
     );
-    nav.appendChild(row);
+
+    for (const summary of inYear) {
+      // Month name without the year — the year is already the group heading above.
+      body.appendChild(
+        navRow(
+          formatMonthLabel(summary.month, false),
+          String(summary.photoCount),
+          "month",
+          summary.month,
+          () => void showMonth(summary, index),
+        ),
+      );
+    }
   }
 
   renderNavTools(index);
@@ -522,6 +640,7 @@ function navRow(
   row.addEventListener("click", () => {
     clearActive();
     row.classList.add("active");
+    revealRow(row);
     row.scrollIntoView({ block: "nearest", inline: "nearest" });
     open();
   });
@@ -613,6 +732,12 @@ export function renderAlbum(index: ArchiveIndexFile): void {
   }
 
   renderNav(index);
-  // Open the newest month automatically — the nav is sorted newest-first.
-  (document.querySelector(".month-link") as HTMLButtonElement | null)?.click();
+  // Open the newest thing automatically — the nav is sorted newest-first — but
+  // only from a group that is actually open. Picking the very first row would
+  // always land on a trip and force the Trips section back open, which makes
+  // collapsing it look broken.
+  const first =
+    document.querySelector<HTMLButtonElement>(".nav-months:not([hidden]) .month-link") ??
+    document.querySelector<HTMLButtonElement>(".month-link");
+  first?.click();
 }

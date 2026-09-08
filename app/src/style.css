@@ -231,14 +231,49 @@ body.resizing { cursor: col-resize; user-select: none; }
   padding: 10px 8px;
 }
 
+.nav-group { position: relative; }
+
+/* The year heading is a button now, and it sticks: in a flat list the year you
+   are reading scrolls off the top and the months under it become bare numbers
+   with no year attached. `top: -10px` cancels the nav's own top padding, so the
+   first heading does not float above where it was drawn. */
 .nav-year {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  font: inherit;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
+  text-align: left;
   color: var(--text-secondary);
+  background: var(--bg-muted);
+  border: none;
   padding: 12px 10px 4px;
+  cursor: pointer;
 }
 .nav-year:first-child { padding-top: 2px; }
+.nav-year:hover { color: var(--text); }
+.nav-year-twisty {
+  flex: 0 0 auto;
+  font-size: 9px;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.nav-year-name { flex: 1; min-width: 0; }
+/* A collapsed year still says how much is behind it, so the pane reads as a
+   summary of the archive rather than a list of lids. */
+.nav-year-count {
+  flex: 0 0 auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
 
 .month-link {
   display: flex;
@@ -696,11 +731,20 @@ body.resizing { cursor: col-resize; user-select: none; }
   }
   #month-nav::-webkit-scrollbar { display: none; }
   .nav-year {
+    position: static;
+    width: auto;
     padding: 0 4px 0 8px;
     align-self: center;
     flex-shrink: 0;
   }
   .nav-year:first-child { padding-left: 4px; }
+  .nav-year-count { display: none; }
+  /* `display: contents` keeps the months as direct flex children of the strip,
+     so an expanded year lays out inline instead of stacking. Scoped to
+     `:not([hidden])` — an unconditional `display` would defeat the attribute
+     and every year would be permanently open. */
+  .nav-group,
+  .nav-months:not([hidden]) { display: contents; }
   .month-link {
     width: auto;
     flex-shrink: 0;

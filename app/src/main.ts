@@ -70,11 +70,13 @@ async function main() {
     }
   });
 
-  if (!(await getActiveAccount())) {
-    showSignInBanner();
-    showMessage("Sign in to load your archive.");
-    return;
-  }
+  // No account is not the same as nothing to show. When the local job server
+  // is running it holds a byte-identical mirror of the archive and `loadIndex`
+  // prefers it, so a signed-out desktop can still read everything — this used
+  // to stop at the banner with the whole archive sitting on disk. Offer the
+  // sign-in, then try anyway: with no mirror the load raises
+  // SignInRequiredError and lands on exactly the same banner.
+  if (!(await getActiveAccount())) showSignInBanner();
 
   await loadAndRender();
 }

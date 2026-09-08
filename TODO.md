@@ -175,6 +175,44 @@ working practice this list was built with.
       Export confirmed good by the owner 2026-09-08 — a real PDF, produced
       after the stylesheet was restored. Closed.
 
+- [x] **The left pane became 123 rows of scroll.** Fixed 2026-09-09 at the
+      owner's request. Every year was expanded at once, so a pane holding
+      twelve years of archive could show about one and a half of them; the year
+      heading you were reading scrolled off the top and the months under it
+      became bare numbers with no year attached.
+
+      Years and Trips are now collapsible sections that remember what you left
+      open (`nav-open-groups` in `localStorage`), each heading sticks while its
+      own rows scroll past, and a collapsed year still carries its photo count
+      so the pane reads as a summary rather than a row of lids. First run opens
+      Trips and the newest year. The whole archive now fits without scrolling.
+
+      Three things the browser caught that the diff did not:
+
+      - Sticky siblings share a containing block, so every heading pinned to
+        the top of the nav and stacked on the last. Each group is now its own
+        `<section>`, which bounds the sticky range and lets the next section
+        push the previous heading out.
+      - The row opened automatically on load is always the newest trip, so
+        revealing its group re-opened Trips on every reload and made collapsing
+        it look broken. The reveal no longer writes to storage, and the
+        automatic selection is taken from a group that is already open.
+      - On the phone the nav is a horizontal strip, so a group must not become
+        a block. `display: contents` on the section and the month list keeps the
+        rows as direct flex children — scoped to `:not([hidden])`, since an
+        unconditional `display` would defeat the attribute and pin every year
+        open. Checked at 500px: `▸ Trips` and `▾ 2026` as chips with the year's
+        months inline, and tapping a collapsed chip expands it in place.
+
+- [x] **A signed-out app showed nothing even with the whole archive on disk.**
+      Found 2026-09-09 while testing the above in a browser with no Microsoft
+      session. `main()` gated on `getActiveAccount()` and stopped at the banner,
+      but `loadIndex` prefers the local job server's mirror and never got the
+      chance. It now offers the sign-in and loads anyway: with no mirror the
+      load raises `SignInRequiredError` and lands on exactly the same banner, so
+      the phone's path is unchanged. Verified signed out — index, month shards
+      and thumbnails all served from `127.0.0.1:4319`.
+
 - [x] **The pin control moved from the sidebar row into the page heading.**
       Done 2026-09-08 at the owner's request. It used to be a 16px glyph inside
       the nav row, which put a per-item *action* in a list whose job is
