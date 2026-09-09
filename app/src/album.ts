@@ -329,7 +329,9 @@ async function showTrip(trip: TripRecord): Promise<void> {
   }
 
   content.replaceChildren(frag);
-  content.scrollTop = 0;
+  // Back where the reader was, when this render is a refresh of the same view.
+  content.scrollTop = restoreScrollTop ?? 0;
+  restoreScrollTop = null;
   addPinControl(header, "trip", trip.id);
   addExportButton(header);
   lookAhead(trip.days.flatMap((d) => d.photoIds));
@@ -393,7 +395,9 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   }
 
   content.replaceChildren(frag);
-  content.scrollTop = 0;
+  // Back where the reader was, when this render is a refresh of the same view.
+  content.scrollTop = restoreScrollTop ?? 0;
+  restoreScrollTop = null;
   addPinControl(heading, "month", summary.month);
   addExportButton(heading);
   lookAhead(photos.map((p) => p.id));
@@ -765,10 +769,43 @@ export function getCachedIndex(): ArchiveIndexFile | null {
   return cachedIndex;
 }
 
+/**
+ * Where the reader was, so a re-render puts them back.
+ *
+ * `renderAlbum` runs again whenever a job finishes — a day rewritten from its
+ * own page, an organize run from Generate — and it rebuilt the nav and clicked
+ * the first row, which threw the reader back to the newest trip at the top.
+ * Pressing "Rewrite this day" and landing somewhere else entirely is the
+ * feature undoing itself.
+ *
+ * Module state on purpose: it has to survive the render that replaces every
+ * element it could otherwise hang off.
+ */
+let restoreScrollTop: number | null = null;
+let wantedView: { kind: string; id: string } | null = null;
+
+/**
+ * Called before a reload begins, not during the render.
+ *
+ * `loadAndRender` shows "Loading archive…" first, and that replaces `#content`
+ * — which resets its scroll to 0. Reading the offset inside `renderAlbum`
+ * therefore always read 0, and restoring it did nothing. The nav survives that
+ * far, so the *selection* could be read either side; the scroll offset cannot.
+ */
+export function captureView(): void {
+  const active = document.querySelector<HTMLElement>(".month-link.active");
+  wantedView = active?.dataset.pinKind
+    ? { kind: active.dataset.pinKind, id: active.dataset.pinId ?? "" }
+    : null;
+  restoreScrollTop = wantedView ? (document.getElementById("content")?.scrollTop ?? null) : null;
+}
+
 export function renderAlbum(index: ArchiveIndexFile): void {
   cachedIndex = index;
   const content = document.getElementById("content")!;
   applyDensity();
+  const wanted = wantedView;
+  wantedView = null;
 
   if (index.months.length === 0) {
     content.replaceChildren(
@@ -778,12 +815,22 @@ export function renderAlbum(index: ArchiveIndexFile): void {
   }
 
   renderNav(index);
-  // Open the newest thing automatically — the nav is sorted newest-first — but
-  // only from a group that is actually open. Picking the very first row would
-  // always land on a trip and force the Trips section back open, which makes
+
+  // The view that was open wins over the default. Matched on kind and id rather
+  // than on position: a rebuilt nav can reorder, and reopening whatever now
+  // sits in that slot is not the same thing as staying put.
+  const previous = wanted
+    ? document.querySelector<HTMLButtonElement>(
+        `.month-link[data-pin-kind="${wanted.kind}"][data-pin-id="${CSS.escape(wanted.id)}"]`,
+      )
+    : null;
+
+  // Otherwise open the newest thing — the nav is sorted newest-first — but only
+  // from a group that is actually open. Picking the very first row would always
+  // land on a trip and force the Trips section back open, which makes
   // collapsing it look broken.
   const first =
     document.querySelector<HTMLButtonElement>(".nav-months:not([hidden]) .month-link") ??
     document.querySelector<HTMLButtonElement>(".month-link");
-  first?.click();
+  (previous ?? first)?.click();
 }

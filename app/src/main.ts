@@ -1,4 +1,4 @@
-import { renderAlbum } from "./album";
+import { captureView, renderAlbum } from "./album";
 import { loadIndex, SignInRequiredError } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
@@ -30,6 +30,10 @@ function showMessage(html: string): void {
  * text-without-images.
  */
 async function loadAndRender(): Promise<void> {
+  // Before the placeholder replaces #content and takes its scroll offset with
+  // it — a reload after a job should put the reader back, not at the top of
+  // the newest trip.
+  captureView();
   showMessage("Loading archive…");
   try {
     renderAlbum(await loadIndex());
