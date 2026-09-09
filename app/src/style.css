@@ -1,6 +1,17 @@
 /**
  * Six tokens drive every colour in the app, which is what makes a theme switch
- * six declarations rather than an audit.
+ * six declarations rather than an audit. The values are Fluent 2's own —
+ * pulled from `@fluentui/tokens` rather than picked by eye — because this is
+ * a Windows desktop app and Fluent is what "looks like it belongs on this OS"
+ * actually means: `colorNeutralBackground1`/`Foreground1`/`Stroke1` and
+ * Fluent's Communication Blue brand color, not a from-scratch palette that
+ * happens to also be a light and a dark grey.
+ *
+ * Fluent's own nav guidance puts navigation surfaces on `colorNeutralBackground3`
+ * — its most recessed neutral tier — while ordinary content sits on
+ * `colorNeutralBackground1`, the least recessed. That is already this app's
+ * `--bg` (content) / `--bg-muted` (sidebar) split; only the hex values were
+ * generic before.
  *
  * Three states, not two. `data-theme` is set only when the reader has chosen;
  * with nothing set the OS decides, which is the default and is what "System"
@@ -14,34 +25,65 @@
  */
 :root {
   color-scheme: light;
-  --bg: #ffffff;
-  --bg-muted: #f4f3ef;
-  --text: #1a1a18;
-  --text-secondary: #5f5e5a;
-  --border: #e2e0d8;
-  --accent: #378ade;
+  --bg: #ffffff;              /* colorNeutralBackground1 */
+  --bg-muted: #f5f5f5;        /* colorNeutralBackground3 — Fluent's nav surface */
+  --text: #242424;            /* colorNeutralForeground1 */
+  --text-secondary: #616161;  /* colorNeutralForeground3 */
+  --border: #d1d1d1;          /* colorNeutralStroke1 */
+  --accent: #0078d4;          /* colorBrandBackground / Fluent's Communication Blue */
+
+  /* Elevation as a formula, not a colour: mixing --text into --bg darkens a
+     raised surface in light mode and lightens it in dark mode, which is the
+     direction each theme actually wants, from the same declaration. This
+     replaces the `color-mix(in srgb, var(--text) 8%, transparent)` expression
+     that had been copied into hover/selected rules across the sidebar and the
+     menu — one token instead of three copies of the same idea. */
+  --surface-hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --surface-selected: color-mix(in srgb, var(--accent) 8%, transparent);
+
+  /* Three of Fluent's radii — Medium, Large, XLarge from `@fluentui/tokens`'s
+     borderRadius scale — standing in for what had been 21 separate
+     `border-radius` declarations across the file at exactly 4px, 6px or 8px,
+     picked independently of each other component by component. */
+  --radius-s: 4px;
+  --radius-l: 6px;
+  --radius-m: 8px;
+
+  /* Fluent's shadow scale — the same rgba(0,0,0,..) values in both themes,
+     since these represent physical depth rather than surface colour, and
+     that's how Fluent itself ships them. Two named stops for the two kinds
+     of floating element left in the file: a flyout (the print-progress pill)
+     and a near-fullscreen overlay (the trip map's expand view). */
+  --shadow-16: 0 8px 16px rgba(0, 0, 0, .14), 0 0 2px rgba(0, 0, 0, .12);
+  --shadow-64: 0 32px 64px rgba(0, 0, 0, .24), 0 0 8px rgba(0, 0, 0, .2);
 }
 
 /* System preference, unless the reader explicitly asked for light. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #161614;
-    --bg-muted: #211f1c;
-    --text: #f1efe8;
-    --text-secondary: #b4b2a9;
-    --border: #333330;
+    --bg: #292929;             /* colorNeutralBackground1, dark */
+    --bg-muted: #141414;       /* colorNeutralBackground3, dark */
+    --text: #ffffff;           /* colorNeutralForeground1, dark */
+    --text-secondary: #adadad; /* colorNeutralForeground3, dark */
+    --border: #666666;         /* colorNeutralStroke1, dark */
+    /* Fluent's own brand foreground is brighter in dark mode than the light
+       theme's brand background — #0078d4 loses too much contrast against a
+       dark surface, which is exactly why Fluent ships a separate value here
+       rather than reusing one blue for both themes. */
+    --accent: #2899f5;
   }
 }
 
 /* An explicit choice, which must win on any OS. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #161614;
-  --bg-muted: #211f1c;
-  --text: #f1efe8;
-  --text-secondary: #b4b2a9;
-  --border: #333330;
+  --bg: #292929;
+  --bg-muted: #141414;
+  --text: #ffffff;
+  --text-secondary: #adadad;
+  --border: #666666;
+  --accent: #2899f5;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -49,12 +91,57 @@
 
 * { box-sizing: border-box; }
 
+/* Native checkboxes and radios (job forms, Settings' "Check for changes")
+   otherwise tint themselves with the browser/OS default blue rather than this
+   app's own accent — the one native form control CSS can recolour without
+   rebuilding it from scratch. */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* Themed scrollbars everywhere, rather than the OS default sitting on top of
+   an otherwise token-driven page. Firefox's two-property shorthand plus
+   WebKit's pseudo-elements (Electron is Chromium, so the second is what
+   actually renders here) — a transparent track and a thumb in `--border`
+   that steps up to `--text-secondary` on hover, the same relationship
+   `.month-link` already uses for hover. `background-clip: padding-box` on a
+   transparent border is what insets the thumb from the track's edges without
+   a fixed pixel gap that would look wrong at a different scrollbar width.
+   `#month-nav`'s own `::-webkit-scrollbar { display: none }` in the mobile
+   media query below still wins over this — a `display: none` there overrides
+   regardless of which rule has higher specificity. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Column layout so the nav and the photo pane scroll independently — with
    several hundred thumbnails in a month, scrolling the whole document would
    drag the month tabs off screen. */
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   display: flex;
@@ -74,7 +161,7 @@ body {
 /* The sidebar is the scrolling column; the nav and the job panel are its two
    children so that re-rendering one never touches the other. */
 #sidebar {
-  width: var(--sidebar-width, 210px);
+  width: var(--sidebar-width, 230px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -116,111 +203,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-top: 1px solid var(--border);
   background: var(--bg-muted);
 }
-/* Bottom left, clear of the photo grid and of the scrollbar. */
-#menu {
-  position: fixed;
-  left: 12px;
-  bottom: 12px;
-  z-index: 60;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-start;
-  gap: 6px;
-}
-#menu-toggle {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  color: var(--text);
-  cursor: pointer;
-  box-shadow: 0 2px 12px rgb(0 0 0 / 0.22);
-}
-#menu-toggle:hover { border-color: var(--accent); }
-#menu-toggle.open { background: var(--accent); color: #fff; border-color: var(--accent); }
-
-/* The expanded list: icon plus label per row, like a system menu. Icons alone
-   said nothing about what the buttons did. */
-#menu-items {
-  display: flex;
-  flex-direction: column;
-  min-width: 168px;
-  padding: 5px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
-}
-#menu-items[hidden] { display: none; }
-/* `:not([hidden])` matters here specifically: Generate is hidden until a
-   backend answers, and on the phone one never does. Without it, the read-only
-   client would offer a button that cannot work. */
-#menu-items button:not([hidden]) {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  color: var(--text);
-  background: none;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-#menu-items button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
-/* A left bar marks what is currently open, as a system menu marks its page. */
-#menu-items button.active {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-#menu svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
-
-#settings-panel {
-  position: fixed;
-  left: 190px;
-  bottom: 12px;
-  z-index: 60;
-  min-width: 230px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 0.28);
-  font-size: 12px;
-}
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 5px 0;
-}
-.settings-row > span { color: var(--text-secondary); }
-#settings-reset-sidebar {
-  font: inherit;
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  cursor: pointer;
-}
 /* The month list scrolls; the job panel stays pinned below it. With 61 months
    in the nav, a panel that scrolled with them sat far below the fold and was
    effectively invisible. */
@@ -241,13 +223,23 @@ body.resizing { cursor: col-resize; user-select: none; }
    the months under it become bare numbers with no year attached. `top: -10px`
    cancels the nav's own top padding, so the first heading does not float above
    where it was drawn. */
+/* A grid, not a flex row: a leading 16px icon column, the name, a
+   right-aligned count, then the disclosure chevron trailing at the far right.
+   Every group header gets this — Trips and every year alike — so "Trips" and
+   "2026" start their label text at the same x. (An earlier pass gave Trips an
+   icon and left years bare, which was worse: two peer headers in the same
+   list landing at two different label positions.) The chevron used to lead
+   (sitting where the icon is now); real Fluent nav items — an expandable
+   "Job Postings" row, checked against the Storybook demo — put the disclosure
+   arrow last, after the label, not first. */
 .nav-year {
   position: sticky;
   top: -10px;
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px 1fr auto 12px;
   align-items: center;
-  gap: 4px;
+  column-gap: 10px;
   width: 100%;
   font: inherit;
   font-size: 12.5px;
@@ -256,99 +248,182 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   background: var(--bg-muted);
   border: none;
-  border-radius: 7px;
-  padding: 9px 8px 7px;
+  border-radius: var(--radius-s);
+  /* 8px, not 6px: measured against the real Fluent Nav item, our own row
+     computed to 28.5px against Fluent's 40px. Full parity would nearly
+     double every row's height and reintroduce the scrolling this sidebar
+     was explicitly fixed to avoid across a 12-year archive, so this lands
+     roughly on Fluent's own Medium-density tier (~32px) instead of its
+     40px default. */
+  padding: 8px 8px;
   cursor: pointer;
 }
-.nav-year:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.nav-year:hover { background: var(--surface-hover); }
 
-/* Drawn rather than typed. As a ▸/▾ glyph pair it was a 9px sliver that sat off
-   the text baseline, and it was the same character the trip rows used as a
-   bullet — so a trip looked like a collapsed group. One chevron that turns. */
-.nav-year-twisty {
-  flex: 0 0 14px;
-  height: 14px;
-  position: relative;
+/* Fluent's own Location20Regular / Calendar20Regular — the leading icon every
+   group header carries, matched by `.month-link`'s own indent below so a
+   child's label lands on the same x without repeating the icon itself. */
+.nav-year-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: currentColor;
   color: var(--text-secondary);
+}
+
+/* Fluent's own ChevronDown12Regular glyph (real path data, not a CSS
+   border-corner trick) — it used to be a ▸/▾ glyph pair, a 9px sliver that sat
+   off the text baseline and was the same character the trip rows used as a
+   bullet, so a trip looked like a collapsed group. The SVG already points
+   down, so the resting (collapsed) state rotates it to point right instead of
+   the other way around. */
+.nav-year-twisty {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  fill: currentColor;
+  color: var(--text-secondary);
+  transform: rotate(-90deg);
   transition: transform 120ms ease;
 }
-.nav-year-twisty::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-}
-.nav-year[aria-expanded="true"] .nav-year-twisty { transform: rotate(90deg); }
+.nav-year[aria-expanded="true"] .nav-year-twisty { transform: rotate(0deg); }
 
-.nav-year-name { flex: 1; min-width: 0; }
+.nav-year-name { min-width: 0; }
 /* A collapsed year still says how much is behind it, so the pane reads as a
-   summary of the archive rather than a row of lids. */
+   summary of the archive rather than a row of lids. Same `min-width` as
+   `.month-count` below so a two-digit and a five-digit count still end on the
+   same right edge — the column, not just the row, now lines up. */
 .nav-year-count {
-  flex: 0 0 auto;
+  min-width: 3.4em;
+  text-align: right;
   font-size: 11px;
   font-weight: 400;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
-/* A rail under the heading, so the months read as contained by their year
-   rather than merely following it. The indent lines the rail up with the
-   middle of the chevron above. */
+/* No indent here — the indent that used to live on this container now lives
+   on `.month-link`'s own padding instead, so it can match a precise target
+   (the parent header's label x) rather than an arbitrary margin. */
 .nav-months {
-  margin: 1px 0 0 14px;
-  padding-left: 5px;
-  border-left: 1px solid var(--border);
+  margin-top: 1px;
 }
 
+/* Two columns — the name, then a right-aligned count — no icon column: a
+   child row never repeats the icon its own group header already carries.
+   Its label still has to land where that header's label does, so the left
+   padding alone does the work an icon-plus-gap would otherwise do: 8px
+   (`.nav-year`'s own padding) + 16px (icon) + 10px (column-gap) = 34px,
+   the exact x `.nav-year-name` starts at. */
 .month-link {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 10px;
   width: 100%;
   font: inherit;
   font-size: 12.5px;
   text-align: left;
-  padding: 5px 8px;
+  padding: 8px 8px 8px 34px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
 }
+/* Generate/Settings reuse `.month-link` for the same row height and hover, but
+   carry an icon and a name — no marker or count, and a flex row rather than
+   the shared grid, since a two-child icon+label row doesn't need a column
+   template built for three. Text-only utility rows read as orphaned links
+   rather than navigation items — every other row in this sidebar leads with
+   something in that position (a twisty, or empty space held for one), so
+   these two were the odd ones out. */
+.nav-tool {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* `.month-link`'s own padding indents a bare-label child row to line up
+     with its parent's label text past an icon it doesn't carry. Generate and
+     Settings carry their own icon instead, so they need the symmetric
+     padding every icon-led row gets, not that indent. */
+  padding: 8px 8px;
+}
+/* Fluent's own Sparkle20Regular and Settings20Regular — real path data, not a
+   hand-drawn approximation (an earlier pass here drew Settings as three
+   sliders, which reads as an equalizer, not the gear Fluent actually uses).
+   `@fluentui/svg-icons` ships these pre-stripped to `fill="currentColor"` for
+   exactly this kind of theming; these paths are copied from the same source
+   rather than pulling in the package, since a two-icon need doesn't justify a
+   new dependency (`@fluentui/react-icons`, the framework-integrated one, is
+   React-only besides). */
+.nav-tool-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: currentColor;
+  color: var(--text-secondary);
+}
+.nav-tool.active .nav-tool-icon { color: var(--accent); }
+/* Selection is the accent bar and tint below, not the browser's default focus
+   ring — with nothing overriding it, a mouse click left a rectangular outline
+   sitting on top of that styling, which a system nav (Explorer's own selected
+   item is just a line and a soft fill, no ring) does not do. Suppressed for a
+   pointer click; kept, and made more visible, for keyboard navigation. */
+.nav-year:focus,
+.month-link:focus {
+  outline: none;
+}
+.nav-year:focus-visible,
+.month-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 /* A lift, not `--bg`: in dark mode `--bg` is darker than the sidebar, so a
    hovered row read as a hole punched in the list rather than a raised one. */
 .month-link:hover {
-  background: color-mix(in srgb, var(--text) 8%, transparent);
+  background: var(--surface-hover);
   color: var(--text);
 }
 /* A tint of the accent rather than `--bg`: in dark mode `--bg` is *darker* than
-   the sidebar, so the selected row read as a hole punched in the list. The bar
-   sits on the rail, marking which stretch of the year you are in. */
+   the sidebar, so the selected row read as a hole punched in the list. Fluent's
+   own nav marks a selected item with a bar and bold text and nothing else — no
+   filled pill — so the tint here is kept faint (`--surface-selected` at 8%)
+   rather than removed outright, which is what a bar-only treatment regressed
+   to before: see the "holes in dark mode" fix this file already carries scars
+   from. */
 .month-link.active {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--surface-selected);
   color: var(--text);
-  font-weight: 500;
+  font-weight: 600;
+}
+/* The bar as its own short, rounded-end element rather than a full-height
+   inset box-shadow: a box-shadow that tall gets clipped by the row's own
+   4px corner radius, and a 3px-wide bar loses almost all of that clipped
+   corner — it read as a groove eaten out of the top and bottom of the bar
+   instead of a clean line. Inset 4px top/bottom and given its own radius,
+   it sits clear of the row's curve entirely. */
+.month-link.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
 }
 
-/* The name takes the slack and the count is a right-aligned column, so digits
-   line up down the list. With `space-between` alone the count floated wherever
-   the month name ended, and 4,998 sat well left of 2. */
-.month-name {
-  flex: 1;
+/* The grid's middle column takes the slack and the count is a right-aligned
+   column, so digits line up down the list. With `space-between` alone the
+   count floated wherever the month name ended, and 4,998 sat well left of 2. */
+.nav-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .month-count {
-  flex: 0 0 auto;
   min-width: 3.4em;
   text-align: right;
   font-size: 11px;
@@ -371,7 +446,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .loading code {
   background: var(--bg-muted);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   font-size: 12px;
 }
 
@@ -393,7 +468,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   align-self: center;
   flex-shrink: 0;
 }
@@ -402,7 +477,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-size: 12px;
   padding: 4px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-l);
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
@@ -437,7 +512,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-size: 13px;
   line-height: 1.7;
   background: var(--bg-muted);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   padding: 12px 14px;
   margin-bottom: 14px;
 }
@@ -457,7 +532,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   position: relative;
   aspect-ratio: 1;
   background: var(--bg-muted);
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   overflow: hidden;
 }
 .album-cell img {
@@ -570,7 +645,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   flex-direction: column;
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   overflow: hidden;
 }
 /* The strip's height comes from its width, never from a pixel value.
@@ -665,7 +740,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   background: var(--bg-muted);
   cursor: zoom-in;
 }
@@ -705,7 +780,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-size: 13px;
   font-weight: 500;
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
@@ -737,7 +812,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   max-width: 92vw;
   max-height: 92vh;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
 }
 
 /* --- Narrow screens: month tabs become a horizontal strip ------------- */
@@ -770,6 +845,13 @@ body.resizing { cursor: col-resize; user-select: none; }
     scrollbar-width: none;
   }
   #month-nav::-webkit-scrollbar { display: none; }
+  /* Grid's `1fr` track needs a definite container width to size against, which
+     an auto-width flex child sized by its own content does not reliably give
+     across browsers. The strip predates the grid template above and is not
+     being restyled in this pass, so it opts back out to the flex row it
+     already had rather than inheriting a layout mode built for the sidebar's
+     fixed width. */
+  .nav-year, .month-link { display: flex; align-items: center; }
   .nav-year {
     position: static;
     width: auto;
@@ -792,6 +874,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   .month-link {
     width: auto;
     flex-shrink: 0;
+    gap: 6px;
     padding: 6px 12px;
     white-space: nowrap;
   }
@@ -826,19 +909,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 3px 9px;
-}
-
-/* Trips sit above the year groups and are the only nav entries that are not a
-   month, so they get a marker rather than relying on position alone. */
-.trip-link .month-name::before {
-  content: "";
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin-right: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  vertical-align: middle;
 }
 
 /* --- Job panel (only present when `pipeline serve` is running) --------- */
@@ -887,11 +957,20 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   padding: 4px 6px;
   width: 100%;
 }
 .job-field textarea { resize: vertical; }
+/* Fluent's own input focus is a 2px accent underline, not a glow around the
+   whole field. An inset box-shadow draws it rather than thickening the actual
+   border — changing border-width on focus would grow the box by a pixel and
+   shift whatever sits below it. */
+.job-field input:focus,
+.job-field textarea:focus {
+  outline: none;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
 
 .job-check { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
 .job-check input { margin: 0; }
@@ -904,17 +983,40 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 .job-form button[type="submit"],
 .job-estimate,
-.job-cancel {
+.job-cancel,
+.job-preview {
   font: inherit;
   font-size: 12px;
   padding: 5px 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   border: 1px solid var(--border);
   background: var(--bg-muted);
   color: var(--text);
   cursor: pointer;
 }
 .job-form button[type="submit"] { border-color: var(--accent); color: var(--accent); }
+/* Genuinely unstyled before this — `type="button"`, not `[type="submit"]`, so
+   it matched none of the rules above and rendered as the browser's own grey
+   default. */
+.job-preview:hover { border-color: var(--accent); }
+
+/* The browser's own file input keeps its native "Choose file / no file
+   chosen" text — rebuilding that as a real dropzone is a bigger change than
+   this pass — but `::file-selector-button` is real, standard CSS support
+   (Chromium, so Electron too) for reskinning just the button half to match
+   everything else here. */
+.job-field input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  margin-right: 8px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  cursor: pointer;
+}
+.job-field input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 .job-progress:not([hidden]) { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .job-phase { color: var(--text-secondary); }
@@ -981,7 +1083,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   max-width: 100%;
   max-height: 92vh;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   transform-origin: center;
   /* Panning is a drag, and without this the browser starts its own image drag
      and a text selection instead. */
@@ -1003,7 +1105,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   align-items: center;
   gap: 2px;
   padding: 3px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: rgb(0 0 0 / 0.55);
   border: 1px solid rgb(241 239 232 / 0.14);
 }
@@ -1071,7 +1173,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 #lightbox-card,
 #lightbox-photo {
   padding: 14px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: rgb(28 27 25 / 0.92);
   border: 1px solid rgb(241 239 232 / 0.1);
   display: flex;
@@ -1232,8 +1334,8 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-top: 1px solid var(--border);
   background: var(--bg-muted);
 }
-.nav-tool .month-name { color: var(--text-secondary); }
-.nav-tool.active .month-name { color: var(--text); }
+.nav-tool .nav-label { color: var(--text-secondary); }
+.nav-tool.active .nav-label { color: var(--text); }
 
 /* --- Settings page ---------------------------------------------------- */
 
@@ -1248,7 +1350,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .set-body {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   padding: 4px 12px 12px;
   background: var(--bg-muted);
 }
@@ -1270,6 +1372,17 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-size: 11.5px;
   line-height: 1.55;
   color: var(--text-secondary);
+}
+/* A plain-text warning read as a debug log line, not something the reader was
+   meant to act on. Fluent's own answer to this is the MessageBar component —
+   a tinted, bordered banner with a coloured bar — built here from the tone
+   colour this project already has rather than a new component, since one
+   banner doesn't need a generic one built for it. */
+.set-note.tone-warn {
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, currentColor 10%, var(--bg));
+  box-shadow: inset 3px 0 0 currentColor;
 }
 
 /* The sync state is the one thing on this page worth seeing from across the
@@ -1302,11 +1415,18 @@ body.resizing { cursor: col-resize; user-select: none; }
   gap: 8px;
   padding: 10px 0 2px;
 }
+/* Fluent's own button radius is the Medium tier, not Large — Large/XLarge
+   are for cards and panels. This one had been a literal 6px before the token
+   sweep just carried the existing number forward as --radius-l without
+   checking it against Fluent's actual component guidance for buttons
+   specifically. font-weight 600 is Fluent's button weight too; these had
+   inherited the page's regular 400. */
 .set-btn {
   font: inherit;
   font-size: 11.5px;
+  font-weight: 600;
   padding: 5px 11px;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
@@ -1326,7 +1446,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   margin: 10px 0 2px;
   padding: 10px 12px;
   border: 1px solid #a33;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: color-mix(in srgb, #a33 6%, var(--bg));
 }
 .set-conflict-lead {
@@ -1386,7 +1506,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   padding: 3px 6px;
 }
 
@@ -1413,7 +1533,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   font: inherit;
   font-size: 11.5px;
   padding: 4px 11px;
-  border-radius: 6px;
+  border-radius: var(--radius-l);
   border: 1px solid var(--border);
   background: var(--bg-muted);
   color: var(--text-secondary);
@@ -1434,7 +1554,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   margin-top: 10px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: var(--bg-muted);
   font-size: 11.5px;
   line-height: 1.6;
@@ -1449,7 +1569,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   padding: 5px 6px;
 }
 
@@ -1501,7 +1621,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   font: inherit;
   font-size: 11.5px;
   padding: 4px 11px;
-  border-radius: 6px;
+  border-radius: var(--radius-l);
   border: 1px solid var(--border);
   background: var(--bg-muted);
   color: var(--text-secondary);
@@ -1531,7 +1651,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   position: relative;
   margin: 0 0 22px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: var(--bg-muted);
   overflow: hidden;
 }
@@ -1630,7 +1750,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   inset: 3vh 3vw;
   z-index: 90;
   margin: 0;
-  box-shadow: 0 18px 60px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-64);
 }
 .trip-map.is-expanded .trip-map-svg { height: 94vh; }
 /* Stops the page scrolling behind the overlay. */
@@ -1650,7 +1770,7 @@ body.map-expanded::after {
   font: inherit;
   font-size: 11px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-l);
   border: 1px solid var(--border);
   background: var(--bg-muted);
   color: var(--text);
@@ -1664,7 +1784,7 @@ body.map-expanded::after {
   font: inherit;
   font-size: 11px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-l);
   border: 1px solid var(--border);
   background: var(--bg-muted);
   color: var(--text);
@@ -1697,7 +1817,7 @@ body.map-expanded::after {
   background: var(--bg-muted);
   color: var(--text);
   font-size: 12px;
-  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-16);
 }
 
 @media print {
