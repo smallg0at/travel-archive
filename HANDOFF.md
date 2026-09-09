@@ -209,6 +209,16 @@ before believing it.
 `--remote-debugging-port=9222` and a ~40-line CDP client, since it is not Chrome
 and the extension cannot attach.
 
+**Precise measurement answers the wrong question when the question is "does
+this look right."** The Fluent 2 sidebar refresh (`TODO.md`, 2026-09-09) spent
+several rounds proving a chevron centered to 0.5px and a marker column's math
+correct against the TreeView spec, while the actual defect was one level up —
+TreeView was the wrong component archetype for what the design wanted
+(Fluent's flatter NavDrawer). `getBoundingClientRect` verifies a claim once you
+know what to check; it does not tell you whether you are checking the right
+thing. Look at the screen first, especially when a critique is about how
+something reads rather than whether it matches a spec.
+
 **Cost is real.** `analyze` spends money per photo. The whole 18-day trip cost
 under £8 for 4,181 photos. Show an estimate before spending, and never re-run
 over the library casually.
