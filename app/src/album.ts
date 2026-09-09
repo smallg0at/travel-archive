@@ -3,6 +3,7 @@ import { loadMonth, SignInRequiredError } from "./archiveData";
 import { el, lazyImg } from "./photoUi";
 import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
+import { addDayControls, setDayEditingAvailable } from "./dayEdit";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
@@ -202,6 +203,9 @@ function renderDaySection(
     summary.textContent = day.summary;
     header.appendChild(summary);
   }
+  // Only a day `organize` has actually written can be corrected — there is no
+  // record to patch for a day that is still a plain grid.
+  if (day) addDayControls(header, day);
   section.appendChild(header);
 
   // A day broken into stops renders as a page; everything else is a plain
@@ -748,6 +752,7 @@ function addPinControl(heading: HTMLElement, kind: "trip" | "month", id: string)
  */
 async function revealBackendTools(): Promise<void> {
   if (!(await checkHealth())) return;
+  setDayEditingAvailable(true);
   const generate = document.getElementById("nav-generate");
   if (generate) generate.hidden = false;
 }

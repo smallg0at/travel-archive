@@ -238,6 +238,30 @@ export function startOrganize(body: { only?: string; force?: boolean; days?: str
   return post<JobRecord>("/jobs/organize", body);
 }
 
+/**
+ * A correction, or a note for the summarizer. Spends nothing and answers
+ * synchronously — unlike the jobs above, this is one field and one write.
+ *
+ * `undefined` leaves a field alone; an explicit `null` clears it. Send only
+ * what changed, or saving a title erases the note.
+ */
+export interface DayPatch {
+  note?: string | null;
+  summary?: string | null;
+  stops?: { anchorPhotoId: string; title?: string | null; summary?: string | null }[];
+}
+
+export interface DayEditResult {
+  date: string;
+  note: string | null;
+  /** True when the next day-summaries run will rewrite this day. */
+  stale: boolean;
+}
+
+export function editDay(date: string, patch: DayPatch): Promise<DayEditResult> {
+  return post<DayEditResult>(`/days/${date}`, patch);
+}
+
 export interface TripRequest {
   startDate: string;
   endDate: string;

@@ -3,6 +3,7 @@ import { loadIndex, SignInRequiredError } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
 import { initSidebarResize } from "./chrome";
+import { setArchiveRefresh } from "./dayEdit";
 
 let panelMounted = false;
 
@@ -40,6 +41,7 @@ async function loadAndRender(): Promise<void> {
     // experience and needs no separate code path.
     if (!panelMounted) {
       panelMounted = true;
+      setArchiveRefresh(() => void loadAndRender());
       void initGeneration(() => void loadAndRender());
     }
   } catch (err) {

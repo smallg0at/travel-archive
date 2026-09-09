@@ -610,6 +610,124 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .stop-title { margin: 0; font-size: 15px; font-weight: 600; }
 .stop-meta { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+/* --- Correcting what the summarizer wrote ----------------------------- */
+
+/* Present only when the local server is (dayEdit.ts returns early otherwise),
+   so none of this exists on the phone. */
+.day-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.day-edit-open,
+.stop-edit-open {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.day-edit-open:hover,
+.stop-edit-open:hover { background: var(--surface-hover); color: var(--text); }
+/* The stop's Rename sits at the end of its heading row, past the time and
+   count, rather than beside the title where it would push the name about. */
+.stop-edit-open { margin-left: auto; }
+
+/* `:not([hidden])` on both editors: an unconditional `display` would beat the
+   UA's `[hidden]` rule and leave them permanently open — the trap this
+   stylesheet has fallen into three times (see HANDOFF.md). */
+.day-editor:not([hidden]),
+.stop-editor:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.day-editor,
+.stop-editor {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+.day-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.day-editor textarea,
+.stop-editor textarea,
+.stop-editor input {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 7px 9px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  resize: vertical;
+}
+.stop-editor input { font-size: 15px; font-weight: 600; }
+.day-editor textarea:focus-visible,
+.stop-editor textarea:focus-visible,
+.stop-editor input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.day-editor-actions,
+.stop-editor-actions {
+  display: flex;
+  gap: 6px;
+}
+.day-editor-actions button,
+.stop-editor-actions button {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.day-editor-actions button:hover:not(:disabled),
+.stop-editor-actions button:hover:not(:disabled) { background: var(--surface-hover); }
+.day-editor-actions button:disabled,
+.stop-editor-actions button:disabled { opacity: 0.55; cursor: default; }
+.day-save,
+.stop-save {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+/* Rewriting costs a model call, so it sits apart from Save and Cancel rather
+   than reading as the third of three equivalent buttons. */
+.day-regen { margin-left: auto; }
+
+.day-editor-note,
+.stop-editor-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* The editors are chrome, not content — an export is the archive, not the
+   tools for editing it. */
+@media print {
+  .day-tools,
+  .day-editor,
+  .stop-edit-open,
+  .stop-editor { display: none !important; }
+}
+
 .stop-summary {
   margin: 0 0 12px;
   max-width: 68ch;

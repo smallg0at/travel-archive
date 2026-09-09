@@ -2,6 +2,7 @@ import type { DayRecord, DaySegment, Highlight, PhotoRecord } from "@travel-arch
 import { el, lazyImg } from "./photoUi";
 import { openCard, openPhoto } from "./viewer";
 import { anchorFor } from "./tripMap";
+import { addStopControls } from "./dayEdit";
 
 /**
  * A day, laid out as a page rather than listed.
@@ -140,6 +141,7 @@ function renderPlace(segment: DaySegment, byId: Record<string, PhotoRecord>, dat
   section.querySelector(".stop-title")!.textContent = segment.title;
   // Anchored so a city on the trip map can scroll straight to it.
   section.id = anchorFor(date, segment.id);
+  addStopControls(section.querySelector(".stop-head") as HTMLElement, section, date, segment);
 
   const all = segment.photoIds.map((id) => byId[id]).filter(Boolean);
   section.querySelector(".stop-meta")!.textContent = `${timeRange(segment)} · ${all.length} photos`;
