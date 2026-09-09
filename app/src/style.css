@@ -925,11 +925,20 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   padding: 4px 6px;
   width: 100%;
 }
 .job-field textarea { resize: vertical; }
+/* Fluent's own input focus is a 2px accent underline, not a glow around the
+   whole field. An inset box-shadow draws it rather than thickening the actual
+   border — changing border-width on focus would grow the box by a pixel and
+   shift whatever sits below it. */
+.job-field input:focus,
+.job-field textarea:focus {
+  outline: none;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
 
 .job-check { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
 .job-check input { margin: 0; }
@@ -946,7 +955,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   font: inherit;
   font-size: 12px;
   padding: 5px 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   border: 1px solid var(--border);
   background: var(--bg-muted);
   color: var(--text);
@@ -1340,11 +1349,18 @@ body.resizing { cursor: col-resize; user-select: none; }
   gap: 8px;
   padding: 10px 0 2px;
 }
+/* Fluent's own button radius is the Medium tier, not Large — Large/XLarge
+   are for cards and panels. This one had been a literal 6px before the token
+   sweep just carried the existing number forward as --radius-l without
+   checking it against Fluent's actual component guidance for buttons
+   specifically. font-weight 600 is Fluent's button weight too; these had
+   inherited the page's regular 400. */
 .set-btn {
   font: inherit;
   font-size: 11.5px;
+  font-weight: 600;
   padding: 5px 11px;
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-s);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
