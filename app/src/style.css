@@ -46,6 +46,17 @@
      scale (Medium and XLarge) rather than values picked to look right. */
   --radius-s: 4px;
   --radius-m: 8px;
+
+  /* Fluent's shadow scale — the same rgba(0,0,0,..) values in both themes,
+     since these represent physical depth rather than surface colour, and
+     that's how Fluent itself ships them. Replaces five box-shadows that had
+     each been tuned by eye (12px/22px/20px/60px/22px blur, four different
+     opacities) with three named stops picked by what each element actually
+     is: a resting floating button, a flyout/menu, or a near-fullscreen
+     overlay. */
+  --shadow-4: 0 2px 4px rgba(0, 0, 0, .14), 0 0 2px rgba(0, 0, 0, .12);
+  --shadow-16: 0 8px 16px rgba(0, 0, 0, .14), 0 0 2px rgba(0, 0, 0, .12);
+  --shadow-64: 0 32px 64px rgba(0, 0, 0, .24), 0 0 8px rgba(0, 0, 0, .2);
 }
 
 /* System preference, unless the reader explicitly asked for light. */
@@ -206,7 +217,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   background: var(--bg-muted);
   color: var(--text);
   cursor: pointer;
-  box-shadow: 0 2px 12px rgb(0 0 0 / 0.22);
+  box-shadow: var(--shadow-4);
 }
 #menu-toggle:hover { border-color: var(--accent); }
 #menu-toggle.open { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -221,7 +232,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-radius: var(--radius-m);
   border: 1px solid var(--border);
   background: var(--bg-muted);
-  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-16);
 }
 #menu-items[hidden] { display: none; }
 /* `:not([hidden])` matters here specifically: Generate is hidden until a
@@ -269,7 +280,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-radius: var(--radius-m);
   border: 1px solid var(--border);
   background: var(--bg-muted);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 0.28);
+  box-shadow: var(--shadow-16);
   font-size: 12px;
 }
 .settings-row {
@@ -321,7 +332,14 @@ body.resizing { cursor: col-resize; user-select: none; }
   display: grid;
   grid-template-columns: 14px 1fr auto;
   align-items: center;
-  column-gap: 8px;
+  /* 10px, not the 8px this shared with every other gap in the file: Fluent's
+     own nav item measures out to a 16px gap between its 20px icon and label
+     (row padding `10px 8px 10px 10px`, icon 20x20, gap 16px, from the
+     Storybook "Basic" Nav story's computed styles). Our marker column is a
+     narrower 14px than Fluent's icon, so matching 16px verbatim would read as
+     too roomy for what sits in it — 10px is a step toward that breathing room
+     scaled to our narrower column, not the literal Fluent number. */
+  column-gap: 10px;
   width: 100%;
   font: inherit;
   font-size: 12.5px;
@@ -389,7 +407,14 @@ body.resizing { cursor: col-resize; user-select: none; }
   display: grid;
   grid-template-columns: 14px 1fr auto;
   align-items: center;
-  column-gap: 8px;
+  /* 10px, not the 8px this shared with every other gap in the file: Fluent's
+     own nav item measures out to a 16px gap between its 20px icon and label
+     (row padding `10px 8px 10px 10px`, icon 20x20, gap 16px, from the
+     Storybook "Basic" Nav story's computed styles). Our marker column is a
+     narrower 14px than Fluent's icon, so matching 16px verbatim would read as
+     too roomy for what sits in it — 10px is a step toward that breathing room
+     scaled to our narrower column, not the literal Fluent number. */
+  column-gap: 10px;
   width: 100%;
   font: inherit;
   font-size: 12.5px;
@@ -1750,7 +1775,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   inset: 3vh 3vw;
   z-index: 90;
   margin: 0;
-  box-shadow: 0 18px 60px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-64);
 }
 .trip-map.is-expanded .trip-map-svg { height: 94vh; }
 /* Stops the page scrolling behind the overlay. */
@@ -1817,7 +1842,7 @@ body.map-expanded::after {
   background: var(--bg-muted);
   color: var(--text);
   font-size: 12px;
-  box-shadow: 0 4px 22px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-16);
 }
 
 @media print {
