@@ -145,7 +145,7 @@ function dayOf(photo: PhotoRecord): string {
  * reading "September" above a heading reading "2026年9月1日周二". Deriving both
  * from the raw `yyyy-mm` keeps them in one language — the viewer's.
  */
-function formatMonthLabel(month: string, withYear = true): string {
+export function formatMonthLabel(month: string, withYear = true): string {
   const [year, m] = month.split("-").map(Number);
   return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString(undefined, {
     month: "long",
@@ -734,7 +734,16 @@ async function revealBackendTools(): Promise<void> {
   if (generate) generate.hidden = false;
 }
 
+let cachedIndex: ArchiveIndexFile | null = null;
+/** For resolving an id (a trip, in a pin record) back to something a reader
+ * recognizes — Settings needs the trip's name, not its slug, and has no
+ * reason to fetch the whole index a second time just to get it. */
+export function getCachedIndex(): ArchiveIndexFile | null {
+  return cachedIndex;
+}
+
 export function renderAlbum(index: ArchiveIndexFile): void {
+  cachedIndex = index;
   const content = document.getElementById("content")!;
   applyDensity();
 

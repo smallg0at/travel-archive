@@ -983,7 +983,8 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 .job-form button[type="submit"],
 .job-estimate,
-.job-cancel {
+.job-cancel,
+.job-preview {
   font: inherit;
   font-size: 12px;
   padding: 5px 10px;
@@ -994,6 +995,28 @@ body.resizing { cursor: col-resize; user-select: none; }
   cursor: pointer;
 }
 .job-form button[type="submit"] { border-color: var(--accent); color: var(--accent); }
+/* Genuinely unstyled before this — `type="button"`, not `[type="submit"]`, so
+   it matched none of the rules above and rendered as the browser's own grey
+   default. */
+.job-preview:hover { border-color: var(--accent); }
+
+/* The browser's own file input keeps its native "Choose file / no file
+   chosen" text — rebuilding that as a real dropzone is a bigger change than
+   this pass — but `::file-selector-button` is real, standard CSS support
+   (Chromium, so Electron too) for reskinning just the button half to match
+   everything else here. */
+.job-field input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  margin-right: 8px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text);
+  cursor: pointer;
+}
+.job-field input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 .job-progress:not([hidden]) { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .job-phase { color: var(--text-secondary); }
@@ -1349,6 +1372,17 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-size: 11.5px;
   line-height: 1.55;
   color: var(--text-secondary);
+}
+/* A plain-text warning read as a debug log line, not something the reader was
+   meant to act on. Fluent's own answer to this is the MessageBar component —
+   a tinted, bordered banner with a coloured bar — built here from the tone
+   colour this project already has rather than a new component, since one
+   banner doesn't need a generic one built for it. */
+.set-note.tone-warn {
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, currentColor 10%, var(--bg));
+  box-shadow: inset 3px 0 0 currentColor;
 }
 
 /* The sync state is the one thing on this page worth seeing from across the

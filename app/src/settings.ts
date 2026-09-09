@@ -15,7 +15,7 @@ import {
   type ScanMode,
 } from "./backend";
 import { el } from "./photoUi";
-import { renderDensityControl } from "./album";
+import { renderDensityControl, getCachedIndex, formatMonthLabel } from "./album";
 import { resetSidebarWidth } from "./chrome";
 import { renderThemeControl } from "./theme";
 
@@ -610,7 +610,15 @@ function offlineSection(status: SyncStatus): HTMLElement {
     }
     const rows = pins.map((pin) => {
       const r = el<HTMLDivElement>(`<div class="set-row set-pin"><span></span></div>`);
-      r.querySelector("span")!.textContent = `${pin.kind === "trip" ? "Trip" : "Month"} · ${pin.id}${pin.originals ? " · with originals" : ""}`;
+      // A pin's own record only carries the id it was made against — a trip
+      // slug or a yyyy-mm month — because that is all a pin needs to function.
+      // The reader never asked to see that slug, though; it's an internal
+      // identifier; this resolves it back to what they actually recognize.
+      const label =
+        pin.kind === "trip"
+          ? (getCachedIndex()?.sections.find((s) => s.id === pin.id)?.name ?? pin.id)
+          : formatMonthLabel(pin.id);
+      r.querySelector("span")!.textContent = `${pin.kind === "trip" ? "Trip" : "Month"} · ${label}${pin.originals ? " · with originals" : ""}`;
       r.appendChild(
         button("Unpin", () => {
           // The server answers with the new pin list, so the section can be
