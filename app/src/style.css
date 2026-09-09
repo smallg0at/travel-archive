@@ -91,6 +91,15 @@
 
 * { box-sizing: border-box; }
 
+/* Native checkboxes and radios (job forms, Settings' "Check for changes")
+   otherwise tint themselves with the browser/OS default blue rather than this
+   app's own accent — the one native form control CSS can recolour without
+   rebuilding it from scratch. */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
 /* Themed scrollbars everywhere, rather than the OS default sitting on top of
    an otherwise token-driven page. Firefox's two-property shorthand plus
    WebKit's pseudo-elements (Electron is Chromium, so the second is what
@@ -1440,7 +1449,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   padding: 3px 6px;
 }
 
@@ -1503,7 +1512,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-s);
   padding: 5px 6px;
 }
 
