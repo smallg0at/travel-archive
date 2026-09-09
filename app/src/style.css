@@ -81,6 +81,42 @@
 
 * { box-sizing: border-box; }
 
+/* Themed scrollbars everywhere, rather than the OS default sitting on top of
+   an otherwise token-driven page. Firefox's two-property shorthand plus
+   WebKit's pseudo-elements (Electron is Chromium, so the second is what
+   actually renders here) — a transparent track and a thumb in `--border`
+   that steps up to `--text-secondary` on hover, the same relationship
+   `.month-link` already uses for hover. `background-clip: padding-box` on a
+   transparent border is what insets the thumb from the track's edges without
+   a fixed pixel gap that would look wrong at a different scrollbar width.
+   `#month-nav`'s own `::-webkit-scrollbar { display: none }` in the mobile
+   media query below still wins over this — a `display: none` there overrides
+   regardless of which rule has higher specificity. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Column layout so the nav and the photo pane scroll independently — with
    several hundred thumbnails in a month, scrolling the whole document would
    drag the month tabs off screen. */
