@@ -466,10 +466,45 @@ working practice this list was built with.
       this change; neighbouring days are the smaller half. Needs a marker on
       `DayRecord` for which mode produced it, and `segmentsAreCurrent()`
       extended so switching modes counts as stale.
-- [ ] **Koblenz is missing from the trip map.** It is in the trip's `places`
-      list but produces no city marker. Likely caught by the new
-      `MAX_PLACE_SPAN_KM` rule (a Rhine-valley train leg) or merged into
-      Boppard. Not yet investigated.
+- [x] **Koblenz is missing from the trip map.** Fixed 2026-09-09. **The guess
+      in this entry was wrong** — `MAX_PLACE_SPAN_KM` lives in `app/src/tripMap.ts`
+      and never touched it, and it was not merged into Boppard.
+
+      Koblenz was a `transit` segment: 39 photos over 105 minutes, filed as
+      travelling. `detectStops` splits a cluster whenever the anchor moves more
+      than `MOVE_KM` (350m), which is the right question for separating a museum
+      from the café beside it and the wrong one for a place you move *around*
+      in. A cable car across the Rhine, Ehrenbreitstein Fortress and the
+      Deutsches Eck are each further apart than that, so the visit shattered
+      into clusters that were individually too small to be `substantial()`, and
+      every one of them fell into the same transit run — together with the train
+      back to Mainz, which is why the segment measured 63km end to end.
+
+      The fix is a second pass at city scale (5km) over the runs that failed the
+      first test. The bar for promotion is higher than `substantial()`, because
+      everything reaching it has already failed once and the failure mode is
+      promoting a train window into a destination. Each threshold came from a
+      real false positive in the measurement:
+
+      | rule | the case that required it |
+      |---|---|
+      | duration >= 25 min, not photo count alone | a 12-photo burst from a moving train at Bingen, over 4 minutes |
+      | >= 6 located photos and measured span <= 5km | with no GPS every photo joins one cluster, so a 16-hour overnight ferry looked compact |
+      | duration <= 4 hours | "Train to a port town", 974 minutes; "Train to a city", 581 |
+
+      Measured across the trip's 81 transit runs: 19 promotions on the first
+      rule, 16 with GPS evidence required, 13 with the duration cap — dominated
+      by real visits (Koblenz, the Hafelekar cable car, the a city canal
+      tour, Munich Altstadt).
+
+      Verified: 2026-08-24 re-detects as `place Koblenz 39p 17:06-18:51` with
+      "Train to Koblenz" and "Train to Mainz" correctly transit either side; the
+      re-summarized day gives Koblenz 8 cards and names Ehrenbreitstein and
+      Deutsches Eck; the marker is on the trip map.
+
+      **Nothing else was re-summarized.** `segmentsAreCurrent()` cannot see an
+      algorithm change, so every other day keeps its stored segments until
+      forced — the day picker in Generate is how to choose which.
 - [ ] **the city airport never appears on the map.** The photos are correct and now
       trusted (18 of 21 UK fixes), geocoded to the capital region / City of the capital.
       They land in a single **transit** segment (13:42–21:58 "Flight to the capital

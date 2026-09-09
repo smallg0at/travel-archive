@@ -35,6 +35,37 @@ const GAP_MINUTES = 75;
 const MIN_PHOTOS = 12;
 const MIN_MINUTES = 25;
 
+/**
+ * A second pass, at the scale of a town rather than a street corner.
+ *
+ * `MOVE_KM` asks "did I walk somewhere else", which is the right question for
+ * splitting a museum from the café next to it and the wrong one for a place you
+ * move *around* in. Koblenz was the case that showed it: a cable car across the
+ * Rhine, a fortress and the Deutsches Eck are each more than 350m apart, so the
+ * visit shattered into clusters that were individually too small to be
+ * substantial, and every one of them fell into the same transit run — 39 photos
+ * over 105 minutes, filed as travelling. The trip map only marks `place`
+ * stops, so Koblenz was on the trip's list of places and nowhere on its map.
+ *
+ * So the runs that failed the first test get clustered again at city scale, and
+ * a cluster that looks like a visit is promoted. The bar is deliberately higher
+ * than `substantial()`, because everything here has already failed that test
+ * once and the failure mode is turning a train window into a destination:
+ *
+ * - **duration, not just count.** A 12-photo burst from a moving train at
+ *   Bingen lasted four minutes; the count alone would have promoted it.
+ * - **located photos, and a measured span.** With no GPS every photo joins one
+ *   cluster and "within 5km" means nothing — that is how a 16-hour overnight
+ *   ferry looked compact.
+ * - **an upper bound on duration.** A stop of more than four hours inside a
+ *   transit run *is* the transit: the ferry, the long-haul train.
+ */
+const CITY_KM = 5;
+const PROMOTE_MIN_MINUTES = 25;
+const PROMOTE_MAX_MINUTES = 240;
+const PROMOTE_MIN_PHOTOS = 8;
+const PROMOTE_MIN_LOCATED = 6;
+
 export type StopKind = "place" | "transit";
 
 export interface Stop {
@@ -142,27 +173,71 @@ export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
   const stops: Stop[] = [];
   let pending: PhotoRecord[][] = [];
 
+  const span = (photos: PhotoRecord[]): { located: number; km: number } => {
+    const points = photos.map(pointOf).filter((p): p is [number, number] => p !== null);
+    let km = 0;
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) km = Math.max(km, distanceKm(points[i], points[j]));
+    }
+    return { located: points.length, km };
+  };
+
+  /** Whether a city-scale cluster inside a transit run is really a visit. */
+  const isVisit = (photos: PhotoRecord[]): boolean => {
+    if (photos.length < PROMOTE_MIN_PHOTOS) return false;
+    const minutes = minutesBetween(photos[0].takenAt!, photos[photos.length - 1].takenAt!);
+    if (minutes < PROMOTE_MIN_MINUTES || minutes > PROMOTE_MAX_MINUTES) return false;
+    const { located, km } = span(photos);
+    return located >= PROMOTE_MIN_LOCATED && km <= CITY_KM;
+  };
+
+  const pushStop = (kind: StopKind, photos: PhotoRecord[]) => {
+    if (photos.length === 0) return;
+    stops.push({ kind, photos, startTime: photos[0].takenAt!, endTime: photos[photos.length - 1].takenAt! });
+  };
+
+  /**
+   * Emits the pending run, promoting any city-scale cluster in it that looks
+   * like a visit and keeping the rest as transit — in time order, so the day
+   * still reads forwards.
+   */
   const flushTransit = () => {
     if (pending.length === 0) return;
     const photos = pending.flat();
-    stops.push({
-      kind: "transit",
-      photos,
-      startTime: photos[0].takenAt!,
-      endTime: photos[photos.length - 1].takenAt!,
-    });
     pending = [];
+
+    let run: PhotoRecord[] = [];
+    let anchor: [number, number] | null = null;
+    const groups: PhotoRecord[][] = [];
+    for (const photo of photos) {
+      const point = pointOf(photo);
+      if (point !== null && anchor !== null && distanceKm(point, anchor) > CITY_KM) {
+        groups.push(run);
+        run = [];
+        anchor = point;
+      }
+      if (point !== null && anchor === null) anchor = point;
+      run.push(photo);
+    }
+    if (run.length > 0) groups.push(run);
+
+    let travelling: PhotoRecord[] = [];
+    for (const group of groups) {
+      if (isVisit(group)) {
+        pushStop("transit", travelling);
+        travelling = [];
+        pushStop("place", group);
+      } else {
+        travelling.push(...group);
+      }
+    }
+    pushStop("transit", travelling);
   };
 
   for (const cluster of clusters) {
     if (substantial(cluster)) {
       flushTransit();
-      stops.push({
-        kind: "place",
-        photos: cluster,
-        startTime: cluster[0].takenAt!,
-        endTime: cluster[cluster.length - 1].takenAt!,
-      });
+      pushStop("place", cluster);
     } else {
       pending.push(cluster);
     }
