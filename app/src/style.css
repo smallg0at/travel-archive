@@ -262,27 +262,22 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .nav-year:hover { background: var(--surface-hover); }
 
-/* Drawn rather than typed. As a ▸/▾ glyph pair it was a 9px sliver that sat off
-   the text baseline, and it was the same character the trip rows used as a
-   bullet — so a trip looked like a collapsed group. One chevron that turns. */
+/* Fluent's own ChevronDown12Regular glyph (real path data, not a CSS
+   border-corner trick) — it used to be a ▸/▾ glyph pair, a 9px sliver that sat
+   off the text baseline and was the same character the trip rows used as a
+   bullet, so a trip looked like a collapsed group. The SVG already points
+   down, so the resting (collapsed) state rotates it to point right instead of
+   the other way around. */
 .nav-year-twisty {
-  height: 14px;
-  position: relative;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  fill: currentColor;
   color: var(--text-secondary);
+  transform: rotate(-90deg);
   transition: transform 120ms ease;
 }
-.nav-year-twisty::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-}
-.nav-year[aria-expanded="true"] .nav-year-twisty { transform: rotate(90deg); }
+.nav-year[aria-expanded="true"] .nav-year-twisty { transform: rotate(0deg); }
 
 .nav-year-name { min-width: 0; }
 /* A collapsed year still says how much is behind it, so the pane reads as a
@@ -354,19 +349,22 @@ body.resizing { cursor: col-resize; user-select: none; }
   align-items: center;
   gap: 8px;
 }
+/* Fluent's own Sparkle20Regular and Settings20Regular — real path data, not a
+   hand-drawn approximation (an earlier pass here drew Settings as three
+   sliders, which reads as an equalizer, not the gear Fluent actually uses).
+   `@fluentui/svg-icons` ships these pre-stripped to `fill="currentColor"` for
+   exactly this kind of theming; these paths are copied from the same source
+   rather than pulling in the package, since a two-icon need doesn't justify a
+   new dependency (`@fluentui/react-icons`, the framework-integrated one, is
+   React-only besides). */
 .nav-tool-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  fill: currentColor;
   color: var(--text-secondary);
 }
 .nav-tool.active .nav-tool-icon { color: var(--accent); }
-.nav-tool-icon-knob { fill: currentColor; stroke: none; }
 /* Selection is the accent bar and tint below, not the browser's default focus
    ring — with nothing overriding it, a mouse click left a rectangular outline
    sitting on top of that styling, which a system nav (Explorer's own selected
