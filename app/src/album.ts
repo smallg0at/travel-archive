@@ -443,14 +443,34 @@ function rememberOpenGroups(open: Set<string>): void {
  */
 const expanders = new WeakMap<HTMLElement, () => void>();
 
+/**
+ * Fluent's own Location20Regular and Calendar20Regular — the leading icon
+ * every top-level group header carries: Trips gets the pin, a year gets the
+ * calendar. Both group headers are peers in the same list, so both get an
+ * icon — the two-icon compromise (Trips iconed, years bare) put "Trips" and
+ * "2026" at different x positions for their label text, which broke the one
+ * thing a reading axis needs: every header's text starting in the same place.
+ *
+ * Children do not repeat their parent's icon — a pin on Trips and a second
+ * pin on a town said the same thing twice — but they still have to land on
+ * that same axis, so `.month-link` indents its label by the icon-plus-gap
+ * width its parent spent on an icon it doesn't have (see style.css).
+ */
+const GROUP_ICON = {
+  trips: `<path d="M14.9498 4.05139C12.2162 1.31653 7.7841 1.31653 5.05043 4.05139C2.3168 6.78625 2.31681 11.2199 5.05043 13.9547L6.57094 15.4537L8.61391 17.4391L8.74672 17.5563C9.52149 18.1843 10.6565 18.1455 11.3864 17.4391L13.8219 15.069L14.9498 13.9547C17.6833 11.2199 17.6833 6.78621 14.9498 4.05139ZM5.75454 4.75647C8.09899 2.41099 11.9003 2.41099 14.2448 4.75647C16.5291 7.04181 16.5877 10.7107 14.4206 13.067L14.2448 13.2496L12.9235 14.5543L10.693 16.7223L10.6002 16.8024C10.2461 17.07 9.7542 17.0701 9.40004 16.8024L9.30727 16.7223L6.32582 13.817L5.75454 13.2496L5.57973 13.067C3.41265 10.7109 3.47055 7.04183 5.75454 4.75647ZM9.99965 6.24963C8.48115 6.24982 7.24985 7.48113 7.24965 8.99963C7.24965 10.5183 8.48103 11.7494 9.99965 11.7496C11.5184 11.7496 12.7497 10.5184 12.7497 8.99963C12.7495 7.48102 11.5183 6.24963 9.99965 6.24963ZM9.99965 7.24963C10.966 7.24963 11.7495 8.0333 11.7497 8.99963C11.7497 9.96613 10.9662 10.7496 9.99965 10.7496C9.03331 10.7494 8.24965 9.96602 8.24965 8.99963C8.24985 8.03342 9.03343 7.24982 9.99965 7.24963Z" />`,
+  calendar: `<path d="M7 11C7.55228 11 8 10.5523 8 10C8 9.44771 7.55228 9 7 9C6.44772 9 6 9.44771 6 10C6 10.5523 6.44772 11 7 11ZM8 13C8 13.5523 7.55228 14 7 14C6.44772 14 6 13.5523 6 13C6 12.4477 6.44772 12 7 12C7.55228 12 8 12.4477 8 13ZM10 11C10.5523 11 11 10.5523 11 10C11 9.44771 10.5523 9 10 9C9.44771 9 9 9.44771 9 10C9 10.5523 9.44771 11 10 11ZM11 13C11 13.5523 10.5523 14 10 14C9.44771 14 9 13.5523 9 13C9 12.4477 9.44771 12 10 12C10.5523 12 11 12.4477 11 13ZM13 11C13.5523 11 14 10.5523 14 10C14 9.44771 13.5523 9 13 9C12.4477 9 12 9.44771 12 10C12 10.5523 12.4477 11 13 11ZM17 5.5C17 4.11929 15.8807 3 14.5 3H5.5C4.11929 3 3 4.11929 3 5.5V14.5C3 15.8807 4.11929 17 5.5 17H14.5C15.8807 17 17 15.8807 17 14.5V5.5ZM4 7H16V14.5C16 15.3284 15.3284 16 14.5 16H5.5C4.67157 16 4 15.3284 4 14.5V7ZM5.5 4H14.5C15.3284 4 16 4.67157 16 5.5V6H4V5.5C4 4.67157 4.67157 4 5.5 4Z" />`,
+} as const;
+
 function navGroup(nav: HTMLElement, id: string, title: string, count: number, open: Set<string>): HTMLDivElement {
+  const icon = id === "trips" ? GROUP_ICON.trips : GROUP_ICON.calendar;
   const header = el<HTMLButtonElement>(
     `<button class="nav-year" type="button">
+       <svg class="nav-year-icon" viewBox="0 0 20 20" aria-hidden="true">${icon}</svg>
+       <span class="nav-year-name"></span>
+       <span class="nav-year-count"></span>
        <svg class="nav-year-twisty" viewBox="0 0 12 12" aria-hidden="true">
          <path d="M2.14645 4.64645C2.34171 4.45118 2.65829 4.45118 2.85355 4.64645L6 7.79289L9.14645 4.64645C9.34171 4.45118 9.65829 4.45118 9.85355 4.64645C10.0488 4.84171 10.0488 5.15829 9.85355 5.35355L6.35355 8.85355C6.15829 9.04882 5.84171 9.04882 5.64645 8.85355L2.14645 5.35355C1.95118 5.15829 1.95118 4.84171 2.14645 4.64645Z" />
        </svg>
-       <span class="nav-year-name"></span>
-       <span class="nav-year-count"></span>
      </button>`,
   );
   header.querySelector(".nav-year-name")!.textContent = title;
@@ -533,7 +553,6 @@ function renderNav(index: ArchiveIndexFile): void {
         trip.id,
         () => void showTrip(trip),
       );
-      row.classList.add("trip-link");
       body.appendChild(row);
     }
   }
