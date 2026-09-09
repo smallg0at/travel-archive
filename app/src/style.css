@@ -161,7 +161,7 @@ body {
 /* The sidebar is the scrolling column; the nav and the job panel are its two
    children so that re-rendering one never touches the other. */
 #sidebar {
-  width: var(--sidebar-width, 210px);
+  width: var(--sidebar-width, 230px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -417,7 +417,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 /* The grid's middle column takes the slack and the count is a right-aligned
    column, so digits line up down the list. With `space-between` alone the
    count floated wherever the month name ended, and 4,998 sat well left of 2. */
-.month-name {
+.nav-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1311,8 +1311,8 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-top: 1px solid var(--border);
   background: var(--bg-muted);
 }
-.nav-tool .month-name { color: var(--text-secondary); }
-.nav-tool.active .month-name { color: var(--text); }
+.nav-tool .nav-label { color: var(--text-secondary); }
+.nav-tool.active .nav-label { color: var(--text); }
 
 /* --- Settings page ---------------------------------------------------- */
 

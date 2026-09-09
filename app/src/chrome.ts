@@ -8,7 +8,13 @@
  */
 
 const WIDTH_KEY = "sidebar-width";
-const DEFAULT_WIDTH = 210;
+/* 230, not 210: measured against "a town Seaside Getaway" (24 characters,
+   an entirely normal trip name length) truncating at the old default. No
+   fixed width avoids truncation for arbitrary user-chosen trip names — that
+   would need 270px for this one name alone, and a longer one would just move
+   the goalpost — so this is a proportionate step, not an attempt to eliminate
+   ellipsis entirely. The drag handle exists for exactly the remaining case. */
+const DEFAULT_WIDTH = 230;
 const MIN_WIDTH = 150;
 const MAX_WIDTH = 460;
 
