@@ -251,7 +251,13 @@ body.resizing { cursor: col-resize; user-select: none; }
   background: var(--bg-muted);
   border: none;
   border-radius: var(--radius-s);
-  padding: 6px 8px;
+  /* 8px, not 6px: measured against the real Fluent Nav item, our own row
+     computed to 28.5px against Fluent's 40px. Full parity would nearly
+     double every row's height and reintroduce the scrolling this sidebar
+     was explicitly fixed to avoid across a 12-year archive, so this lands
+     roughly on Fluent's own Medium-density tier (~32px) instead of its
+     40px default. */
+  padding: 8px 8px;
   cursor: pointer;
 }
 .nav-year:hover { background: var(--surface-hover); }
@@ -300,10 +306,11 @@ body.resizing { cursor: col-resize; user-select: none; }
   padding-left: 5px;
 }
 
-/* Same three-column template as `.nav-year` above: a 14px marker column (empty
-   for an ordinary month, the trip dot below), the name, then the count. Row
-   padding matches `.nav-year`'s too, so a heading and a month cost the same
-   vertical space instead of two independently-chosen heights. */
+/* Same three-column template as `.nav-year` above: a 14px marker column
+   (unused now that the trip dot is gone, but still what keeps a month's name
+   starting at the same x as a year's), the name, then the count. Row padding
+   matches `.nav-year`'s too, so a heading and a month cost the same vertical
+   space instead of two independently-chosen heights. */
 .month-link {
   position: relative;
   display: grid;
@@ -321,7 +328,9 @@ body.resizing { cursor: col-resize; user-select: none; }
   font: inherit;
   font-size: 12.5px;
   text-align: left;
-  padding: 6px 8px;
+  /* Matches .nav-year's padding above, for the same reason: a step toward
+     Fluent's real row height without fully matching its 40px default. */
+  padding: 8px 8px;
   border: none;
   border-radius: var(--radius-s);
   background: none;
