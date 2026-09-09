@@ -1,4 +1,4 @@
-import type { DayRecord, DaySegment, OrganizePlan, PhotoRecord } from "@travel-archive/shared";
+import type { DayEdits, DayRecord, DaySegment, OrganizePlan, PhotoRecord } from "@travel-archive/shared";
 import { CARD_BUDGET } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { getProvider } from "../providers/index.js";
@@ -157,6 +157,41 @@ function segmentsAreCurrent(segments: DaySegment[] | undefined): boolean {
 }
 
 /**
+ * Puts the owner's corrections back over the model's text.
+ *
+ * Called for every day, not only rewritten ones, so that an edit made against a
+ * stored summary survives a run that reuses it.
+ *
+ * Stop edits find their target by photo rather than by segment id — see
+ * `StopEdit`. An edit whose anchor photo is no longer in the day is dropped
+ * silently here and reported by the caller: the alternative is reapplying a
+ * title to whichever stop inherited the id, which is how a correction ends up
+ * on the wrong place.
+ */
+export function applyEdits(
+  summary: string | null,
+  segments: DaySegment[],
+  edits: DayEdits | null | undefined,
+): { summary: string | null; segments: DaySegment[]; orphaned: number } {
+  if (!edits) return { summary, segments, orphaned: 0 };
+
+  let orphaned = 0;
+  const next = segments.map((seg) => ({ ...seg }));
+
+  for (const edit of edits.stops ?? []) {
+    const target = next.find((seg) => seg.photoIds.includes(edit.anchorPhotoId));
+    if (!target) {
+      orphaned++;
+      continue;
+    }
+    if (edit.title !== undefined) target.title = edit.title;
+    if (edit.summary !== undefined) target.summary = edit.summary;
+  }
+
+  return { summary: edits.summary ?? summary, segments: next, orphaned };
+}
+
+/**
  * What a run would do with one day, and why.
  *
  * Factored out so the preview and the run cannot drift: both call this, so a
@@ -180,10 +215,11 @@ function decideDay(args: {
   prior: DayRecord | undefined;
   analyzedCount: number;
   place: string | null;
+  note: string | null;
   summarizedIds: string[];
   opts: OrganizeOptions;
 }): DayOutcome {
-  const { date, prior, analyzedCount, place, summarizedIds, opts } = args;
+  const { date, prior, analyzedCount, place, note, summarizedIds, opts } = args;
   const inScope = opts.days?.length ? opts.days.includes(date) : !opts.only || date.startsWith(opts.only);
   // Place is an input to the summary, not just a label, so a day whose place
   // changed is as stale as one whose photos changed — geocoding lands after
@@ -193,6 +229,12 @@ function decideDay(args: {
     prior?.summarizedPhotoIds != null &&
     sameIds(prior.summarizedPhotoIds, summarizedIds) &&
     prior.place === place &&
+    // A note is an input to the summary like the photos are, so editing one
+    // makes the day stale. `?? null` on both sides because days written before
+    // v14 have no `summarizedNote` at all, and absent must compare equal to
+    // "no note" — otherwise a schema bump alone marks 545 days for a paid
+    // re-run.
+    (prior.summarizedNote ?? null) === note &&
     segmentsAreCurrent(prior.segments);
 
   if (prior && (unchanged || !inScope)) return "reuse";
@@ -278,6 +320,7 @@ export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan>
       prior: existingDaysByDate.get(date),
       analyzedCount: analyzed.length,
       place: dominantPlace(dayPhotos),
+      note: existingDaysByDate.get(date)?.note ?? null,
       summarizedIds: analyzed.map((p) => p.id),
       opts,
     });
@@ -350,11 +393,16 @@ export async function runOrganize(
     // reason it might be missing is that something was withdrawn from it.
     const summarizedIds = analyzed.map((p) => p.id);
     const prior = existingDaysByDate.get(date);
+    // Carried forward, never regenerated: the note and the hand-edits are the
+    // owner's, and `organize` only ever reads them.
+    const note = prior?.note ?? null;
+    const edits = prior?.edits ?? null;
     const outcome = decideDay({
       date,
       prior,
       analyzedCount: analyzed.length,
       place,
+      note,
       summarizedIds,
       opts,
     });
@@ -389,6 +437,7 @@ export async function runOrganize(
       const summarized = await provider.summarizeDay({
         date,
         place,
+        note,
         // Both flags describe how much the model may lean on metadata; see
         // SummarizeDayInput. A day is time-uncertain if any of its photos is.
         timeUncertain: dayPhotos.some((p) => p.timeSuspect),
@@ -422,7 +471,32 @@ export async function runOrganize(
       }
     }
 
-    days.push({ date, place, summary, photoIds, segments, summarizedPhotoIds: summarizedIds });
+    // The overlay goes last, over both branches: a reused day keeps the edits
+    // it already carries, and a rewritten day has the model's text replaced by
+    // the owner's wherever they wrote some.
+    const applied = applyEdits(summary, segments, edits);
+    summary = applied.summary;
+    segments = applied.segments;
+    if (applied.orphaned > 0) {
+      onProgress({
+        message: `${date}: ${applied.orphaned} hand-edit(s) dropped — the photo they were anchored to is no longer in the day.`,
+      });
+    }
+
+    days.push({
+      date,
+      place,
+      summary,
+      photoIds,
+      segments,
+      summarizedPhotoIds: summarizedIds,
+      note,
+      // Only a rewrite consumed the note; a reused day keeps whatever its
+      // stored summary was actually written from, or the staleness check would
+      // clear itself without the summary ever being redone.
+      summarizedNote: outcome === "rewrite" ? note : (prior?.summarizedNote ?? null),
+      edits,
+    });
   }
 
   // A cancelled run must not write a half-built `sections` — the days it never

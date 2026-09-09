@@ -21,7 +21,7 @@ export interface GeoPoint {
  * v12 dropped heroes in favour of sized highlight cards.
  * v13 added a per-stop card budget and English renderings of placard text.
  */
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 /** How much a photo should be surfaced. `hidden` still renders behind a "show more" toggle — never removed. */
 export type Visibility = "feature" | "normal" | "hidden";
@@ -244,11 +244,52 @@ export interface DaySegment {
   highlights: Highlight[];
 }
 
+/**
+ * A correction the owner made by hand, which a re-run must not throw away.
+ *
+ * Stop edits are anchored to a **photo**, not to the segment id: ids are
+ * positional (`s1`, `s2`…), so adding one photo can re-cluster the day and turn
+ * `s2` into a different place — a title frozen by id would then reappear on
+ * something it was never written about. The anchor is the first photo of the
+ * stop as it stood when the edit was made, and a re-run reapplies the edit to
+ * whichever stop now contains that photo. If the photo is gone, so is the edit.
+ */
+export interface StopEdit {
+  anchorPhotoId: string;
+  title?: string;
+  summary?: string | null;
+}
+
+export interface DayEdits {
+  summary?: string;
+  stops?: StopEdit[];
+}
+
 export interface DayRecord {
   date: string;
   place: string | null;
   summary: string | null;
   photoIds: string[];
+  /**
+   * What the owner told the summarizer about this day — "this is the
+   * the railway museum", "the morning was a write-off".
+   *
+   * Stored on the day rather than passed per run, because it is a fact about
+   * the day and not about one invocation: it has to reach *every* future
+   * summary, or it would need retyping each time the day is rewritten.
+   */
+  note?: string | null;
+  /**
+   * The note the stored summary was actually written from.
+   *
+   * Compared against `note` to decide staleness, exactly as `summarizedPhotoIds`
+   * is compared against the current photo set. Absent on days written before
+   * v14, which is why the comparison treats absent and null as the same — a
+   * schema bump must not silently mark 545 days as needing a paid re-run.
+   */
+  summarizedNote?: string | null;
+  /** Hand-written text that overwrites whatever the model produces. */
+  edits?: DayEdits | null;
   /**
    * The day broken into stops. Empty for days written before v11, and for days
    * with nothing analyzed — the album still renders those as a plain grid.

@@ -318,6 +318,29 @@ const DAY_SCHEMA = {
   required: ["summary", "segments"],
 };
 
+/**
+ * What the owner said about this day, placed where it outranks the captions.
+ *
+ * The captions are a model's guesses about single photographs; this is
+ * testimony from the person who was there. It is also the only channel for
+ * things no photograph carries — that a stop is the the railway museum, or that a
+ * morning was a write-off and must not be dressed up into an activity.
+ *
+ * Framed as authority over naming and framing, not as licence to invent: the
+ * same caution `placeFromMetadataOnly` already encodes. A note that says where
+ * you were does not tell the model what the pictures show.
+ */
+function ownerNote(input: SummarizeDayInput): string {
+  const note = input.note?.trim();
+  if (!note) return "";
+  return `
+
+FROM THE ARCHIVE OWNER, about this day:
+${note}
+
+This is first-hand and outranks anything inferred from the captions — for naming stops, for what the day was, and for what to leave alone. It does not license describing anything the photos do not show.`;
+}
+
 function metadataCaveats(input: SummarizeDayInput): string {
   const notes: string[] = [];
   if (input.timeUncertain) {
@@ -371,7 +394,7 @@ async function summarizeDay(model: string, thinkingBudget: number | undefined, i
             text: `Lay out one day of travel as a page: the day, the places in it, and what stood out at each.
 
 Date: ${input.date}
-Location: ${input.place ?? "unknown"}
+Location: ${input.place ?? "unknown"}${ownerNote(input)}
 
 The day is already divided into stops by where and when the photos were taken. Return one segment per stop, in order, reusing the given ids exactly.
 

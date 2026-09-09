@@ -58,6 +58,16 @@ export interface SummarizeDayInput {
    * from their own day's median) that it should be treated as a hint.
    */
   placeFromMetadataOnly: boolean;
+  /**
+   * What the owner said about this day, in their own words.
+   *
+   * This outranks anything the model infers from the pictures: the captions are
+   * guesses about what a photograph shows, and this is testimony from the person
+   * who was there. It is also the only channel for things no photograph can
+   * carry — that a stop is the the railway museum, or that a morning was a write-off
+   * and should not be dressed up as an activity.
+   */
+  note: string | null;
 }
 
 export interface SegmentResult {

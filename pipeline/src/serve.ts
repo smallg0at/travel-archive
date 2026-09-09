@@ -20,6 +20,7 @@ import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
+import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { runTrip } from "./jobs/trip.js";
 import * as jobs from "./server/jobs.js";
 
@@ -668,6 +669,27 @@ const routes: [RegExp, string, Handler][] = [
         documents: body.documents ?? [],
       };
       json(res, 202, jobs.start({ kind: "trip", run: (onProgress, signal) => runTrip(opts, onProgress, signal) }));
+    },
+  ],
+
+  /**
+   * The owner's note for a day, and their corrections to what the model wrote.
+   *
+   * Not a job: it spends nothing and finishes in one write, so it answers
+   * synchronously rather than handing back a job to poll. It still takes the
+   * archive lock — the app is a reader and the server is the only writer.
+   */
+  [
+    /^\/days\/(\d{4}-\d{2}-\d{2})$/,
+    "POST",
+    async (req, res, [date]) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<DayPatch>(req);
+      try {
+        json(res, 200, await editDay(date, body));
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
     },
   ],
 
