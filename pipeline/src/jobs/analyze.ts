@@ -1,4 +1,5 @@
 import type { AnalyzePlan, JobProgress, PhotoRecord, PhotoShard } from "@travel-archive/shared";
+import type { CaptionContext } from "../providers/types.js";
 import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
 import { reverseGeocode } from "../exif.js";
@@ -211,6 +212,43 @@ export async function planAnalyze(opts: AnalyzeOptions): Promise<AnalyzePlan> {
   };
 }
 
+/** How many neighbouring captions a photo is given. Orientation, not a transcript. */
+const NEARBY_CAPTIONS = 6;
+/** Trimmed so six of them stay a hint rather than a page. */
+const NEARBY_CAPTION_CHARS = 140;
+
+/**
+ * Where and when this photo was taken, and what else was photographed near it.
+ *
+ * Read from the shard at call time, so a run picks up the captions it has
+ * already written this pass as well as those from earlier runs — the first
+ * photo of a museum visit has no neighbours, the hundredth has six.
+ *
+ * `timeSuspect` photos give the date without the clock. Their day is right and
+ * their hour is not (phone clock drift, and filenames that carry a date only),
+ * so offering "14:32" would be inventing precision the record does not have.
+ */
+export function captionContextFor(shard: PhotoShard, record: PhotoRecord): CaptionContext | null {
+  const day = record.takenAt?.slice(0, 10) ?? null;
+
+  const nearby = day
+    ? Object.values(shard.photos)
+        .filter((p) => p.id !== record.id && p.caption && p.takenAt?.slice(0, 10) === day)
+        .sort(
+          (a, b) =>
+            Math.abs(Date.parse(a.takenAt!) - Date.parse(record.takenAt!)) -
+            Math.abs(Date.parse(b.takenAt!) - Date.parse(record.takenAt!)),
+        )
+        .slice(0, NEARBY_CAPTIONS)
+        .map((p) => p.caption!.slice(0, NEARBY_CAPTION_CHARS))
+    : [];
+
+  const takenAt = record.takenAt ? (record.timeSuspect ? record.takenAt.slice(0, 10) : record.takenAt) : null;
+  const place = record.place ?? null;
+  if (!takenAt && !place && nearby.length === 0) return null;
+  return { takenAt, place, nearbyCaptions: nearby };
+}
+
 export async function runAnalyze(
   opts: AnalyzeOptions,
   onProgress: ProgressFn,
@@ -314,6 +352,7 @@ export async function runAnalyze(
         const caption = await provider.captionPhoto({
           imageBase64: image.toString("base64"),
           mediaType: mediaTypeFor(record.fileName),
+          context: captionContextFor(shard, record),
         });
 
         const updated: PhotoRecord = {

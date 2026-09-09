@@ -145,13 +145,43 @@ function usageOf(response: { usageMetadata?: UsageMetadata }): CallUsage {
   };
 }
 
+/**
+ * Where the photo was taken and what was around it, as a prompt block.
+ *
+ * Framed hard as naming help. Context invites a model to assert what it cannot
+ * see — a photo tagged "the railway museum" becomes "a locomotive in the
+ * the railway museum" whether or not the picture shows one — and a caption that
+ * confidently states the wrong thing is worse than a vague one, because
+ * everything downstream reads captions as observations.
+ */
+function captionContext(input: CaptionPhotoInput): string {
+  const context = input.context;
+  if (!context) return "";
+  const lines: string[] = [];
+  if (context.takenAt) lines.push(`Taken: ${context.takenAt}`);
+  if (context.place) lines.push(`Location from GPS (a hint, not confirmed by this image): ${context.place}`);
+  if (context.nearbyCaptions.length) {
+    const list = context.nearbyCaptions.map((c) => `- ${c}`).join("\n");
+    lines.push(`Other photos from the same day, nearest in time:\n${list}`);
+  }
+  if (!lines.length) return "";
+  return [
+    "",
+    "",
+    "CONTEXT — use it only to name what you can already see, never to add what you cannot:",
+    lines.join("\n"),
+    "",
+    "If this context lets you name a place, a building or an exhibit that the image shows, use the name. If the image does not support it, ignore the context entirely and describe only what is in the frame. Never state that the photo was taken somewhere on the strength of the context alone.",
+  ].join("\n");
+}
+
 async function captionPhoto(model: string, thinkingBudget: number | undefined, input: CaptionPhotoInput): Promise<CaptionResult> {
   const response = await withRetry("caption", () => ai().models.generateContent({
     model,
     contents: [
       {
         role: "user",
-        parts: [{ inlineData: { mimeType: input.mediaType, data: input.imageBase64 } }, { text: CAPTION_PROMPT }],
+        parts: [{ inlineData: { mimeType: input.mediaType, data: input.imageBase64 } }, { text: CAPTION_PROMPT + captionContext(input) }],
       },
     ],
     config: {

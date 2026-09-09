@@ -5,6 +5,36 @@ export type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/w
 export interface CaptionPhotoInput {
   imageBase64: string;
   mediaType: ImageMediaType;
+  /**
+   * Where and when, and what was photographed around it.
+   *
+   * The captioner used to see one image and a static prompt, which is why it
+   * could not know that a blue carriage is in the the railway museum — the *day*
+   * summarizer can, because it sees every caption, the place and the placard
+   * OCR at once. This is that same context moved one step earlier, where it is
+   * cheap: the fields already exist on the photo record.
+   *
+   * It is a hint for **naming**, never licence to describe what the image does
+   * not show — the caution `placeFromMetadataOnly` already encodes for days.
+   * Null throughout for a photo with no date, no location and no captioned
+   * neighbours, which is the pre-context behaviour exactly.
+   */
+  context: CaptionContext | null;
+}
+
+export interface CaptionContext {
+  /** ISO instant, or a date alone when the clock is not to be trusted. */
+  takenAt: string | null;
+  /** Reverse-geocoded from GPS, so a hint rather than an observation. */
+  place: string | null;
+  /**
+   * Captions of the nearest photos in time from the same day, already written.
+   *
+   * The cheapest way to tell the model it is looking at one frame of a museum
+   * visit rather than an isolated object. Deliberately few and short: this is
+   * orientation, not a transcript, and every one is input tokens on every photo.
+   */
+  nearbyCaptions: string[];
 }
 
 /**

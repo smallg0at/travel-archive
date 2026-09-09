@@ -383,6 +383,57 @@ working practice this list was built with.
       alone", or the next run silently discards the correction. Any direct-edit
       feature also needs somewhere to write to — the app is a pure reader today
       and the server is the only writer.
+- [ ] **Photo captions are written with no context at all.** *(Plumbing built
+      2026-09-09 and the small-scale test run. **The premise does not hold** —
+      read the measurement below before spending anything on this.)*
+
+      `CaptionPhotoInput` now carries a `context` of `takenAt`, the geocoded
+      `place`, and the six nearest already-written captions from the same day,
+      framed in both providers as help for *naming* and never licence to
+      describe what the image does not show.
+
+      **Tested on 20 photos of the the railway museum stop (2026-08-18 s3), the
+      TODO's own example, writing nothing.** Each was re-captioned with context
+      and compared against its stored caption:
+
+      | | result |
+      |---|---|
+      | context actually supplied | `Utrecht, Nederland` + 6 nearby captions, on all 20 |
+      | captions naming the museum, before | **0 of 20** |
+      | captions naming the museum, after | **0 of 20** |
+      | captions that changed at all | 20 of 20 — paraphrase, 99 → 106 chars average |
+
+      The reason is structural and was not visible from the code: **none of the
+      three context fields carries the museum's name.** Reverse geocoding runs
+      at `zoom=10` and returns a city; the neighbouring captions are themselves
+      context-free descriptions of train interiors, so they cannot name what
+      they do not know either. The name first exists in the *day* summary, which
+      is written after captioning. Passing a photo its city and its neighbours'
+      captions cannot tell it where it is.
+
+      What the test did buy: slightly more specific descriptions ("suspended by
+      leather straps", "in Dutch and English", "visitors walking ahead"). Real
+      but marginal, and it costs ~200 input tokens on every photo — about +16%
+      on the measured 1,227.
+
+      Two routes that would actually deliver the headline benefit, neither yet
+      taken:
+      - **POI-level geocoding, free.** At `zoom=18` those coordinates return
+        `Maliebaanstation` — the former station the museum occupies — against
+        `Bloesemstraat` at 16 and `Utrecht` at 10. A named venue rather than a
+        city, at no model cost. Not the museum's own name, so worth sampling
+        across several stops before believing it.
+      - **Caption after organize, not before.** The stop title *is* the name,
+        and it exists by the time the day is summarized. That inverts the
+        pipeline order for a second pass over photos worth re-describing.
+
+      **Decision needed before any re-run**: keep the context (marginal gain,
+      +16% input), keep it only once a POI geocode gives it something worth
+      saying, or drop it. Nothing has been re-analyzed and no captions were
+      overwritten.
+
+      Original entry follows.
+
 - [ ] **Photo captions are written with no context at all.** Confirmed at the
       source: `CaptionPhotoInput` is `{ imageBase64, mediaType }` and nothing
       else, so the model sees one image and a static prompt. It cannot know a
