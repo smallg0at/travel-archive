@@ -581,7 +581,12 @@ function renderNavTools(index: ArchiveIndexFile): void {
   tools.replaceChildren();
 
   const generate = el<HTMLButtonElement>(
-    `<button class="month-link nav-tool" id="nav-generate" type="button" hidden><span class="month-name">Generate</span></button>`,
+    `<button class="month-link nav-tool" id="nav-generate" type="button" hidden>
+       <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
+         <path d="M10 2.5l1.8 4.7 4.7 1.8-4.7 1.8-1.8 4.7-1.8-4.7-4.7-1.8 4.7-1.8z"/>
+       </svg>
+       <span class="month-name">Generate</span>
+     </button>`,
   );
   generate.addEventListener("click", () => {
     cancelLookAhead();
@@ -593,7 +598,17 @@ function renderNavTools(index: ArchiveIndexFile): void {
   tools.appendChild(generate);
 
   const settings = el<HTMLButtonElement>(
-    `<button class="month-link nav-tool" type="button"><span class="month-name">Settings</span></button>`,
+    `<button class="month-link nav-tool" type="button">
+       <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
+         <line x1="3" y1="5" x2="17" y2="5" />
+         <circle cx="12" cy="5" r="1.6" class="nav-tool-icon-knob" />
+         <line x1="3" y1="10" x2="17" y2="10" />
+         <circle cx="7" cy="10" r="1.6" class="nav-tool-icon-knob" />
+         <line x1="3" y1="15" x2="17" y2="15" />
+         <circle cx="13" cy="15" r="1.6" class="nav-tool-icon-knob" />
+       </svg>
+       <span class="month-name">Settings</span>
+     </button>`,
   );
   settings.addEventListener("click", () => {
     // Leaving a view cancels its look-ahead. Without this, glancing at a trip
