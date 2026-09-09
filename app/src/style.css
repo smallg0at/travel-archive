@@ -232,47 +232,77 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 
 .nav-group { position: relative; }
+.nav-group + .nav-group { margin-top: 1px; }
 
-/* The year heading is a button now, and it sticks: in a flat list the year you
-   are reading scrolls off the top and the months under it become bare numbers
-   with no year attached. `top: -10px` cancels the nav's own top padding, so the
-   first heading does not float above where it was drawn. */
+/* The heading is the anchor of its group, so it is the larger and brighter of
+   the two — it used to be 11px and dim above 13px bright months, which read as
+   a caption for its own children rather than a parent of them.
+   It also sticks: the year you are reading otherwise scrolls off the top and
+   the months under it become bare numbers with no year attached. `top: -10px`
+   cancels the nav's own top padding, so the first heading does not float above
+   where it was drawn. */
 .nav-year {
   position: sticky;
   top: -10px;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
   font: inherit;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
-  letter-spacing: 0.06em;
   text-align: left;
-  color: var(--text-secondary);
+  color: var(--text);
   background: var(--bg-muted);
   border: none;
-  padding: 12px 10px 4px;
+  border-radius: 7px;
+  padding: 9px 8px 7px;
   cursor: pointer;
 }
-.nav-year:first-child { padding-top: 2px; }
-.nav-year:hover { color: var(--text); }
+.nav-year:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+
+/* Drawn rather than typed. As a ▸/▾ glyph pair it was a 9px sliver that sat off
+   the text baseline, and it was the same character the trip rows used as a
+   bullet — so a trip looked like a collapsed group. One chevron that turns. */
 .nav-year-twisty {
-  flex: 0 0 auto;
-  font-size: 9px;
-  letter-spacing: 0;
-  line-height: 1;
+  flex: 0 0 14px;
+  height: 14px;
+  position: relative;
+  color: var(--text-secondary);
+  transition: transform 120ms ease;
 }
+.nav-year-twisty::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+.nav-year[aria-expanded="true"] .nav-year-twisty { transform: rotate(90deg); }
+
 .nav-year-name { flex: 1; min-width: 0; }
 /* A collapsed year still says how much is behind it, so the pane reads as a
-   summary of the archive rather than a list of lids. */
+   summary of the archive rather than a row of lids. */
 .nav-year-count {
   flex: 0 0 auto;
+  font-size: 11px;
   font-weight: 400;
-  letter-spacing: 0;
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-  opacity: 0.65;
+}
+
+/* A rail under the heading, so the months read as contained by their year
+   rather than merely following it. The indent lines the rail up with the
+   middle of the chevron above. */
+.nav-months {
+  margin: 1px 0 0 14px;
+  padding-left: 5px;
+  border-left: 1px solid var(--border);
 }
 
 .month-link {
@@ -282,21 +312,31 @@ body.resizing { cursor: col-resize; user-select: none; }
   gap: 8px;
   width: 100%;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   text-align: left;
-  padding: 7px 10px;
+  padding: 5px 8px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
 }
-.month-link:hover { background: var(--bg); }
+/* A lift, not `--bg`: in dark mode `--bg` is darker than the sidebar, so a
+   hovered row read as a hole punched in the list rather than a raised one. */
+.month-link:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+/* A tint of the accent rather than `--bg`: in dark mode `--bg` is *darker* than
+   the sidebar, so the selected row read as a hole punched in the list. The bar
+   sits on the rail, marking which stretch of the year you are in. */
 .month-link.active {
-  background: var(--bg);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
   color: var(--text);
   font-weight: 500;
 }
+
 /* The name takes the slack and the count is a right-aligned column, so digits
    line up down the list. With `space-between` alone the count floated wherever
    the month name ended, and 4,998 sat well left of 2. */
@@ -737,7 +777,11 @@ body.resizing { cursor: col-resize; user-select: none; }
     align-self: center;
     flex-shrink: 0;
   }
-  .nav-year:first-child { padding-left: 4px; }
+  /* Each header is the first child of its own section now, so a `:first-child`
+     rule would match every one of them. A rule about the first group has to
+     name the group. Deliberately the only mobile change here: the phone UX is
+     being redesigned wholesale, so this strip is not worth dressing up. */
+  .nav-group:first-child .nav-year { padding-left: 4px; }
   .nav-year-count { display: none; }
   /* `display: contents` keeps the months as direct flex children of the strip,
      so an expanded year lays out inline instead of stacking. Scoped to
@@ -787,8 +831,14 @@ body.resizing { cursor: col-resize; user-select: none; }
 /* Trips sit above the year groups and are the only nav entries that are not a
    month, so they get a marker rather than relying on position alone. */
 .trip-link .month-name::before {
-  content: "▸ ";
-  color: var(--accent);
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
 }
 
 /* --- Job panel (only present when `pipeline serve` is running) --------- */

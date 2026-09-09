@@ -461,7 +461,8 @@ function navGroup(nav: HTMLElement, id: string, title: string, count: number, op
     const isOpen = open.has(id);
     body.hidden = !isOpen;
     header.setAttribute("aria-expanded", String(isOpen));
-    header.querySelector(".nav-year-twisty")!.textContent = isOpen ? "▾" : "▸";
+    // The chevron is drawn in CSS off `aria-expanded`, so there is no glyph to
+    // swap here — the state is announced once and styled from the same source.
   };
   apply();
 

@@ -204,6 +204,30 @@ working practice this list was built with.
         open. Checked at 500px: `▸ Trips` and `▾ 2026` as chips with the year's
         months inline, and tapping a collapsed chip expands it in place.
 
+- [x] **The collapsed pane worked but looked wrong.** Fixed 2026-09-09 on the
+      owner's verdict that the first cut would "give you crap design awards".
+      Three things were actually wrong, not just unlovely:
+
+      - **Inverted hierarchy.** The year heading was 11px and dim above 13px
+        bright months, so the parent read as a caption for its own children.
+        The heading is now the larger, full-contrast element and the months are
+        the secondary text.
+      - **One glyph, two jobs.** The group twisty and the trip-row bullet were
+        both `▸` in the same position, so a trip looked like a collapsed group.
+        The twisty is now a CSS chevron that rotates off `aria-expanded` — no
+        glyph to swap in JS — and trips get an accent dot.
+      - **Hover and selection punched holes.** Both used `--bg`, which in dark
+        mode is *darker* than the sidebar. Hover is now a `color-mix` lift and
+        selection an accent tint with a bar on the rail.
+
+      Months also sit on a rail under their heading, so they read as contained
+      by the year rather than merely following it. Checked in both themes.
+
+      Not done, deliberately: the phone's horizontal strip. It carries one fix —
+      `:first-child` matched every heading once each group became its own
+      `<section>` — and nothing cosmetic, because the mobile UX is due to be
+      redesigned wholesale.
+
 - [x] **A signed-out app showed nothing even with the whole archive on disk.**
       Found 2026-09-09 while testing the above in a browser with no Microsoft
       session. `main()` gated on `getActiveAccount()` and stopped at the banner,
