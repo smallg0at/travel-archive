@@ -306,6 +306,7 @@ body.resizing { cursor: col-resize; user-select: none; }
    padding matches `.nav-year`'s too, so a heading and a month cost the same
    vertical space instead of two independently-chosen heights. */
 .month-link {
+  position: relative;
   display: grid;
   grid-template-columns: 14px 1fr auto;
   align-items: center;
@@ -359,18 +360,32 @@ body.resizing { cursor: col-resize; user-select: none; }
   color: var(--text);
 }
 /* A tint of the accent rather than `--bg`: in dark mode `--bg` is *darker* than
-   the sidebar, so the selected row read as a hole punched in the list. The bar
-   sits on the rail, marking which stretch of the year you are in. Fluent's own
-   nav marks a selected item with a 3px bar and bold text and nothing else — no
+   the sidebar, so the selected row read as a hole punched in the list. Fluent's
+   own nav marks a selected item with a bar and bold text and nothing else — no
    filled pill — so the tint here is kept faint (`--surface-selected` at 8%)
    rather than removed outright, which is what a bar-only treatment regressed
    to before: see the "holes in dark mode" fix this file already carries scars
    from. */
 .month-link.active {
   background: var(--surface-selected);
-  box-shadow: inset 3px 0 0 var(--accent);
   color: var(--text);
   font-weight: 600;
+}
+/* The bar as its own short, rounded-end element rather than a full-height
+   inset box-shadow: a box-shadow that tall gets clipped by the row's own
+   4px corner radius, and a 3px-wide bar loses almost all of that clipped
+   corner — it read as a groove eaten out of the top and bottom of the bar
+   instead of a clean line. Inset 4px top/bottom and given its own radius,
+   it sits clear of the row's curve entirely. */
+.month-link.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
 }
 
 /* The grid's middle column takes the slack and the count is a right-aligned
