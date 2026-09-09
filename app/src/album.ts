@@ -526,7 +526,7 @@ function renderNav(index: ArchiveIndexFile): void {
     for (const trip of sorted) {
       const row = navRow(
         trip.name,
-        String(trip.days.reduce((n, d) => n + d.photoIds.length, 0)),
+        trip.days.reduce((n, d) => n + d.photoIds.length, 0).toLocaleString(),
         "trip",
         trip.id,
         () => void showTrip(trip),
@@ -554,7 +554,7 @@ function renderNav(index: ArchiveIndexFile): void {
       body.appendChild(
         navRow(
           formatMonthLabel(summary.month, false),
-          String(summary.photoCount),
+          summary.photoCount.toLocaleString(),
           "month",
           summary.month,
           () => void showMonth(summary, index),
@@ -629,6 +629,7 @@ function navRow(
 ): HTMLButtonElement {
   const row = el<HTMLButtonElement>(
     `<button class="month-link" type="button">
+       <span class="month-marker" aria-hidden="true"></span>
        <span class="month-name"></span>
        <span class="month-count"></span>
      </button>`,

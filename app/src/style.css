@@ -20,6 +20,15 @@
   --text-secondary: #5f5e5a;
   --border: #e2e0d8;
   --accent: #378ade;
+
+  /* Elevation as a formula, not a colour: mixing --text into --bg darkens a
+     raised surface in light mode and lightens it in dark mode, which is the
+     direction each theme actually wants, from the same declaration. This
+     replaces the `color-mix(in srgb, var(--text) 8%, transparent)` expression
+     that had been copied into hover/selected rules across the sidebar and the
+     menu — one token instead of three copies of the same idea. */
+  --surface-hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --surface-selected: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 /* System preference, unless the reader explicitly asked for light. */
@@ -174,10 +183,10 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-radius: 6px;
   cursor: pointer;
 }
-#menu-items button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+#menu-items button:hover { background: var(--surface-hover); }
 /* A left bar marks what is currently open, as a system menu marks its page. */
 #menu-items button.active {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: var(--surface-selected);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 #menu svg {
@@ -241,13 +250,18 @@ body.resizing { cursor: col-resize; user-select: none; }
    the months under it become bare numbers with no year attached. `top: -10px`
    cancels the nav's own top padding, so the first heading does not float above
    where it was drawn. */
+/* A grid, not a flex row, and the same three-column template `.month-link`
+   uses below: a fixed 14px marker column, the name, then a right-aligned
+   count. Sharing the template is what makes the twisty above and the trip dot
+   below land in the same column instead of at three different x positions. */
 .nav-year {
   position: sticky;
   top: -10px;
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
   align-items: center;
-  gap: 4px;
+  column-gap: 8px;
   width: 100%;
   font: inherit;
   font-size: 12.5px;
@@ -257,16 +271,15 @@ body.resizing { cursor: col-resize; user-select: none; }
   background: var(--bg-muted);
   border: none;
   border-radius: 7px;
-  padding: 9px 8px 7px;
+  padding: 6px 8px;
   cursor: pointer;
 }
-.nav-year:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.nav-year:hover { background: var(--surface-hover); }
 
 /* Drawn rather than typed. As a ▸/▾ glyph pair it was a 9px sliver that sat off
    the text baseline, and it was the same character the trip rows used as a
    bullet — so a trip looked like a collapsed group. One chevron that turns. */
 .nav-year-twisty {
-  flex: 0 0 14px;
   height: 14px;
   position: relative;
   color: var(--text-secondary);
@@ -285,11 +298,14 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .nav-year[aria-expanded="true"] .nav-year-twisty { transform: rotate(90deg); }
 
-.nav-year-name { flex: 1; min-width: 0; }
+.nav-year-name { min-width: 0; }
 /* A collapsed year still says how much is behind it, so the pane reads as a
-   summary of the archive rather than a row of lids. */
+   summary of the archive rather than a row of lids. Same `min-width` as
+   `.month-count` below so a two-digit and a five-digit count still end on the
+   same right edge — the column, not just the row, now lines up. */
 .nav-year-count {
-  flex: 0 0 auto;
+  min-width: 3.4em;
+  text-align: right;
   font-size: 11px;
   font-weight: 400;
   color: var(--text-secondary);
@@ -305,50 +321,62 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-left: 1px solid var(--border);
 }
 
+/* Same three-column template as `.nav-year` above: a 14px marker column (empty
+   for an ordinary month, the trip dot below), the name, then the count. Row
+   padding matches `.nav-year`'s too, so a heading and a month cost the same
+   vertical space instead of two independently-chosen heights. */
 .month-link {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  column-gap: 8px;
   width: 100%;
   font: inherit;
   font-size: 12.5px;
   text-align: left;
-  padding: 5px 8px;
+  padding: 6px 8px;
   border: none;
   border-radius: 6px;
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
 }
+.month-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Generate/Settings reuse `.month-link` for the same row height and hover, but
+   carry only a name — no marker or count. Without its own template, the grid's
+   3-column layout would auto-place that single child into the 14px marker
+   column and clip it to a couple of letters. */
+.nav-tool { grid-template-columns: 1fr; }
 /* A lift, not `--bg`: in dark mode `--bg` is darker than the sidebar, so a
    hovered row read as a hole punched in the list rather than a raised one. */
 .month-link:hover {
-  background: color-mix(in srgb, var(--text) 8%, transparent);
+  background: var(--surface-hover);
   color: var(--text);
 }
 /* A tint of the accent rather than `--bg`: in dark mode `--bg` is *darker* than
    the sidebar, so the selected row read as a hole punched in the list. The bar
    sits on the rail, marking which stretch of the year you are in. */
 .month-link.active {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: var(--surface-selected);
   box-shadow: inset 2px 0 0 var(--accent);
   color: var(--text);
   font-weight: 500;
 }
 
-/* The name takes the slack and the count is a right-aligned column, so digits
-   line up down the list. With `space-between` alone the count floated wherever
-   the month name ended, and 4,998 sat well left of 2. */
+/* The grid's middle column takes the slack and the count is a right-aligned
+   column, so digits line up down the list. With `space-between` alone the
+   count floated wherever the month name ended, and 4,998 sat well left of 2. */
 .month-name {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .month-count {
-  flex: 0 0 auto;
   min-width: 3.4em;
   text-align: right;
   font-size: 11px;
@@ -770,6 +798,13 @@ body.resizing { cursor: col-resize; user-select: none; }
     scrollbar-width: none;
   }
   #month-nav::-webkit-scrollbar { display: none; }
+  /* Grid's `1fr` track needs a definite container width to size against, which
+     an auto-width flex child sized by its own content does not reliably give
+     across browsers. The strip predates the grid template above and is not
+     being restyled in this pass, so it opts back out to the flex row it
+     already had rather than inheriting a layout mode built for the sidebar's
+     fixed width. */
+  .nav-year, .month-link { display: flex; align-items: center; }
   .nav-year {
     position: static;
     width: auto;
@@ -792,9 +827,14 @@ body.resizing { cursor: col-resize; user-select: none; }
   .month-link {
     width: auto;
     flex-shrink: 0;
+    gap: 6px;
     padding: 6px 12px;
     white-space: nowrap;
   }
+  /* The marker column collapses with the rest of the grid on mobile; only the
+     trip dot inside it still needs to render, sized to itself rather than a
+     14px column that has nothing else to line up with here. */
+  .month-marker { display: contents; }
   .month-count { display: none; }
   #content { padding: 14px 12px 40px; }
   .month-heading { flex-wrap: wrap; }
@@ -829,16 +869,17 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 
 /* Trips sit above the year groups and are the only nav entries that are not a
-   month, so they get a marker rather than relying on position alone. */
-.trip-link .month-name::before {
+   month, so they get a marker rather than relying on position alone. The dot
+   lives in the row's own 14px marker column — the same column the twisty
+   occupies on a year heading — rather than as a prefix on the name, which used
+   to push trip text 12px right of a month's and break the column the names sit
+   in. */
+.trip-link .month-marker::before {
   content: "";
-  display: inline-block;
   width: 5px;
   height: 5px;
-  margin-right: 7px;
   border-radius: 50%;
   background: var(--accent);
-  vertical-align: middle;
 }
 
 /* --- Job panel (only present when `pipeline serve` is running) --------- */
