@@ -351,6 +351,20 @@ body.resizing { cursor: col-resize; user-select: none; }
    3-column layout would auto-place that single child into the 14px marker
    column and clip it to a couple of letters. */
 .nav-tool { grid-template-columns: 1fr; }
+/* Selection is the accent bar and tint below, not the browser's default focus
+   ring — with nothing overriding it, a mouse click left a rectangular outline
+   sitting on top of that styling, which a system nav (Explorer's own selected
+   item is just a line and a soft fill, no ring) does not do. Suppressed for a
+   pointer click; kept, and made more visible, for keyboard navigation. */
+.nav-year:focus,
+.month-link:focus {
+  outline: none;
+}
+.nav-year:focus-visible,
+.month-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 /* A lift, not `--bg`: in dark mode `--bg` is darker than the sidebar, so a
    hovered row read as a hole punched in the list rather than a raised one. */
 .month-link:hover {
