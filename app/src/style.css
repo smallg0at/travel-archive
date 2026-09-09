@@ -292,13 +292,12 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-variant-numeric: tabular-nums;
 }
 
-/* A rail under the heading, so the months read as contained by their year
-   rather than merely following it. The indent lines the rail up with the
-   middle of the chevron above. */
+/* Indentation alone marks a month as belonging to its year — no rail. Fluent's
+   own tree (checked against the real component, expanded) does the same: a
+   child is indented under its parent with no connecting line at all. */
 .nav-months {
   margin: 1px 0 0 14px;
   padding-left: 5px;
-  border-left: 1px solid var(--border);
 }
 
 /* Same three-column template as `.nav-year` above: a 14px marker column (empty
@@ -852,10 +851,6 @@ body.resizing { cursor: col-resize; user-select: none; }
     padding: 6px 12px;
     white-space: nowrap;
   }
-  /* The marker column collapses with the rest of the grid on mobile; only the
-     trip dot inside it still needs to render, sized to itself rather than a
-     14px column that has nothing else to line up with here. */
-  .month-marker { display: contents; }
   .month-count { display: none; }
   #content { padding: 14px 12px 40px; }
   .month-heading { flex-wrap: wrap; }
@@ -887,20 +882,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 3px 9px;
-}
-
-/* Trips sit above the year groups and are the only nav entries that are not a
-   month, so they get a marker rather than relying on position alone. The dot
-   lives in the row's own 14px marker column — the same column the twisty
-   occupies on a year heading — rather than as a prefix on the name, which used
-   to push trip text 12px right of a month's and break the column the names sit
-   in. */
-.trip-link .month-marker::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
 }
 
 /* --- Job panel (only present when `pipeline serve` is running) --------- */
