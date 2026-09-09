@@ -4,7 +4,7 @@ State as of **2026-09-07**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**30 open, 24 done.** The list grows because each session surfaces defects that
+**31 open, 27 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -15,6 +15,38 @@ Open items are listed first in each section; fixes are kept below them
 working practice this list was built with.
 
 ## Open issues
+
+- [ ] **UI style refresh — the whole app, not a patch.** Raised 2026-09-09.
+      The owner's verdict on the reworked left pane: "ugly and not aligned",
+      and a refresh of the app's visual style is wanted rather than another
+      round of touch-ups. **Do not spot-fix the sidebar in isolation** — it is
+      the symptom that got looked at closely, not the scope.
+
+      What is concretely wrong in the pane as it stands, as a starting brief:
+
+      - **Nothing shares a column.** Year counts sit hard against the pane's
+        right padding; trip and month counts sit inside the rail plus the row's
+        own padding, so no two numbers line up vertically. The selected row
+        moves its count again.
+      - **Three left edges.** Year name, month name and trip name (which adds a
+        dot) each start at a different x, so no vertical line runs down the
+        list.
+      - **Inconsistent number formatting.** `4,899` and `12,224` are grouped
+        (the group heading calls `toLocaleString`), `4685` and `214` are not
+        (the rows pass `String(count)`) — `app/src/album.ts`, `navRow` callers
+        against `navGroup`. Cheap to fix but part of the same column problem,
+        so it belongs in the refresh rather than ahead of it.
+      - **No shared vertical rhythm.** Heading rows and month rows are
+        different heights, set independently.
+
+      The mobile view is due to be redesigned wholesale with a different UX and
+      should be part of this, not a separate pass — its current horizontal
+      strip has deliberately been left undressed for that reason.
+
+      Worth deciding up front: whether the six colour tokens in `style.css` are
+      still the right vocabulary, since the two defects that keep recurring —
+      hover and selection reading as holes in dark mode — both come from `--bg`
+      being darker than `--bg-muted`, leaving no token for "raised".
 
 - [ ] **A month emptied on OneDrive leaves a ghost month.** Deleting the *last*
       photo of a month folder (or the folder itself) leaves its records and its
