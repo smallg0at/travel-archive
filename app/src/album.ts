@@ -641,7 +641,6 @@ function navRow(
 ): HTMLButtonElement {
   const row = el<HTMLButtonElement>(
     `<button class="month-link" type="button">
-       <span class="month-marker" aria-hidden="true"></span>
        <span class="nav-label"></span>
        <span class="month-count"></span>
      </button>`,

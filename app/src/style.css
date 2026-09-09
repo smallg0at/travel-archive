@@ -301,23 +301,22 @@ body.resizing { cursor: col-resize; user-select: none; }
   padding-left: 5px;
 }
 
-/* Same three-column template as `.nav-year` above: a 14px marker column
-   (unused now that the trip dot is gone, but still what keeps a month's name
-   starting at the same x as a year's), the name, then the count. Row padding
-   matches `.nav-year`'s too, so a heading and a month cost the same vertical
-   space instead of two independently-chosen heights. */
+/* Two columns, not three: the name, then the count. This used to reserve a
+   14px marker column matching `.nav-year`'s twisty column, for cross-level
+   text alignment — measured against the real Fluent tree, that alignment
+   convention holds up fine on its own. What doesn't hold up is doing it with
+   an empty column: Fluent fills that space with an icon on every row; a month
+   or trip row here has nothing in it now that the dot is gone, so the accent
+   bar on a selected row sat against dead air before the label started — a gap
+   a reader can see even if the underlying grid math checks out. Closing it
+   costs the cross-level alignment; on balance, a real visible gap next to a
+   real visible bar outweighs a column matching a heading's that nothing sits
+   in.  */
 .month-link {
   position: relative;
   display: grid;
-  grid-template-columns: 14px 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  /* 10px, not the 8px this shared with every other gap in the file: Fluent's
-     own nav item measures out to a 16px gap between its 20px icon and label
-     (row padding `10px 8px 10px 10px`, icon 20x20, gap 16px, from the
-     Storybook "Basic" Nav story's computed styles). Our marker column is a
-     narrower 14px than Fluent's icon, so matching 16px verbatim would read as
-     too roomy for what sits in it — 10px is a step toward that breathing room
-     scaled to our narrower column, not the literal Fluent number. */
   column-gap: 10px;
   width: 100%;
   font: inherit;
@@ -331,11 +330,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   background: none;
   color: var(--text-secondary);
   cursor: pointer;
-}
-.month-marker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 /* Generate/Settings reuse `.month-link` for the same row height and hover, but
    carry an icon and a name — no marker or count, and a flex row rather than
