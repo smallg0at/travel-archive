@@ -262,6 +262,29 @@ export function editDay(date: string, patch: DayPatch): Promise<DayEditResult> {
   return post<DayEditResult>(`/days/${date}`, patch);
 }
 
+/**
+ * Correcting when a photo was taken.
+ *
+ * A rename of the file in OneDrive, not a stored override — for a WhatsApp save
+ * the filename *is* the timestamp, so this is the only correction that stays
+ * true across a rescan. Refuses, rather than guessing, on a photo whose date
+ * comes from EXIF.
+ */
+export interface SetTakenAtResult {
+  id: string;
+  fileName: string;
+  takenAt: string;
+  timeSuspect: boolean;
+  months: string[];
+}
+
+export function setPhotoTakenAt(
+  id: string,
+  body: { month: string; date: string; time: string | null },
+): Promise<SetTakenAtResult> {
+  return post<SetTakenAtResult>(`/photos/${encodeURIComponent(id)}/taken`, body);
+}
+
 export interface TripRequest {
   startDate: string;
   endDate: string;

@@ -52,6 +52,55 @@ const FILENAME_DATE = /(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})(?:[-_.T ]?(\d{2})[-_.
  * `stops.ts` splits the day on it as though the day genuinely began there.
  * Callers must know the difference; see `takenAtOf` in graph.ts.
  */
+/**
+ * Rewrites the timestamp a filename carries, leaving everything else alone.
+ *
+ * This is how a photo is given a day, and a time within it. For a WhatsApp save
+ * the filename *is* the timestamp — those files carry no EXIF, so `takenAtOf`
+ * falls back to the name — which means renaming the file in OneDrive genuinely
+ * moves the photo, through the ordinary scan path, with no override field on
+ * the record to keep in step with it.
+ *
+ * Writing a time matters as much as the date. A name carrying a date alone
+ * parses as `filename-date`, which is `timeSuspect` and lands the photo at
+ * midnight, where `stops.ts` refuses to place it in the day and appends it to
+ * the last stop instead. A name carrying both parses as `filename`, with a real
+ * position in the day.
+ *
+ * Only the first timestamp run is touched and its separators are preserved:
+ * `IMG-20260907-WA0012.jpg` with 14:00 becomes `IMG-20260906-140000-WA0012.jpg`,
+ * which `parseDateFromFileName` reads straight back. Null when the name carries
+ * no date at all — there is nothing to rewrite, and inventing a place to put one
+ * risks a name the scanner reads differently.
+ */
+export function renameForTakenAt(fileName: string, date: string, time: string | null): string | null {
+  const target = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!target) return null;
+  const [, year, month, day] = target;
+
+  const clock = time ? /^(\d{2}):(\d{2})$/.exec(time) : null;
+  if (time && !clock) return null;
+  const stamp = clock ? `${clock[1]}${clock[2]}00` : null;
+
+  // Same shape as FILENAME_DATE, so whatever that would have matched is what
+  // gets rewritten — the two must not disagree about which run is the date.
+  const RUN = /(20\d{2})([-_.]?)(\d{2})([-_.]?)(\d{2})(?:([-_.T ]?)(\d{2})[-_.:]?(\d{2})[-_.:]?(\d{2}))?/;
+  const match = RUN.exec(fileName);
+  if (!match) return null;
+
+  const [whole, , sepA, , sepB, , timeSep] = match;
+  let replacement = `${year}${sepA}${month}${sepB}${day}`;
+  if (stamp) {
+    // Reuse the separator that already sat before the time; when the name had
+    // no time, borrow whatever follows the date so the result reads like the
+    // names this library already contains.
+    const after = fileName.slice(match.index + whole.length);
+    replacement += `${timeSep || (after[0] && /[-_.]/.test(after[0]) ? after[0] : "_")}${stamp}`;
+  }
+
+  return fileName.slice(0, match.index) + replacement + fileName.slice(match.index + whole.length);
+}
+
 export function parseDateFromFileName(fileName: string): { iso: string; hasTime: boolean } | null {
   const match = FILENAME_DATE.exec(fileName);
   if (!match) return null;

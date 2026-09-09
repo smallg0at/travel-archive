@@ -1,5 +1,5 @@
-import type { DayRecord, DaySegment } from "@travel-archive/shared";
-import { editDay, getJob, startOrganize, type DayPatch } from "./backend";
+import type { DayRecord, DaySegment, PhotoRecord } from "@travel-archive/shared";
+import { editDay, getJob, setPhotoTakenAt, startOrganize, type DayPatch } from "./backend";
 import { el } from "./photoUi";
 
 /**
@@ -31,6 +31,11 @@ export function setDayEditingAvailable(value: boolean): void {
 /** How to redraw the archive after a regenerate. Set by main.ts. */
 export function setArchiveRefresh(fn: () => void): void {
   refresh = fn;
+}
+
+/** Redraw after something changed the archive under the page. */
+export function refreshArchive(): void {
+  refresh?.();
 }
 
 function button(label: string, className: string): HTMLButtonElement {
@@ -261,4 +266,90 @@ export function addStopControls(head: HTMLElement, section: HTMLElement, date: s
   });
 
   section.appendChild(editor);
+}
+
+/**
+ * When this photo was taken, corrected by hand.
+ *
+ * Offered on any photo the archive dates from its filename — the 125 WhatsApp
+ * saves here, which land at a fabricated midnight that `stops.ts` refuses to
+ * place, so they are appended to the end of the day rather than sitting in it.
+ * A photo dated from EXIF is left alone: the server would refuse it, because
+ * EXIF outranks the name and a rename would move nothing.
+ *
+ * The control writes the timestamp into the *filename*, which is why it is a
+ * correction rather than an annotation — a rescan reads it straight back.
+ */
+export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSaved: () => void): void {
+  if (!available) return;
+  if (photo.dateSource !== "filename" && photo.dateSource !== "filename-date") return;
+  if (!photo.takenAt) return;
+
+  const month = photo.takenAt.slice(0, 7);
+  const wrap = el<HTMLDivElement>(`
+    <div class="photo-time">
+      <button type="button" class="photo-time-open"></button>
+      <div class="photo-time-editor" hidden>
+        <label><span>Date</span><input type="date" class="photo-time-date" /></label>
+        <label><span>Time</span><input type="time" class="photo-time-clock" step="60" /></label>
+        <div class="photo-time-actions"></div>
+        <p class="photo-time-note"></p>
+      </div>
+    </div>
+  `);
+  const open = wrap.querySelector<HTMLButtonElement>(".photo-time-open")!;
+  const editor = wrap.querySelector<HTMLDivElement>(".photo-time-editor")!;
+  const date = wrap.querySelector<HTMLInputElement>(".photo-time-date")!;
+  const clock = wrap.querySelector<HTMLInputElement>(".photo-time-clock")!;
+  const status = wrap.querySelector<HTMLParagraphElement>(".photo-time-note")!;
+  const actions = wrap.querySelector<HTMLDivElement>(".photo-time-actions")!;
+
+  open.textContent = photo.timeSuspect ? "Set the time" : "Change the time";
+
+  // Local, because the line right above this control is local — `takenAt` is a
+  // UTC instant and the viewer formats it for the reader. Prefilling from the
+  // raw UTC slice showed 15:30 under a caption that said 16:30, so typing what
+  // you saw moved the photo an hour.
+  const local = new Date(photo.takenAt);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  date.value = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+  // A suspect clock is a fabricated midnight, so offering it as the starting
+  // value would invite confirming a number nothing measured.
+  clock.value = photo.timeSuspect ? "" : `${pad(local.getHours())}:${pad(local.getMinutes())}`;
+  status.textContent = "Renames the file in OneDrive, so it survives a rescan.";
+
+  const saveBtn = button("Save", "photo-time-save");
+  actions.appendChild(saveBtn);
+
+  open.addEventListener("click", () => {
+    editor.hidden = !editor.hidden;
+    if (!editor.hidden) clock.focus();
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    if (!date.value) {
+      status.textContent = "Pick a date first.";
+      return;
+    }
+    // Back to the instant the archive stores. With no time there is nothing to
+    // convert — a bare date is a bare date in any zone, and the record keeps
+    // the midnight that marks it untimed.
+    let sendDate = date.value;
+    let sendTime: string | null = null;
+    if (clock.value) {
+      const instant = new Date(`${date.value}T${clock.value}`);
+      sendDate = instant.toISOString().slice(0, 10);
+      sendTime = instant.toISOString().slice(11, 16);
+    }
+
+    const ok = await save(saveBtn, async () => {
+      const result = await setPhotoTakenAt(photo.id, { month, date: sendDate, time: sendTime });
+      status.textContent = `Saved as ${result.fileName}.`;
+    });
+    // The photo has moved within the day, or out of it, so the page it is on is
+    // no longer right — reloading is the honest way to show that.
+    if (ok) onSaved();
+  });
+
+  host.appendChild(wrap);
 }

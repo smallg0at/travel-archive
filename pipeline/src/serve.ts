@@ -21,6 +21,7 @@ import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
+import { setPhotoTakenAt } from "./jobs/photoTime.js";
 import { runTrip } from "./jobs/trip.js";
 import * as jobs from "./server/jobs.js";
 
@@ -687,6 +688,35 @@ const routes: [RegExp, string, Handler][] = [
       const body = await readJsonBody<DayPatch>(req);
       try {
         json(res, 200, await editDay(date, body));
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+
+  /**
+   * The day and time a photo was taken, corrected by hand.
+   *
+   * A rename in OneDrive, not a stored override — see `renameForTakenAt`. Like
+   * the day editor it answers synchronously and takes the archive lock; unlike
+   * it, it writes to the photo library itself, so it refuses rather than
+   * guesses whenever the filename is not the photo's real source of truth.
+   */
+  [
+    /^\/photos\/([^/]+)\/taken$/,
+    "POST",
+    async (req, res, [id]) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{ month?: string; date?: string; time?: string | null }>(req);
+      if (!body.month || !body.date) {
+        return json(res, 400, { error: "month and date are required" });
+      }
+      try {
+        json(res, 200, await setPhotoTakenAt(decodeURIComponent(id), {
+          month: body.month,
+          date: body.date,
+          time: body.time?.trim() ? body.time.trim() : null,
+        }));
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }

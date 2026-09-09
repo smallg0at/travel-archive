@@ -141,7 +141,7 @@ function merge(fresh: PhotoRecord, prior: PhotoRecord | undefined): PhotoRecord 
   };
 }
 
-function summarize(shard: PhotoShard): MonthSummary {
+export function summarize(shard: PhotoShard): MonthSummary {
   const photos = Object.values(shard.photos);
   const sorted = [...photos].sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? ""));
   return {

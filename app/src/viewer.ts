@@ -1,6 +1,7 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "./graphPhoto";
 import { el } from "./photoUi";
+import { addPhotoTimeControl, refreshArchive } from "./dayEdit";
 
 /**
  * The photo viewer, opened from a card rather than from a single image.
@@ -133,6 +134,11 @@ function renderPhotoPanel(photo: PhotoRecord): void {
     line.textContent = meta;
     photoPanel.appendChild(line);
   }
+
+  addPhotoTimeControl(photoPanel, photo, () => {
+    close();
+    refreshArchive();
+  });
 
   if (photo.extractedText) {
     const block = document.createElement("div");

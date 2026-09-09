@@ -295,6 +295,26 @@ export async function downloadThumbnailBuffer(
  * pass does), and it's a short-lived pre-authenticated URL that would be
  * stale by the time the AI pass got to it anyway.
  */
+/**
+ * Renames a file in OneDrive.
+ *
+ * The one place the pipeline writes to the photo library itself rather than to
+ * its own metadata folder — see `renameForTakenAt` for why a rename is how a
+ * photo's timestamp is corrected. Graph rejects a name that collides with a
+ * sibling, which surfaces here as the error it is rather than silently
+ * producing a second copy.
+ */
+export async function renamePhoto(token: string, itemId: string, name: string): Promise<void> {
+  const res = await graphFetch(token, `/me/drive/items/${itemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw new Error(`Could not rename to "${name}": ${res.status} ${res.statusText} ${await res.text()}`.trim());
+  }
+}
+
 export async function downloadPhotoBuffer(token: string, itemId: string): Promise<Buffer> {
   const res = await graphFetch(token, `/me/drive/items/${itemId}/content`);
   return Buffer.from(await res.arrayBuffer());

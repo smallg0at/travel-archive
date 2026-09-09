@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**31 open, 29 done.** The list grows because each session surfaces defects that
+**32 open, 30 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -60,6 +60,52 @@ working practice this list was built with.
       **Not done, on purpose**: the mobile horizontal strip is unchanged and
       still tracked separately below — it needs its own redesign, not a
       Fluent pass on top of a layout due to be replaced.
+
+- [ ] **Filename clocks are read as UTC but shown as local.** Found 2026-09-09
+      while building the control below. `parseDateFromFileName` builds the
+      instant with `Date.UTC(...)`, so a camera's local wall clock becomes a UTC
+      instant — and the viewer then formats it for the reader, adding their
+      offset. `IMG_20260818_124949.jpg` is stored `12:49:49Z` and shows as 13:49
+      in UTC+1.
+
+      The app is inconsistent with itself about it too: stop headings slice the
+      raw UTC digits (`startTime.slice(11, 16)`), while the photo viewer runs
+      `toLocaleString`. The same photo can read 12:49 under its stop and 13:49
+      in the lightbox.
+
+      Not fixed, because the right answer depends on what the stored instant is
+      meant to be — the camera's wall clock or a true UTC instant — and changing
+      it moves every filename-dated photo in the library. The new time control
+      converts at its own edge so that what you type matches what the caption
+      shows; that is a local fix, not the systemic one.
+
+- [x] **Moving a photo to another day — rename the file.** Built 2026-09-10 as
+      "set the date and time", which is the owner's better framing of it: the
+      same rename can carry a *time*, which is what actually rescues these
+      photos. A name with a date alone parses as `filename-date`, which is
+      `timeSuspect` and lands at midnight, where `stops.ts` refuses to place it
+      and appends it to the day's last stop; a name with both parses as
+      `filename` and takes a real position in the day.
+
+      `renameForTakenAt` rewrites only the first timestamp run and keeps its
+      separators, so `IMG-20260907-WA0012.jpg` at 14:00 becomes
+      `IMG-20260906-140000-WA0012.jpg` — a name `parseDateFromFileName` reads
+      straight back. `POST /photos/<id>/taken` renames in OneDrive first (an
+      archive written first would be undone by the next scan reading the old
+      name), then updates the record, moving it between shards and rebuilding
+      both month summaries when the date crosses a month.
+
+      It refuses rather than guesses in two cases: a photo dated from EXIF,
+      which outranks the filename so a rename would move nothing, and a name
+      carrying no date to rewrite.
+
+      In the app it is a control in the photo viewer, offered only on
+      filename-dated photos. Verified end to end against real files: one photo
+      given 15:30 came back `filename` and no longer suspect, and Graph
+      confirmed OneDrive itself held the new name; clearing the time through the
+      UI renamed it back and restored `filename-date`.
+
+      Still open above: the timezone the filename clock is read in.
 
 - [ ] **Moving a photo to another day — rename the file.** Raised 2026-09-09.
       WhatsApp saves land on the day they were *sent*, and the real day is
