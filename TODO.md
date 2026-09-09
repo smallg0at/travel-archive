@@ -61,6 +61,25 @@ working practice this list was built with.
       still tracked separately below — it needs its own redesign, not a
       Fluent pass on top of a layout due to be replaced.
 
+- [ ] **Moving a photo to another day — rename the file.** Raised 2026-09-09.
+      WhatsApp saves land on the day they were *sent*, and the real day is
+      unrecoverable from the file, so some photos need moving by hand.
+
+      No override field is needed for the case that motivates this.
+      `takenAtOf` (`pipeline/src/graph.ts`) tries EXIF first and falls back to
+      the filename, and WhatsApp strips EXIF — so those photos are
+      `dateSource: "filename-date"` and **renaming the file in OneDrive moves
+      them**. It goes through the normal scan path, so the shard, the month
+      counts and the day grouping all follow, including across months.
+
+      Two caveats: it edits the source of truth, and a name carrying a date but
+      no time still lands `timeSuspect`, so the photo is appended to the day's
+      last place rather than placed in time.
+
+      It does nothing for a photo that has EXIF — that would need a real
+      override on the record, and grouping keyed off it in `organize`. Worth
+      building only if a case turns up that renaming cannot reach.
+
 - [ ] **A month emptied on OneDrive leaves a ghost month.** Deleting the *last*
       photo of a month folder (or the folder itself) leaves its records and its
       sidebar entry in place forever, with a photo count for photos that no
