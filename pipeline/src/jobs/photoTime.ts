@@ -89,6 +89,7 @@ export async function setPhotoTakenAt(id: string, req: SetTakenAtRequest): Promi
     const targetMonth = req.date.slice(0, 7);
     const index = await loadIndex(token);
     const months = [req.month];
+    const before = JSON.stringify(index.months);
 
     if (targetMonth === req.month) {
       source.photos[id] = updated;
@@ -107,7 +108,13 @@ export async function setPhotoTakenAt(id: string, req: SetTakenAtRequest): Promi
       months.push(targetMonth);
     }
 
-    await saveIndex(token, index);
+    // Only when it actually changed. A time correction inside one month moves
+    // no counts — `photoCount`, `analyzedCount` and `representativeCount` are
+    // all unaffected — so the summary is usually identical, and writing it
+    // anyway uploaded 3.4MB of index.json for every photo. Measured at 6.5-8.7
+    // seconds a photo against a library with 118 still to correct, which is the
+    // difference between a batch job and an evening.
+    if (JSON.stringify(index.months) !== before) await saveIndex(token, index);
 
     return {
       id,

@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**33 open, 30 done.** The list grows because each session surfaces defects that
+**34 open, 30 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -60,6 +60,43 @@ working practice this list was built with.
       **Not done, on purpose**: the mobile horizontal strip is unchanged and
       still tracked separately below — it needs its own redesign, not a
       Fluent pass on top of a layout due to be replaced.
+
+- [ ] **Multi-select retime — and it is the performance fix, not a
+      convenience.** Raised by the owner 2026-09-10 with the right instinct and
+      the wrong worry: it does **not** need the gallery rebuilding. Selection is
+      additive to `renderGrid` — a class, a modifier-click handler and an action
+      bar. The lightbox is not involved.
+
+      What makes it worth doing is the cost per photo, measured against the real
+      archive with 118 still to correct:
+
+      | | |
+      |---|---|
+      | one retime, before | **6.5-8.7s** |
+      | after skipping the index write when the month summary is unchanged | **5.1-5.9s** |
+      | 118 photos at that rate | **~10 minutes of waiting** |
+
+      Skipping the index write was worth little because **the reads dominate,
+      not the writes**. `setPhotoTakenAt` calls `loadShard` and `loadIndex`,
+      and both are Graph *downloads* — 823KB and 3.4MB — on a write path, which
+      is deliberate: HANDOFF's invariant says a write path must not trust the
+      mirror, because a mirror gone stale on another machine would be merged
+      onto and uploaded over the newer copy. So every single photo costs about
+      4MB down and 1MB up.
+
+      And the deferred-upload machinery that would otherwise help is only half
+      built: `saveIndex` calls `markDirty`/`markSynced` and sync's `ahead` state
+      pushes the local index — but `saveShard` has no dirty tracking at all, and
+      the push path uploads `index.json` only. Nothing debounces either.
+
+      A batch endpoint collapses all of it: one `loadIndex`, one `loadShard`, N
+      renames, one `saveShard`, one `saveIndex`. 118 photos become one round
+      trip instead of 118. The renames themselves still cost a Graph call each,
+      but those are small and can run pooled.
+
+      Design decision to settle first: what "set the time" means for several
+      photos at once — the same hour for all of them, or the same hour spread
+      in capture order so they keep their sequence within it.
 
 - [ ] **There is no incremental refresh — every change reloads the archive.**
       Raised by the owner 2026-09-10, and it is the shared cause behind three
