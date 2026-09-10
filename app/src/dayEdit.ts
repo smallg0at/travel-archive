@@ -291,7 +291,7 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
       <button type="button" class="photo-time-open"></button>
       <div class="photo-time-editor" hidden>
         <label><span>Date</span><input type="date" class="photo-time-date" /></label>
-        <label><span>Time (hour)</span><input type="time" class="photo-time-clock" step="3600" /></label>
+        <label><span>Time (hour)</span><select class="photo-time-clock"></select></label>
         <div class="photo-time-actions"></div>
         <p class="photo-time-note"></p>
       </div>
@@ -300,7 +300,7 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   const open = wrap.querySelector<HTMLButtonElement>(".photo-time-open")!;
   const editor = wrap.querySelector<HTMLDivElement>(".photo-time-editor")!;
   const date = wrap.querySelector<HTMLInputElement>(".photo-time-date")!;
-  const clock = wrap.querySelector<HTMLInputElement>(".photo-time-clock")!;
+  const clock = wrap.querySelector<HTMLSelectElement>(".photo-time-clock")!;
   const status = wrap.querySelector<HTMLParagraphElement>(".photo-time-note")!;
   const actions = wrap.querySelector<HTMLDivElement>(".photo-time-actions")!;
 
@@ -315,9 +315,28 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   date.value = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
   // A suspect clock is a fabricated midnight, so offering it as the starting
   // value would invite confirming a number nothing measured.
-  // To the hour. Nobody remembers whether the museum was 14:10 or 14:25, and a
-  // minute field invites a precision the memory does not have — the point is to
-  // put the photo in the right part of the day, which an hour already does.
+  // A list of hours, not a time field. `<input type="time">` yields an empty
+  // string until *both* halves are filled, and `step="3600"` only governs the
+  // stepper — so picking an hour and leaving the minutes alone read as "no time
+  // given" and silently saved the date by itself. A select cannot be half
+  // answered.
+  //
+  // Hours because nobody remembers whether the museum was 14:10 or 14:25, and a
+  // minute field invites a precision the memory does not have; an hour already
+  // puts the photo in the right part of the day.
+  //
+  // Not `el()` for the options: an <option> parsed inside a <div> is dropped on
+  // the floor, which is how the Generate month list once came up empty.
+  const unknown = document.createElement("option");
+  unknown.value = "";
+  unknown.textContent = "Not known";
+  clock.appendChild(unknown);
+  for (let hour = 0; hour < 24; hour++) {
+    const option = document.createElement("option");
+    option.value = `${pad(hour)}:00`;
+    option.textContent = `${pad(hour)}:00`;
+    clock.appendChild(option);
+  }
   clock.value = photo.timeSuspect ? "" : `${pad(local.getHours())}:00`;
   status.textContent = "Renames the file in OneDrive, so it survives a rescan.";
 
@@ -340,10 +359,7 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
     let sendDate = date.value;
     let sendTime: string | null = null;
     if (clock.value) {
-      // Minutes dropped rather than trusted: `step` only governs the stepper,
-      // and a typed 14:25 would otherwise store a precision this control does
-      // not claim to offer.
-      const instant = new Date(`${date.value}T${clock.value.slice(0, 2)}:00`);
+      const instant = new Date(`${date.value}T${clock.value}`);
       sendDate = instant.toISOString().slice(0, 10);
       sendTime = instant.toISOString().slice(11, 16);
     }

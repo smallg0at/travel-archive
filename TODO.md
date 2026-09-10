@@ -105,8 +105,16 @@ working practice this list was built with.
       confirmed OneDrive itself held the new name; clearing the time through the
       UI renamed it back and restored `filename-date`.
 
-      The control is hour-granular (`step="3600"`, minutes dropped on save at
-      the input edge rather than in storage). Nobody remembers whether the
+      The hour is a `<select>`, not `<input type="time">`. The time input was
+      the first attempt and it silently half-worked: it yields an **empty
+      string** until *both* halves are filled, and `step="3600"` only governs
+      the stepper — so picking an hour and leaving the minutes alone read as
+      "no time given" and saved the date by itself. Reported as "sometimes it
+      just changes the date and not the time", which is exactly what it did. A
+      select cannot be half answered.
+
+      Hour granularity (minutes dropped at the input edge rather than in
+      storage). Nobody remembers whether the
       museum was 14:10 or 14:25, and a minute field invites a precision the
       memory does not have — an hour already puts the photo in the right part of
       the day. Dropping at the input edge keeps zones with a half-hour offset

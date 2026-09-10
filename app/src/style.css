@@ -645,7 +645,8 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-size: 11px;
   color: var(--text-secondary);
 }
-.photo-time-editor input {
+.photo-time-editor input,
+.photo-time-editor select {
   font: inherit;
   font-size: 12px;
   padding: 5px 7px;
