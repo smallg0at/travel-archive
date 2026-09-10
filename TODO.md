@@ -105,6 +105,13 @@ working practice this list was built with.
       confirmed OneDrive itself held the new name; clearing the time through the
       UI renamed it back and restored `filename-date`.
 
+      The control is hour-granular (`step="3600"`, minutes dropped on save at
+      the input edge rather than in storage). Nobody remembers whether the
+      museum was 14:10 or 14:25, and a minute field invites a precision the
+      memory does not have — an hour already puts the photo in the right part of
+      the day. Dropping at the input edge keeps zones with a half-hour offset
+      correct: 15:00 in UTC+5:30 still stores 09:30Z and reads back as 15:00.
+
       Still open above: the timezone the filename clock is read in.
 
 - [ ] **Moving a photo to another day — rename the file.** Raised 2026-09-09.

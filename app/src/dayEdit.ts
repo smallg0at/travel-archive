@@ -291,7 +291,7 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
       <button type="button" class="photo-time-open"></button>
       <div class="photo-time-editor" hidden>
         <label><span>Date</span><input type="date" class="photo-time-date" /></label>
-        <label><span>Time</span><input type="time" class="photo-time-clock" step="60" /></label>
+        <label><span>Time (hour)</span><input type="time" class="photo-time-clock" step="3600" /></label>
         <div class="photo-time-actions"></div>
         <p class="photo-time-note"></p>
       </div>
@@ -315,7 +315,10 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   date.value = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
   // A suspect clock is a fabricated midnight, so offering it as the starting
   // value would invite confirming a number nothing measured.
-  clock.value = photo.timeSuspect ? "" : `${pad(local.getHours())}:${pad(local.getMinutes())}`;
+  // To the hour. Nobody remembers whether the museum was 14:10 or 14:25, and a
+  // minute field invites a precision the memory does not have — the point is to
+  // put the photo in the right part of the day, which an hour already does.
+  clock.value = photo.timeSuspect ? "" : `${pad(local.getHours())}:00`;
   status.textContent = "Renames the file in OneDrive, so it survives a rescan.";
 
   const saveBtn = button("Save", "photo-time-save");
@@ -337,7 +340,10 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
     let sendDate = date.value;
     let sendTime: string | null = null;
     if (clock.value) {
-      const instant = new Date(`${date.value}T${clock.value}`);
+      // Minutes dropped rather than trusted: `step` only governs the stepper,
+      // and a typed 14:25 would otherwise store a precision this control does
+      // not claim to offer.
+      const instant = new Date(`${date.value}T${clock.value.slice(0, 2)}:00`);
       sendDate = instant.toISOString().slice(0, 10);
       sendTime = instant.toISOString().slice(11, 16);
     }
