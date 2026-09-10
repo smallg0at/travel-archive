@@ -103,7 +103,7 @@ function renderGrid(photos: PhotoRecord[]): HTMLElement {
     const img = lazyImg(photo, "large");
     // No card here: the collapsed "more photos" grid and the transit strips are
     // ordinary photographs, and the viewer shows just the photo's own panel.
-    img.addEventListener("click", () => openPhoto(photo));
+    img.addEventListener("click", () => openPhoto(photo, photos));
     grid.appendChild(img);
   }
   return grid;

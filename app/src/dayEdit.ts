@@ -281,6 +281,18 @@ export function addStopControls(head: HTMLElement, section: HTMLElement, date: s
  * The control writes the timestamp into the *filename*, which is why it is a
  * correction rather than an annotation — a rescan reads it straight back.
  */
+/**
+ * Whether the time editor is open, remembered across photos.
+ *
+ * Retiming is a *batch*: 123 WhatsApp saves, each wanting one hour picked. If
+ * the editor closed itself every time the panel redrew — after a save, and
+ * again on every arrow key to the next photo — the job would be three clicks
+ * per photo instead of one. Opened once, it stays open until it is closed.
+ */
+let timeEditorOpen = false;
+/** The last save, so the confirmation survives the redraw that follows it. */
+let lastTimeSave: { id: string; fileName: string } | null = null;
+
 export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSaved: () => void): void {
   if (!available) return;
   if (photo.dateSource !== "filename" && photo.dateSource !== "filename-date") return;
@@ -344,9 +356,13 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   const saveBtn = button("Save", "photo-time-save");
   actions.appendChild(saveBtn);
 
+  editor.hidden = !timeEditorOpen;
+  if (lastTimeSave?.id === photo.id) status.textContent = `Saved as ${lastTimeSave.fileName}.`;
+
   open.addEventListener("click", () => {
-    editor.hidden = !editor.hidden;
-    if (!editor.hidden) clock.focus();
+    timeEditorOpen = editor.hidden;
+    editor.hidden = !timeEditorOpen;
+    if (timeEditorOpen) clock.focus();
   });
 
   saveBtn.addEventListener("click", async () => {
@@ -367,14 +383,26 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
 
     const ok = await save(saveBtn, async () => {
       const result = await setPhotoTakenAt(photo.id, { month, date: sendDate, time: sendTime });
-      // The record that changed lives in a month shard, and those are cached
-      // for the session — without this the page reloads and shows the old time
-      // back, which reads as the save having failed.
+
+      // Updated in place, not reloaded. There are 123 of these to get through,
+      // and a full reload after each one closes the viewer and throws away the
+      // place in the day — which makes the job impractical rather than merely
+      // slow. The record here is the same object the cached shard holds, so
+      // mutating it is what every other view will read.
+      photo.fileName = result.fileName;
+      photo.takenAt = result.takenAt;
+      photo.dateSource = result.dateSource;
+      photo.timeSuspect = result.timeSuspect;
+
+      // The shard on disk has moved on too; dropping it means a later read
+      // fetches the server's copy rather than trusting this mutation forever.
       forgetMonths(result.months);
-      status.textContent = `Saved as ${result.fileName}.`;
+      lastTimeSave = { id: photo.id, fileName: result.fileName };
     });
-    // The photo has moved within the day, or out of it, so the page it is on is
-    // no longer right — reloading is the honest way to show that.
+
+    // Redraw just this panel, so the caption line and the control agree with
+    // what was saved. The day around it is not regrouped — that needs the
+    // reload the user can do when the batch is finished.
     if (ok) onSaved();
   });
 

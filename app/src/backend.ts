@@ -5,6 +5,7 @@ import type {
   JobRecord,
   OrganizePlan,
   Pin,
+  PhotoRecord,
   SyncStatus,
 } from "@travel-archive/shared";
 
@@ -274,6 +275,7 @@ export interface SetTakenAtResult {
   id: string;
   fileName: string;
   takenAt: string;
+  dateSource: PhotoRecord["dateSource"];
   timeSuspect: boolean;
   months: string[];
 }

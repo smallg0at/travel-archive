@@ -1,7 +1,7 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "./graphPhoto";
 import { el } from "./photoUi";
-import { addPhotoTimeControl, refreshArchive } from "./dayEdit";
+import { addPhotoTimeControl } from "./dayEdit";
 
 /**
  * The photo viewer, opened from a card rather than from a single image.
@@ -135,10 +135,9 @@ function renderPhotoPanel(photo: PhotoRecord): void {
     photoPanel.appendChild(line);
   }
 
-  addPhotoTimeControl(photoPanel, photo, () => {
-    close();
-    refreshArchive();
-  });
+  // Re-render this panel rather than the whole archive: a correction is one
+  // photo, and reloading between each of 123 of them closes the viewer.
+  addPhotoTimeControl(photoPanel, photo, () => renderPhotoPanel(photo));
 
   if (photo.extractedText) {
     const block = document.createElement("div");
@@ -314,7 +313,13 @@ async function show(index: number): Promise<void> {
   const { img, spinner, strip } = dom();
   setZoom(1);
   renderPhotoPanel(photo);
-  strip.querySelectorAll("img").forEach((t, i) => t.classList.toggle("current", i === index));
+  strip.querySelectorAll("img").forEach((t, i) => {
+    t.classList.toggle("current", i === index);
+    // Keep the marked thumbnail in view: the strip scrolls now, so arrowing
+    // through a long grid otherwise leaves the highlight somewhere off to the
+    // right with no sign of where you are.
+    if (i === index) t.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
 
   img.dataset.full = "0";
   spinner.hidden = false;
@@ -383,13 +388,24 @@ export function openCard(
 }
 
 /** Opens a single photograph, for grids and album months where there is no card. */
-export function openPhoto(photo: PhotoRecord): void {
-  session = { photos: [photo], index: 0, highlight: null };
+/**
+ * Opens one photograph, with the grid it came from behind the arrow keys.
+ *
+ * `siblings` is what makes the viewer walkable: a session of one had nothing to
+ * step to, so browsing a stop's collapsed grid meant closing and reopening the
+ * viewer for every photograph — and correcting the times of 123 WhatsApp saves
+ * meant doing that 123 times. A photo not in the list given, or no list at all,
+ * still opens on its own.
+ */
+export function openPhoto(photo: PhotoRecord, siblings?: PhotoRecord[]): void {
+  const at = siblings?.indexOf(photo) ?? -1;
+  const photos = at >= 0 ? siblings! : [photo];
+  session = { photos, index: at >= 0 ? at : 0, highlight: null };
   initZoomControls();
   renderCardPanel(null, {});
   renderStrip();
   dom().lightbox.hidden = false;
-  void show(0);
+  void show(session.index);
 }
 
 function close(): void {

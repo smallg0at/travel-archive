@@ -1347,6 +1347,11 @@ body.resizing { cursor: col-resize; user-select: none; }
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  /* Without this the flex basis above is only a suggestion: a row flex item's
+     automatic minimum size is its content's min-content width, and the strip's
+     thumbnails do not shrink — so the panel grew to fit all of them and pushed
+     the photograph off instead of letting the strip scroll. */
+  min-width: 0;
   color: #f1efe8;
   cursor: auto;
 }
@@ -1448,8 +1453,12 @@ body.resizing { cursor: col-resize; user-select: none; }
   display: flex;
   gap: 6px;
   overflow-x: auto;
+  /* Same reason as the panel: this is the box that has to be allowed to be
+     narrower than what it holds. */
+  min-width: 0;
   padding-bottom: 2px;
   scrollbar-width: thin;
+  overscroll-behavior-x: contain;
 }
 #lightbox-strip[hidden] { display: none; }
 #lightbox-strip img {
