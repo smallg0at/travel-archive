@@ -3,13 +3,14 @@ import { loadMonth, SignInRequiredError } from "./archiveData";
 import { el, lazyImg } from "./photoUi";
 import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
-import { addDayControls, setDayEditingAvailable } from "./dayEdit";
+import { addDayControls, isRetimable, setDayEditingAvailable } from "./dayEdit";
+import { selectionClick } from "./retime";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
 import { checkHealth, setPin as savePin, syncStatus } from "./backend";
 import { releaseSettings, showSettings } from "./settings";
-import { showGenerate } from "./tripMode";
+import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
 
 /**
@@ -168,23 +169,41 @@ function dayIndexOf(index: ArchiveIndexFile): Map<string, DayRecord> {
 
 function renderAlbumGrid(photos: PhotoRecord[]): HTMLElement {
   const grid = el<HTMLDivElement>(`<div class="album-grid"></div>`);
-  for (const photo of photos) {
+  const imgs: HTMLImageElement[] = [];
+  for (const [index, photo] of photos.entries()) {
     const cell = el<HTMLDivElement>(`<div class="album-cell"></div>`);
     // Always "large" — see the Density comment above for why "medium" can't
     // render a tall photo crisply at any usable cell size.
     const img = lazyImg(photo, "large");
-    img.addEventListener("click", () => openPhoto(photo, photos));
+    if (isRetimable(photo)) img.dataset.retimable = "";
+    // Unless the click is picking photos to retime — see retime.ts.
+    img.addEventListener("click", (event) => {
+      if (!selectionClick(event, photos, imgs, index)) openPhoto(photo, photos);
+    });
+    imgs.push(img);
     cell.appendChild(img);
     grid.appendChild(cell);
   }
   return grid;
 }
 
+/**
+ * One day: its heading, its summary, and its photos.
+ *
+ * Two layouts, chosen by the view rather than by the day. A trip is the
+ * curated reading — stops, cards, placards — so it renders the day as a page.
+ * The month album is the whole library by date, where the job is finding and
+ * fixing photos, so every day is the summary and one chronological grid, even
+ * a day `organize` has broken into stops. Cards hid their photos from that job:
+ * a picture inside a card could not be selected, and a placard bound to one
+ * did not appear at all.
+ */
 function renderDaySection(
   date: string,
   photos: PhotoRecord[],
   day: DayRecord | undefined,
   byId: Record<string, PhotoRecord>,
+  layout: "trip" | "album",
 ): HTMLElement {
   const section = el<HTMLElement>(`<section class="day-page"></section>`);
 
@@ -208,9 +227,10 @@ function renderDaySection(
   if (day) addDayControls(header, day);
   section.appendChild(header);
 
-  // A day broken into stops renders as a page; everything else is a plain
-  // chronological grid, which is the whole album before any tokens are spent.
-  if (day?.segments?.length) {
+  // In a trip, a day broken into stops renders as a page; everything else is a
+  // plain chronological grid, which is the whole album before any tokens are
+  // spent.
+  if (layout === "trip" && day?.segments?.length) {
     section.appendChild(renderDayBody(day, byId));
   } else {
     section.appendChild(renderAlbumGrid(photos));
@@ -262,6 +282,7 @@ function scrollToStop(anchor: string): void {
  */
 async function showTrip(trip: TripRecord): Promise<void> {
   const content = document.getElementById("content")!;
+  setTitle(trip.name);
   cancelLookAhead();
   releaseSettings();
   releaseThumbnails();
@@ -325,21 +346,27 @@ async function showTrip(trip: TripRecord): Promise<void> {
 
   for (const day of trip.days) {
     const dayPhotos = day.photoIds.map((id) => photos[id]).filter(Boolean);
-    frag.appendChild(renderDaySection(day.date, dayPhotos, day, photos));
+    frag.appendChild(renderDaySection(day.date, dayPhotos, day, photos, "trip"));
   }
 
   content.replaceChildren(frag);
-  // Back where the reader was, when this render is a refresh of the same view.
-  content.scrollTop = restoreScrollTop ?? 0;
-  restoreScrollTop = null;
   addPinControl(header, "trip", trip.id);
   addExportButton(header);
+  // Back where the reader was, when this render is a refresh of the same view.
+  // After the heading's controls, not before: they can wrap the heading onto a
+  // second line, and anything that grows above a restored offset is paid for
+  // by scroll anchoring pushing the reader down by its height.
+  content.scrollTop = restoreScrollTop ?? 0;
+  restoreScrollTop = null;
   lookAhead(trip.days.flatMap((d) => d.photoIds));
 
   // After the page is on screen: the basemap is a ~750KB dynamic import, and
   // the trip should be readable before it lands.
   void renderTripMap(trip, photos, (anchor) => scrollToStop(anchor)).then((map) => {
+    // The slot holds the map's height while it loads (see style.css); a trip
+    // with nothing to map must give that space back rather than keep a gap.
     if (map) mapSlot.replaceChildren(map);
+    else mapSlot.remove();
   });
 }
 
@@ -348,6 +375,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   cancelLookAhead();
   releaseSettings();
   const label = formatMonthLabel(summary.month);
+  setTitle(label);
 
   // The outgoing month's thumbnails are about to be detached, so free their
   // blob URLs now rather than pinning every thumbnail decoded this session.
@@ -391,15 +419,15 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   frag.appendChild(heading);
 
   for (const date of ordered) {
-    frag.appendChild(renderDaySection(date, byDay.get(date)!, days.get(date), shard.photos));
+    frag.appendChild(renderDaySection(date, byDay.get(date)!, days.get(date), shard.photos, "album"));
   }
 
   content.replaceChildren(frag);
-  // Back where the reader was, when this render is a refresh of the same view.
-  content.scrollTop = restoreScrollTop ?? 0;
-  restoreScrollTop = null;
   addPinControl(heading, "month", summary.month);
   addExportButton(heading);
+  // After the heading's controls — see showTrip.
+  content.scrollTop = restoreScrollTop ?? 0;
+  restoreScrollTop = null;
   lookAhead(photos.map((p) => p.id));
 }
 
@@ -622,12 +650,14 @@ function renderNavTools(index: ArchiveIndexFile): void {
     releaseSettings();
     clearActive();
     generate.classList.add("active");
+    enter("#generate");
+    setTitle("Generate");
     showGenerate();
   });
   tools.appendChild(generate);
 
   const settings = el<HTMLButtonElement>(
-    `<button class="month-link nav-tool" type="button">
+    `<button class="month-link nav-tool" id="nav-settings" type="button">
        <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
          <path d="M1.91099 7.38266C2.28028 6.24053 2.88863 5.19213 3.69133 4.30364C3.82707 4.15339 4.04002 4.09984 4.23069 4.16802L6.14897 4.85392C6.66905 5.03977 7.24131 4.76883 7.42716 4.24875C7.44544 4.19762 7.45952 4.14507 7.46925 4.09173L7.83471 2.08573C7.87104 1.88627 8.02422 1.7285 8.22251 1.6863C8.8027 1.5628 9.39758 1.5 10.0003 1.5C10.6026 1.5 11.1971 1.56273 11.7769 1.68607C11.9752 1.72824 12.1284 1.88591 12.1648 2.08529L12.5313 4.09165C12.6303 4.63497 13.1511 4.9951 13.6944 4.89601C13.7479 4.88627 13.8004 4.87219 13.8515 4.85395L15.7698 4.16802C15.9605 4.09984 16.1734 4.15339 16.3092 4.30364C17.1119 5.19213 17.7202 6.24053 18.0895 7.38266C18.1518 7.57534 18.0918 7.78658 17.9374 7.91764L16.3825 9.23773C15.9615 9.5952 15.9101 10.2263 16.2675 10.6473C16.3027 10.6887 16.3411 10.7271 16.3825 10.7623L17.9374 12.0824C18.0918 12.2134 18.1518 12.4247 18.0895 12.6173C17.7202 13.7595 17.1119 14.8079 16.3092 15.6964C16.1734 15.8466 15.9605 15.9002 15.7698 15.832L13.8515 15.1461C13.3315 14.9602 12.7592 15.2312 12.5733 15.7512C12.5551 15.8024 12.541 15.8549 12.5312 15.9085L12.1648 17.9147C12.1284 18.1141 11.9752 18.2718 11.7769 18.3139C11.1971 18.4373 10.6026 18.5 10.0003 18.5C9.39758 18.5 8.8027 18.4372 8.22251 18.3137C8.02422 18.2715 7.87104 18.1137 7.83471 17.9143L7.46926 15.9084C7.37018 15.365 6.8494 15.0049 6.30608 15.104C6.25265 15.1137 6.20011 15.1278 6.14906 15.1461L4.23069 15.832C4.04002 15.9002 3.82707 15.8466 3.69133 15.6964C2.88863 14.8079 2.28028 13.7595 1.91099 12.6173C1.84869 12.4247 1.90876 12.2134 2.06313 12.0824L3.61798 10.7623C4.03897 10.4048 4.09046 9.77373 3.73299 9.35274C3.69784 9.31135 3.65937 9.27288 3.618 9.23775L2.06313 7.91764C1.90876 7.78658 1.84869 7.57534 1.91099 7.38266ZM2.97154 7.37709L4.26523 8.47546C4.34803 8.54576 4.42496 8.62269 4.49526 8.70548C5.2102 9.54746 5.10721 10.8096 4.26521 11.5246L2.97154 12.6229C3.26359 13.4051 3.68504 14.1322 4.21648 14.7751L5.81246 14.2044C5.91473 14.1679 6.01982 14.1397 6.12667 14.1202C7.21332 13.922 8.25487 14.6423 8.45305 15.729L8.75702 17.3975C9.16489 17.4655 9.58024 17.5 10.0003 17.5C10.42 17.5 10.8351 17.4656 11.2427 17.3976L11.5475 15.7289C11.567 15.6221 11.5951 15.517 11.6317 15.4147C12.0034 14.3746 13.1479 13.8327 14.1881 14.2044L15.784 14.7751C16.3155 14.1322 16.7369 13.4051 17.029 12.6229L15.7353 11.5245C15.6525 11.4542 15.5756 11.3773 15.5053 11.2945C14.7903 10.4525 14.8933 9.1904 15.7353 8.47544L17.029 7.37709C16.7369 6.59486 16.3155 5.86783 15.784 5.22494L14.1881 5.79559C14.0858 5.83214 13.9807 5.8603 13.8738 5.87979C12.7872 6.07796 11.7456 5.3577 11.5475 4.27119L11.2427 2.60235C10.8351 2.53443 10.42 2.5 10.0003 2.5C9.58024 2.5 9.16489 2.53448 8.75702 2.60249L8.45304 4.27105C8.43355 4.37791 8.40539 4.48299 8.36884 4.58527C7.99714 5.62542 6.8526 6.1673 5.81237 5.79556L4.21648 5.22494C3.68504 5.86783 3.26359 6.59486 2.97154 7.37709ZM7.50026 10C7.50026 8.61929 8.61954 7.5 10.0003 7.5C11.381 7.5 12.5003 8.61929 12.5003 10C12.5003 11.3807 11.381 12.5 10.0003 12.5C8.61954 12.5 7.50026 11.3807 7.50026 10ZM8.50026 10C8.50026 10.8284 9.17183 11.5 10.0003 11.5C10.8287 11.5 11.5003 10.8284 11.5003 10C11.5003 9.17157 10.8287 8.5 10.0003 8.5C9.17183 8.5 8.50026 9.17157 8.50026 10Z"/>
        </svg>
@@ -642,6 +672,8 @@ function renderNavTools(index: ArchiveIndexFile): void {
     cancelLookAhead();
     clearActive();
     settings.classList.add("active");
+    enter("#settings");
+    setTitle("Settings");
     void showSettings();
   });
   tools.appendChild(settings);
@@ -682,6 +714,7 @@ function navRow(
     row.classList.add("active");
     revealRow(row);
     row.scrollIntoView({ block: "nearest", inline: "nearest" });
+    enter(`#${kind}/${encodeURIComponent(id)}`);
     open();
   });
   return row;
@@ -785,6 +818,156 @@ let restoreScrollTop: number | null = null;
 let wantedView: { kind: string; id: string } | null = null;
 
 /**
+ * Where the reader is, kept across a *page* refresh as well.
+ *
+ * `captureView` only covers a re-render inside the running page. A browser
+ * refresh starts this module from nothing, so it fell through to the default
+ * and landed on the newest trip every time. The view goes in the URL hash — it
+ * survives a refresh, and `#month/2026-09` opens that month from a link — and
+ * the scroll offset in sessionStorage, keyed by that hash, because it is only
+ * worth keeping for this tab.
+ */
+const SCROLL_KEY = "view-scroll";
+
+/** Where the reader is: a nav row, or one of the two tool pages below the list. */
+type View = { kind: "trip" | "month"; id: string } | { kind: "settings" } | { kind: "generate" };
+
+function viewFromHash(): View | null {
+  if (location.hash === "#settings") return { kind: "settings" };
+  if (location.hash === "#generate") return { kind: "generate" };
+  const match = /^#(trip|month)\/(.+)$/.exec(location.hash);
+  return match ? { kind: match[1] as "trip" | "month", id: decodeURIComponent(match[2]) } : null;
+}
+
+/** The nav element that opens a view — a row, or a tool button. */
+function rowFor(view: View | null): HTMLElement | null {
+  if (!view) return null;
+  if (view.kind === "settings") return document.getElementById("nav-settings");
+  if (view.kind === "generate") return document.getElementById("nav-generate");
+  return document.querySelector<HTMLElement>(
+    `#month-nav .month-link[data-pin-kind="${view.kind}"][data-pin-id="${CSS.escape(view.id)}"]`,
+  );
+}
+
+/**
+ * The newest thing — the nav is sorted newest-first — but only from a group
+ * that is actually open. Picking the very first row would always land on a
+ * trip and force the Trips section back open, which makes collapsing it look
+ * broken.
+ */
+function defaultRow(): HTMLElement | null {
+  return (
+    document.querySelector<HTMLElement>("#month-nav .nav-months:not([hidden]) .month-link") ??
+    document.querySelector<HTMLElement>("#month-nav .month-link")
+  );
+}
+
+/**
+ * Offsets per view, so Back returns to where you were in *that* view rather
+ * than only remembering the last one. At most one entry per trip and month.
+ */
+function scrollMap(): Record<string, number> {
+  try {
+    const map = JSON.parse(sessionStorage.getItem(SCROLL_KEY) ?? "{}") as unknown;
+    return map && typeof map === "object" ? (map as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function storedScroll(hash: string): number | null {
+  const top = scrollMap()[hash];
+  return typeof top === "number" ? top : null;
+}
+
+/**
+ * The hash of the view on screen. Not `location.hash`: by the time `popstate`
+ * fires the URL already names the view being *returned to*, and saving the
+ * outgoing offset under it would overwrite the one about to be restored.
+ */
+let currentHash = "";
+let scrollSaveTimer = 0;
+
+function saveScroll(): void {
+  const content = document.getElementById("content");
+  if (!content || !/^#(trip|month)\//.test(currentHash)) return;
+  try {
+    const map = scrollMap();
+    map[currentHash] = content.scrollTop;
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify(map));
+  } catch {
+    // Storage blocked: the view still comes back from the hash, just at the top.
+  }
+}
+
+/**
+ * How the next open touches history. A reader's click adds an entry, so Back
+ * works; reopening a view — on load, after a re-render, on Back itself — must
+ * replace instead, or every refresh would add an entry that goes nowhere.
+ */
+let historyMode: "push" | "replace" = "push";
+
+/** Called by every nav open, before the view renders. */
+function enter(hash: string): void {
+  window.clearTimeout(scrollSaveTimer);
+  saveScroll(); // the view being left, under its own hash
+  if (historyMode === "push" && location.hash !== hash) history.pushState(null, "", hash);
+  else history.replaceState(null, "", hash);
+  currentHash = hash;
+}
+
+/**
+ * The tab and history entry say what is open. Every tab read "Photo Archive"
+ * whatever it showed, and so did every entry in the Back menu — which made the
+ * history this file now keeps unreadable.
+ */
+const APP_TITLE = "Photo Archive";
+
+function setTitle(page: string): void {
+  document.title = `${page} · ${APP_TITLE}`;
+}
+
+/** Opens a view without adding a history entry. */
+function reopen(row: HTMLElement | null): void {
+  if (!row) return;
+  historyMode = "replace";
+  try {
+    row.click();
+  } finally {
+    historyMode = "push";
+  }
+}
+
+/**
+ * Once per page: `#content` itself is never replaced, only its children.
+ *
+ * The offset is saved on scroll, debounced; on every navigation (`enter`); and
+ * on `pagehide`. The debounce alone lost a refresh pressed within 250ms of
+ * scrolling, and scroll events are only delivered while the page is being drawn
+ * — the other two fire regardless, so they are the saves that cannot be missed.
+ */
+function watchNavigation(content: HTMLElement): void {
+  if (content.dataset.scrollWatched) return;
+  content.dataset.scrollWatched = "1";
+  content.addEventListener(
+    "scroll",
+    () => {
+      window.clearTimeout(scrollSaveTimer);
+      scrollSaveTimer = window.setTimeout(saveScroll, 250);
+    },
+    { passive: true },
+  );
+  window.addEventListener("pagehide", saveScroll);
+  window.addEventListener("popstate", () => {
+    if (!cachedIndex) return;
+    const view = viewFromHash();
+    const row = rowFor(view);
+    if (row && (view?.kind === "trip" || view?.kind === "month")) restoreScrollTop = storedScroll(location.hash);
+    reopen(row ?? defaultRow());
+  });
+}
+
+/**
  * Called before a reload begins, not during the render.
  *
  * `loadAndRender` shows "Loading archive…" first, and that replaces `#content`
@@ -804,7 +987,10 @@ export function renderAlbum(index: ArchiveIndexFile): void {
   cachedIndex = index;
   const content = document.getElementById("content")!;
   applyDensity();
-  const wanted = wantedView;
+  watchNavigation(content);
+  // An in-page reload captured the view in memory; a page refresh did not, and
+  // has only the URL to go on.
+  const captured = wantedView;
   wantedView = null;
 
   if (index.months.length === 0) {
@@ -819,18 +1005,25 @@ export function renderAlbum(index: ArchiveIndexFile): void {
   // The view that was open wins over the default. Matched on kind and id rather
   // than on position: a rebuilt nav can reorder, and reopening whatever now
   // sits in that slot is not the same thing as staying put.
-  const previous = wanted
-    ? document.querySelector<HTMLButtonElement>(
-        `.month-link[data-pin-kind="${wanted.kind}"][data-pin-id="${CSS.escape(wanted.id)}"]`,
-      )
-    : null;
+  const view: View | null = captured
+    ? { kind: captured.kind as "trip" | "month", id: captured.id }
+    : viewFromHash();
 
-  // Otherwise open the newest thing — the nav is sorted newest-first — but only
-  // from a group that is actually open. Picking the very first row would always
-  // land on a trip and force the Trips section back open, which makes
-  // collapsing it look broken.
-  const first =
-    document.querySelector<HTMLButtonElement>(".nav-months:not([hidden]) .month-link") ??
-    document.querySelector<HTMLButtonElement>(".month-link");
-  (previous ?? first)?.click();
+  if (view?.kind === "generate") {
+    // Generate exists only once a backend has answered and its panel is built,
+    // which on a refresh happens after this render — so wait for that, and
+    // fall back to the default when there is no backend to generate with.
+    void whenGenerationReady().then((ok) => reopen(ok ? rowFor(view) : defaultRow()));
+    return;
+  }
+
+  const row = rowFor(view);
+  if (!row) {
+    // A stale hash (a trip since renamed) falls through to the default, and an
+    // offset captured for the missing view means nothing there.
+    restoreScrollTop = null;
+  } else if (!captured && (view?.kind === "trip" || view?.kind === "month")) {
+    restoreScrollTop = storedScroll(location.hash);
+  }
+  reopen(row ?? defaultRow());
 }

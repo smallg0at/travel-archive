@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**34 open, 30 done.** The list grows because each session surfaces defects that
+**33 open, 32 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -61,11 +61,107 @@ working practice this list was built with.
       still tracked separately below — it needs its own redesign, not a
       Fluent pass on top of a layout due to be replaced.
 
-- [ ] **Multi-select retime — and it is the performance fix, not a
+- [x] **A page refresh lost the reader's place — always back to the newest
+      trip.** Raised by the owner 2026-09-10. `captureView` only kept the view
+      across a re-render inside the running page; a browser refresh starts the
+      module from nothing and fell through to the default.
+
+      Fixed in `album.ts`: the view goes in the URL hash (`#month/2026-09`,
+      `#trip/<id>`), written with `replaceState` on every nav click; the scroll
+      offset goes in sessionStorage keyed by that hash, saved on scroll
+      (debounced) and again on `pagehide`. A hash naming something that no
+      longer exists falls back to the default.
+
+      Restoring the offset was not enough on its own. Two things arrived
+      *above* it after it was set, and scroll anchoring pushed the reader down
+      by their height each time. Found by measuring which day sat at the top
+      of the viewport before and after a refresh, the train left at 2000:
+
+      | | restored at |
+      |---|---|
+      | first attempt | **2440** |
+      | the trip map's space held while its import loads (`.trip-map-slot:empty`, 404px) | **2036** |
+      | restore moved after the heading's pin and Save-as-PDF controls, which wrap it (36px) | **2001** |
+
+      September 2026, left at 3000, restores at 3003.
+
+      A testing note that nearly read as a bug: the preview pane is hidden,
+      and hidden pages get **no scroll events at all** (0 delivered, rAF never
+      fired), so the debounced save never ran there. `pagehide` fires on every
+      unload regardless — it is why the test reflects real use, and it also
+      covers a refresh pressed within the 250ms debounce.
+
+      **Then, the same day, the two things left out**, plus page titles:
+
+      - **Back and Forward move between views.** A reader's click pushes an
+        entry; reopening a view — on load, after a re-render, on Back itself —
+        replaces instead, so a refresh adds nothing. Every open goes through
+        one `enter(hash)`, which saves the outgoing view's offset under *its*
+        hash first: at `popstate` the URL already names the view being
+        returned to, and saving under `location.hash` would have overwritten
+        the offset about to be restored. Offsets are now a map per view.
+      - **`#settings` and `#generate` are views too.** Generate only exists
+        once a backend has answered and its panel is built, which on a refresh
+        happens after the album renders — so it waits on
+        `whenGenerationReady()` from `tripMode.ts`, and falls back to the
+        default with no backend. This also keeps a reader on Generate when a
+        finished job re-renders the album, where it used to jump to a trip.
+      - **The tab title names the page** — "the train 1 · Photo Archive",
+        "September 2026 · …", "Settings · …" — so the Back menu is readable.
+
+      Verified in the preview: fresh load adds no entry; each click one; Back
+      to the train at 2001 (left at 2000) and Forward to September at 3003
+      (left at 3000); refresh on Settings and on Generate stays there; Back
+      from Generate reaches Settings; titles follow; console clean. A trip
+      regenerated under a new name mid-session (a town "Seaside Getaway" →
+      "Coastal Weekend", new id) is the case the stale-hash fallback exists
+      for — trip ids come from names, so an old link to one can go stale.
+
+- [x] **Multi-select retime — and it is the performance fix, not a
       convenience.** Raised by the owner 2026-09-10 with the right instinct and
       the wrong worry: it does **not** need the gallery rebuilding. Selection is
       additive to `renderGrid` — a class, a modifier-click handler and an action
-      bar. The lightbox is not involved.
+      bar. The lightbox is not involved. **Built the same day.**
+
+      **Server** — `setPhotosTakenAt` in `pipeline/src/jobs/photoTime.ts`,
+      `POST /photos/taken`. One lock; each touched shard read from Graph once;
+      renames pooled four at a time; each touched shard saved once; the index
+      read once and written only if a month summary changed. Partial success is
+      a 200 with `results` and `errors`, because the renames that went through
+      are real and must be recorded. Capped at 200. The single-photo route is
+      now the batch of one, so there is one implementation.
+
+      **App** — `app/src/retime.ts`. Ctrl/Cmd-click selects, Shift extends a
+      run within a grid, a plain click toggles once anything is selected,
+      Escape clears. EXIF-dated photos dim and cannot be selected. A bar docks
+      at the bottom: date (prefilled from the first pick), hour or "Not known",
+      Set time. Records are updated in place, like the single-photo control, so
+      nothing reloads.
+
+      **Decided by default, since the owner said "build it" without picking**:
+      one hour for all of them, **a minute apart in page order** — every photo
+      lands in the chosen hour and keeps its sequence. That makes 60 the most a
+      batch can take with an hour set; "Not known" has no limit.
+
+      **Verified**: a request where every item should be refused (two "already
+      says", a duplicate, an EXIF photo, an unknown id) — all five refused with
+      the right reason, in 3.7s, `index.json` untouched. The gestures, scripted
+      in the preview: Ctrl → 1, Shift → 4 (4 expected), plain click → 3, EXIF
+      click swallowed with no viewer, Escape → 0. Console clean.
+
+      **Not verified**: a real batch rename — not run against the owner's
+      library without asking, so the time for an actual batch is **unmeasured**.
+      Expected shape: two Graph downloads, then the renames at four at a time,
+      then one upload per touched shard.
+
+      **Follow-up the same day, at the owner's call**: the month album no
+      longer renders a day as stops and cards. It is the day's summary and one
+      chronological grid, so every photo in the month can be selected — card
+      photos and the placards bound to them included. The trip view keeps the
+      curated page; card photos there still do not take selection, which is
+      fine because the album now reaches them. Verified on September 2026: 758
+      photos in grids, 0 stops, 0 cards, selection working; a town trip
+      unchanged at 10 stops and 47 cards.
 
       What makes it worth doing is the cost per photo, measured against the real
       archive with 118 still to correct:
@@ -93,10 +189,6 @@ working practice this list was built with.
       renames, one `saveShard`, one `saveIndex`. 118 photos become one round
       trip instead of 118. The renames themselves still cost a Graph call each,
       but those are small and can run pooled.
-
-      Design decision to settle first: what "set the time" means for several
-      photos at once — the same hour for all of them, or the same hour spread
-      in capture order so they keep their sequence within it.
 
 - [ ] **There is no incremental refresh — every change reloads the archive.**
       Raised by the owner 2026-09-10, and it is the shared cause behind three

@@ -288,10 +288,50 @@ let timeEditorOpen = false;
 /** The last save, so the confirmation survives the redraw that follows it. */
 let lastTimeSave: { id: string; fileName: string } | null = null;
 
+/**
+ * Whether a photo's time can be corrected from here: the server is present,
+ * and the photo is dated from its filename, which a rename can change. EXIF
+ * outranks the name, so renaming such a photo would move nothing.
+ */
+export function isRetimable(photo: PhotoRecord): boolean {
+  return (
+    available &&
+    !!photo.takenAt &&
+    (photo.dateSource === "filename" || photo.dateSource === "filename-date")
+  );
+}
+
+/**
+ * "Not known" and the 24 hours.
+ *
+ * A list of hours, not a time field. `<input type="time">` yields an empty
+ * string until *both* halves are filled, and `step="3600"` only governs the
+ * stepper — so picking an hour and leaving the minutes alone read as "no time
+ * given" and silently saved the date by itself. A select cannot be half
+ * answered.
+ *
+ * Hours because nobody remembers whether the museum was 14:10 or 14:25, and a
+ * minute field invites a precision the memory does not have; an hour already
+ * puts the photo in the right part of the day.
+ *
+ * Not `el()` for the options: an <option> parsed inside a <div> is dropped on
+ * the floor, which is how the Generate month list once came up empty.
+ */
+export function fillHours(select: HTMLSelectElement): void {
+  const unknown = document.createElement("option");
+  unknown.value = "";
+  unknown.textContent = "Not known";
+  select.appendChild(unknown);
+  for (let hour = 0; hour < 24; hour++) {
+    const option = document.createElement("option");
+    option.value = `${String(hour).padStart(2, "0")}:00`;
+    option.textContent = option.value;
+    select.appendChild(option);
+  }
+}
+
 export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSaved: () => void): void {
-  if (!available) return;
-  if (photo.dateSource !== "filename" && photo.dateSource !== "filename-date") return;
-  if (!photo.takenAt) return;
+  if (!isRetimable(photo) || !photo.takenAt) return;
 
   const month = photo.takenAt.slice(0, 7);
   const wrap = el<HTMLDivElement>(`
@@ -321,32 +361,12 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   const local = new Date(photo.takenAt);
   const pad = (n: number) => String(n).padStart(2, "0");
   date.value = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+  fillHours(clock);
   // A suspect clock is a fabricated midnight, so offering it as the starting
   // value would invite confirming a number nothing measured.
-  // A list of hours, not a time field. `<input type="time">` yields an empty
-  // string until *both* halves are filled, and `step="3600"` only governs the
-  // stepper — so picking an hour and leaving the minutes alone read as "no time
-  // given" and silently saved the date by itself. A select cannot be half
-  // answered.
-  //
-  // Hours because nobody remembers whether the museum was 14:10 or 14:25, and a
-  // minute field invites a precision the memory does not have; an hour already
-  // puts the photo in the right part of the day.
-  //
-  // Not `el()` for the options: an <option> parsed inside a <div> is dropped on
-  // the floor, which is how the Generate month list once came up empty.
-  const unknown = document.createElement("option");
-  unknown.value = "";
-  unknown.textContent = "Not known";
-  clock.appendChild(unknown);
-  for (let hour = 0; hour < 24; hour++) {
-    const option = document.createElement("option");
-    option.value = `${pad(hour)}:00`;
-    option.textContent = `${pad(hour)}:00`;
-    clock.appendChild(option);
-  }
   clock.value = photo.timeSuspect ? "" : `${pad(local.getHours())}:00`;
-  status.textContent = "Renames the file in OneDrive, so it survives a rescan.";
+  status.textContent =
+    "Renames the file in OneDrive, so it survives a rescan. To set several at once, Ctrl-click them in the day's grid.";
 
   const saveBtn = button("Save", "photo-time-save");
   actions.appendChild(saveBtn);

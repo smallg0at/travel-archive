@@ -287,6 +287,20 @@ export function setPhotoTakenAt(
   return post<SetTakenAtResult>(`/photos/${encodeURIComponent(id)}/taken`, body);
 }
 
+export interface SetTakenAtBatchResult {
+  results: SetTakenAtResult[];
+  /** Photos left unchanged, and why. The others went through regardless. */
+  errors: { id: string; error: string }[];
+  months: string[];
+}
+
+/** Many photos in one request — one read and one write of each file on the server. */
+export function setPhotosTakenAt(
+  items: { id: string; month: string; date: string; time: string | null }[],
+): Promise<SetTakenAtBatchResult> {
+  return post<SetTakenAtBatchResult>("/photos/taken", { items });
+}
+
 export interface TripRequest {
   startDate: string;
   endDate: string;

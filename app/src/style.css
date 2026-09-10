@@ -790,7 +790,8 @@ body.resizing { cursor: col-resize; user-select: none; }
   .day-editor,
   .stop-edit-open,
   .stop-editor,
-  .photo-time { display: none !important; }
+  .photo-time,
+  .retime-bar { display: none !important; }
 }
 
 .stop-summary {
@@ -927,6 +928,80 @@ body.resizing { cursor: col-resize; user-select: none; }
   background: var(--bg-muted);
   cursor: zoom-in;
 }
+
+/* Picking photos to retime — see retime.ts. While a selection exists a click
+   toggles rather than opens, so the cursor stops promising a zoom, and the
+   photos a rename cannot move (EXIF-dated) step back. */
+.retime-selecting :is(.stop-grid, .album-cell) img[data-retimable] { cursor: pointer; }
+.retime-selecting :is(.stop-grid, .album-cell) img:not([data-retimable]) { opacity: 0.35; cursor: default; }
+:is(.stop-grid, .album-cell) img.is-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+:is(.stop-grid, .album-cell) img.is-retimed:not(.is-selected) {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -2px;
+}
+
+.retime-bar:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.retime-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-16);
+  font-size: 12px;
+}
+.retime-count {
+  align-self: center;
+  font-weight: 600;
+  min-width: 7ch;
+}
+.retime-bar label:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.retime-bar label span {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.retime-bar input,
+.retime-bar select,
+.retime-bar button {
+  font: inherit;
+  padding: 5px 9px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+}
+.retime-bar .retime-save {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.retime-bar button:disabled { opacity: 0.55; cursor: default; }
+.retime-status {
+  flex-basis: 100%;
+  margin: 0;
+  max-width: 60ch;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.retime-status:empty { display: none; }
 
 .stop-more > summary,
 .transit summary {
@@ -1848,6 +1923,12 @@ body.resizing { cursor: col-resize; user-select: none; }
   overflow: hidden;
 }
 .trip-map-loading { padding: 20px; font-size: 12px; color: var(--text-secondary); }
+/* The map's space, held while the basemap import is still loading: the SVG's
+   380px, its 2px of border and the 22px margin. Without it the map arrived
+   after a refresh had restored the reader's scroll offset, and scroll
+   anchoring pushed the page down by the map's height — measured at 440px on
+   the train. Kept in step with `.trip-map` and `.trip-map-svg` above. */
+.trip-map-slot:empty { height: calc(380px + 2px + 22px); }
 .trip-map-svg {
   display: block;
   width: 100%;

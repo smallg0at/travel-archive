@@ -21,7 +21,7 @@ import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
-import { setPhotoTakenAt } from "./jobs/photoTime.js";
+import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
 import { runTrip } from "./jobs/trip.js";
 import * as jobs from "./server/jobs.js";
 
@@ -717,6 +717,35 @@ const routes: [RegExp, string, Handler][] = [
           date: body.date,
           time: body.time?.trim() ? body.time.trim() : null,
         }));
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+
+  /**
+   * Many photos at once — see `setPhotosTakenAt` for why this is the fast path
+   * and not merely the convenient one. Partial success comes back as 200 with
+   * the refusals listed, because the renames that went through are real.
+   */
+  [
+    /^\/photos\/taken$/,
+    "POST",
+    async (req, res) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{
+        items?: { id?: string; month?: string; date?: string; time?: string | null }[];
+      }>(req);
+      if (!Array.isArray(body.items) || body.items.some((i) => !i.id || !i.month || !i.date)) {
+        return json(res, 400, { error: "items, each with id, month and date, are required" });
+      }
+      try {
+        json(res, 200, await setPhotosTakenAt(body.items.map((i) => ({
+          id: i.id!,
+          month: i.month!,
+          date: i.date!,
+          time: i.time?.trim() ? i.time.trim() : null,
+        }))));
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }

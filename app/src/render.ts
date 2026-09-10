@@ -2,7 +2,8 @@ import type { DayRecord, DaySegment, Highlight, PhotoRecord } from "@travel-arch
 import { el, lazyImg } from "./photoUi";
 import { openCard, openPhoto } from "./viewer";
 import { anchorFor } from "./tripMap";
-import { addStopControls } from "./dayEdit";
+import { addStopControls, isRetimable } from "./dayEdit";
+import { selectionClick } from "./retime";
 
 /**
  * A day, laid out as a page rather than listed.
@@ -99,11 +100,17 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
 
 function renderGrid(photos: PhotoRecord[]): HTMLElement {
   const grid = el<HTMLDivElement>(`<div class="stop-grid"></div>`);
-  for (const photo of photos) {
+  const imgs: HTMLImageElement[] = [];
+  for (const [index, photo] of photos.entries()) {
     const img = lazyImg(photo, "large");
+    if (isRetimable(photo)) img.dataset.retimable = "";
     // No card here: the collapsed "more photos" grid and the transit strips are
     // ordinary photographs, and the viewer shows just the photo's own panel.
-    img.addEventListener("click", () => openPhoto(photo, photos));
+    // Unless the click is picking photos to retime — see retime.ts.
+    img.addEventListener("click", (event) => {
+      if (!selectionClick(event, photos, imgs, index)) openPhoto(photo, photos);
+    });
+    imgs.push(img);
     grid.appendChild(img);
   }
   return grid;

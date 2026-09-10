@@ -358,6 +358,20 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
 let panel: HTMLElement | null = null;
 let refreshFn: Refresh = () => {};
 
+let markReady: (ok: boolean) => void = () => {};
+const ready = new Promise<boolean>((resolve) => {
+  markReady = resolve;
+});
+
+/**
+ * Settles once `initGeneration` has decided: true when the panel exists. A
+ * refresh on `#generate` renders the album before the panel is built, and has
+ * to wait for this rather than find nothing to show.
+ */
+export function whenGenerationReady(): Promise<boolean> {
+  return ready;
+}
+
 /** Shows Generate as a page, like Settings. False when there is no backend. */
 export function showGenerate(): boolean {
   if (!panel) return false;
@@ -372,20 +386,27 @@ export function showGenerate(): boolean {
  */
 export async function initGeneration(refresh: Refresh): Promise<void> {
   refreshFn = refresh;
-  const health = await checkHealth();
-  if (!health?.ok) return;
+  // Settled on every exit, including a failed health check or a throw, so a
+  // page waiting on `whenGenerationReady` is never left on "Loading archive…".
+  try {
+    const health = await checkHealth();
+    if (!health?.ok) return;
 
-  // The same check that reveals the generation controls also decides where
-  // thumbnails come from: a server that can run jobs can serve images from its
-  // own disk cache, which is shared between browsers and survives one clearing
-  // its site data. Without a backend the built-in Graph path stays in use.
-  setThumbnailSource(localServerSource);
+    // The same check that reveals the generation controls also decides where
+    // thumbnails come from: a server that can run jobs can serve images from
+    // its own disk cache, which is shared between browsers and survives one
+    // clearing its site data. Without a backend the built-in Graph path stays
+    // in use.
+    setThumbnailSource(localServerSource);
 
-  panel = renderJobPanel(refresh);
+    panel = renderJobPanel(refresh);
 
-  const running = health.running ?? (await (async () => {
-    const id = rememberedJob();
-    return id ? await getJob(id) : null;
-  })());
-  if (running) attach(panel, running);
+    const running = health.running ?? (await (async () => {
+      const id = rememberedJob();
+      return id ? await getJob(id) : null;
+    })());
+    if (running) attach(panel, running);
+  } finally {
+    markReady(panel !== null);
+  }
 }
