@@ -65,9 +65,8 @@ working practice this list was built with.
       Raised by the owner 2026-09-10, and it is the shared cause behind three
       separate patches made this week rather than a defect of its own.
 
-      Any write — a day rewritten, a stop renamed, a photo's time corrected —
-      calls `loadAndRender`, which re-fetches `index.json` (3.4MB) and rebuilds
-      every view from scratch. Nothing knows *what* changed, so:
+      A write calls `loadAndRender`, which re-fetches `index.json` (3.4MB) and
+      rebuilds every view from scratch. Nothing knows *what* changed, so:
 
       - the reader lost their place, patched by capturing the selection and
         scroll offset before the reload (`captureView`);
@@ -77,11 +76,20 @@ working practice this list was built with.
       - the same cache is why **captions only appear after a page refresh**,
         which is still open further down this list.
 
-      Each patch is right on its own terms and none of them is the fix. The fix
-      is for a write to return what changed and for the page to re-render only
-      that — a day section, a stop heading, one photo's meta line. Worth doing
-      before the next feature that writes to the archive, since that one will
-      need a fourth patch.
+      **One path now does it properly, as a worked example.** Correcting a
+      photo's time was unusable at a reload per photo — 123 of them, the viewer
+      closing each time — so `setPhotoTakenAt` returns the fields it changed,
+      the app writes them into the record the cached shard already holds (the
+      same object every view reads), and only that one panel is redrawn. No
+      fetch, nothing else touched.
+
+      What that path does not do, and a general fix would have to decide: the
+      day is not regrouped, so a photo given a new hour stays where it sits
+      until a reload. Mid-batch that is a feature; after the batch it is stale.
+
+      Still outstanding for the writes that do reload — day rewrites and stop
+      renames. Worth finishing before the next feature that writes to the
+      archive, since that one would otherwise need a patch of its own.
 
 - [ ] **Filename clocks are read as UTC but shown as local.** Found 2026-09-09
       while building the control below. `parseDateFromFileName` builds the

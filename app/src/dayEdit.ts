@@ -34,11 +34,6 @@ export function setArchiveRefresh(fn: () => void): void {
   refresh = fn;
 }
 
-/** Redraw after something changed the archive under the page. */
-export function refreshArchive(): void {
-  refresh?.();
-}
-
 function button(label: string, className: string): HTMLButtonElement {
   const b = el<HTMLButtonElement>(`<button type="button" class="${className}"></button>`);
   b.textContent = label;
