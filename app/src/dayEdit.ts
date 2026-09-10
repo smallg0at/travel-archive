@@ -1,6 +1,7 @@
 import type { DayRecord, DaySegment, PhotoRecord } from "@travel-archive/shared";
 import { editDay, getJob, setPhotoTakenAt, startOrganize, type DayPatch } from "./backend";
 import { el } from "./photoUi";
+import { forgetMonths } from "./archiveData";
 
 /**
  * Correcting what the summarizer wrote, from the page it wrote it on.
@@ -366,6 +367,10 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
 
     const ok = await save(saveBtn, async () => {
       const result = await setPhotoTakenAt(photo.id, { month, date: sendDate, time: sendTime });
+      // The record that changed lives in a month shard, and those are cached
+      // for the session — without this the page reloads and shows the old time
+      // back, which reads as the save having failed.
+      forgetMonths(result.months);
       status.textContent = `Saved as ${result.fileName}.`;
     });
     // The photo has moved within the day, or out of it, so the page it is on is

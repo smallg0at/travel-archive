@@ -93,6 +93,23 @@ export async function loadIndex(): Promise<ArchiveIndexFile> {
 // handful, so there's no need for eviction at this scale.
 const shardCache = new Map<string, Promise<PhotoShard>>();
 
+/**
+ * Drops cached months so the next read sees what the server just wrote.
+ *
+ * The cache is what makes flipping between month tabs instant, and it is also
+ * why a change written through the server does not show: reloading re-fetches
+ * `index.json`, but a photo record lives in its month *shard*, which is still
+ * the copy held from earlier in the session. Correcting a photo's time and
+ * watching the old time stay put is that cache, not a failed write.
+ *
+ * Called with the months a write actually touched, rather than clearing the
+ * lot, so a correction in one month does not throw away every other month a
+ * long browsing session has loaded.
+ */
+export function forgetMonths(months: string[]): void {
+  for (const month of months) shardCache.delete(month);
+}
+
 export function loadMonth(month: string): Promise<PhotoShard> {
   const cached = shardCache.get(month);
   if (cached) return cached;

@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**32 open, 30 done.** The list grows because each session surfaces defects that
+**33 open, 30 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -60,6 +60,28 @@ working practice this list was built with.
       **Not done, on purpose**: the mobile horizontal strip is unchanged and
       still tracked separately below — it needs its own redesign, not a
       Fluent pass on top of a layout due to be replaced.
+
+- [ ] **There is no incremental refresh — every change reloads the archive.**
+      Raised by the owner 2026-09-10, and it is the shared cause behind three
+      separate patches made this week rather than a defect of its own.
+
+      Any write — a day rewritten, a stop renamed, a photo's time corrected —
+      calls `loadAndRender`, which re-fetches `index.json` (3.4MB) and rebuilds
+      every view from scratch. Nothing knows *what* changed, so:
+
+      - the reader lost their place, patched by capturing the selection and
+        scroll offset before the reload (`captureView`);
+      - `shardCache` kept serving the old photo record, so a corrected time did
+        not appear until a manual refresh, patched by invalidating the months a
+        write reports touching (`forgetMonths`);
+      - the same cache is why **captions only appear after a page refresh**,
+        which is still open further down this list.
+
+      Each patch is right on its own terms and none of them is the fix. The fix
+      is for a write to return what changed and for the page to re-render only
+      that — a day section, a stop heading, one photo's meta line. Worth doing
+      before the next feature that writes to the archive, since that one will
+      need a fourth patch.
 
 - [ ] **Filename clocks are read as UTC but shown as local.** Found 2026-09-09
       while building the control below. `parseDateFromFileName` builds the
