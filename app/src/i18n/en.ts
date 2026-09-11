@@ -311,6 +311,7 @@ export const en = {
       sync: "sync",
       translate: "translate",
       collect: "collect",
+      locate: "locate",
     } satisfies Record<JobKind, string>,
     jobStatus: {
       queued: "queued",

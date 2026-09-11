@@ -114,6 +114,8 @@ interface StateFile {
    * them captioned.
    */
   noCaption?: string[];
+  /** The open batch `locateAhead` last finished for, so it runs once per round. */
+  locatedAheadFor?: string | null;
 }
 
 /** Google's "too much enqueued" answer — HTTP 429, RESOURCE_EXHAUSTED. */
@@ -426,6 +428,76 @@ export async function autoSubmitStatus(): Promise<AutoSubmitStatus | null> {
   const state = await readState();
   if (!state.autoSubmit) return null;
   return { since: state.autoSubmit.since, from: state.autoSubmit.from, to: state.autoSubmit.to, waitingForBatch: state.batches.some(isOpen) };
+}
+
+/**
+ * Looks up places for the photos the next automatic submit will send, while
+ * the current batch is still at Google.
+ *
+ * Measured 2026-09-11: a round was ~1h of Nominatim lookups (one a second, and
+ * 2024-25 had never been located) followed by 1-2h at Google, back to back,
+ * because the lookups ran inside the submit. Done here instead they overlap
+ * the wait, and the submit that follows only prepares and uploads — the one
+ * whose months were already located took 11 minutes.
+ *
+ * Takes the same photos the submit will, in the same order, plus a margin for
+ * the ones with no thumbnail that the submit skips. Saved month by month, so a
+ * cancel keeps what was found.
+ */
+export async function locateAhead(onProgress: ProgressFn, signal?: AbortSignal): Promise<{ located: number; photos: number }> {
+  const state = await readState();
+  const open = state.batches.find(isOpen);
+  const auto = state.autoSubmit;
+  const result = { located: 0, photos: 0 };
+  if (!auto || !open) return result;
+
+  onProgress({ phase: "signing-in", message: "Signing in..." });
+  const token = await getAccessToken();
+  onProgress({ phase: "planning", message: "Loading index..." });
+  const index = await loadIndex(token);
+  const queued = new Set([
+    ...state.batches.filter(isOpen).flatMap((b) => b.refs.map(([, id]) => id)),
+    ...(state.noCaption ?? []),
+  ]);
+  const opts: AnalyzeOptions = { from: auto.from, to: auto.to, limit: auto.limit };
+  const months = index.months.filter(
+    (m) => (!opts.from || m.month >= opts.from.slice(0, 7)) && (!opts.to || m.month <= opts.to.slice(0, 7)),
+  );
+  let budget = Math.min(PER_FILE + 200, opts.limit);
+
+  for (const summary of months) {
+    if (signal?.aborted || budget <= 0) break;
+    const shard = await loadShard(token, summary.month);
+    const targets = selectTargets(shard, opts)
+      .filter((p) => !queued.has(p.id))
+      .slice(0, budget);
+    if (targets.length === 0) continue;
+    budget -= targets.length;
+    result.photos += targets.length;
+    onProgress({ phase: "geocoding", message: `${summary.month} — locating ${targets.length} photo(s) for the next batch` });
+    const located = await geocodeBeforeCaptioning(shard, targets, onProgress, signal);
+    if (located > 0) {
+      await saveShard(token, shard);
+      result.located += located;
+    }
+  }
+
+  if (!signal?.aborted) {
+    state.locatedAheadFor = open.name;
+    await writeState(state);
+  }
+  onProgress({
+    phase: "done",
+    message: `Located ${result.located} of ${result.photos} photo(s) ahead of the next batch; its submit now only prepares and uploads.`,
+  });
+  return result;
+}
+
+/** Whether `locateAhead` has work: the chain is on, a batch is out, and this round is not yet located. */
+export async function locateAheadDue(): Promise<boolean> {
+  const state = await readState();
+  const open = state.batches.find(isOpen);
+  return Boolean(state.autoSubmit && open && state.locatedAheadFor !== open.name);
 }
 
 /** Options for the next automatic submit — only once no batch is open, since the queue holds one. */

@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**22 open, 47 done.** The list grows because each session surfaces defects that
+**22 open, 48 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -1136,6 +1136,17 @@ working practice this list was built with.
       treat 429 at submit as "stop here, keep what was sent" rather than a
       failure, and have the ten-minute collect submit the next file once a
       batch is collected — one open batch at a time on Tier 1.
+- [x] **Batch rounds ran their place lookups and Google's wait back to back.**
+      2026-09-11: the automatic submit for batch 4 took 47 minutes, nearly
+      all of it Nominatim (one lookup a second; 3,078 photos in 2024-25 had
+      never been located), and only then did Google's 1-2h start. The submit
+      whose months were already located took 11 minutes. *Fixed the same day:
+      while a batch is out, the server runs a `locate` job (`locateAhead` in
+      `analyzeBatch.ts`) over the photos the next submit will take — same
+      selection and order, plus 200 for the ones without a thumbnail — once
+      per open batch (`locatedAheadFor`), so the lookups overlap the wait. It
+      holds the archive like any job, so a collect that comes due meanwhile
+      waits for it; cancel it from Activity to jump the queue.*
 - [x] **Activity — one page for everything the server does.** *Done
       2026-09-11* (`app/src/activity.ts`). Running job live with cancel,
       thumbnail warming (new counters on `/health`), batches with tokens and

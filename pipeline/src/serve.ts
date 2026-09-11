@@ -23,6 +23,8 @@ import {
   autoSubmitStatus,
   collectAnalyzeBatches,
   listAnalyzeBatches,
+  locateAhead,
+  locateAheadDue,
   readyToCollect,
   stopAutoSubmit,
   submitAnalyzeBatch,
@@ -990,7 +992,22 @@ async function collectIfReady(): Promise<void> {
     const next = await autoSubmitDue();
     if (next) {
       console.log("  batch queue has room — submitting the next caption batch");
-      jobs.start<object>({ kind: "analyze", run: (onProgress, signal) => submitAnalyzeBatch(next, onProgress, signal) });
+      const job = jobs.start<object>({
+        kind: "analyze",
+        run: (onProgress, signal) => submitAnalyzeBatch(next, onProgress, signal),
+      });
+      // Straight on to locating the round after, rather than at the next tick.
+      const stop = jobs.subscribe(job.id, (record) => {
+        if (record.status === "running" || record.status === "queued") return;
+        stop();
+        setTimeout(() => void collectIfReady(), 5_000);
+      });
+      return;
+    }
+    // While a batch is out, look up places for the next one — see locateAhead.
+    if (await locateAheadDue()) {
+      console.log("  batch out at Google — locating photos for the next one");
+      jobs.start({ kind: "locate", run: (onProgress, signal) => locateAhead(onProgress, signal) });
     }
   } catch (err) {
     console.warn(`  batch check failed: ${(err as Error).message}`);

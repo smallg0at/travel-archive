@@ -305,6 +305,7 @@ export const zhHans: Messages = {
       sync: "同步",
       translate: "翻译",
       collect: "收取结果",
+      locate: "定位",
     },
     jobStatus: {
       queued: "排队中",

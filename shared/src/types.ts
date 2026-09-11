@@ -402,7 +402,7 @@ export interface ArchiveIndexFile {
  * `trip` writes one trip's narrative from day summaries that already exist; it
  * is a single model call, so it finishes in seconds.
  */
-export type JobKind = "scan" | "analyze" | "organize" | "trip" | "sync" | "translate" | "collect";
+export type JobKind = "scan" | "analyze" | "organize" | "trip" | "sync" | "translate" | "collect" | "locate";
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 

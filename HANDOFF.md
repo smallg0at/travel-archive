@@ -283,6 +283,9 @@ photos already in an open batch are skipped. **Since then the server submits
 the rest by itself**, one batch after each collect (`autoSubmit` in
 `analyzeBatch.ts`; stop it from Activity). Photos that come back without a
 caption are left out of later batches — run one interactive Analyze at the end.
+While a batch is out the server also looks up places for the next one (a
+`locate` job), so a round is Google's wait rather than an hour of Nominatim
+followed by it.
 
 At batch prices on gemini-3.7-flash (they double on 2027-01-01) the whole run
 is about **$20**, measured on the first full batch: 4,000 photos for $3.40 —
