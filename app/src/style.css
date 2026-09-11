@@ -1698,7 +1698,13 @@ body.resizing { cursor: col-resize; user-select: none; }
   opacity: 0.8;
 }
 /* Only the day being read shows its stops, or an 18-day trip is a wall. */
-.toc-stops { padding-left: 12px; }
+/* Indented under the day's label with a guide line, so stops read as the
+   day's contents rather than as more days — at 12px they did not. */
+.page-contents .toc-stops {
+  margin: 2px 0 6px 12px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
 .toc-day:not(.is-active) .toc-stops { display: none; }
 .toc-stop { font-size: 11.5px; }
 .toc-stop.is-active { color: var(--accent); }
