@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { Server } from "node:http";
 import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { serveApp } from "./static";
 import {
@@ -123,6 +124,7 @@ function createWindow(): void {
       // localhost over fetch. It needs no Node and gets none.
       nodeIntegration: false,
       contextIsolation: true,
+      preload: join(__dirname, "preload.js"),
     },
   });
 
@@ -167,6 +169,47 @@ function createWindow(): void {
   void mainWindow.loadURL(APP_URL);
   mainWindow.on("closed", () => (mainWindow = null));
 }
+
+/**
+ * Exports the current page to a PDF the renderer picked with app/src/print.ts,
+ * without Chrome's print dialog — see preload.ts for why.
+ *
+ * `preferCSSPageSize` hands page size and margins to the app's own `@page`
+ * rule (style.css) rather than duplicating it here; `displayHeaderFooter` is
+ * false so no URL/date/title band is added, which is the entire point.
+ */
+ipcMain.handle("print-to-pdf", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return { ok: false, error: "No window" };
+
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: "Export as PDF",
+    defaultPath: "Photo Archive.pdf",
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (canceled || !filePath) return { ok: false, error: "cancelled" };
+
+  // The window is created with a dark backgroundColor (matching the app's own
+  // screen theme) so it never flashes white before the page paints. printToPDF
+  // paints that native colour into anything the page hasn't — the tail end of
+  // the last page, any not-yet-composited region during the screen-to-print
+  // layout swap — which is invisible on screen but shows up as black behind an
+  // otherwise-white printed page. White for the capture only; restored after
+  // regardless of success, so the screen never shows the wrong colour.
+  const screenBackground = win.getBackgroundColor();
+  win.setBackgroundColor("#ffffff");
+  try {
+    const data = await event.sender.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+    });
+    await writeFile(filePath, data);
+    return { ok: true, path: filePath };
+  } finally {
+    win.setBackgroundColor(screenBackground);
+  }
+});
 
 /**
  * A fresh install has no `.env`, so the job server cannot start.

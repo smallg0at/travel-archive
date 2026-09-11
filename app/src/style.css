@@ -2100,9 +2100,17 @@ body.map-expanded::after {
      is what makes a print theme six lines instead of an audit. */
   /* `:root[data-theme]` outranks a bare `:root`, so printing while the app is
      in dark mode would otherwise come out dark however many tokens are
-     re-declared here. Matching the attribute form keeps specificity level. */
+     re-declared here. Matching the attribute form keeps specificity level.
+     `:root:not([data-theme="light"])` does the same for "System" (no
+     data-theme attribute at all) on a dark-mode OS: that is the selector the
+     dark media query above uses, at (0,2,0), which otherwise beats this
+     block's bare `:root` at (0,1,0) and lets the dark --bg/--bg-muted survive
+     into print — invisible with window.print(), since Chrome's "Background
+     graphics" defaults off, but visible once printToPDF's printBackground:
+     true paints it. */
   :root,
-  :root[data-theme] {
+  :root[data-theme],
+  :root:not([data-theme="light"]) {
     --bg: #ffffff;
     --bg-muted: #ffffff;
     --text: #14140f;

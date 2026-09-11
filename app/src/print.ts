@@ -31,6 +31,19 @@ import { ui } from "./i18n";
 const OVERLAY_ID = "print-progress";
 
 /**
+ * The desktop shell's bridge for exporting without Chrome's print dialog —
+ * see desktop/src/preload.ts. Absent in a plain browser tab, where
+ * `window.print()` is the only option.
+ */
+declare global {
+  interface Window {
+    electronAPI?: {
+      printToPDF(): Promise<{ ok: boolean; path?: string; error?: string }>;
+    };
+  }
+}
+
+/**
  * Resolution the exported images are rasterised at.
  *
  * Thumbnails arrive at Graph's `large` — an 800px box — which is the right size
@@ -268,7 +281,7 @@ export async function printView(): Promise<void> {
   // DOM when the dialog opens.
   const swapped = await rasteriseAll(images, label(ui.print.sizing));
 
-  box.textContent = ui.print.openingPrint;
+  box.textContent = window.electronAPI ? ui.print.savingPdf : ui.print.openingPrint;
   // Two frames: one for the last decode to be painted, one for the layout it
   // changes to settle. Printing before this leaves the final cards blank.
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -277,9 +290,22 @@ export async function printView(): Promise<void> {
   // cannot appear in the printed output even if the stylesheet missed it.
   box.hidden = true;
   try {
-    // Blocks until the dialog is dismissed, which is what makes it safe to put
-    // the screen-sized images back on the next line.
-    window.print();
+    if (window.electronAPI) {
+      // The desktop shell: main process rasterises the same page straight to
+      // a PDF file, with no dialog and no header/footer band. Awaited, same
+      // as window.print() below, so restore() below only runs once the page
+      // has actually been captured.
+      const result = await window.electronAPI.printToPDF();
+      if (!result.ok && result.error !== "cancelled") {
+        box.hidden = false;
+        box.textContent = ui.print.exportFailed(result.error ?? ui.edit.unknownError);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    } else {
+      // Blocks until the dialog is dismissed, which is what makes it safe to
+      // put the screen-sized images back on the next line.
+      window.print();
+    }
   } finally {
     // In `finally` so a cancelled or failed print still leaves the page as it
     // was found, rather than showing print-resolution images from then on.
