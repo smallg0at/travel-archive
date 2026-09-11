@@ -285,7 +285,9 @@ the rest by itself**, one batch after each collect (`autoSubmit` in
 caption are left out of later batches — run one interactive Analyze at the end.
 
 At batch prices on gemini-3.7-flash (they double on 2027-01-01) the whole run
-is about **$17**; output, including thinking, is two thirds of it. A photo that
+is about **$20**, measured on the first full batch: 4,000 photos for $3.40 —
+578 input and 337 output tokens a photo (output, including thinking, above
+the 250 estimated, and 62% of the cost). A photo that
 comes back empty (RECITATION) stays uncaptioned — one interactive Analyze
 afterwards picks those up with its fallback.
 

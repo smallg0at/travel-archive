@@ -55,6 +55,8 @@ let liveJobId: string | null = null;
 let nowHost: HTMLElement | null = null;
 let warmHost: HTMLElement | null = null;
 let refreshLists: (() => void) | null = null;
+/** The last batch list read, so an idle "Now" can say what is still out at Google. */
+let lastBatches: AnalyzeBatchStatus[] = [];
 let indicatorTimer: ReturnType<typeof setInterval> | null = null;
 
 let refreshAlbum: () => void = () => {};
@@ -129,14 +131,33 @@ function resultText(job: JobRecord): string {
     .join(", ");
 }
 
-/** The running job, followed live, with its cancel button; or a line saying nothing runs. */
+/**
+ * What "Now" says with no job running here. A batch at Google is work in
+ * progress all the same — for hours — and "Nothing is running" above it read
+ * as if the run had stalled.
+ */
+function idleNote(): HTMLElement {
+  const uncollected = lastBatches.filter((b) => !b.collectedAt);
+  const waiting = uncollected.filter((b) => b.state === "pending" || b.state === "running");
+  const done = uncollected.filter((b) => b.state === "succeeded");
+  const lines: string[] = [];
+  if (waiting.length) {
+    const photos = waiting.reduce((n, b) => n + b.photos, 0);
+    const oldest = Math.min(...waiting.map((b) => Date.parse(b.createdAt)));
+    lines.push(ui.activity.waitingForGoogle(photos, ui.activity.duration(Date.now() - oldest)));
+  }
+  if (done.length) lines.push(ui.activity.readyToCollect(done.reduce((n, b) => n + b.photos, 0)));
+  return note(lines.length ? lines.join(" ") : ui.activity.idle);
+}
+
+/** The running job, followed live, with its cancel button; or what is idle and what is still out. */
 function renderNow(host: HTMLElement, job: JobRecord | null): void {
   stopLive?.();
   stopLive = null;
   liveJobId = null;
   host.replaceChildren();
   if (!job || finished(job)) {
-    host.appendChild(note(ui.activity.idle));
+    host.appendChild(idleNote());
     return;
   }
   liveJobId = job.id;
@@ -173,7 +194,7 @@ function renderNow(host: HTMLElement, job: JobRecord | null): void {
     stopLive = null;
     liveJobId = null;
     // It moves to the top of the history, which is refreshed to show it.
-    host.replaceChildren(note(ui.activity.idle));
+    host.replaceChildren(idleNote());
     refreshLists?.();
   });
 }
@@ -321,6 +342,7 @@ export async function showActivity(): Promise<void> {
 
   nowHost = now.body;
   warmHost = warm;
+  lastBatches = batches ?? [];
   renderNow(now.body, health.running ?? null);
   renderWarming(warm, health.warming);
   renderBatches(batchSection.body, batches, auto);
@@ -328,6 +350,8 @@ export async function showActivity(): Promise<void> {
   refreshLists = () => {
     void Promise.all([listBatches(), jobHistory(), autoSubmitStatus()]).then(([b, h, a]) => {
       if (!batchSection.node.isConnected) return;
+      lastBatches = b ?? [];
+      if (liveJobId === null && nowHost) nowHost.replaceChildren(idleNote());
       renderBatches(batchSection.body, b, a);
       renderHistory(past.body, h);
     });

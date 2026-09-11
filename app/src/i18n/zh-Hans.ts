@@ -315,6 +315,8 @@ export const zhHans: Messages = {
     loading: "正在加载活动…",
     now: "正在进行",
     idle: "当前没有运行中的任务。",
+    waitingForGoogle: (photos, ago) => `本机没有运行中的任务。正在等待 Google：${num(photos)} 张照片，${ago}前提交。`,
+    readyToCollect: (photos) => `Google 已处理完 ${num(photos)} 张照片，将在十分钟内收取。`,
     batches: "照片说明批量任务",
     noBatches: "还没有提交过照片说明批量任务。",
     batchDetail: (applied, failed, input, output, cost) => {

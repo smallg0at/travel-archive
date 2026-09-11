@@ -320,6 +320,10 @@ export const en = {
     loading: "Loading activity…",
     now: "Now",
     idle: "Nothing is running.",
+    waitingForGoogle: (photos: number, ago: string) =>
+      `Nothing is running here. Waiting for Google: ${count(photos, "photo", "photos")}, submitted ${ago} ago.`,
+    readyToCollect: (photos: number) =>
+      `Google has finished ${count(photos, "photo", "photos")}; they are collected within ten minutes.`,
     batches: "Caption batches",
     noBatches: "No caption batches have been submitted.",
     batchDetail: (
