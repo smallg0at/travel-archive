@@ -1,6 +1,6 @@
 import { createWriteStream, type WriteStream } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import type { AnalyzeBatchState, AnalyzeBatchStatus, PhotoShard } from "@travel-archive/shared";
+import type { AnalyzeBatchState, AnalyzeBatchStatus, AutoSubmitStatus, PhotoShard } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
 import { readThumb } from "../thumbStore.js";
@@ -82,8 +82,43 @@ interface StoredBatch extends Omit<AnalyzeBatchStatus, "costUsd"> {
   usage: { promptTokens: number; outputTokens: number; thoughtsTokens: number } | null;
 }
 
+/**
+ * A submit that stopped at Google's queue limit, carried on by the server once
+ * the queue has room. Tier 1 allows 3M tokens enqueued across all open batches
+ * for Gemini 3.7 Flash, and one file of 4,000 photos is ~2.6M — so on that
+ * tier the library goes one batch at a time, and nobody should have to come
+ * back after each to press Submit again.
+ */
+interface AutoSubmit {
+  from: string | null;
+  to: string | null;
+  /** What is left of the original limit. */
+  limit: number;
+  since: string;
+}
+
 interface StateFile {
   batches: StoredBatch[];
+  autoSubmit?: AutoSubmit | null;
+  /**
+   * Set the first time Google refuses a batch for its queue limit. From then
+   * on a submit stops after one file, and skips preparing at all while a batch
+   * is open, instead of preparing and uploading a file (~330MB) only to have it
+   * refused.
+   */
+  queueLimited?: boolean;
+  /**
+   * Photos a batch returned without a caption — RECITATION, a refusal. Left
+   * out of later batches, or the automatic submit would send the same few
+   * round after round forever; the interactive run's fallback is what gets
+   * them captioned.
+   */
+  noCaption?: string[];
+}
+
+/** Google's "too much enqueued" answer — HTTP 429, RESOURCE_EXHAUSTED. */
+function isQueueFull(err: unknown): boolean {
+  return (err as { status?: number }).status === 429 || /RESOURCE_EXHAUSTED/.test((err as Error).message ?? "");
 }
 
 async function readState(): Promise<StateFile> {
@@ -138,6 +173,8 @@ export interface BatchSubmitResult {
   located: number;
   noThumbnail: number;
   alreadyQueued: number;
+  /** 1 when it stopped at Google's queue limit and left the rest to the server's automatic submit. */
+  queueFull: number;
 }
 
 interface OpenFile {
@@ -150,23 +187,75 @@ function closeStream(stream: WriteStream): Promise<void> {
   return new Promise((resolve, reject) => stream.end((err?: Error | null) => (err ? reject(err) : resolve())));
 }
 
+/**
+ * Submits uncaptioned photos as batches of 4,000. On an account whose queue
+ * holds one batch at a time it submits one, records the rest as `autoSubmit`,
+ * and the server submits the next each time one has been collected.
+ *
+ * A cancel or a failure clears `autoSubmit`: a chain that has gone wrong must
+ * stop rather than try again every ten minutes, uploading hundreds of
+ * megabytes each time.
+ */
 export async function submitAnalyzeBatch(
   opts: AnalyzeOptions,
   onProgress: ProgressFn,
   signal?: AbortSignal,
 ): Promise<BatchSubmitResult> {
   requireGemini();
+  const state = await readState();
+  try {
+    return await submitBatches(state, opts, onProgress, signal);
+  } catch (err) {
+    if (state.autoSubmit) {
+      state.autoSubmit = null;
+      await writeState(state);
+      onProgress({ message: "Automatic submit stopped." });
+    }
+    throw err;
+  }
+}
+
+async function submitBatches(
+  state: StateFile,
+  opts: AnalyzeOptions,
+  onProgress: ProgressFn,
+  signal?: AbortSignal,
+): Promise<BatchSubmitResult> {
+  const result: BatchSubmitResult = { submitted: 0, batches: 0, located: 0, noThumbnail: 0, alreadyQueued: 0, queueFull: 0 };
+  const carryOn = async (message: string) => {
+    state.autoSubmit = {
+      from: opts.from ?? null,
+      to: opts.to ?? null,
+      limit: opts.limit - result.submitted,
+      since: state.autoSubmit?.since ?? new Date().toISOString(),
+    };
+    await writeState(state);
+    onProgress({ phase: "done", message });
+  };
+
+  // Known to hold one batch at a time and one is out: preparing now would be
+  // refused at the end, so hand straight over to the automatic submit.
+  if (state.queueLimited && state.batches.some(isOpen)) {
+    result.queueFull = 1;
+    await carryOn("A batch is still with Google, and this account's queue holds one at a time. The rest is submitted automatically once it has been collected.");
+    return result;
+  }
+
   onProgress({ phase: "signing-in", message: "Signing in..." });
   const token = await getAccessToken();
   onProgress({ phase: "planning", message: "Loading index..." });
   const index = await loadIndex(token);
   const sources = contextSources(index);
-  const state = await readState();
-  // A photo already in a batch that has not come back would be paid for twice.
-  const queued = new Set(state.batches.filter(isOpen).flatMap((b) => b.refs.map(([, id]) => id)));
-  const result: BatchSubmitResult = { submitted: 0, batches: 0, located: 0, noThumbnail: 0, alreadyQueued: 0 };
+  // A photo already in a batch that has not come back would be paid for twice;
+  // one that came back empty would come back empty again.
+  const queued = new Set([
+    ...state.batches.filter(isOpen).flatMap((b) => b.refs.map(([, id]) => id)),
+    ...(state.noCaption ?? []),
+  ]);
   await mkdir(BATCH_DIR, { recursive: true });
 
+  /** Set once no more files can go in this run; workers stop and the half-built file is dropped. */
+  let full = false;
   let file = null as OpenFile | null;
   // Workers append concurrently; the chain keeps lines whole and a file's
   // rotation from racing another worker's write.
@@ -181,7 +270,25 @@ export async function submitAnalyzeBatch(
     onProgress({ phase: "uploading", message: `Uploading ${refs.length} request(s) — ${displayName}` });
     const ai = geminiClient();
     const uploaded = await ai.files.upload({ file: path, config: { mimeType: "jsonl", displayName } });
-    const job = await ai.batches.create({ model: env.geminiModel, src: uploaded.name!, config: { displayName } });
+    const anyOpen = state.batches.some(isOpen);
+    let job: Awaited<ReturnType<typeof ai.batches.create>>;
+    try {
+      job = await ai.batches.create({ model: env.geminiModel, src: uploaded.name!, config: { displayName } });
+    } catch (err) {
+      // With nothing open, a 429 is not the queue — it is spend or rate, and
+      // waiting for a collect would not change it. That fails the job.
+      if (!anyOpen || !isQueueFull(err)) {
+        await rm(path, { force: true });
+        throw err;
+      }
+      full = true;
+      result.queueFull = 1;
+      state.queueLimited = true;
+      await ai.files.delete({ name: uploaded.name! }).catch(() => undefined);
+      await rm(path, { force: true });
+      onProgress({ message: `Google's batch queue is full — ${refs.length} request(s) held back for the next round.` });
+      return;
+    }
     state.batches.push({
       name: job.name!,
       displayName,
@@ -202,10 +309,13 @@ export async function submitAnalyzeBatch(
     result.batches++;
     result.submitted += refs.length;
     onProgress({ message: `Submitted ${job.name} — ${refs.length} photo(s).` });
+    // One at a time on this account: the next file would only be refused.
+    if (state.queueLimited) full = true;
   };
 
   const append = (line: string, ref: [string, string]): Promise<void> => {
     chain = chain.then(async () => {
+      if (full) return;
       if (!file) {
         const path = `${BATCH_DIR}/requests-${Date.now()}.jsonl`;
         file = { path, stream: createWriteStream(path, { encoding: "utf-8" }), refs: [] };
@@ -224,7 +334,7 @@ export async function submitAnalyzeBatch(
   let budget = opts.limit;
 
   for (const summary of months) {
-    if (signal?.aborted || budget <= 0) break;
+    if (signal?.aborted || full || budget <= 0) break;
     const shard = await loadShard(token, summary.month);
     const all = selectTargets(shard, opts);
     const fresh = all.filter((p) => !queued.has(p.id));
@@ -243,7 +353,7 @@ export async function submitAnalyzeBatch(
     onProgress({ phase: "preparing", done: 0, total: targets.length, message: `${summary.month} — preparing ${targets.length} request(s)` });
     let prepared = 0;
     await pooled(targets, DOWNLOADS_AT_ONCE, async (target) => {
-      if (signal?.aborted) return;
+      if (signal?.aborted || full) return;
       let image: Buffer | null = null;
       try {
         // The server's own thumbnail cache first: the same Graph `large`
@@ -269,7 +379,7 @@ export async function submitAnalyzeBatch(
   }
 
   await chain;
-  if (signal?.aborted) {
+  if (signal?.aborted || full) {
     // Nothing in a half-written file has been sent, so nothing is lost by dropping it.
     if (file) {
       const open = file;
@@ -281,6 +391,26 @@ export async function submitAnalyzeBatch(
     await finish();
   }
 
+  if (signal?.aborted) {
+    // A cancel is a decision to stop, including the chain.
+    if (state.autoSubmit) {
+      state.autoSubmit = null;
+      await writeState(state);
+    }
+    return result;
+  }
+  if (full) {
+    await carryOn(
+      `Submitted ${result.submitted} photo(s). This account's queue holds one batch at a time, so the rest is submitted automatically as each one is collected.`,
+    );
+    return result;
+  }
+
+  // Everything in range is submitted; the chain, if there was one, is done.
+  if (state.autoSubmit) {
+    state.autoSubmit = null;
+    await writeState(state);
+  }
   onProgress({
     phase: "done",
     message:
@@ -289,6 +419,29 @@ export async function submitAnalyzeBatch(
         : "Nothing to submit in that range.",
   });
   return result;
+}
+
+/** What the automatic submit will carry on with, for the Activity page; null when it is off. */
+export async function autoSubmitStatus(): Promise<AutoSubmitStatus | null> {
+  const state = await readState();
+  if (!state.autoSubmit) return null;
+  return { since: state.autoSubmit.since, from: state.autoSubmit.from, to: state.autoSubmit.to, waitingForBatch: state.batches.some(isOpen) };
+}
+
+/** Options for the next automatic submit — only once no batch is open, since the queue holds one. */
+export async function autoSubmitDue(): Promise<AnalyzeOptions | null> {
+  const state = await readState();
+  if (!state.autoSubmit || state.batches.some(isOpen)) return null;
+  const { from, to, limit } = state.autoSubmit;
+  return { from, to, limit };
+}
+
+/** Turns the automatic submit off. Batches already at Google are still collected. */
+export async function stopAutoSubmit(): Promise<void> {
+  const state = await readState();
+  if (!state.autoSubmit) return;
+  state.autoSubmit = null;
+  await writeState(state);
 }
 
 interface ResultLine {
@@ -353,6 +506,7 @@ export async function collectAnalyzeBatches(onProgress: ProgressFn, signal?: Abo
   const token = await getAccessToken();
   const index = await loadIndex(token);
   const shards = new Map<string, PhotoShard>();
+  const noCaption = new Set(state.noCaption ?? []);
 
   for (const { batch, resultFile } of ready) {
     if (signal?.aborted) break;
@@ -398,6 +552,7 @@ export async function collectAnalyzeBatches(onProgress: ProgressFn, signal?: Abo
       }
       if (!caption) {
         failed++;
+        noCaption.add(id);
         if (failed <= 5) onProgress({ message: `no caption for ${id}: ${row.error?.message ?? candidate?.finishReason ?? "empty"}` });
         continue;
       }
@@ -438,6 +593,7 @@ export async function collectAnalyzeBatches(onProgress: ProgressFn, signal?: Abo
     if (touched.size > 0) await saveIndex(token, index);
 
     Object.assign(batch, { collectedAt: new Date().toISOString(), applied, failed, usage });
+    state.noCaption = [...noCaption];
     await writeState(state);
     await rm(local, { force: true });
     result.collected++;

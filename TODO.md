@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**30 open, 39 done.** The list grows because each session surfaces defects that
+**29 open, 40 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -1107,8 +1107,18 @@ working practice this list was built with.
       it on a ten-minute timer. Round trip on 3 photos: accepted, finished in
       4 minutes, 3 of 3 captioned, 1,742 input / 749 output tokens — 581 and
       250 a photo, as estimated. The backlog is now 23,425, about $17 batched.
-- [ ] **A batch submit dies at Google's queue quota and wastes its
-      preparation.** 2026-09-11: the whole-library submit sent one file of
+- [x] **A batch submit dies at Google's queue quota and wastes its
+      preparation.** *Fixed 2026-09-11: a 429 at `batches.create` while a
+      batch is open now stops the submit cleanly (uploaded file deleted),
+      sets `queueLimited` and `autoSubmit` in `data/batches/analyze.json`, and
+      the server's collect timer submits the next file as soon as a collect
+      leaves no batch open — one at a time. While a batch is open a queue-
+      limited submit hands straight over without preparing anything. A cancel,
+      a failure, or a 429 with nothing open clears `autoSubmit`, so a broken
+      chain cannot retry every ten minutes. Photos a batch returned without a
+      caption are kept in `noCaption` and left out of later batches (else the
+      chain would resend them forever); the interactive run catches them.
+      Stop from Activity.* 2026-09-11: the whole-library submit sent one file of
       4,000, then `batches.create` for the second answered 429
       RESOURCE_EXHAUSTED "You exceeded your current quota" after 43 minutes of
       locating and preparing; the job failed and the prepared JSONL was

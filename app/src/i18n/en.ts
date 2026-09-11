@@ -340,6 +340,12 @@ export const en = {
     money: (usd: string, gbp: string) => `${usd} (≈${gbp})`,
     batchTotal: (spent: string, waiting: number) =>
       `${spent} spent on collected batches, at batch prices${waiting ? ` · ${count(waiting, "photo", "photos")} still with Google` : ""}.`,
+    autoSubmit: (waiting: boolean, since: string) =>
+      `Submitting the rest automatically, one batch at a time — Google's queue holds one for this account. ${
+        waiting ? "The next goes in once the batch below has been collected." : "The next goes in shortly."
+      } On since ${since}.`,
+    stopAutoSubmit: "Stop automatic submit",
+    autoSubmitStopped: "Automatic submit stopped. Batches already with Google are still collected.",
     thumbnails: "Thumbnails",
     warming: (done: number, total: number, failed: number, finished: boolean) =>
       `${finished ? "Cached" : "Caching"} ${num(done)} of ${num(total)}${failed ? ` · ${num(failed)} unavailable` : ""}`,

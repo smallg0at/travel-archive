@@ -1,5 +1,7 @@
-import type { AnalyzeBatchStatus, JobKind, JobRecord } from "@travel-archive/shared";
+import type { AnalyzeBatchStatus, AutoSubmitStatus, JobKind, JobRecord } from "@travel-archive/shared";
 import {
+  autoSubmitStatus,
+  stopAutoSubmit,
   cancelJob,
   checkHealth,
   jobHistory,
@@ -193,8 +195,30 @@ function renderWarming(host: HTMLElement, warm: ThumbWarming | null | undefined)
   host.appendChild(box);
 }
 
-function renderBatches(host: HTMLElement, batches: AnalyzeBatchStatus[] | null): void {
+/** The server submitting the rest one batch at a time, and the switch to stop it. */
+function autoSubmitBlock(auto: AutoSubmitStatus): HTMLElement {
+  const box = el<HTMLDivElement>(`<div></div>`);
+  box.appendChild(note(ui.activity.autoSubmit(auto.waitingForBatch, fmtDateTime(new Date(auto.since), WHEN))));
+  const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  const stop = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
+  stop.textContent = ui.activity.stopAutoSubmit;
+  stop.addEventListener("click", () => {
+    stop.disabled = true;
+    void stopAutoSubmit()
+      .then(() => box.replaceChildren(note(ui.activity.autoSubmitStopped)))
+      .catch((err: Error) => {
+        stop.disabled = false;
+        stop.textContent = err.message.slice(0, 80);
+      });
+  });
+  actions.appendChild(stop);
+  box.appendChild(actions);
+  return box;
+}
+
+function renderBatches(host: HTMLElement, batches: AnalyzeBatchStatus[] | null, auto: AutoSubmitStatus | null): void {
   host.replaceChildren();
+  if (auto) host.appendChild(autoSubmitBlock(auto));
   if (!batches || batches.length === 0) {
     host.appendChild(note(ui.activity.noBatches));
     return;
@@ -270,7 +294,12 @@ export async function showActivity(): Promise<void> {
   releaseActivity();
   content.replaceChildren(el(`<div class="loading">${ui.activity.loading}</div>`));
 
-  const [health, batches, history] = await Promise.all([checkHealth(), listBatches(), jobHistory()]);
+  const [health, batches, history, auto] = await Promise.all([
+    checkHealth(),
+    listBatches(),
+    jobHistory(),
+    autoSubmitStatus(),
+  ]);
   // The reader may have gone elsewhere while those were in flight.
   if (location.hash !== "#activity") return;
 
@@ -294,12 +323,12 @@ export async function showActivity(): Promise<void> {
   warmHost = warm;
   renderNow(now.body, health.running ?? null);
   renderWarming(warm, health.warming);
-  renderBatches(batchSection.body, batches);
+  renderBatches(batchSection.body, batches, auto);
   renderHistory(past.body, history);
   refreshLists = () => {
-    void Promise.all([listBatches(), jobHistory()]).then(([b, h]) => {
+    void Promise.all([listBatches(), jobHistory(), autoSubmitStatus()]).then(([b, h, a]) => {
       if (!batchSection.node.isConnected) return;
-      renderBatches(batchSection.body, b);
+      renderBatches(batchSection.body, b, a);
       renderHistory(past.body, h);
     });
   };

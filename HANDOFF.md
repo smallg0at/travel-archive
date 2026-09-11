@@ -279,7 +279,10 @@ there. The file had uploaded; `batches.create` was what refused. Tier 1 allows
 **3M tokens queued across all open batches** for Gemini 3.7 Flash (Google's
 rate-limits page; Tier 2 allows 400M), and one 4,000-photo file is ~2.6M — so
 at Tier 1 only one batch can be open at a time. Submitting again is safe:
-photos already in an open batch are skipped.
+photos already in an open batch are skipped. **Since then the server submits
+the rest by itself**, one batch after each collect (`autoSubmit` in
+`analyzeBatch.ts`; stop it from Activity). Photos that come back without a
+caption are left out of later batches — run one interactive Analyze at the end.
 
 At batch prices on gemini-3.7-flash (they double on 2027-01-01) the whole run
 is about **$17**; output, including thinking, is two thirds of it. A photo that

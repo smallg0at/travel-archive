@@ -328,6 +328,12 @@ export const zhHans: Messages = {
     money: (usd, gbp) => `${usd}（约 ${gbp}）`,
     batchTotal: (spent, waiting) =>
       `已收取的批量任务按批量价格共计 ${spent}${waiting ? `，另有 ${num(waiting)} 张照片仍在 Google 处理中` : ""}。`,
+    autoSubmit: (waiting, since) =>
+      `正在自动提交其余照片，每次一批——此账户的 Google 队列一次只能容纳一批。${
+        waiting ? "下面这一批收取后，会提交下一批。" : "下一批即将提交。"
+      }自 ${since} 起开启。`,
+    stopAutoSubmit: "停止自动提交",
+    autoSubmitStopped: "已停止自动提交。已在 Google 处理的批量任务仍会被收取。",
     thumbnails: "缩略图",
     warming: (done, total, failed, finished) =>
       `${finished ? "已缓存" : "正在缓存"} ${num(done)} / ${num(total)}${failed ? ` · ${num(failed)} 张无法获取` : ""}`,

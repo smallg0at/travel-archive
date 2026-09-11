@@ -18,7 +18,15 @@ import { getCachedAccessToken } from "./auth.js";
 import { loadIndex } from "./archiveStore.js";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
-import { collectAnalyzeBatches, listAnalyzeBatches, readyToCollect, submitAnalyzeBatch } from "./jobs/analyzeBatch.js";
+import {
+  autoSubmitDue,
+  autoSubmitStatus,
+  collectAnalyzeBatches,
+  listAnalyzeBatches,
+  readyToCollect,
+  stopAutoSubmit,
+  submitAnalyzeBatch,
+} from "./jobs/analyzeBatch.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
@@ -689,6 +697,19 @@ const routes: [RegExp, string, Handler][] = [
       json(res, 202, jobs.start<object>({ kind: "analyze", run }));
     },
   ],
+  /** Whether the server is carrying a batch submit on by itself — `autoSubmit` in analyzeBatch.ts. Null when off. */
+  [/^\/jobs\/analyze\/auto$/, "GET", async (_req, res) => json(res, 200, await autoSubmitStatus())],
+  [
+    /^\/jobs\/analyze\/auto\/stop$/,
+    "POST",
+    async (_req, res) => {
+      // The state file belongs to a running submit or collect; cancelling a
+      // submit stops the chain as well.
+      if (refuseIfBusy(res)) return;
+      await stopAutoSubmit();
+      json(res, 200, { ok: true });
+    },
+  ],
   /** Merges finished batches now, rather than at the timer's next tick. */
   [
     /^\/jobs\/analyze\/collect$/,
@@ -950,9 +971,25 @@ server.listen(env.servePort, "127.0.0.1", () => {
 const COLLECT_EVERY_MS = 10 * 60 * 1000;
 async function collectIfReady(): Promise<void> {
   try {
-    if (jobs.runningJob() || !(await readyToCollect())) return;
-    console.log("  caption batch finished — collecting");
-    jobs.start({ kind: "collect", run: (onProgress, signal) => collectAnalyzeBatches(onProgress, signal) });
+    if (jobs.runningJob()) return;
+    if (await readyToCollect()) {
+      console.log("  caption batch finished — collecting");
+      const job = jobs.start({ kind: "collect", run: (onProgress, signal) => collectAnalyzeBatches(onProgress, signal) });
+      // The automatic submit waits on this collect, so look again as soon as
+      // it ends rather than at the next tick.
+      const stop = jobs.subscribe(job.id, (record) => {
+        if (record.status === "running" || record.status === "queued") return;
+        stop();
+        setTimeout(() => void collectIfReady(), 5_000);
+      });
+      return;
+    }
+    // A submit that stopped at Google's queue limit carries on once no batch is open.
+    const next = await autoSubmitDue();
+    if (next) {
+      console.log("  batch queue has room — submitting the next caption batch");
+      jobs.start<object>({ kind: "analyze", run: (onProgress, signal) => submitAnalyzeBatch(next, onProgress, signal) });
+    }
   } catch (err) {
     console.warn(`  batch check failed: ${(err as Error).message}`);
   }

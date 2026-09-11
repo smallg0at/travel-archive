@@ -462,6 +462,18 @@ export interface AnalyzeBatchStatus {
   costUsd: number | null;
 }
 
+/**
+ * The server carrying on a batch submit by itself, one batch at a time, because
+ * Google's queue for this account holds only one. Null from the server when off.
+ */
+export interface AutoSubmitStatus {
+  since: string;
+  from: string | null;
+  to: string | null;
+  /** True while a batch is out; the next is submitted once it has been collected. */
+  waitingForBatch: boolean;
+}
+
 export interface AnalyzePlan {
   total: number;
   months: { month: string; count: number }[];

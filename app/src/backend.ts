@@ -254,6 +254,21 @@ export function startCollect(): Promise<JobRecord> {
   return post<JobRecord>("/jobs/analyze/collect", {});
 }
 
+/** Whether the server is submitting caption batches by itself, one at a time. Null when off, or with no backend. */
+export async function autoSubmitStatus(): Promise<import("@travel-archive/shared").AutoSubmitStatus | null> {
+  try {
+    const res = await fetch(`${BACKEND}/jobs/analyze/auto`);
+    return res.ok ? ((await res.json()) as import("@travel-archive/shared").AutoSubmitStatus | null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Turns the automatic submit off; batches already at Google are still collected. */
+export function stopAutoSubmit(): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>("/jobs/analyze/auto/stop", {});
+}
+
 /** Jobs newest first, including those from before the server last restarted. Null with no backend. */
 export async function jobHistory(): Promise<JobRecord[] | null> {
   try {
