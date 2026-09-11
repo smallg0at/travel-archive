@@ -44,9 +44,9 @@ let status: HTMLElement;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-function localDate(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+/** The date on the camera's clock — `takenAt` holds wall-clock time with UTC digits. */
+function cameraDate(iso: string): string {
+  return iso.slice(0, 10);
 }
 
 function ensureBar(): HTMLElement {
@@ -140,7 +140,7 @@ export function selectionClick(
 
   if (!dateInput?.value || !selecting) {
     ensureBar();
-    dateInput.value = localDate(photo.takenAt!);
+    dateInput.value = cameraDate(photo.takenAt!);
   }
 
   if (event.shiftKey && anchor && anchor.photos === photos) {
@@ -171,9 +171,8 @@ async function apply(): Promise<void> {
   const items = entries.map(({ photo }, i) => {
     const month = photo.takenAt!.slice(0, 7);
     if (!hourSelect.value) return { id: photo.id, month, date: dateInput.value, time: null };
-    const instant = new Date(`${dateInput.value}T${hourSelect.value.slice(0, 2)}:${pad(i)}`);
-    const iso = instant.toISOString();
-    return { id: photo.id, month, date: iso.slice(0, 10), time: iso.slice(11, 16) };
+    // As typed, on the camera's clock — no zone conversion (see cameraDate).
+    return { id: photo.id, month, date: dateInput.value, time: `${hourSelect.value.slice(0, 2)}:${pad(i)}` };
   });
 
   saveBtn.disabled = true;

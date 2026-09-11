@@ -10,6 +10,7 @@
     "organize": "node dist/organize.js",
     "redact": "node dist/redact.js",
     "trip": "node dist/trip.js",
+    "dedupe": "node dist/dedupe.js",
     "serve": "node dist/serve.js"
   },
   "dependencies": {

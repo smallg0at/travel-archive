@@ -1,5 +1,5 @@
-import type { DayRecord, DaySegment, PhotoRecord } from "@travel-archive/shared";
-import { editDay, getJob, setPhotoTakenAt, startOrganize, type DayPatch } from "./backend";
+import type { DayRecord, DaySegment, PhotoRecord, TripRecord } from "@travel-archive/shared";
+import { deleteTrip, editDay, getJob, renameTrip, setPhotoTakenAt, startOrganize, type DayPatch } from "./backend";
 import { el } from "./photoUi";
 import { forgetMonths } from "./archiveData";
 import { contentLanguage } from "./contentLang";
@@ -80,6 +80,70 @@ async function save(action: HTMLButtonElement, patch: () => Promise<void>): Prom
   } finally {
     if (action.textContent === ui.common.saving) action.textContent = label;
   }
+}
+
+/**
+ * Renaming or deleting a trip, from its own page.
+ *
+ * Delete asks for a second press within five seconds rather than a dialog —
+ * it discards a paid-for narrative, and the desktop shell's window is not
+ * somewhere to rely on `confirm()`. Either way no photo and no day summary is
+ * touched: the days go back to their months (deleteTrip on the server).
+ *
+ * `name` is the trip's own name, not the translation on screen, since that is
+ * what gets renamed.
+ */
+export function addTripControls(header: HTMLElement, trip: TripRecord, name: string): void {
+  if (!available) return;
+
+  const bar = el<HTMLDivElement>(`<div class="day-tools"></div>`);
+  const rename = button(ui.edit.renameTrip, "day-edit-open");
+  const remove = button(ui.edit.deleteTrip, "day-edit-open");
+  bar.append(rename, remove);
+  header.appendChild(bar);
+
+  const panel = el<HTMLDivElement>(`
+    <div class="day-editor" hidden>
+      <label class="day-field">
+        <span>${ui.edit.tripNameLabel}</span>
+        <input type="text" class="trip-name-edit" />
+      </label>
+      <div class="day-editor-actions"></div>
+    </div>
+  `);
+  const input = panel.querySelector<HTMLInputElement>(".trip-name-edit")!;
+  input.value = name;
+  const saveBtn = button(ui.common.save, "day-save");
+  const cancel = button(ui.common.cancel, "day-cancel");
+  panel.querySelector(".day-editor-actions")!.append(saveBtn, cancel);
+  header.after(panel);
+
+  rename.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) input.focus();
+  });
+  cancel.addEventListener("click", () => {
+    input.value = name;
+    panel.hidden = true;
+  });
+  saveBtn.addEventListener("click", async () => {
+    if (await save(saveBtn, async () => void (await renameTrip(trip.id, input.value)))) refresh?.();
+  });
+
+  let armed: ReturnType<typeof setTimeout> | null = null;
+  remove.addEventListener("click", async () => {
+    if (!armed) {
+      remove.textContent = ui.edit.confirmDeleteTrip;
+      armed = setTimeout(() => {
+        armed = null;
+        remove.textContent = ui.edit.deleteTrip;
+      }, 5000);
+      return;
+    }
+    clearTimeout(armed);
+    armed = null;
+    if (await save(remove, async () => void (await deleteTrip(trip.id)))) refresh?.();
+  });
 }
 
 /**
@@ -376,17 +440,17 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
 
   open.textContent = photo.timeSuspect ? ui.time.set : ui.time.change;
 
-  // Local, because the line right above this control is local — `takenAt` is a
-  // UTC instant and the viewer formats it for the reader. Prefilling from the
-  // raw UTC slice showed 15:30 under a caption that said 16:30, so typing what
-  // you saw moved the photo an hour.
-  const local = new Date(photo.takenAt);
+  // The camera's clock, as stored and as the line above now shows it:
+  // `takenAt` is wall-clock time with UTC digits. This used to convert to the
+  // reader's zone to match a caption that did the same; both now read the
+  // stored clock, so what you see is what you type is what is saved.
+  const taken = new Date(photo.takenAt);
   const pad = (n: number) => String(n).padStart(2, "0");
-  date.value = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+  date.value = `${taken.getUTCFullYear()}-${pad(taken.getUTCMonth() + 1)}-${pad(taken.getUTCDate())}`;
   fillHours(clock);
   // A suspect clock is a fabricated midnight, so offering it as the starting
   // value would invite confirming a number nothing measured.
-  clock.value = photo.timeSuspect ? "" : `${pad(local.getHours())}:00`;
+  clock.value = photo.timeSuspect ? "" : `${pad(taken.getUTCHours())}:00`;
   status.textContent = ui.time.note;
 
   const saveBtn = button(ui.common.save, "photo-time-save");
@@ -406,16 +470,10 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
       status.textContent = ui.time.pickDate;
       return;
     }
-    // Back to the instant the archive stores. With no time there is nothing to
-    // convert — a bare date is a bare date in any zone, and the record keeps
-    // the midnight that marks it untimed.
-    let sendDate = date.value;
-    let sendTime: string | null = null;
-    if (clock.value) {
-      const instant = new Date(`${date.value}T${clock.value}`);
-      sendDate = instant.toISOString().slice(0, 10);
-      sendTime = instant.toISOString().slice(11, 16);
-    }
+    // Sent as typed: the archive stores the camera's clock, so there is no
+    // zone to convert between. No time keeps the untimed midnight.
+    const sendDate = date.value;
+    const sendTime: string | null = clock.value || null;
 
     const ok = await save(saveBtn, async () => {
       const result = await setPhotoTakenAt(photo.id, { month, date: sendDate, time: sendTime });

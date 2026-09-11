@@ -33,7 +33,7 @@ import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
-import { runTrip } from "./jobs/trip.js";
+import { deleteTrip, renameTrip, runTrip } from "./jobs/trip.js";
 import { parseTranslateOptions, planTranslate, runTranslate } from "./jobs/translate.js";
 import * as jobs from "./server/jobs.js";
 
@@ -780,6 +780,37 @@ const routes: [RegExp, string, Handler][] = [
         allowMissingSummaries: body.allowMissingSummaries === true,
       };
       json(res, 202, jobs.start({ kind: "trip", run: (onProgress, signal) => runTrip(opts, onProgress, signal) }));
+    },
+  ],
+  /**
+   * A trip renamed or deleted from its page. Synchronous like the day editor:
+   * one write, nothing spent. Delete keeps every day and photo — see deleteTrip.
+   */
+  [
+    /^\/trips\/([^/]+)\/rename$/,
+    "POST",
+    async (req, res, [id]) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{ name?: string }>(req);
+      try {
+        await renameTrip(decodeURIComponent(id), body.name ?? "");
+        json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+  [
+    /^\/trips\/([^/]+)\/delete$/,
+    "POST",
+    async (_req, res, [id]) => {
+      if (refuseIfBusy(res)) return;
+      try {
+        await deleteTrip(decodeURIComponent(id));
+        json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
     },
   ],
 

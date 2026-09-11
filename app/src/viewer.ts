@@ -59,6 +59,12 @@ function metaLine(photo: PhotoRecord): string {
         // library shifts times by hours; the day is usually right, the hour not.
         hour: photo.timeSuspect ? undefined : "2-digit",
         minute: photo.timeSuspect ? undefined : "2-digit",
+        // The camera's clock, unshifted. `takenAt` holds the wall-clock time
+        // with UTC digits — EXIF and filename alike (27,458 of 27,645 EXIF
+        // photos match their filename stamp to the minute) — and stop headings
+        // slice it raw. Formatting it for the reader's zone made the same
+        // photo read 12:49 under its stop and 13:49 here.
+        timeZone: "UTC",
       }),
     );
   }

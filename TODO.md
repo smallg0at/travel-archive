@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**22 open, 48 done.** The list grows because each session surfaces defects that
+**15 open, 55 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -302,7 +302,13 @@ working practice this list was built with.
       renames. Worth finishing before the next feature that writes to the
       archive, since that one would otherwise need a patch of its own.
 
-- [ ] **Filename clocks are read as UTC but shown as local.** Found 2026-09-09
+- [x] **Filename clocks are read as UTC but shown as local.** *Fixed
+      2026-09-11 — owner's decision: a time means the camera's clock. Measured
+      first: EXIF times are stored the same way as filename times (27,458 of
+      27,645 EXIF photos with a timestamped name match it to the minute), so
+      no record moved. The viewer's line, the photo time control and retime
+      now show and send that clock unshifted (`timeZone: "UTC"`, UTC getters,
+      no conversion on save), matching the stop headings.* Found 2026-09-09
       while building the control below. `parseDateFromFileName` builds the
       instant with `Date.UTC(...)`, so a camera's local wall clock becomes a UTC
       instant — and the viewer then formats it for the reader, adding their
@@ -363,7 +369,10 @@ working practice this list was built with.
 
       Still open above: the timezone the filename clock is read in.
 
-- [ ] **Moving a photo to another day — rename the file.** Raised 2026-09-09.
+- [x] **Moving a photo to another day — rename the file.** *Closed 2026-09-11
+      as a duplicate: this is the item directly above, built 2026-09-10 as "set
+      the date and time". Kept for the reasoning about EXIF-dated photos.*
+      Raised 2026-09-09.
       WhatsApp saves land on the day they were *sent*, and the real day is
       unrecoverable from the file, so some photos need moving by hand.
 
@@ -853,7 +862,16 @@ working practice this list was built with.
       **Nothing else was re-summarized.** `segmentsAreCurrent()` cannot see an
       algorithm change, so every other day keeps its stored segments until
       forced — the day picker in Generate is how to choose which.
-- [ ] **the city airport never appears on the map.** The photos are correct and now
+- [x] **the city airport never appears on the map.** *Fixed 2026-09-11 (owner:
+      split long transit). `arrivalTail` in `stops.ts`: when a day's last
+      transit run — last with nothing *located* after it — ends 50km+ from
+      where it began with 3+ located photos within 25km of its end, that end
+      becomes a place. 2026-09-02 now reads "t30 p12 p7": the flight, then 12
+      photos 14:38-20:11 in Essex / the capital region, then 7 hotel photos with
+      no GPS (which is why "day's last run" alone missed it). Undated photos
+      skip an arrival when the day has another place. 14 of 2,015 days change,
+      each only by an arrival split off its last transit; a day's stored
+      segments change only when it is re-summarized.* The photos are correct and now
       trusted (18 of 21 UK fixes), geocoded to the capital region / City of the capital.
       They land in a single **transit** segment (13:42–21:58 "Flight to the capital
       City") and `citiesOf` only builds markers from `place` segments. Needs a
@@ -872,7 +890,9 @@ working practice this list was built with.
       `forgetAllMonths` first. A collect reports no months and touched 30 in
       one run, so it forgets them all; the day editor and retime still forget
       only the months they name.*
-- [ ] Zoom-out reaches the whole world; cap at continental?
+- [x] Zoom-out reaches the whole world; cap at continental? *Capped 2026-09-11
+      at a sixth of the world's width, or four times the trip's own extent if
+      that is wider: a town opens 942 units wide and zooms out to 16,667.*
 - [ ] Mobile view: design needs rethinking; a Figma would help.
 
 ### Resolved
@@ -1103,7 +1123,12 @@ working practice this list was built with.
       rerun, because the rerun is the thing that would otherwise be paid for
       twice. Note `documentTranslation` currently renders foreign placards
       *into English* specifically; under a Chinese UI that target changes too.
-- [ ] Trip management — rename, delete.
+- [x] Trip management — rename, delete. *Built 2026-09-11: "Rename trip" and
+      "Delete trip" on a trip's page (server only). Rename changes the name in
+      the index and trips.json and keeps the id, so pins and links survive.
+      Delete takes a second press within 5s, removes the range and narrative,
+      returns the days to their months with summaries intact, drops a pin on
+      the trip, and touches no photo.*
 - [x] **Gemini Batch API** — roughly half price, async, up to 24h. Not worth it
       for a 35-minute interactive run; worth building if backfilling the other
       ~14,000 photos (£20 vs £40 overnight).
@@ -1425,8 +1450,13 @@ Verified: card panel with placard text, per-image panel switching, strip
 selection, arrows wrapping 2-1-2-0, zoom 100/150/fit, panning, and the
 no-card path.
 
-- [ ] The viewer is desktop-shaped. Below 900px it stacks, but that has not been
-      exercised on a real phone. User: Tested, layout does not scroll.
+- [x] The viewer is desktop-shaped. Below 900px it stacks, but that has not been
+      exercised on a real phone. User: Tested, layout does not scroll. *Fixed
+      2026-09-11: stacked, the card section could not shrink and the photo's
+      section got no height, so the transcript was clipped with nothing to
+      scroll. The panel is now one scroller and the figure uses `92dvh`. At
+      375x812: panel 325px tall over 1,145px of content, scrolls. Not yet
+      re-checked on a real phone.*
 - [x] Zoom is centre-origin, so zooming does not follow the cursor. *Fixed
       2026-09-11: the wheel passes the cursor as an anchor and `setZoom` moves
       the pan by `d·(1-k)`, `d` being the cursor's distance from the photo's
@@ -1460,9 +1490,17 @@ resample from the source: no seams at 152% or 506%, and sharper.
 - [ ] `dedupe` command — delete duplicate files from OneDrive. sha256 only,
       dry-run default, recycle bin. **Needs explicit approval and a shown dry
       run.** Now worth more: real duplicate count is 1,357, not 324.
-- [ ] Re-run analyze for the 2 photos that failed `503 UNAVAILABLE` on
+      *Dry run built 2026-09-11 (owner: build, dry run only):
+      `npm run --workspace pipeline dedupe` checks every copy in an "exact"
+      group against the photo the group keeps by content hash (SHA-256, else
+      SHA-1, else QuickXor) and writes `data/dedupe/dry-run-*.csv`. It has no
+      way to delete; that step waits on the owner reviewing the list.*
+- [x] Re-run analyze for the 2 photos that failed `503 UNAVAILABLE` on
       2026-09-05. Not lost — `analyzedAt` is still null — and the retry added
-      afterwards should prevent a repeat.
+      afterwards should prevent a repeat. *Closed 2026-09-11: the whole-library
+      batch chain takes every uncaptioned photo, these included; anything a
+      batch returns empty is caught by the one interactive Analyze planned
+      after the chain ends.*
 - [x] **`analyze` (CLI) and `serve` can run at once and clobber the same
       shard.** Fixed 2026-09-06 by `pipeline/src/lock.ts` — a pid lock at
       `data/.archive-lock`, held per write by all five CLI entry points, every

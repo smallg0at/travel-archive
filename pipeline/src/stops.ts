@@ -119,7 +119,48 @@ function timeIsReal(photo: PhotoRecord): boolean {
   return photo.dateSource !== "filename-date";
 }
 
-export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
+/**
+ * An arrival: the end of a day's last transit run, when the run finished far
+ * from where it began and there are photos at the far end.
+ *
+ * the city airport was the case. The day's last 8 hours were one run, "Flight to
+ * the city airport", and the photos taken after landing were in it — too few and
+ * too spread between the airport and the hotel to pass `isVisit`. The trip
+ * map marks only places, so the city the day ended in was nowhere on it, and
+ * nothing later in the day named it either. Only for the day's last run with
+ * nothing *located* after it: a located place later in the day already covers
+ * wherever the traveller got to, and an unlocated one cannot be mapped.
+ *
+ * The tail is walked back from the last located photo while photos stay
+ * within `ARRIVAL_CITY_KM` — wider than `CITY_KM`, since an airport is rarely
+ * 5km from the city it serves.
+ */
+const ARRIVAL_FROM_KM = 50;
+const ARRIVAL_CITY_KM = 25;
+const ARRIVAL_MIN_LOCATED = 3;
+
+function arrivalTail(photos: PhotoRecord[]): PhotoRecord[] | null {
+  const located = photos
+    .map((photo, i) => ({ i, point: pointOf(photo) }))
+    .filter((x): x is { i: number; point: [number, number] } => x.point !== null);
+  if (located.length <= ARRIVAL_MIN_LOCATED) return null;
+  const last = located[located.length - 1].point;
+  let start = located[located.length - 1].i;
+  let inCity = 0;
+  for (let k = located.length - 1; k >= 0; k--) {
+    if (distanceKm(located[k].point, last) > ARRIVAL_CITY_KM) break;
+    start = located[k].i;
+    inCity++;
+  }
+  // The whole run in one city is not a journey that arrived anywhere.
+  if (inCity < ARRIVAL_MIN_LOCATED || start === located[0].i) return null;
+  if (distanceKm(located[0].point, last) < ARRIVAL_FROM_KM) return null;
+  return photos.slice(start);
+}
+
+/** `splitArrival` is only switched off to measure what it changes. */
+export function detectStops(dayPhotos: PhotoRecord[], opts: { splitArrival?: boolean } = {}): Stop[] {
+  const splitArrival = opts.splitArrival ?? true;
   const dated = dayPhotos.filter((p) => p.takenAt);
   const ordered = dated
     .filter(timeIsReal)
@@ -171,6 +212,8 @@ export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
     minutesBetween(cluster[0].takenAt!, cluster[cluster.length - 1].takenAt!) >= MIN_MINUTES;
 
   const stops: Stop[] = [];
+  /** Stops made by `arrivalTail` — passed over when placing the untimed photos below. */
+  const arrivals = new Set<Stop>();
   let pending: PhotoRecord[][] = [];
 
   const span = (photos: PhotoRecord[]): { located: number; km: number } => {
@@ -201,10 +244,16 @@ export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
    * like a visit and keeping the rest as transit — in time order, so the day
    * still reads forwards.
    */
-  const flushTransit = () => {
+  const flushTransit = (atDayEnd = false) => {
     if (pending.length === 0) return;
-    const photos = pending.flat();
+    let photos = pending.flat();
     pending = [];
+
+    let arrival: PhotoRecord[] = [];
+    if (atDayEnd && splitArrival) {
+      arrival = arrivalTail(photos) ?? [];
+      photos = photos.slice(0, photos.length - arrival.length);
+    }
 
     let run: PhotoRecord[] = [];
     let anchor: [number, number] | null = null;
@@ -232,17 +281,25 @@ export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
       }
     }
     pushStop("transit", travelling);
+    if (arrival.length > 0) {
+      pushStop("place", arrival);
+      arrivals.add(stops[stops.length - 1]);
+    }
   };
 
-  for (const cluster of clusters) {
+  const located = (photos: PhotoRecord[]) => photos.some((p) => pointOf(p) !== null);
+  for (const [i, cluster] of clusters.entries()) {
     if (substantial(cluster)) {
-      flushTransit();
+      // Nothing located for the rest of the day means no later stop can put
+      // where the journey ended on the map, so this run's end is an arrival —
+      // 2026-09-02 ends in seven hotel photos with no GPS after the flight.
+      flushTransit(!clusters.slice(i).some(located));
       pushStop("place", cluster);
     } else {
       pending.push(cluster);
     }
   }
-  flushTransit();
+  flushTransit(true);
 
   // The untimed photos join the day's last *place*. Their own start/end are not
   // merged in, so the stop keeps the times that were actually measured rather
@@ -259,8 +316,14 @@ export function detectStops(dayPhotos: PhotoRecord[]): Stop[] {
   // flagged `timeUncertain` so the summarizer is told not to narrate when
   // things happened, but the guess is why this is worth revisiting if these
   // ever become more than a fraction of a day.
+  //
+  // Not an arrival, when there is another place: a few photos taken after
+  // getting off a train would otherwise carry every undated photo of the day —
+  // on 2026-09-07 thirty of them moved from a town to a four-photo the capital.
   if (untimed.length > 0 && stops.length > 0) {
-    const lastPlace = stops.map((s, i) => (s.kind === "place" ? i : -1)).filter((i) => i >= 0).pop();
+    const places = stops.map((s, i) => (s.kind === "place" ? i : -1)).filter((i) => i >= 0);
+    const settled = places.filter((i) => !arrivals.has(stops[i]));
+    const lastPlace = settled.pop() ?? places.pop();
     stops[lastPlace ?? stops.length - 1].photos.push(...untimed);
   }
 

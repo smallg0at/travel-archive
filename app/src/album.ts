@@ -15,6 +15,7 @@ import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
 import { fmtDate, num, ui } from "./i18n";
 import { releaseActivity, showActivity, startActivityIndicator } from "./activity";
+import { addTripControls } from "./dayEdit";
 
 /**
  * How long a view must be looked at before anything is fetched for it.
@@ -332,6 +333,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
   header.querySelector("span")!.textContent =
     `${formatDayHeading(trip.startDate)} – ${formatDayHeading(trip.endDate)} · ${ui.common.days(trip.days.length)} · ${ui.common.photos(photoCount)}`;
   frag.appendChild(header);
+  addTripControls(header, trip, trip.name);
 
   if (trip.narrative) {
     const narrative = el<HTMLDivElement>(`<div class="trip-narrative"></div>`);

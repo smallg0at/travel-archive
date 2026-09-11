@@ -315,6 +315,49 @@ export async function renamePhoto(token: string, itemId: string, name: string): 
   }
 }
 
+export interface ItemHashes {
+  id: string;
+  name: string;
+  size: number;
+  /** The folder, as Graph reports it ("/drive/root:/Pictures/2026-09"). */
+  folder: string | null;
+  sha256?: string;
+  sha1?: string;
+  quickXor?: string;
+}
+
+/**
+ * A file's content hashes, for `dedupe`. The archive keeps no hashes — its
+ * duplicate groups are name, size and capture time — so deleting anything
+ * waits on this: the bytes themselves must be shown identical. Null when the
+ * item is gone.
+ */
+export async function fetchItemHashes(token: string, itemId: string): Promise<ItemHashes | null> {
+  try {
+    const res = await graphFetch(token, `/me/drive/items/${itemId}?$select=id,name,size,file,parentReference`);
+    const item = (await res.json()) as {
+      id?: string;
+      name?: string;
+      size?: number;
+      file?: { hashes?: { sha256Hash?: string; sha1Hash?: string; quickXorHash?: string } };
+      parentReference?: { path?: string };
+    };
+    if (!item.id) return null;
+    const h = item.file?.hashes ?? {};
+    return {
+      id: item.id,
+      name: item.name ?? "",
+      size: item.size ?? 0,
+      folder: item.parentReference?.path ?? null,
+      sha256: h.sha256Hash,
+      sha1: h.sha1Hash,
+      quickXor: h.quickXorHash,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function downloadPhotoBuffer(token: string, itemId: string): Promise<Buffer> {
   const res = await graphFetch(token, `/me/drive/items/${itemId}/content`);
   return Buffer.from(await res.arrayBuffer());

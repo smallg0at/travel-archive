@@ -8,6 +8,8 @@ import { bucketDays } from "./sections.js";
 import type { ProgressFn } from "./analyze.js";
 import { NATIVE_LANGUAGE, saveNativeText } from "./translate.js";
 import type { TripDayInput } from "../providers/types.js";
+import { withArchiveLock } from "../lock.js";
+import { removePin } from "../syncStore.js";
 
 /**
  * Writes the story of one trip over a date range the user chose.
@@ -102,6 +104,58 @@ async function upsertDefinition(def: TripDefinition): Promise<TripDefinition[]> 
   next.sort((a, b) => a.startDate.localeCompare(b.startDate));
   await writeFile(TRIPS_FILE, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
   return next;
+}
+
+async function writeDefinitions(defs: TripDefinition[]): Promise<void> {
+  await writeFile(TRIPS_FILE, `${JSON.stringify(defs, null, 2)}\n`, "utf-8");
+}
+
+/**
+ * Renames a trip: its section in the index and its definition in trips.json.
+ * The id stays — pins, links and the second language's text refer to it.
+ * The index is written first, so a failure leaves the old name everywhere
+ * rather than two names.
+ */
+export async function renameTrip(id: string, name: string): Promise<void> {
+  const clean = name.trim();
+  if (!clean) throw new Error("A trip needs a name.");
+  await withArchiveLock("rename trip", async () => {
+    const defs = await loadTripDefinitions();
+    const def = defs.find((d) => d.id === id);
+    if (!def) throw new Error(`There is no trip "${id}".`);
+    const token = await getAccessToken();
+    const index = await loadIndex(token);
+    const section = index.sections.find((s) => s.id === id);
+    if (section) {
+      section.name = clean;
+      await saveIndex(token, index);
+    }
+    def.name = clean;
+    await writeDefinitions(defs);
+  });
+}
+
+/**
+ * Deletes a trip — its date range and its narrative. Its days go back to
+ * their months with their summaries intact, and no photo is touched. A pin on
+ * the trip goes too, since it would name nothing.
+ */
+export async function deleteTrip(id: string): Promise<void> {
+  await withArchiveLock("delete trip", async () => {
+    const defs = await loadTripDefinitions();
+    const rest = defs.filter((d) => d.id !== id);
+    if (rest.length === defs.length) throw new Error(`There is no trip "${id}".`);
+    const token = await getAccessToken();
+    const index = await loadIndex(token);
+    index.sections = bucketDays(
+      index.sections.flatMap((s) => s.days),
+      rest,
+      index.sections,
+    );
+    await saveIndex(token, index);
+    await writeDefinitions(rest);
+    await removePin("trip", id).catch(() => undefined);
+  });
 }
 
 function idFor(opts: TripOptions): string {

@@ -1557,13 +1557,23 @@ body.resizing { cursor: col-resize; user-select: none; }
   .lightbox-figure {
     flex-direction: column;
     gap: 10px;
+    /* The height a phone actually shows, not the one behind its toolbars —
+       92vh on a phone reaches under them, and the panel's end with it. */
+    height: 92dvh;
   }
+  .lightbox-stage { min-height: 0; }
   .lightbox img { max-height: 100%; }
   #lightbox-panel {
     flex: 0 1 auto;
     max-height: 40vh;
+    /* One scroller for the whole panel. Stacked, the card could not shrink
+       and the photo's section got what was left — nothing, on a phone — so
+       the transcript was clipped with no way to reach it. Reported as "layout
+       does not scroll". */
+    overflow-y: auto;
   }
-  #lightbox-card { max-height: none; }
+  #lightbox-card,
+  #lightbox-photo { max-height: none; flex: 0 0 auto; overflow: visible; }
 }
 
 /* The viewer's close control. The figure fills the screen now, so the backdrop

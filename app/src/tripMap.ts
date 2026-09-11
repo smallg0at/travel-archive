@@ -558,7 +558,13 @@ export async function renderTripMap(
     // Bounded by the world's *width*, not its height: the viewBox is wider than
     // it is tall, so clamping on height alone let you zoom out past the point
     // where the whole map fits and kept going into empty space.
-    const maxH = Math.min(WORLD_H, WORLD_H / aspect);
+    //
+    // And capped at about a continent — a sixth of the world's width, or four
+    // times the trip's own extent when the trip is wider than that. Zooming
+    // out to the whole globe showed a speck; the country around a two-city
+    // trip is still in reach, which is what the old 1.67x cap took away.
+    const continentH = Math.max(home.h * 4, WORLD_H / 6 / aspect);
+    const maxH = Math.min(WORLD_H, WORLD_H / aspect, continentH);
     const next = Math.min(maxH, Math.max(home.h / MAX_SCALE, view.h * factor));
     view.w *= next / view.h;
     view.h = next;

@@ -384,6 +384,16 @@ export function startTrip(body: TripRequest): Promise<JobRecord> {
   return post<JobRecord>("/jobs/trip", body);
 }
 
+/** Renames a trip; its id, and so its links and pins, stay. */
+export function renameTrip(id: string, name: string): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>(`/trips/${encodeURIComponent(id)}/rename`, { name });
+}
+
+/** Deletes a trip's range and narrative; its days return to their months, no photo is touched. */
+export function deleteTrip(id: string): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>(`/trips/${encodeURIComponent(id)}/delete`, {});
+}
+
 export function cancelJob(id: string): Promise<JobRecord> {
   return post<JobRecord>(`/jobs/${id}/cancel`, {});
 }

@@ -49,7 +49,7 @@ const DUP_SUFFIX = /(?:[ -]\d{1,2}|\s*\(\d{1,2}\))$/;
 const BURST_TAG = /_BURST\d+/i;
 
 /** "IMG_1234 2.jpg" -> "IMG_1234.jpg". Leaves names without a copy suffix alone. */
-function stripCopySuffix(fileName: string): string {
+export function stripCopySuffix(fileName: string): string {
   const dot = fileName.lastIndexOf(".");
   const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
   const ext = dot > 0 ? fileName.slice(dot) : "";
