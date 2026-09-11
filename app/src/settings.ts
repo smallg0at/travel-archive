@@ -628,9 +628,25 @@ function offlineSection(status: SyncStatus): HTMLElement {
     `<label class="set-check"><input type="checkbox"><span>${ui.settings.autoCheck}</span></label>`,
   );
   const box = auto.querySelector("input") as HTMLInputElement;
-  box.checked = true;
+  // The stored value. It was hard-coded to checked, so unticking it looked
+  // undone on the next visit; `settings` is absent from an older server.
+  box.checked = status.settings?.autoSyncOnLaunch ?? true;
   box.addEventListener("change", () => void saveSyncSettings({ autoSyncOnLaunch: box.checked }));
   body.appendChild(auto);
+
+  const every = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.checkEvery}</span></div>`);
+  const pick = document.createElement("select");
+  pick.className = "set-select";
+  for (const minutes of [0, 15, 60, 360]) {
+    const option = document.createElement("option");
+    option.value = String(minutes);
+    option.textContent = ui.settings.interval(minutes);
+    pick.appendChild(option);
+  }
+  pick.value = String(status.settings?.intervalMinutes ?? 0);
+  pick.addEventListener("change", () => void saveSyncSettings({ intervalMinutes: Number(pick.value) }));
+  every.appendChild(pick);
+  body.appendChild(every);
   return s;
 }
 

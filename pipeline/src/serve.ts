@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { cachedSync, checkSync, protectedPaths, runSync, type ConflictChoice } from "./jobs/sync.js";
+import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, removePin, setPin, writeSync } from "./syncStore.js";
 import { readFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
@@ -492,8 +492,8 @@ const routes: [RegExp, string, Handler][] = [
   ],
 
   /**
-   * Run a sync. `checkOnly` reports without downloading, which is what the app
-   * does on launch; `resolve` settles a conflict and is required when both
+   * Run a sync. `checkOnly` reports without downloading (the automatic checks
+   * call `checkSync` directly, not this — see `startSyncChecks`); `resolve` settles a conflict and is required when both
    * sides changed, since this never picks for the user.
    */
   [
@@ -998,3 +998,4 @@ async function collectIfReady(): Promise<void> {
 }
 setInterval(() => void collectIfReady(), COLLECT_EVERY_MS);
 setTimeout(() => void collectIfReady(), 30_000);
+startSyncChecks(() => jobs.runningJob() !== null);

@@ -217,6 +217,9 @@ export const en = {
     includeOriginals: "Keep full-size too",
     thumbnailsOnly: "Thumbnails only",
     autoCheck: "Check for changes when the app starts",
+    checkEvery: "And while it runs, check every",
+    interval: (minutes: number) =>
+      minutes === 0 ? "Never" : minutes < 60 ? `${minutes} minutes` : `${minutes / 60} hour${minutes === 60 ? "" : "s"}`,
 
     appearance: "Appearance",
     sidebarWidth: "Sidebar width",

@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**23 open, 46 done.** The list grows because each session surfaces defects that
+**22 open, 47 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -1378,8 +1378,16 @@ Three bugs found by testing, not reasoning:
 Still to build. Light/dark, i18n and trip management are tracked under **Todo**
 above rather than repeated here; the Settings page is simply where they land.
 
-- [ ] The periodic sync timer — the setting is stored and honoured by the
-      server, but nothing in the UI sets the interval yet.
+- [x] The periodic sync timer — the setting is stored and honoured by the
+      server, but nothing in the UI sets the interval yet. *Fixed 2026-09-11,
+      and the entry was wrong: nothing honoured it. `intervalMinutes` and
+      `autoSyncOnLaunch` were stored and read by no one — no launch check ran
+      anywhere, and the Settings box was hard-coded to checked. Now the server
+      runs `checkSync` (eTag only, no download) 20s after start when
+      `autoSyncOnLaunch`, and every `intervalMinutes` (re-read each minute,
+      skipped while a job runs) — `startSyncChecks` in `jobs/sync.ts`.
+      `SyncStatus` carries both settings, the box shows the stored value, and
+      Settings has an interval picker: never, 15 min, 1 h, 6 h.*
 - [x] Pin "include originals" — the API takes it, the UI never sets it.
       *Done 2026-09-11: each pin in Settings → Kept offline has a "Keep
       full-size too" / "Thumbnails only" button. It re-saves the pin with

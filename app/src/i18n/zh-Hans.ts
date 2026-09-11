@@ -214,6 +214,8 @@ export const zhHans: Messages = {
     includeOriginals: "同时保存原图",
     thumbnailsOnly: "仅缩略图",
     autoCheck: "应用启动时检查更改",
+    checkEvery: "运行期间，每隔多久检查一次",
+    interval: (minutes) => (minutes === 0 ? "从不" : minutes < 60 ? `${minutes} 分钟` : `${minutes / 60} 小时`),
 
     appearance: "外观",
     sidebarWidth: "侧栏宽度",

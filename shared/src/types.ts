@@ -582,6 +582,8 @@ export interface SyncStatus {
   localGeneratedAt: string | null;
   remoteLastModified: string | null;
   pins: Pin[];
+  /** The automatic checks, as stored — Settings shows and changes them. */
+  settings: { autoSyncOnLaunch: boolean; intervalMinutes: number };
   storage: {
     metadataBytes: number;
     thumbnails: { count: number; bytes: number };

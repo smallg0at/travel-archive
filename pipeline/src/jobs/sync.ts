@@ -67,6 +67,7 @@ async function localStatus(): Promise<{ status: SyncStatus; local: ArchiveIndexF
       localGeneratedAt: local?.generatedAt ?? null,
       remoteLastModified: null,
       pins: state.pins,
+      settings: { autoSyncOnLaunch: state.autoSyncOnLaunch, intervalMinutes: state.intervalMinutes },
       storage: {
         metadataBytes: await metadataBytes(),
         thumbnails: await cacheStats(["medium", "large"]),
@@ -95,6 +96,38 @@ export async function cachedSync(): Promise<SyncStatus> {
   if (!(await getCachedAccessToken())) return status;
   status.state = state.lastState ?? (local === null ? "never-synced" : "in-sync");
   return status;
+}
+
+/**
+ * The two automatic checks Settings offers: once shortly after the server
+ * starts, when `autoSyncOnLaunch`, and every `intervalMinutes` while it runs.
+ * Both are `checkSync` below — an eTag comparison, no download, no job — so
+ * Settings reports OneDrive's real state without anyone pressing "Check now".
+ * Until 2026-09-11 both settings were stored and nothing read either of them.
+ *
+ * The interval is re-read every minute, so a change in Settings applies
+ * without a restart. Skipped while a job runs: its own `saveIndex` moves the
+ * eTag anyway, and the next minute tries again.
+ */
+export function startSyncChecks(busy: () => boolean): void {
+  const check = async (why: string) => {
+    if (busy()) return;
+    try {
+      console.log(`  sync check (${why}): ${(await checkSync()).state}`);
+    } catch (err) {
+      console.warn(`  sync check failed: ${(err as Error).message}`);
+    }
+  };
+  setTimeout(() => {
+    void readSync().then((state) => (state.autoSyncOnLaunch ? check("on start") : undefined));
+  }, 20_000);
+  setInterval(() => {
+    void readSync().then((state) => {
+      if (state.intervalMinutes <= 0) return;
+      const since = state.checkedAt ? Date.now() - Date.parse(state.checkedAt) : Number.POSITIVE_INFINITY;
+      if (since >= state.intervalMinutes * 60_000) return check(`every ${state.intervalMinutes} min`);
+    });
+  }, 60_000);
 }
 
 /**
