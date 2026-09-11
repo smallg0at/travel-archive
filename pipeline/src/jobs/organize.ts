@@ -1,10 +1,10 @@
 import type { DayEdits, DayRecord, DaySegment, OrganizePlan, PhotoRecord } from "@travel-archive/shared";
-import { CARD_BUDGET, applyEdits } from "@travel-archive/shared";
+import { CARD_BUDGET, SUMMARY_MIN_PHOTOS, applyEdits } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { getProvider } from "../providers/index.js";
 import { loadAllShards, loadIndex, loadIndexForReading, saveIndex } from "../archiveStore.js";
 import { dayKey, sameIds } from "../util.js";
-import { loadTripDefinitions } from "../tripDefs.js";
+import { findTripFor, loadTripDefinitions } from "../tripDefs.js";
 import { bucketDays } from "./sections.js";
 import { detectStops } from "../stops.js";
 import { mayBeAnalyzed } from "../screenshots.js";
@@ -21,7 +21,8 @@ import { NATIVE_LANGUAGE, saveNativeText } from "./translate.js";
  * photo shards aren't touched.
  *
  * Only days with at least one analyzed photo are summarized — there's nothing
- * for the model to work from otherwise. The album view renders every day
+ * for the model to work from otherwise — and, outside a trip, only days with
+ * more than SUMMARY_MIN_PHOTOS photos. The album view renders every day
  * regardless, summary or not, so running this is purely additive.
  *
  * Callable by both the CLI and the job server; see ./analyze.ts for why.
@@ -171,7 +172,7 @@ export { applyEdits };
  * and "nothing here has been analyzed", and the third is the common one on this
  * archive, where 4,386 of 31,374 photos have captions.
  */
-export type DayOutcome = "rewrite" | "reuse" | "skip-out-of-scope" | "skip-no-analyzed" | "skip-undated";
+export type DayOutcome = "rewrite" | "reuse" | "skip-out-of-scope" | "skip-no-analyzed" | "skip-undated" | "skip-small";
 
 export interface DayDecision {
   date: string;
@@ -184,12 +185,15 @@ function decideDay(args: {
   date: string;
   prior: DayRecord | undefined;
   analyzedCount: number;
+  /** Every photo the day holds, analyzed or not — what the reader sees. */
+  photoCount: number;
+  inTrip: boolean;
   place: string | null;
   note: string | null;
   summarizedIds: string[];
   opts: OrganizeOptions;
 }): DayOutcome {
-  const { date, prior, analyzedCount, place, note, summarizedIds, opts } = args;
+  const { date, prior, analyzedCount, photoCount, inTrip, place, note, summarizedIds, opts } = args;
   const inScope = opts.days?.length ? opts.days.includes(date) : !opts.only || date.startsWith(opts.only);
   // Place is an input to the summary, not just a label, so a day whose place
   // changed is as stale as one whose photos changed — geocoding lands after
@@ -208,10 +212,13 @@ function decideDay(args: {
     segmentsAreCurrent(prior.segments);
 
   if (prior && (unchanged || !inScope)) return "reuse";
-  if (inScope && date !== "unknown-date" && analyzedCount > 0) return "rewrite";
   if (!inScope) return "skip-out-of-scope";
   if (date === "unknown-date") return "skip-undated";
-  return "skip-no-analyzed";
+  if (analyzedCount === 0) return "skip-no-analyzed";
+  // After the others, so a small day that also has nothing analyzed is still
+  // reported as needing Analyze — that is the reason it would stay blank in a trip.
+  if (!inTrip && photoCount <= SUMMARY_MIN_PHOTOS) return "skip-small";
+  return "rewrite";
 }
 
 export interface OrganizeOptions {
@@ -240,6 +247,8 @@ export interface OrganizeResult {
   days: number;
   summarized: number;
   reused: number;
+  /** Days left unsummarized for having too few photos outside a trip. */
+  small: number;
   withheld: number;
   trips: number;
   months: number;
@@ -263,6 +272,7 @@ export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan>
   for (const shard of shards.values()) Object.assign(photos, shard.photos);
 
   const existingDaysByDate = new Map(index.sections.flatMap((s) => s.days).map((d) => [d.date, d] as const));
+  const tripDefs = await loadTripDefinitions();
 
   const byDay = new Map<string, PhotoRecord[]>();
   for (const photo of Object.values(photos)) {
@@ -278,6 +288,7 @@ export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan>
     skippedNoAnalyzed: 0,
     skippedOutOfScope: 0,
     skippedUndated: 0,
+    skippedSmall: 0,
     days: [],
     truncated: false,
   };
@@ -289,6 +300,8 @@ export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan>
       date,
       prior: existingDaysByDate.get(date),
       analyzedCount: analyzed.length,
+      photoCount: dayPhotos.length,
+      inTrip: findTripFor(date, tripDefs) !== null,
       place: dominantPlace(dayPhotos),
       note: existingDaysByDate.get(date)?.note ?? null,
       summarizedIds: analyzed.map((p) => p.id),
@@ -302,6 +315,7 @@ export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan>
     } else if (outcome === "reuse") plan.reuse++;
     else if (outcome === "skip-no-analyzed") plan.skippedNoAnalyzed++;
     else if (outcome === "skip-out-of-scope") plan.skippedOutOfScope++;
+    else if (outcome === "skip-small") plan.skippedSmall = (plan.skippedSmall ?? 0) + 1;
     else plan.skippedUndated++;
   }
 
@@ -337,7 +351,7 @@ export async function runOrganize(
   }
 
   const dates = [...byDay.keys()].sort();
-  const result: OrganizeResult = { days: 0, summarized: 0, reused: 0, withheld: 0, trips: 0, months: 0 };
+  const result: OrganizeResult = { days: 0, summarized: 0, reused: 0, small: 0, withheld: 0, trips: 0, months: 0 };
   const days: DayRecord[] = [];
   // What the summarizer wrote in the second language, saved with the index at
   // the end — and, like it, not at all if the run is cancelled.
@@ -374,6 +388,8 @@ export async function runOrganize(
       date,
       prior,
       analyzedCount: analyzed.length,
+      photoCount: dayPhotos.length,
+      inTrip: findTripFor(date, tripDefs) !== null,
       place,
       note,
       summarizedIds,
@@ -389,6 +405,12 @@ export async function runOrganize(
       summary = prior.summary;
       segments = prior.segments ?? [];
       result.reused++;
+    } else if (outcome === "skip-small") {
+      // No new summary, but one written before the rule stays: it was paid
+      // for, and the day still reads better with it than without.
+      summary = prior?.summary ?? null;
+      segments = prior?.segments ?? [];
+      result.small++;
     } else if (outcome === "rewrite") {
       onProgress({ phase: "summarizing", done: i, total: dates.length, message: `Summarizing ${date}...` });
 
@@ -464,7 +486,9 @@ export async function runOrganize(
       summary,
       photoIds,
       segments,
-      summarizedPhotoIds: summarizedIds,
+      // A skipped small day keeps what its stored summary was written from, so
+      // it is still seen as stale once it joins a trip or grows.
+      summarizedPhotoIds: outcome === "skip-small" ? (prior?.summarizedPhotoIds ?? []) : summarizedIds,
       note,
       // Only a rewrite consumed the note; a reused day keeps whatever its
       // stored summary was actually written from, or the staleness check would
@@ -494,7 +518,7 @@ export async function runOrganize(
     phase: "done",
     done: days.length,
     total: dates.length,
-    message: `${result.summarized} day(s) summarized, ${result.reused} unchanged, across ${result.trips} trip(s) and ${result.months} month bucket(s).`,
+    message: `${result.summarized} day(s) summarized, ${result.reused} unchanged, ${result.small} too small to summarize (${SUMMARY_MIN_PHOTOS} photos or fewer, not in a trip), across ${result.trips} trip(s) and ${result.months} month bucket(s).`,
   });
   return result;
 }

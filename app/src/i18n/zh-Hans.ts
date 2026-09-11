@@ -283,6 +283,7 @@ export const zhHans: Messages = {
     noAnalyzed: (n) => `${num(n)} 天还没有分析过的照片——请先对它们运行“分析”`,
     outOfScope: (n) => `${num(n)} 天不在此范围内`,
     undated: (n) => `${num(n)} 天没有可用的日期`,
+    small: (n, min) => `${num(n)} 天照片不超过 ${min} 张且不属于任何旅程——不写摘要`,
     planDay: (date, photos) => `${date} · ${num(photos)} 张照片`,
     truncated: "只列出了前 300 天——按月份缩小范围可查看其余的。",
     selectNone: "全部取消",

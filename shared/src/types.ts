@@ -212,6 +212,15 @@ export type HighlightSize = "full" | "half" | "normal";
 export const CARD_BUDGET: Record<HighlightSize, number> = { full: 1, half: 2, normal: 30 };
 
 /**
+ * A day outside any trip is summarized only when it holds more than this many
+ * photos. A handful of everyday shots reads fine as a plain grid, and a model
+ * call per ordinary day across the whole library is most of the organize bill
+ * for very little. Trip days are always summarized: the trip narrative is
+ * written from them. The owner's rule, 2026-09-11.
+ */
+export const SUMMARY_MIN_PHOTOS = 15;
+
+/**
  * A key picture and what it is: an artwork, a building, a meal. Rendered as a
  * card — the picture, a title, a description — sized by how much it matters.
  *
@@ -545,6 +554,11 @@ export interface OrganizePlan {
   skippedNoAnalyzed: number;
   skippedOutOfScope: number;
   skippedUndated: number;
+  /**
+   * Days outside a trip with too few photos to summarize (SUMMARY_MIN_PHOTOS).
+   * Optional because an older server does not send it.
+   */
+  skippedSmall?: number;
   /** The dates that would be rewritten. Capped; `truncated` says if there are more. */
   days: { date: string; analyzed: number }[];
   truncated: boolean;

@@ -20,6 +20,7 @@ import {
   startTrip,
   watchJob,
 } from "./backend";
+import { SUMMARY_MIN_PHOTOS } from "@travel-archive/shared";
 import { fmtDateTime, num, ui } from "./i18n";
 import { claimRefresh, jobLabel } from "./activity";
 
@@ -350,6 +351,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         [plan.skippedNoAnalyzed, ui.generate.noAnalyzed],
         [plan.skippedOutOfScope, ui.generate.outOfScope],
         [plan.skippedUndated, ui.generate.undated],
+        [plan.skippedSmall ?? 0, (n: number) => ui.generate.small(n, SUMMARY_MIN_PHOTOS)],
       ] as [number, (n: number) => string][]) {
         if (n === 0) continue;
         const row = el<HTMLParagraphElement>(`<p class="job-plan-row"></p>`);
