@@ -602,6 +602,13 @@ function offlineSection(status: SyncStatus): HTMLElement {
           : formatMonthLabel(pin.id);
       r.querySelector("span")!.textContent =
         `${pin.kind === "trip" ? ui.settings.pinTrip : ui.settings.pinMonth} · ${label}${pin.originals ? ` · ${ui.settings.withOriginals}` : ""}`;
+      // The server always took `originals`; nothing in the app could set it.
+      // This records the choice — the next sync fetches or drops the files.
+      r.appendChild(
+        button(pin.originals ? ui.settings.thumbnailsOnly : ui.settings.includeOriginals, () => {
+          void setPin({ ...pin, originals: !pin.originals, pinned: true }).then((res) => renderPins(res.pins));
+        }),
+      );
       r.appendChild(
         button(ui.settings.unpin, () => {
           // The server answers with the new pin list, so the section can be

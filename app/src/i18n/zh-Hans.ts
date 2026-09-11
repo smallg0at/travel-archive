@@ -211,6 +211,8 @@ export const zhHans: Messages = {
     pinMonth: "月份",
     withOriginals: "含原图",
     unpin: "取消保存",
+    includeOriginals: "同时保存原图",
+    thumbnailsOnly: "仅缩略图",
     autoCheck: "应用启动时检查更改",
 
     appearance: "外观",

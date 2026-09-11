@@ -214,6 +214,8 @@ export const en = {
     pinMonth: "Month",
     withOriginals: "with originals",
     unpin: "Unpin",
+    includeOriginals: "Keep full-size too",
+    thumbnailsOnly: "Thumbnails only",
     autoCheck: "Check for changes when the app starts",
 
     appearance: "Appearance",

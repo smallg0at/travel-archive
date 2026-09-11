@@ -238,8 +238,22 @@ function applyZoom(): void {
   zoom.querySelector(".zoom-level")!.textContent = `${Math.round(scale * 100)}%`;
 }
 
-function setZoom(next: number): void {
-  scale = Math.min(6, Math.max(1, next));
+/**
+ * `anchor` is a point on screen that should stay over the same part of the
+ * photo — the cursor, for the wheel. Without it zoom grew from the centre, so
+ * zooming in on a sign at the edge pushed the sign off the screen. The photo
+ * is centred in the stage and grows evenly about its centre, so a point `d`
+ * from that centre lands `d·k` from it; moving the pan by `d·(1-k)` puts it back.
+ */
+function setZoom(next: number, anchor?: { x: number; y: number }): void {
+  const clamped = Math.min(6, Math.max(1, next));
+  if (anchor && clamped > 1 && clamped !== scale) {
+    const r = dom().img.getBoundingClientRect();
+    const k = clamped / scale;
+    panX += (anchor.x - (r.left + r.width / 2)) * (1 - k);
+    panY += (anchor.y - (r.top + r.height / 2)) * (1 - k);
+  }
+  scale = clamped;
   // Snapping back to centre at 1x avoids the photo being stuck off-screen after
   // panning and then zooming out.
   if (scale === 1) {
@@ -267,7 +281,7 @@ function initZoomControls(): void {
     "wheel",
     (event) => {
       event.preventDefault();
-      setZoom(scale * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+      setZoom(scale * (event.deltaY < 0 ? 1.15 : 1 / 1.15), { x: event.clientX, y: event.clientY });
     },
     { passive: false },
   );

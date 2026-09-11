@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**26 open, 43 done.** The list grows because each session surfaces defects that
+**23 open, 46 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -688,9 +688,12 @@ working practice this list was built with.
 - [ ] The mirror is trusted without checking OneDrive at all. Worth a
       background revalidation (compare `generatedAt`, refetch if OneDrive is
       newer) once a second machine is ever in play.
-- [ ] Warming still fires for the whole view. For a 4,998-photo month that is a
+- [x] Warming still fires for the whole view. For a 4,998-photo month that is a
       lot of Graph traffic triggered by opening a tab. Warm the first few days
-      and extend on scroll.
+      and extend on scroll. *Closed 2026-09-11 as already done: `lookAhead` in
+      `album.ts` replaced `warmView` — it waits 2s of dwell (a misclick costs
+      nothing), warms at most `LOOK_AHEAD` = 200 photos, and every way out of a
+      view cancels it. Bulk fetching is sync's job now.*
 - [ ] **Tell the summarizer things, and correct what it wrote.** Two related
       abilities, both missing:
       (a) *before* — a free-text box on the Day summaries job, the way trips
@@ -1377,7 +1380,11 @@ above rather than repeated here; the Settings page is simply where they land.
 
 - [ ] The periodic sync timer — the setting is stored and honoured by the
       server, but nothing in the UI sets the interval yet.
-- [ ] Pin "include originals" — the API takes it, the UI never sets it.
+- [x] Pin "include originals" — the API takes it, the UI never sets it.
+      *Done 2026-09-11: each pin in Settings → Kept offline has a "Keep
+      full-size too" / "Thumbnails only" button. It re-saves the pin with
+      `originals` flipped (`setPin` replaces by kind and id); the next sync
+      fetches or drops the files.*
 
 ## Photo viewer (2026-09-07)
 
@@ -1401,7 +1408,11 @@ no-card path.
 
 - [ ] The viewer is desktop-shaped. Below 900px it stacks, but that has not been
       exercised on a real phone. User: Tested, layout does not scroll.
-- [ ] Zoom is centre-origin, so zooming does not follow the cursor.
+- [x] Zoom is centre-origin, so zooming does not follow the cursor. *Fixed
+      2026-09-11: the wheel passes the cursor as an anchor and `setZoom` moves
+      the pan by `d·(1-k)`, `d` being the cursor's distance from the photo's
+      centre and `k` the zoom step, so the point under the cursor stays put.
+      The buttons still zoom about the centre, which is what a button means.*
 
 Zoom resizes the photograph rather than scaling a layer. `transform: scale()`
 promotes it to a composited layer that is rasterised once and GPU-stretched, and
