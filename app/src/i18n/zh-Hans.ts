@@ -58,6 +58,7 @@ export const zhHans: Messages = {
   album: {
     undated: "无日期",
     thumbnailSize: "缩略图大小",
+    contents: "目录",
     density: { compact: "小", comfortable: "中", spacious: "大" },
   },
 

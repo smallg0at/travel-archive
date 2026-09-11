@@ -16,6 +16,7 @@ import { canPrint, printView } from "./print";
 import { fmtDate, num, ui } from "./i18n";
 import { releaseActivity, showActivity, startActivityIndicator } from "./activity";
 import { addTripControls } from "./dayEdit";
+import { jumpTo, withContents, type ContentsEntry } from "./contents";
 
 /**
  * How long a view must be looked at before anything is fetched for it.
@@ -268,21 +269,28 @@ function renderDaySection(
  * a loop — continuing to adjust while thumbnails keep arriving would drag the
  * page around under the reader.
  */
-const STOP_SCROLL_MARGIN = 16;
-
 function scrollToStop(anchor: string): void {
-  const content = document.getElementById("content");
   const target = document.getElementById(anchor);
-  if (!content || !target) return;
+  if (target) jumpTo(target);
+}
 
-  const align = () => {
-    const offset = target.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
-    content.scrollTop = Math.max(0, offset - STOP_SCROLL_MARGIN);
+/** "Wed 2 Sept" — the contents panel's day label, on the camera's calendar. */
+function formatDayShort(date: string): string {
+  if (date === UNDATED) return ui.album.undated;
+  return fmtDate(new Date(`${date}T00:00:00Z`), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+/** A day section as a contents entry: its date, its place, and its stops. */
+function dayEntry(section: HTMLElement, date: string, day: DayRecord | undefined): ContentsEntry {
+  return {
+    target: section,
+    label: formatDayShort(date),
+    meta: (day && locDay(day).place) || undefined,
+    stops: [...section.querySelectorAll<HTMLElement>("section.stop")].map((stop) => ({
+      target: stop,
+      label: stop.querySelector(".stop-title")?.textContent ?? "",
+    })),
   };
-
-  align();
-  requestAnimationFrame(align);
-  window.setTimeout(align, 400);
 }
 
 /**
@@ -360,12 +368,15 @@ async function showTrip(trip: TripRecord): Promise<void> {
   const mapSlot = el<HTMLDivElement>(`<div class="trip-map-slot"></div>`);
   frag.appendChild(mapSlot);
 
+  const entries: ContentsEntry[] = [];
   for (const day of trip.days) {
     const dayPhotos = day.photoIds.map((id) => photos[id]).filter(Boolean);
-    frag.appendChild(renderDaySection(day.date, dayPhotos, day, photos, "trip"));
+    const section = renderDaySection(day.date, dayPhotos, day, photos, "trip");
+    frag.appendChild(section);
+    entries.push(dayEntry(section, day.date, day));
   }
 
-  content.replaceChildren(frag);
+  content.replaceChildren(withContents(frag, entries));
   addPinControl(header, "trip", trip.id);
   addExportButton(header);
   // Back where the reader was, when this render is a refresh of the same view.
@@ -435,11 +446,14 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
     `${ui.common.photos(summary.photoCount)} · ${ui.common.days(ordered.length)}`;
   frag.appendChild(heading);
 
+  const entries: ContentsEntry[] = [];
   for (const date of ordered) {
-    frag.appendChild(renderDaySection(date, byDay.get(date)!, days.get(date), shard.photos, "album"));
+    const section = renderDaySection(date, byDay.get(date)!, days.get(date), shard.photos, "album");
+    frag.appendChild(section);
+    entries.push(dayEntry(section, date, days.get(date)));
   }
 
-  content.replaceChildren(frag);
+  content.replaceChildren(withContents(frag, entries));
   addPinControl(heading, "month", summary.month);
   addExportButton(heading);
   // After the heading's controls — see showTrip.

@@ -1636,6 +1636,81 @@ body.resizing { cursor: col-resize; user-select: none; }
 .act-batch .set-row { border-bottom: none; padding: 0; }
 .act-batch .set-note { margin-top: 4px; }
 .act-total { margin-top: 10px; font-weight: 500; color: var(--text); }
+
+/* --- Page contents -------------------------------------------------------- */
+
+/* A trip or month page with its days listed beside it — see contents.ts. */
+.has-contents {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 28px;
+  align-items: start;
+}
+.page-main { min-width: 0; }
+.page-contents {
+  position: sticky;
+  top: 0;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 4px 0 20px;
+  font-size: 12px;
+  scrollbar-width: thin;
+}
+.page-contents h2 {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.page-contents ol { list-style: none; margin: 0; padding: 0; }
+.toc-day > button,
+.toc-stop {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.toc-day > button:hover,
+.toc-stop:hover { background: var(--surface-hover); color: var(--text); }
+.toc-day.is-active > button {
+  border-left-color: var(--accent);
+  background: var(--surface-selected);
+  color: var(--text);
+  font-weight: 500;
+}
+.toc-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+/* Only the day being read shows its stops, or an 18-day trip is a wall. */
+.toc-stops { padding-left: 12px; }
+.toc-day:not(.is-active) .toc-stops { display: none; }
+.toc-stop { font-size: 11.5px; }
+.toc-stop.is-active { color: var(--accent); }
+/* Too narrow for two columns: the page reads as before. */
+@media (max-width: 1100px) {
+  .has-contents { display: block; }
+  .page-contents { display: none; }
+}
+@media print {
+  .has-contents { display: block; }
+  .page-contents { display: none; }
+}
 /* Sized like .set-row, which the batch list above it uses. */
 .act-job summary {
   display: flex;

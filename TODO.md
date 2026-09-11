@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**14 open, 56 done.** The list grows because each session surfaces defects that
+**14 open, 57 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -1175,6 +1175,15 @@ working practice this list was built with.
       per open batch (`locatedAheadFor`), so the lookups overlap the wait. It
       holds the archive like any job, so a collect that comes due meanwhile
       waits for it; cancel it from Activity to jump the queue.*
+- [x] **Contents beside long pages.** *Owner's request, built 2026-09-11
+      (`app/src/contents.ts`).* Trip and month pages with 3+ days get a sticky
+      list of their days (date and place) on the right; the day being read is
+      highlighted and shows its stops, and a click jumps there. Built from the
+      sections already on the page. the train 1: 18 entries, a click on "Wed
+      26 Aug" lands it 16px from the top and unfolds its 8 stops; August 2026:
+      30 entries. Hidden below 1,100px and in print. The first highlight runs
+      on a timer, not a frame — a window that is not drawing runs no frames,
+      which is how the first version showed nothing highlighted.
 - [x] **Activity — one page for everything the server does.** *Done
       2026-09-11* (`app/src/activity.ts`). Running job live with cancel,
       thumbnail warming (new counters on `/health`), batches with tokens and

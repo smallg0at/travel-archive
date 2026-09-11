@@ -60,6 +60,7 @@ export const en = {
   album: {
     undated: "Undated",
     thumbnailSize: "Thumbnail size",
+    contents: "Contents",
     density: { compact: "Small", comfortable: "Medium", spacious: "Large" },
   },
 
