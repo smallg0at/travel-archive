@@ -48,6 +48,7 @@ export const en = {
   nav: {
     trips: "Trips",
     generate: "Generate",
+    activity: "Activity",
     settings: "Settings",
     savePdf: "Save as PDF",
     kept: "▣ Kept on this device",
@@ -313,6 +314,44 @@ export const en = {
       cancelled: "cancelled",
     } satisfies Record<JobStatus, string>,
     jobFailed: (message: string) => `failed: ${message}`,
+  },
+
+  activity: {
+    loading: "Loading activity…",
+    now: "Now",
+    idle: "Nothing is running.",
+    batches: "Caption batches",
+    noBatches: "No caption batches have been submitted.",
+    batchDetail: (
+      applied: number | null,
+      failed: number | null,
+      input: number | null,
+      output: number | null,
+      cost: string | null,
+    ) => {
+      const parts: string[] = [];
+      if (applied !== null) parts.push(`${num(applied)} captioned`);
+      if (failed) parts.push(`${num(failed)} without a caption`);
+      if (input !== null && output !== null) parts.push(`${num(input)} input, ${num(output)} output tokens`);
+      if (cost !== null) parts.push(cost);
+      return parts.join(" · ");
+    },
+    /** `usd` and `gbp` arrive formatted, e.g. "$1.23" and "£0.97". */
+    money: (usd: string, gbp: string) => `${usd} (≈${gbp})`,
+    batchTotal: (spent: string, waiting: number) =>
+      `${spent} spent on collected batches, at batch prices${waiting ? ` · ${count(waiting, "photo", "photos")} still with Google` : ""}.`,
+    thumbnails: "Thumbnails",
+    warming: (done: number, total: number, failed: number, finished: boolean) =>
+      `${finished ? "Cached" : "Caching"} ${num(done)} of ${num(total)}${failed ? ` · ${num(failed)} unavailable` : ""}`,
+    history: "Recent jobs",
+    noHistory: "No jobs have run yet.",
+    duration: (ms: number) => {
+      const seconds = Math.round(ms / 1000);
+      if (seconds < 60) return `${seconds} s`;
+      const minutes = Math.round(seconds / 60);
+      return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+    },
+    noServer: "Activity needs the local server, which the desktop app runs.",
   },
 };
 

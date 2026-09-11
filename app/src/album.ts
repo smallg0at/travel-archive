@@ -14,6 +14,7 @@ import { releaseSettings, showSettings } from "./settings";
 import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
 import { fmtDate, num, ui } from "./i18n";
+import { releaseActivity, showActivity, startActivityIndicator } from "./activity";
 
 /**
  * How long a view must be looked at before anything is fetched for it.
@@ -297,6 +298,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
   setTitle(loc(trip.name));
   cancelLookAhead();
   releaseSettings();
+  releaseActivity();
   releaseThumbnails();
   content.replaceChildren(loadingNote(ui.common.loading(loc(trip.name))));
 
@@ -386,6 +388,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   const content = document.getElementById("content")!;
   cancelLookAhead();
   releaseSettings();
+  releaseActivity();
   const label = formatMonthLabel(summary.month);
   setTitle(label);
 
@@ -660,6 +663,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
   generate.addEventListener("click", () => {
     cancelLookAhead();
     releaseSettings();
+    releaseActivity();
     clearActive();
     generate.classList.add("active");
     enter("#generate");
@@ -667,6 +671,27 @@ function renderNavTools(index: ArchiveIndexFile): void {
     showGenerate();
   });
   tools.appendChild(generate);
+
+  // Hidden until a backend answers, like Generate — see activity.ts.
+  const activity = el<HTMLButtonElement>(
+    `<button class="month-link nav-tool" id="nav-activity" type="button" hidden>
+       <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
+         <path fill-rule="evenodd" d="M10 2a8 8 0 1 1 0 16a8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14a7 7 0 0 0 0-14Zm-.5 3a.5.5 0 0 1 .5.5V10h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5Z" />
+       </svg>
+       <span class="nav-label">${ui.nav.activity}</span>
+       <span class="nav-activity-status"></span>
+     </button>`,
+  );
+  activity.addEventListener("click", () => {
+    cancelLookAhead();
+    releaseSettings();
+    clearActive();
+    activity.classList.add("active");
+    enter("#activity");
+    setTitle(ui.nav.activity);
+    void showActivity();
+  });
+  tools.appendChild(activity);
 
   const settings = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" id="nav-settings" type="button">
@@ -682,6 +707,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
     // — the dwell delay only helps if every exit cancels it, not just the two
     // that happen to render a view.
     cancelLookAhead();
+    releaseActivity();
     clearActive();
     settings.classList.add("active");
     enter("#settings");
@@ -802,6 +828,11 @@ async function revealBackendTools(): Promise<void> {
   setDayEditingAvailable(true);
   const generate = document.getElementById("nav-generate");
   if (generate) generate.hidden = false;
+  const activity = document.getElementById("nav-activity");
+  if (activity) {
+    activity.hidden = false;
+    startActivityIndicator(activity);
+  }
 }
 
 let cachedIndex: ArchiveIndexFile | null = null;
@@ -840,11 +871,12 @@ let wantedView: { kind: string; id: string } | null = null;
 const SCROLL_KEY = "view-scroll";
 
 /** Where the reader is: a nav row, or one of the two tool pages below the list. */
-type View = { kind: "trip" | "month"; id: string } | { kind: "settings" } | { kind: "generate" };
+type View = { kind: "trip" | "month"; id: string } | { kind: "settings" } | { kind: "generate" } | { kind: "activity" };
 
 function viewFromHash(): View | null {
   if (location.hash === "#settings") return { kind: "settings" };
   if (location.hash === "#generate") return { kind: "generate" };
+  if (location.hash === "#activity") return { kind: "activity" };
   const match = /^#(trip|month)\/(.+)$/.exec(location.hash);
   return match ? { kind: match[1] as "trip" | "month", id: decodeURIComponent(match[2]) } : null;
 }
@@ -854,6 +886,7 @@ function rowFor(view: View | null): HTMLElement | null {
   if (!view) return null;
   if (view.kind === "settings") return document.getElementById("nav-settings");
   if (view.kind === "generate") return document.getElementById("nav-generate");
+  if (view.kind === "activity") return document.getElementById("nav-activity");
   return document.querySelector<HTMLElement>(
     `#month-nav .month-link[data-pin-kind="${view.kind}"][data-pin-id="${CSS.escape(view.id)}"]`,
   );

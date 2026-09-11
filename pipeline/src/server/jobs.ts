@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dataFile } from "../paths.js";
 import { withArchiveLock } from "../lock.js";
 import { randomUUID } from "node:crypto";
@@ -39,6 +39,52 @@ export function getJob(id: string): JobRecord | null {
 
 export function listJobs(): JobRecord[] {
   return order.map((id) => jobs.get(id)!.record).filter(Boolean);
+}
+
+/** Log lines kept per job in the history list — a whole-library run writes 200. */
+const HISTORY_LOG_LINES = 40;
+
+/**
+ * Jobs newest first: the ones this process remembers, plus the ones it has
+ * forgotten or that ran before a restart, from their files in `data/jobs/`.
+ * The Activity page's history — the in-memory list alone forgets everything
+ * at the twentieth job and at every restart. A running job is only in memory
+ * (its file is written when it ends), and the memory copy wins where both exist.
+ */
+export async function jobHistory(limit = 40): Promise<JobRecord[]> {
+  const byId = new Map<string, JobRecord>();
+  let names: string[] = [];
+  try {
+    names = (await readdir(JOB_DIR)).filter((n) => n.endsWith(".json"));
+  } catch {
+    // No job has ever finished here.
+  }
+  for (const name of names) {
+    try {
+      const record = JSON.parse(await readFile(`${JOB_DIR}/${name}`, "utf-8")) as JobRecord;
+      byId.set(record.id, record);
+    } catch {
+      // A file caught mid-write is skipped; it is complete on the next read.
+    }
+  }
+  for (const record of listJobs()) byId.set(record.id, record);
+  return [...byId.values()]
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    .slice(0, limit)
+    .map((record) => ({ ...record, log: record.log.slice(-HISTORY_LOG_LINES) }));
+}
+
+/**
+ * The job that ended most recently, as a stub. A client polling `/health` can
+ * miss a job entirely — an empty collect is over in under a second — but not
+ * this id changing, which is how the app notices it should reload its data.
+ */
+export function lastFinished(): Pick<JobRecord, "id" | "kind" | "status" | "finishedAt"> | null {
+  let latest: JobRecord | null = null;
+  for (const record of listJobs()) {
+    if (record.finishedAt && (!latest || record.finishedAt > latest.finishedAt!)) latest = record;
+  }
+  return latest && { id: latest.id, kind: latest.kind, status: latest.status, finishedAt: latest.finishedAt };
 }
 
 export function runningJob(): JobRecord | null {

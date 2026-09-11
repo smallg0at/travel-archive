@@ -46,6 +46,7 @@ export const zhHans: Messages = {
   nav: {
     trips: "旅行",
     generate: "生成",
+    activity: "活动",
     settings: "设置",
     savePdf: "导出 PDF",
     kept: "▣ 已保存在本机",
@@ -308,5 +309,36 @@ export const zhHans: Messages = {
       cancelled: "已取消",
     },
     jobFailed: (message) => `失败：${message}`,
+  },
+
+  activity: {
+    loading: "正在加载活动…",
+    now: "正在进行",
+    idle: "当前没有运行中的任务。",
+    batches: "照片说明批量任务",
+    noBatches: "还没有提交过照片说明批量任务。",
+    batchDetail: (applied, failed, input, output, cost) => {
+      const parts: string[] = [];
+      if (applied !== null) parts.push(`已写说明 ${num(applied)} 张`);
+      if (failed) parts.push(`${num(failed)} 张没有说明`);
+      if (input !== null && output !== null) parts.push(`输入 ${num(input)}、输出 ${num(output)} token`);
+      if (cost !== null) parts.push(cost);
+      return parts.join(" · ");
+    },
+    money: (usd, gbp) => `${usd}（约 ${gbp}）`,
+    batchTotal: (spent, waiting) =>
+      `已收取的批量任务按批量价格共计 ${spent}${waiting ? `，另有 ${num(waiting)} 张照片仍在 Google 处理中` : ""}。`,
+    thumbnails: "缩略图",
+    warming: (done, total, failed, finished) =>
+      `${finished ? "已缓存" : "正在缓存"} ${num(done)} / ${num(total)}${failed ? ` · ${num(failed)} 张无法获取` : ""}`,
+    history: "最近的任务",
+    noHistory: "还没有运行过任务。",
+    duration: (ms) => {
+      const seconds = Math.round(ms / 1000);
+      if (seconds < 60) return `${seconds} 秒`;
+      const minutes = Math.round(seconds / 60);
+      return minutes < 60 ? `${minutes} 分钟` : `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`;
+    },
+    noServer: "“活动”需要本地服务器，也就是桌面应用。",
   },
 };

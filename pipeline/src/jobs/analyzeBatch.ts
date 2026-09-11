@@ -56,7 +56,24 @@ const PER_FILE = 4000;
 /** Thumbnails fetched from Graph at once when the local cache does not have them. */
 const DOWNLOADS_AT_ONCE = 8;
 
-interface StoredBatch extends AnalyzeBatchStatus {
+/**
+ * Batch prices, US dollars per million tokens (ai.google.dev/gemini-api/docs/pricing,
+ * read 2026-09-11) — half the standard rate. Output includes thinking. Google
+ * doubles them from 2027-01-01, which `costOf` applies by the batch's date.
+ */
+const BATCH_PRICES: Record<string, { input: number; output: number }> = {
+  "gemini-3.7-flash": { input: 0.375, output: 1.875 },
+};
+
+function costOf(batch: StoredBatch): number | null {
+  const price = BATCH_PRICES[batch.model];
+  if (!price || !batch.usage) return null;
+  const factor = batch.createdAt >= "2027-01-01" ? 2 : 1;
+  const { promptTokens, outputTokens, thoughtsTokens } = batch.usage;
+  return (factor * (promptTokens * price.input + (outputTokens + thoughtsTokens) * price.output)) / 1e6;
+}
+
+interface StoredBatch extends Omit<AnalyzeBatchStatus, "costUsd"> {
   model: string;
   inputFile: string | null;
   /** [month, photo id] in request order; results come back in the same order. */
@@ -463,6 +480,8 @@ export async function listAnalyzeBatches(): Promise<AnalyzeBatchStatus[]> {
         collectedAt: b.collectedAt,
         applied: b.applied,
         failed: b.failed,
+        usage: b.usage,
+        costUsd: costOf(b),
       };
     }),
   );

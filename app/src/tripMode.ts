@@ -21,6 +21,7 @@ import {
   watchJob,
 } from "./backend";
 import { fmtDateTime, num, ui } from "./i18n";
+import { claimRefresh } from "./activity";
 
 /**
  * The generation panel: pick a date range, name it or let the model name it,
@@ -81,7 +82,7 @@ function renderProgress(panel: HTMLElement, job: JobRecord): void {
     onJobSettled();
     // A finished job has almost always changed index.json, so the caller
     // reloads rather than leaving a stale nav on screen.
-    if (job.status === "done") onFinished();
+    if (job.status === "done" && claimRefresh(job.id)) onFinished();
   }
 }
 

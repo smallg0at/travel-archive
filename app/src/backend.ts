@@ -27,10 +27,23 @@ const BACKEND = import.meta.env.VITE_PIPELINE_URL || "http://127.0.0.1:4319";
 /** Short: an absent backend is the normal case, and must not stall first paint. */
 const HEALTH_TIMEOUT_MS = 1500;
 
+/** The latest thumbnail warm, as `/health` reports it. */
+export interface ThumbWarming {
+  size: string;
+  total: number;
+  done: number;
+  failed: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
 export interface Health {
   ok: boolean;
   signedIn: boolean;
   running: JobRecord | null;
+  /** Optional: a server built before the Activity page sends neither. */
+  lastFinished?: Pick<JobRecord, "id" | "kind" | "status" | "finishedAt"> | null;
+  warming?: ThumbWarming | null;
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -239,6 +252,16 @@ export async function listBatches(): Promise<AnalyzeBatchStatus[] | null> {
 /** Merges finished batches now instead of at the server's next ten-minute check. */
 export function startCollect(): Promise<JobRecord> {
   return post<JobRecord>("/jobs/analyze/collect", {});
+}
+
+/** Jobs newest first, including those from before the server last restarted. Null with no backend. */
+export async function jobHistory(): Promise<JobRecord[] | null> {
+  try {
+    const res = await fetch(`${BACKEND}/jobs/history`);
+    return res.ok ? ((await res.json()) as JobRecord[]) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -239,6 +239,29 @@ const inFlight = new Map<string, Promise<Buffer | null>>();
  */
 let warmGeneration = 0;
 
+/**
+ * What the latest `/thumb/warm` is doing, for `/health` — the app's Activity
+ * page shows it. Warming is not a job (it does not take the archive lock and
+ * must not block one), so it has no record of its own; each request replaces
+ * this, as it replaces the work.
+ */
+interface Warming {
+  size: ThumbSize;
+  total: number;
+  done: number;
+  failed: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
+let warming: Warming | null = null;
+/** How long a finished warm stays in `/health`, so a page polling every 15 s still sees how it ended. */
+const WARMING_SHOWN_FOR_MS = 10 * 60_000;
+
+function warmingStatus(): Warming | null {
+  if (warming?.finishedAt && Date.now() - Date.parse(warming.finishedAt) > WARMING_SHOWN_FOR_MS) return null;
+  return warming;
+}
+
 function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer | null> {
   const key = `${size}:${itemId}`;
   const existing = inFlight.get(key);
@@ -299,7 +322,13 @@ const routes: [RegExp, string, Handler][] = [
     "GET",
     async (_req, res) => {
       const token = await getCachedAccessToken();
-      json(res, 200, { ok: true, signedIn: token !== null, running: jobs.runningJob() });
+      json(res, 200, {
+        ok: true,
+        signedIn: token !== null,
+        running: jobs.runningJob(),
+        lastFinished: jobs.lastFinished(),
+        warming: warmingStatus(),
+      });
     },
   ],
   [/^\/archive\/status$/, "GET", async (_req, res) => json(res, 200, await archiveStatus())],
@@ -558,15 +587,28 @@ const routes: [RegExp, string, Handler][] = [
       // Graph traffic, so being greedy here slows down the very load it is
       // meant to help.
       const generation = ++warmGeneration;
+      if (missing.length === 0) return;
+      const record: Warming = {
+        size,
+        total: missing.length,
+        done: 0,
+        failed: 0,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+      };
+      warming = record;
       void (async () => {
         let next = 0;
         const worker = async () => {
           while (next < missing.length && generation === warmGeneration) {
             const id = missing[next++];
-            await fetchAndCache(size, id).catch(() => null);
+            const bytes = await fetchAndCache(size, id).catch(() => null);
+            if (bytes) record.done++;
+            else record.failed++;
           }
         };
         await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
+        record.finishedAt = new Date().toISOString();
       })();
     },
   ],
@@ -595,6 +637,8 @@ const routes: [RegExp, string, Handler][] = [
     },
   ],
   [/^\/jobs$/, "GET", (_req, res) => json(res, 200, jobs.listJobs())],
+  /** Newest first, including jobs from before the last restart — the Activity page's history. */
+  [/^\/jobs\/history$/, "GET", async (_req, res) => json(res, 200, await jobs.jobHistory())],
 
   [
     /^\/jobs\/analyze\/plan$/,

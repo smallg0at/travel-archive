@@ -265,6 +265,21 @@ over the library casually.
   ten minutes. `data/batches/analyze.json` records what was submitted and is
   the only way back to a batch being paid for — never delete it while one is
   open.
+- **Activity** (sidebar, `app/src/activity.ts`) shows all of it: the running
+  job live, thumbnail warming, every batch with its tokens and cost, and job
+  history read from `data/jobs/` (so it survives restarts). When a job the page
+  did not start ends — the server's own collect — it reloads the album once
+  (`claimRefresh`, and `lastFinished` on `/health`, since a 15 s poll misses a
+  collect that takes 0.3 s).
+
+**The first whole-library submit (2026-09-11) was cut short.** One batch of
+4,000 went in (`batches/2az4hfxa9xo75f0ycfrmysehp2oo2o7skql7`); the second was
+refused with HTTP 429 "You exceeded your current quota", and the job ended
+there. The file had uploaded; `batches.create` was what refused. Tier 1 allows
+**3M tokens queued across all open batches** for Gemini 3.7 Flash (Google's
+rate-limits page; Tier 2 allows 400M), and one 4,000-photo file is ~2.6M — so
+at Tier 1 only one batch can be open at a time. Submitting again is safe:
+photos already in an open batch are skipped.
 
 At batch prices on gemini-3.7-flash (they double on 2027-01-01) the whole run
 is about **$17**; output, including thinking, is two thirds of it. A photo that

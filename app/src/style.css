@@ -1604,6 +1604,35 @@ body.resizing { cursor: col-resize; user-select: none; }
 .nav-tool .nav-label { color: var(--text-secondary); }
 .nav-tool.active .nav-label { color: var(--text); }
 
+/* --- Activity ------------------------------------------------------------ */
+
+/* What is running, in a word, beside the sidebar entry — see activity.ts. */
+.nav-activity-status {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--accent);
+}
+.nav-activity-status:empty { display: none; }
+@media (max-width: 700px) {
+  .nav-activity-status { display: none; }
+}
+.act-job { border-bottom: 1px solid var(--border); padding: 6px 0; }
+/* Sized like .set-row, which the batch list above it uses. */
+.act-job summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.act-job summary span:last-child { color: var(--text-secondary); white-space: nowrap; }
+.act-job .job-log { max-height: 240px; overflow: auto; }
+
 /* --- Settings page ---------------------------------------------------- */
 
 .set-section {

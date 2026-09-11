@@ -456,6 +456,10 @@ export interface AnalyzeBatchStatus {
   collectedAt: string | null;
   applied: number | null;
   failed: number | null;
+  /** Tokens Google reported for it, once collected. */
+  usage: { promptTokens: number; outputTokens: number; thoughtsTokens: number } | null;
+  /** What those tokens cost at batch prices, in US dollars — null until collected, or for a model with no known price. */
+  costUsd: number | null;
 }
 
 export interface AnalyzePlan {

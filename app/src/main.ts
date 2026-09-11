@@ -4,6 +4,7 @@ import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
 import { initSidebarResize } from "./chrome";
 import { setArchiveRefresh } from "./dayEdit";
+import { setActivityRefresh } from "./activity";
 import { ui } from "./i18n";
 
 let panelMounted = false;
@@ -50,6 +51,7 @@ async function loadAndRender(): Promise<void> {
     if (!panelMounted) {
       panelMounted = true;
       setArchiveRefresh(() => void loadAndRender());
+      setActivityRefresh(() => void loadAndRender());
       void initGeneration(() => void loadAndRender());
     }
   } catch (err) {

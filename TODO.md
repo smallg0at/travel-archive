@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**29 open, 38 done.** The list grows because each session surfaces defects that
+**30 open, 39 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -1107,6 +1107,25 @@ working practice this list was built with.
       it on a ten-minute timer. Round trip on 3 photos: accepted, finished in
       4 minutes, 3 of 3 captioned, 1,742 input / 749 output tokens — 581 and
       250 a photo, as estimated. The backlog is now 23,425, about $17 batched.
+- [ ] **A batch submit dies at Google's queue quota and wastes its
+      preparation.** 2026-09-11: the whole-library submit sent one file of
+      4,000, then `batches.create` for the second answered 429
+      RESOURCE_EXHAUSTED "You exceeded your current quota" after 43 minutes of
+      locating and preparing; the job failed and the prepared JSONL was
+      thrown away. The file had uploaded (331 MB); `batches.create` refused.
+      Cause: Tier 1's **3M enqueued batch tokens** for Gemini 3.7 Flash across
+      all open batches (Tier 2: 400M), and a 4,000-photo file is ~2.6M. Fix:
+      treat 429 at submit as "stop here, keep what was sent" rather than a
+      failure, and have the ten-minute collect submit the next file once a
+      batch is collected — one open batch at a time on Tier 1.
+- [x] **Activity — one page for everything the server does.** *Done
+      2026-09-11* (`app/src/activity.ts`). Running job live with cancel,
+      thumbnail warming (new counters on `/health`), batches with tokens and
+      cost in $ and ≈£, and history from `data/jobs/` — 40 jobs back to 5 Sept
+      after a restart. A collect started outside the page (0.3 s long) reloaded
+      the album exactly once, seen as one extra `/archive/index` fetch; the
+      first-poll and scan/sync exclusions keep launch from reloading. Checked
+      in English, 简体中文 and at 375 px.
 
 ### Resolved
 
