@@ -108,6 +108,10 @@ function readEnv() {
     // Unset leaves the model's default; 0 disables; -1 is explicit dynamic.
     geminiThinkingBudget:
       fromEnv("GEMINI_THINKING_BUDGET") === undefined ? undefined : Number(fromEnv("GEMINI_THINKING_BUDGET")),
+    // The model `translate` uses, for whichever provider is active. Unset means
+    // that provider's own model. Translation is bulk text where quality matters
+    // least, so this is the setting for the cheapest model that will do.
+    translateModel: fromEnv("TRANSLATE_MODEL"),
   };
 }
 

@@ -6,6 +6,7 @@ import { getProvider } from "../providers/index.js";
 import { loadTripDefinitions, TRIPS_FILE, type TripDefinition } from "../tripDefs.js";
 import { bucketDays } from "./sections.js";
 import type { ProgressFn } from "./analyze.js";
+import { NATIVE_LANGUAGE, saveNativeText } from "./translate.js";
 import type { TripDayInput } from "../providers/types.js";
 
 /**
@@ -178,6 +179,7 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
     days: dayInputs,
     notes: opts.notes,
     documents: opts.documents,
+    alsoIn: NATIVE_LANGUAGE,
   });
 
   const def: TripDefinition = {
@@ -207,6 +209,7 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
   section.places = summary.places;
   section.narrativeGeneratedAt = new Date().toISOString();
   await saveIndex(token, index);
+  await saveNativeText(token, NATIVE_LANGUAGE, summary.native?.pairs ?? [], onProgress);
 
   onProgress({
     phase: "done",

@@ -1,0 +1,296 @@
+import type { Messages } from "./en";
+import { millions, num } from "./format";
+
+/**
+ * The interface in 简体中文. Written by hand, not by the translate job: these are
+ * a few hundred short strings the reader meets on every page, and they are
+ * checked against `Messages` so none can go missing.
+ *
+ * Spaces around Latin words and numbers, full-width punctuation — the usual
+ * mainland convention. Brand and file names (OneDrive, Microsoft, .txt) stay
+ * as they are.
+ */
+export const zhHans: Messages = {
+  app: {
+    title: "照片档案",
+    signInPrompt: "登录后即可加载你的照片。",
+    signInButton: "使用 Microsoft 帐户登录",
+    resizeHandle: "拖动调整宽度 · 双击恢复默认",
+    loadingArchive: "正在加载档案…",
+    signInToLoadArchive: "登录后即可加载你的档案。",
+    failedToLoad: (message) => `档案加载失败：${message}`,
+    failedToStart: (message) => `启动失败：${message}`,
+    emptyArchiveHtml: `档案是空的。运行 <code>npm run --workspace pipeline scan</code> 为照片建立索引。`,
+  },
+
+  common: {
+    save: "保存",
+    saving: "正在保存…",
+    cancel: "取消",
+    close: "关闭",
+    edit: "编辑",
+    fit: "适应窗口",
+    date: "日期",
+    from: "开始",
+    to: "结束",
+    reset: "重置",
+    starting: "正在开始…",
+    checking: "正在检查…",
+    everything: "全部",
+    photos: (n) => `${num(n)} 张照片`,
+    days: (n) => `${num(n)} 天`,
+    loading: (what) => `正在加载 ${what}…`,
+    signInToLoad: (what) => `登录后即可加载 ${what}。`,
+  },
+
+  nav: {
+    trips: "旅行",
+    generate: "生成",
+    settings: "设置",
+    savePdf: "导出 PDF",
+    kept: "▣ 已保存在本机",
+    keep: "☁ 保存到本机",
+    keptTitle: "这里的照片保存在本机，不会为了腾出空间而被清除。",
+    keepTitle: "下载这些照片并保存在本机。",
+  },
+
+  album: {
+    undated: "无日期",
+    thumbnailSize: "缩略图大小",
+    density: { compact: "小", comfortable: "中", spacious: "大" },
+  },
+
+  day: {
+    morePhotos: (n) => `另外 ${num(n)} 张照片`,
+    originalText: "原文",
+    fromPlacards: (n) => (n === 1 ? "说明牌原文" : `${num(n)} 块说明牌的原文`),
+  },
+
+  viewer: {
+    thisPhoto: "这张照片",
+    transcribed: "识别出的文字",
+    loadingFull: "正在加载原图…",
+    zoomIn: "放大",
+    zoomOut: "缩小",
+  },
+
+  edit: {
+    noteLabel: "给摘要模型的备注——会一直保留，每次重写这一天时都会用到",
+    notePlaceholder: "例如：11:00 那一站是 the railway museum；上午什么也没做成。",
+    summaryLabel: "当天摘要",
+    rewrite: "重写这一天",
+    nothingChanged: "没有改动。",
+    saved: "已保存。",
+    savedStale: "已保存。备注有改动，下次运行“当天摘要”时会重写这一天——也可以现在点“重写这一天”。",
+    rewriting: "正在重写…",
+    rewriteCancelled: "重写已取消。",
+    rewriteFailed: (message) => `重写失败：${message}`,
+    unknownError: "未知错误",
+    rewritten: "已重写。",
+    rename: "重命名",
+    stopSummaryPlaceholder: "在这里做了什么（可选）",
+  },
+
+  time: {
+    notKnown: "不确定",
+    hourLabel: "时间（整点）",
+    set: "设置时间",
+    change: "更改时间",
+    note: "会在 OneDrive 中重命名文件，所以重新扫描后依然有效。要一次设置多张，在当天的网格里按住 Ctrl 点击它们。",
+    savedAs: (fileName) => `已保存，文件名为 ${fileName}。`,
+    pickDate: "请先选择日期。",
+  },
+
+  retime: {
+    toolbar: "设置所选照片的时间",
+    hour: "时间",
+    setTime: "设置时间",
+    clear: "清除",
+    selected: (n) => `已选 ${num(n)} 张`,
+    tooMany: "每分钟一张，一小时最多只能放 60 张——请少选一些，或选择“不确定”。",
+    saving: (n) => `正在保存 ${num(n)} 张…`,
+    result: (set, refused, firstError) => {
+      const done = `已设置 ${num(set)} 张照片。`;
+      return refused ? `${done}${num(refused)} 张被拒绝：${firstError}` : `${done}下次重新加载时，当天会重新分组。`;
+    },
+  },
+
+  print: {
+    preparing: (done, total) => `正在准备 ${num(total)} 张照片——${num(done)}/${num(total)}`,
+    sizing: (done, total) => `正在调整 ${num(total)} 张照片的尺寸——${num(done)}/${num(total)}`,
+    savingPdf: "正在保存 PDF…",
+    openingPrint: "正在打开打印对话框…",
+    exportFailed: (error) => `导出失败：${error}`,
+  },
+
+  map: {
+    loading: "正在加载地图…",
+    label: (trip) => `“${trip}”途经的城市`,
+    unnamed: "未命名的地点",
+    expand: "展开",
+  },
+
+  theme: { label: "主题", light: "浅色", dark: "深色", system: "跟随系统" },
+
+  language: { label: "语言" },
+
+  settings: {
+    loading: "正在加载设置…",
+    syncState: {
+      "in-sync": "已同步",
+      behind: "OneDrive 上有更新的改动",
+      ahead: "本机有尚未上传的改动",
+      conflict: "上次同步后两边都有改动",
+      "never-synced": "从未同步",
+      offline: "未登录",
+    },
+    never: "从未",
+    justNow: "刚刚",
+    minutesAgo: (n) => `${n} 分钟前`,
+    hoursAgo: (n) => `${n} 小时前`,
+    conflictLead: "本机和 OneDrive 在上次同步后都有改动。请选择保留哪一份——两者不会合并。",
+    thisDevice: "本机",
+    oneDrive: "OneDrive",
+    uploadMine: "上传本机的（覆盖 OneDrive）",
+    replaceMine: "改用 OneDrive 的（丢弃本机改动）",
+    ofTotal: (done, total) => `——${num(done)}/${num(total)}`,
+    failed: (message) => `失败：${message}`,
+    finished: "已完成。",
+
+    localServer: "本地服务器",
+    noServer:
+      "本地服务器没有运行，所以档案直接从 OneDrive 读取，图片只缓存在这个浏览器里。同步、保存到本机和生成都需要桌面应用。",
+
+    library: "照片库",
+    notSignedIn: "未登录。",
+    photos: "照片",
+    analyzed: "已由 AI 描述",
+    days: "已写摘要的天数",
+    sections: "旅行与月份",
+    schema: "数据结构版本",
+
+    scan: "扫描",
+    lastScanned: "上次扫描",
+    whatToScan: "扫描范围",
+    scanModes: { incremental: "自上次扫描以来", full: "整个照片库", range: "指定月份范围" },
+    scanNotes: {
+      incremental:
+        "从上次扫描的那个月开始扫描。更早月份里从 OneDrive 删除的照片不会被发现——偶尔运行一次完整扫描来处理这些。",
+      full: "列出每个月份文件夹。只有这种方式能发现照片库中任何位置从 OneDrive 删除的照片。",
+      range: "只扫描你选的月份。范围之外删除的照片保持不变。",
+    },
+    scanNow: "立即扫描",
+
+    generation: "生成",
+    provider: "AI 服务商",
+    apiKey: "API 密钥",
+    savedReady: "已保存。可以开始生成了。",
+    saved: "已保存。",
+    unavailable: "不可用",
+    ready: "就绪",
+    readyOnceSaved: "保存后即可使用",
+    noKey: "没有 API 密钥——无法生成",
+    keySaved: "已保存——输入新密钥即可替换",
+    keyPaste: "粘贴你的 API 密钥",
+    keyNote: (path) => `保存在 ${path}。只有生成需要它；浏览和阅读档案不需要。`,
+    shadowed: (name) =>
+      `${name} 同时也设成了系统环境变量，应用重启后它会覆盖这个文件里的值。请在系统里修改或删除它，这里保存的密钥才能保留下来。`,
+
+    sync: "同步",
+    checkingOneDrive: "正在检查 OneDrive…",
+    lastChecked: "上次检查",
+    lastSynced: "上次同步",
+    checkNow: "立即检查",
+    syncNow: "立即同步",
+
+    kept: "保存在本机的内容",
+    nothingPinned:
+      "还没有保存任何内容到本机。打开一次旅行或一个月份，选择“保存到本机”，它的照片就会留在这里——同步时下载，永远不会为了腾出空间而被清除。",
+    pinTrip: "旅行",
+    pinMonth: "月份",
+    withOriginals: "含原图",
+    unpin: "取消保存",
+    autoCheck: "应用启动时检查更改",
+
+    appearance: "外观",
+    sidebarWidth: "侧栏宽度",
+
+    storage: "本地存储",
+    files: (n) => `${num(n)} 个文件`,
+    metadata: "档案元数据",
+    thumbnails: "缩略图",
+    originals: "原图",
+    total: "合计",
+    clearThumbnails: "清除缩略图",
+    clearOriginals: "清除原图",
+    storageNote: "即使清除，保存到本机的内容也会保留。其余内容需要时会重新下载。",
+  },
+
+  generate: {
+    tabs: { trip: "旅行", analyze: "分析", organize: "当天摘要", translate: "翻译" },
+
+    tripNoteHtml:
+      "根据<em>当天摘要</em>写出一次旅行的故事——所以请先对这段日期运行“分析”和“当天摘要”，否则它没有素材可用。",
+    notes: "备注（可选）",
+    notesPlaceholder: "任何值得一提的事——计划、同行的人、旅行的目的。",
+    documents: "背景文档（.txt、.md）",
+    name: "名称（留空则由模型提议）",
+    writeNarrative: "撰写游记",
+
+    analyzeNoteHtml:
+      "为范围内所有还没看过的照片写说明，每张调用一次模型。<strong>这是花钱的一步</strong>——请先查看估算。重复运行是安全的：已有说明的照片会被跳过。",
+    estimateCost: "估算费用",
+    analyze: "分析",
+    nothingToAnalyze: "这段日期内没有需要分析的照片——已经分析过，或作为重复照片和不公开的截图被过滤掉了。",
+    analyzePlan: (photos, months, input, output) =>
+      `${num(photos)} 张照片，分布在 ${num(months)} 个月——约 ${millions(input)}M 输入 token、${millions(output)}M 输出 token。`,
+
+    organizeNoteHtml:
+      "把“分析”写出的说明整理成每天的页面：把每一天按停留的地点分组、命名，并挑选要展示的内容。每天一次纯文本模型调用——不发送图片，所以很便宜。<strong>请在“分析”之后、“旅行”之前运行。</strong>",
+    months: "月份",
+    monthOption: (month, photos) => `${month} · ${num(photos)} 张照片`,
+    includeUnchanged: "包括没有变化的日子",
+    findDays: "查找要写摘要的日子",
+    noDays: "这里没有需要写摘要的日子。",
+    canSummarise: (n) => `可以为 ${num(n)} 天写摘要。`,
+    reuse: (n) => `${num(n)} 天已是最新，或不在此范围内`,
+    noAnalyzed: (n) => `${num(n)} 天还没有分析过的照片——请先对它们运行“分析”`,
+    outOfScope: (n) => `${num(n)} 天不在此范围内`,
+    undated: (n) => `${num(n)} 天没有可用的日期`,
+    planDay: (date, photos) => `${date} · ${num(photos)} 张照片`,
+    truncated: "只列出了前 300 天——按月份缩小范围可查看其余的。",
+    selectNone: "全部取消",
+    selectAll: "全选",
+    nothingSelected: "未选择",
+    summarise: (n) => `为 ${num(n)} 天写摘要`,
+    couldNotCheck: (message) => `无法检查：${message}`,
+
+    translateNote:
+      "把档案里已有的文字翻译成简体中文，与英文并存——包括照片说明、每天的页面和旅行。只发送文字、不发送照片，所以比“分析”便宜得多。这是机器翻译：译文会比较朴素。重复运行只会翻译新增或改动过的内容。",
+    whatToTranslate: "翻译内容",
+    translateScopes: { all: "全部", day: "每天的页面和旅行", captions: "照片说明" },
+    estimate: "估算",
+    translate: "翻译",
+    nothingToTranslate: (strings) => `没有需要翻译的——范围内的 ${num(strings)} 条文字都已有译文。`,
+    translatePlan: (missing, strings, chars, input, output) =>
+      `${num(strings)} 条文字中有 ${num(missing)} 条需要翻译（${num(chars)} 个字符）——约 ${millions(input)}M 输入 token、${millions(output)}M 输出 token。实际数量以运行结果为准。`,
+    couldNotEstimate: (message) => `无法估算：${message}`,
+
+    jobKind: {
+      scan: "扫描",
+      analyze: "分析",
+      organize: "当天摘要",
+      trip: "旅行",
+      sync: "同步",
+      translate: "翻译",
+    },
+    jobStatus: {
+      queued: "排队中",
+      running: "运行中",
+      done: "完成",
+      failed: "失败",
+      cancelled: "已取消",
+    },
+    jobFailed: (message) => `失败：${message}`,
+  },
+};

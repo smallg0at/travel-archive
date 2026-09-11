@@ -35,8 +35,10 @@ own Node rather than `node` — a GUI-launched app has run no shell profile.
 
 Three workspaces plus a shell:
 
-- **`shared/`** — the schema. `SCHEMA_VERSION` is **13**; `loadIndex` refuses a
-  newer one rather than half-reading it.
+- **`shared/`** — the schema. `SCHEMA_VERSION` is **14**; `loadIndex` refuses a
+  newer one rather than half-reading it. Runtime code lives in `types.ts` itself
+  (`textKey`, `applyEdits`): the pipeline loads that file through Node's type
+  stripping, where a relative import between `.ts` files would not resolve.
 - **`pipeline/`** — `scan` (free, Graph listing only) → `analyze` (costs money,
   captions photos) → `organize` (day and place summaries) → `trip` (narrative).
   Plus `serve.ts`, the local job server on **127.0.0.1:4319**.
@@ -46,6 +48,25 @@ Three workspaces plus a shell:
 
 The archive itself lives in OneDrive as `index.json` plus `photos/<yyyy-mm>.json`
 shards, mirrored locally under `pipeline/data/`.
+
+A second language sits **beside** it, never inside it: `i18n/<lang>/index.json`
+(day, stop, card and trip text, plus that language's hand edits under `owner`)
+and `i18n/<lang>/photos/<yyyy-mm>.json` (captions), keyed by `textKey()` of the
+original text — see `TranslationFile` in `shared/src/types.ts`. The index file's
+`parts` lists which month files exist; sync and the app read it instead of
+probing every month. Written by `jobs/translate.ts` (machine translation), by
+organize and trip (`via: "native"`, the summarizers writing Chinese in the same
+call), and by `jobs/dayEdit.ts` when an edit carries a `lang`. None of them
+touches `index.json` or a shard.
+
+**One language setting drives both** — that content and the interface around
+it. The interface's words are `app/src/i18n/`: `en.ts` is the source and
+`Messages` is its type, so `zh-Hans.ts` missing a key fails `tsc`. Anything with
+a number is a function (that is where plurals live), and dates and numbers go
+through `fmtDate`/`num` there, never a bare `toLocale*()`. Keys ending `Html`
+are the only ones that may carry markup. `contentLang.ts` holds the setting and
+must not import `i18n/` — `i18n/` reads the setting while it loads, and the
+cycle would hit it uninitialised. Server and job log text stays English.
 
 ---
 

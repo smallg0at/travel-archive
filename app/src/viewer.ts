@@ -2,6 +2,8 @@ import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "./graphPhoto";
 import { el } from "./photoUi";
 import { addPhotoTimeControl } from "./dayEdit";
+import { loc } from "./contentLang";
+import { fmtDateTime, ui } from "./i18n";
 
 /**
  * The photo viewer, opened from a card rather than from a single image.
@@ -48,7 +50,7 @@ function metaLine(photo: PhotoRecord): string {
   const parts: string[] = [];
   if (photo.takenAt) {
     parts.push(
-      new Date(photo.takenAt).toLocaleString(undefined, {
+      fmtDateTime(new Date(photo.takenAt), {
         weekday: "short",
         day: "numeric",
         month: "short",
@@ -75,13 +77,13 @@ function renderCardPanel(highlight: Highlight | null, byId: Record<string, Photo
   cardPanel.hidden = false;
 
   const title = document.createElement("h3");
-  title.textContent = highlight.title;
+  title.textContent = loc(highlight.title);
   cardPanel.appendChild(title);
 
   if (highlight.description) {
     const desc = document.createElement("p");
     desc.className = "viewer-desc";
-    desc.textContent = highlight.description;
+    desc.textContent = loc(highlight.description);
     cardPanel.appendChild(desc);
   }
 
@@ -90,7 +92,7 @@ function renderCardPanel(highlight: Highlight | null, byId: Record<string, Photo
   if (highlight.documentTranslation) {
     const quote = document.createElement("p");
     quote.className = "viewer-placard";
-    quote.textContent = highlight.documentTranslation;
+    quote.textContent = loc(highlight.documentTranslation);
     cardPanel.appendChild(quote);
   }
 
@@ -102,7 +104,7 @@ function renderCardPanel(highlight: Highlight | null, byId: Record<string, Photo
     const block = document.createElement("div");
     block.className = "viewer-block";
     const label = document.createElement("h4");
-    label.textContent = sources.length === 1 ? "From the placard" : `From ${sources.length} placards`;
+    label.textContent = ui.day.fromPlacards(sources.length);
     const body = document.createElement("div");
     body.textContent = sources.join("\n\n");
     block.append(label, body);
@@ -117,13 +119,13 @@ function renderPhotoPanel(photo: PhotoRecord): void {
 
   const heading = document.createElement("h4");
   heading.className = "viewer-section-label";
-  heading.textContent = "This photo";
+  heading.textContent = ui.viewer.thisPhoto;
   photoPanel.appendChild(heading);
 
   if (photo.caption) {
     const cap = document.createElement("p");
     cap.className = "viewer-caption";
-    cap.textContent = photo.caption;
+    cap.textContent = loc(photo.caption);
     photoPanel.appendChild(cap);
   }
 
@@ -143,7 +145,7 @@ function renderPhotoPanel(photo: PhotoRecord): void {
     const block = document.createElement("div");
     block.className = "viewer-block viewer-transcript";
     const label = document.createElement("h4");
-    label.textContent = "Transcribed text";
+    label.textContent = ui.viewer.transcribed;
     const body = document.createElement("div");
     body.textContent = photo.extractedText;
     block.append(label, body);
@@ -164,7 +166,7 @@ function renderStrip(): void {
   for (const [i, photo] of session.photos.entries()) {
     const thumb = document.createElement("img");
     thumb.src = BLANK;
-    thumb.alt = photo.caption ?? "";
+    thumb.alt = loc(photo.caption) ?? "";
     thumb.className = i === session.index ? "current" : "";
     void loadLarge(photo.id).then((url) => {
       if (url) thumb.src = url;

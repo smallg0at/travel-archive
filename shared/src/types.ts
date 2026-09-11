@@ -365,6 +365,13 @@ export interface ArchiveIndexFile {
   generatedAt: string;
   months: MonthSummary[];
   sections: TripRecord[];
+  /**
+   * Which language the archive's own text is written in, and which others sit
+   * beside it (see `TranslationFile`). Optional, and absent means English with
+   * nothing beside it — so adding it needed no schema bump, and an older build
+   * that ignores it still reads the archive.
+   */
+  languages?: { source: string; available: string[] };
 }
 
 /* --- Background jobs (pipeline serve) ---------------------------------- */
@@ -377,7 +384,7 @@ export interface ArchiveIndexFile {
  * `trip` writes one trip's narrative from day summaries that already exist; it
  * is a single model call, so it finishes in seconds.
  */
-export type JobKind = "scan" | "analyze" | "organize" | "trip" | "sync";
+export type JobKind = "scan" | "analyze" | "organize" | "trip" | "sync" | "translate";
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
@@ -527,4 +534,127 @@ export interface SyncStatus {
     thumbnails: { count: number; bytes: number };
     originals: { count: number; bytes: number };
   };
+}
+
+/* --- Content in a second language --------------------------------------- */
+
+/** Languages the archive's text can be shown in besides its own. */
+export const CONTENT_LANGUAGES = ["zh-Hans"] as const;
+export type ContentLanguage = (typeof CONTENT_LANGUAGES)[number];
+
+/**
+ * One text in another language. `mt` is a machine translation of the original
+ * and may be replaced by a later run; `native` was written in this language by
+ * the summarizer itself, and a translation never replaces it.
+ */
+export interface TranslationEntry {
+  t: string;
+  via: "mt" | "native";
+}
+
+/**
+ * `i18n/<lang>/index.json` (day, stop, card and trip text) and
+ * `i18n/<lang>/photos/<yyyy-mm>.json` (that month's captions).
+ *
+ * Beside the archive rather than inside it. The base files stay exactly as they
+ * were, so no schema bump and no older build broken; write paths, which all
+ * download the 3.5MB index, download nothing extra; and the app fetches only
+ * the language it is showing.
+ *
+ * Keyed by `textKey(original)`, not by record. Stop ids are positional and move
+ * when a day re-clusters — the problem `StopEdit` documents — while a hash
+ * follows the text itself: when a summary is rewritten its key stops matching,
+ * the page falls back to the original, and the next run translates the new
+ * text. Identical texts, duplicate captions included, are translated once.
+ */
+export interface TranslationFile {
+  lang: string;
+  sourceLang: string;
+  generatedAt: string;
+  entries: Record<string, TranslationEntry>;
+  /**
+   * Index file only: the months that have a caption file. Sync and the app read
+   * this instead of asking for every month, which would be a OneDrive round
+   * trip per month for files that mostly do not exist.
+   */
+  parts?: string[];
+  /**
+   * Index file only: the owner's hand edits in this language, by date. Same
+   * shape and the same photo anchoring as `DayRecord.edits`, and never touched
+   * by a translation or a summarizer run.
+   */
+  owner?: Record<string, DayEdits>;
+}
+
+export type TranslateScope = "day" | "captions" | "all";
+
+/** What a translate run would do, spending nothing — the `OrganizePlan` idea. */
+export interface TranslatePlan {
+  lang: string;
+  scope: TranslateScope;
+  /** Distinct texts in scope. */
+  strings: number;
+  /** Of those, how many have no entry yet — what a run would pay for. */
+  missing: number;
+  missingChars: number;
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  /** `index` for day and trip text, otherwise a month of captions. */
+  parts: { part: string; strings: number; missing: number; missingChars: number }[];
+}
+
+/**
+ * A short, stable key for a text — cyrb53, a 53-bit hash, in base 36.
+ *
+ * Synchronous on purpose: the app looks one up for every string it renders, and
+ * `crypto.subtle.digest` is async. At the ~10K distinct texts this archive has,
+ * the chance of any collision is around one in a billion.
+ */
+export function textKey(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+/**
+ * Puts the owner's corrections back over the model's text.
+ *
+ * Called for every day, not only rewritten ones, so that an edit made against a
+ * stored summary survives a run that reuses it. Here rather than in organize so
+ * the app applies an edit made in another language with the same rule.
+ *
+ * Stop edits find their target by photo rather than by segment id — see
+ * `StopEdit`. An edit whose anchor photo is no longer in the day is dropped
+ * silently here and reported by the caller: the alternative is reapplying a
+ * title to whichever stop inherited the id, which is how a correction ends up
+ * on the wrong place.
+ */
+export function applyEdits(
+  summary: string | null,
+  segments: DaySegment[],
+  edits: DayEdits | null | undefined,
+): { summary: string | null; segments: DaySegment[]; orphaned: number } {
+  if (!edits) return { summary, segments, orphaned: 0 };
+
+  let orphaned = 0;
+  const next = segments.map((seg) => ({ ...seg }));
+
+  for (const edit of edits.stops ?? []) {
+    const target = next.find((seg) => seg.photoIds.includes(edit.anchorPhotoId));
+    if (!target) {
+      orphaned++;
+      continue;
+    }
+    if (edit.title !== undefined) target.title = edit.title;
+    if (edit.summary !== undefined) target.summary = edit.summary;
+  }
+
+  return { summary: edits.summary ?? summary, segments: next, orphaned };
 }

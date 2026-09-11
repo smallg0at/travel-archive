@@ -239,6 +239,18 @@ export function startOrganize(body: { only?: string; force?: boolean; days?: str
   return post<JobRecord>("/jobs/organize", body);
 }
 
+type TranslateBody = { lang: string; scope: import("@travel-archive/shared").TranslateScope };
+
+/** What a translate run would do. Spends nothing. */
+export function planTranslate(body: TranslateBody): Promise<import("@travel-archive/shared").TranslatePlan> {
+  return post("/jobs/translate/plan", body);
+}
+
+/** Existing text into the second language — text-only model calls. */
+export function startTranslate(body: TranslateBody): Promise<JobRecord> {
+  return post<JobRecord>("/jobs/translate", body);
+}
+
 /**
  * A correction, or a note for the summarizer. Spends nothing and answers
  * synchronously — unlike the jobs above, this is one field and one write.
@@ -250,6 +262,8 @@ export interface DayPatch {
   note?: string | null;
   summary?: string | null;
   stops?: { anchorPhotoId: string; title?: string | null; summary?: string | null }[];
+  /** The language the summary and stop edits are in; absent for the original. See the server's DayPatch. */
+  lang?: string;
 }
 
 export interface DayEditResult {

@@ -1,5 +1,5 @@
 import type { DayEdits, DayRecord, DaySegment, OrganizePlan, PhotoRecord } from "@travel-archive/shared";
-import { CARD_BUDGET } from "@travel-archive/shared";
+import { CARD_BUDGET, applyEdits } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { getProvider } from "../providers/index.js";
 import { loadAllShards, loadIndex, loadIndexForReading, saveIndex } from "../archiveStore.js";
@@ -10,6 +10,7 @@ import { detectStops } from "../stops.js";
 import { mayBeAnalyzed } from "../screenshots.js";
 import { withheldFromSummaries } from "../sensitive.js";
 import type { ProgressFn } from "./analyze.js";
+import { NATIVE_LANGUAGE, saveNativeText } from "./translate.js";
 
 /**
  * Groups analyzed photos into days, breaks each day into the stops it was
@@ -156,40 +157,9 @@ function segmentsAreCurrent(segments: DaySegment[] | undefined): boolean {
   return segments.every((seg) => seg.highlights.every((h) => h.size !== undefined && "documentTranslation" in h));
 }
 
-/**
- * Puts the owner's corrections back over the model's text.
- *
- * Called for every day, not only rewritten ones, so that an edit made against a
- * stored summary survives a run that reuses it.
- *
- * Stop edits find their target by photo rather than by segment id — see
- * `StopEdit`. An edit whose anchor photo is no longer in the day is dropped
- * silently here and reported by the caller: the alternative is reapplying a
- * title to whichever stop inherited the id, which is how a correction ends up
- * on the wrong place.
- */
-export function applyEdits(
-  summary: string | null,
-  segments: DaySegment[],
-  edits: DayEdits | null | undefined,
-): { summary: string | null; segments: DaySegment[]; orphaned: number } {
-  if (!edits) return { summary, segments, orphaned: 0 };
-
-  let orphaned = 0;
-  const next = segments.map((seg) => ({ ...seg }));
-
-  for (const edit of edits.stops ?? []) {
-    const target = next.find((seg) => seg.photoIds.includes(edit.anchorPhotoId));
-    if (!target) {
-      orphaned++;
-      continue;
-    }
-    if (edit.title !== undefined) target.title = edit.title;
-    if (edit.summary !== undefined) target.summary = edit.summary;
-  }
-
-  return { summary: edits.summary ?? summary, segments: next, orphaned };
-}
+// `applyEdits` now lives in shared, so the app applies an edit made in another
+// language by the same rule. Re-exported for anything that imported it here.
+export { applyEdits };
 
 /**
  * What a run would do with one day, and why.
@@ -369,6 +339,9 @@ export async function runOrganize(
   const dates = [...byDay.keys()].sort();
   const result: OrganizeResult = { days: 0, summarized: 0, reused: 0, withheld: 0, trips: 0, months: 0 };
   const days: DayRecord[] = [];
+  // What the summarizer wrote in the second language, saved with the index at
+  // the end — and, like it, not at all if the run is cancelled.
+  const nativePairs: [string, string][] = [];
 
   onProgress({ phase: "summarizing", done: 0, total: dates.length, message: "Summarizing changed days..." });
 
@@ -438,6 +411,7 @@ export async function runOrganize(
         date,
         place,
         note,
+        alsoIn: NATIVE_LANGUAGE,
         // Both flags describe how much the model may lean on metadata; see
         // SummarizeDayInput. A day is time-uncertain if any of its photos is.
         timeUncertain: dayPhotos.some((p) => p.timeSuspect),
@@ -446,6 +420,7 @@ export async function runOrganize(
       });
 
       summary = summarized.summary;
+      if (summarized.native) nativePairs.push(...summarized.native.pairs);
       const bySegment = new Map(summarized.segments.map((seg) => [seg.id, seg] as const));
       segments = stops.map((stop) => {
         const written = bySegment.get(stop.id);
@@ -509,6 +484,7 @@ export async function runOrganize(
   onProgress({ phase: "saving", message: "Splitting into defined trips and month buckets..." });
   index.sections = bucketDays(days, tripDefs, index.sections);
   await saveIndex(token, index);
+  await saveNativeText(token, NATIVE_LANGUAGE, nativePairs, onProgress);
 
   result.days = days.length;
   result.trips = index.sections.filter((s) => s.kind === "trip").length;

@@ -1,9 +1,10 @@
 import { captureView, renderAlbum } from "./album";
-import { loadIndex, SignInRequiredError } from "./archiveData";
+import { loadContentTranslations, loadIndex, SignInRequiredError } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
 import { initSidebarResize } from "./chrome";
 import { setArchiveRefresh } from "./dayEdit";
+import { ui } from "./i18n";
 
 let panelMounted = false;
 
@@ -34,9 +35,12 @@ async function loadAndRender(): Promise<void> {
   // it — a reload after a job should put the reader back, not at the top of
   // the newest trip.
   captureView();
-  showMessage("Loading archive…");
+  showMessage(ui.app.loadingArchive);
   try {
-    renderAlbum(await loadIndex());
+    // Together, not one after the other: the second language's text is small
+    // and neither needs the other to start.
+    const [index] = await Promise.all([loadIndex(), loadContentTranslations()]);
+    renderAlbum(index);
 
     // Built once and kept: a finished job re-renders the album, and rebuilding
     // the panel would delete the result line the user is waiting to read — or a
@@ -51,14 +55,33 @@ async function loadAndRender(): Promise<void> {
   } catch (err) {
     if (err instanceof SignInRequiredError) {
       showSignInBanner();
-      showMessage("Sign in to load your archive.");
+      showMessage(ui.app.signInToLoadArchive);
       return;
     }
-    showMessage(`Failed to load archive: ${(err as Error).message}`);
+    showMessage(ui.app.failedToLoad((err as Error).message));
   }
 }
 
+/**
+ * The static page's own words. `index.html` keeps its English for the moment
+ * before this runs; from here on they are in the reader's language.
+ */
+function localiseShell(): void {
+  document.title = ui.app.title;
+  document.querySelector("#signin-banner span")!.textContent = ui.app.signInPrompt;
+  document.getElementById("signin-button")!.textContent = ui.app.signInButton;
+  document.getElementById("sidebar-resize")!.title = ui.app.resizeHandle;
+  document.getElementById("lightbox-close")!.setAttribute("aria-label", ui.common.close);
+  const zoom = document.getElementById("lightbox-zoom")!;
+  zoom.querySelector('[data-zoom="out"]')!.setAttribute("aria-label", ui.viewer.zoomOut);
+  zoom.querySelector('[data-zoom="in"]')!.setAttribute("aria-label", ui.viewer.zoomIn);
+  zoom.querySelector('[data-zoom="fit"]')!.textContent = ui.common.fit;
+  // A bare text node after the spinner's <span>, which is the spinning mark.
+  document.getElementById("lightbox-spinner")!.lastChild!.textContent = ui.viewer.loadingFull;
+}
+
 async function main() {
+  localiseShell();
   initSidebarResize();
 
   // Photo/shard loads that hit an expired session ask for a re-auth click
@@ -89,5 +112,5 @@ async function main() {
 
 main().catch((err) => {
   console.error(err);
-  showMessage(`Failed to start: ${(err as Error).message}`);
+  showMessage(ui.app.failedToStart((err as Error).message));
 });

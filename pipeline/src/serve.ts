@@ -23,6 +23,7 @@ import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
 import { runTrip } from "./jobs/trip.js";
+import { parseTranslateOptions, planTranslate, runTranslate } from "./jobs/translate.js";
 import * as jobs from "./server/jobs.js";
 
 /**
@@ -369,6 +370,29 @@ const routes: [RegExp, string, Handler][] = [
       sendJsonText(res, local);
     },
   ],
+  /**
+   * The second language's files, from the mirror, for the same reason as the
+   * two above. The language pattern admits only a code — no dots, no slashes —
+   * so the path cannot be walked out of `i18n/`.
+   */
+  [
+    /^\/archive\/i18n\/([a-z]{2}(?:-[A-Za-z]{2,4})?)\/index$/,
+    "GET",
+    async (_req, res, [lang]) => {
+      const local = await readLocalJson(`i18n/${lang}/index.json`);
+      if (!local) return json(res, 404, { error: `No local ${lang} text` });
+      sendJsonText(res, local);
+    },
+  ],
+  [
+    /^\/archive\/i18n\/([a-z]{2}(?:-[A-Za-z]{2,4})?)\/shard\/(\d{4}-\d{2})$/,
+    "GET",
+    async (_req, res, [lang, month]) => {
+      const local = await readLocalJson(`i18n/${lang}/photos/${month}.json`);
+      if (!local) return json(res, 404, { error: `No local ${lang} captions for ${month}` });
+      sendJsonText(res, local);
+    },
+  ],
 
   /**
    * A thumbnail, from disk when it has been fetched before.
@@ -674,6 +698,31 @@ const routes: [RegExp, string, Handler][] = [
   ],
 
   /**
+   * Existing text into a second language. The plan spends nothing; the run is
+   * text-only model calls, far cheaper than analyze, but still the owner's to
+   * start — never a side effect of another job.
+   */
+  [
+    /^\/jobs\/translate\/plan$/,
+    "POST",
+    async (req, res) => {
+      const opts = parseTranslateOptions(await readJsonBody<{ lang?: string; scope?: string; only?: string }>(req));
+      if ("error" in opts) return json(res, 400, opts);
+      json(res, 200, await planTranslate(opts));
+    },
+  ],
+  [
+    /^\/jobs\/translate$/,
+    "POST",
+    async (req, res) => {
+      if (refuseIfBusy(res)) return;
+      const opts = parseTranslateOptions(await readJsonBody<{ lang?: string; scope?: string; only?: string }>(req));
+      if ("error" in opts) return json(res, 400, opts);
+      json(res, 202, jobs.start({ kind: "translate", run: (onProgress, signal) => runTranslate(opts, onProgress, signal) }));
+    },
+  ],
+
+  /**
    * The owner's note for a day, and their corrections to what the model wrote.
    *
    * Not a job: it spends nothing and finishes in one write, so it answers
@@ -822,6 +871,8 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`  POST /jobs/analyze        {from,to,limit}`);
   console.log(`  POST /jobs/organize/plan  {only,force}      what it would rewrite, spends nothing`);
   console.log(`  POST /jobs/organize       {only,force}`);
+  console.log(`  POST /jobs/translate/plan {lang,scope}      what it would translate, spends nothing`);
+  console.log(`  POST /jobs/translate      {lang,scope}      text only, into the second language`);
   console.log(`  POST /jobs/trip           {startDate,endDate,name?,notes?,documents?}`);
   console.log(`  GET  /jobs/:id/events     SSE progress`);
   console.log(`  POST /jobs/:id/cancel`);

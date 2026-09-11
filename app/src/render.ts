@@ -4,6 +4,8 @@ import { openCard, openPhoto } from "./viewer";
 import { anchorFor } from "./tripMap";
 import { addStopControls, isRetimable } from "./dayEdit";
 import { selectionClick } from "./retime";
+import { loc } from "./contentLang";
+import { ui } from "./i18n";
 
 /**
  * A day, laid out as a page rather than listed.
@@ -63,9 +65,9 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
   }
 
   // textContent throughout: titles, descriptions and OCR are all model output.
-  card.querySelector(".card-title")!.textContent = highlight.title;
+  card.querySelector(".card-title")!.textContent = loc(highlight.title);
   const desc = card.querySelector(".card-desc") as HTMLElement;
-  if (highlight.description) desc.textContent = highlight.description;
+  if (highlight.description) desc.textContent = loc(highlight.description);
   else desc.remove();
 
   // The English rendering sits in the open; the verbatim transcript stays behind
@@ -74,7 +76,7 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
   if (highlight.documentTranslation) {
     const translated = document.createElement("p");
     translated.className = "card-placard";
-    translated.textContent = highlight.documentTranslation;
+    translated.textContent = loc(highlight.documentTranslation);
     card.querySelector(".card-body")!.appendChild(translated);
   }
 
@@ -85,10 +87,8 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
       `<details class="card-source"><summary></summary><div class="card-source-text"></div></details>`,
     );
     details.querySelector("summary")!.textContent = highlight.documentTranslation
-      ? "Original text"
-      : withText.length === 1
-        ? "From the placard"
-        : `From ${withText.length} placards`;
+      ? ui.day.originalText
+      : ui.day.fromPlacards(withText.length);
     details.querySelector(".card-source-text")!.textContent = withText
       .map((d) => d.extractedText)
       .join("\n\n");
@@ -130,8 +130,8 @@ function renderTransit(segment: DaySegment, byId: Record<string, PhotoRecord>): 
       </details>
     </section>
   `);
-  wrap.querySelector(".transit-title")!.textContent = segment.title;
-  wrap.querySelector(".transit-meta")!.textContent = `${timeRange(segment)} · ${photos.length} photos`;
+  wrap.querySelector(".transit-title")!.textContent = loc(segment.title);
+  wrap.querySelector(".transit-meta")!.textContent = `${timeRange(segment)} · ${ui.common.photos(photos.length)}`;
   wrap.querySelector("details")!.appendChild(renderGrid(photos));
   return wrap;
 }
@@ -145,17 +145,17 @@ function renderPlace(segment: DaySegment, byId: Record<string, PhotoRecord>, dat
       </div>
     </section>
   `);
-  section.querySelector(".stop-title")!.textContent = segment.title;
+  section.querySelector(".stop-title")!.textContent = loc(segment.title);
   // Anchored so a city on the trip map can scroll straight to it.
   section.id = anchorFor(date, segment.id);
   addStopControls(section.querySelector(".stop-head") as HTMLElement, section, date, segment);
 
   const all = segment.photoIds.map((id) => byId[id]).filter(Boolean);
-  section.querySelector(".stop-meta")!.textContent = `${timeRange(segment)} · ${all.length} photos`;
+  section.querySelector(".stop-meta")!.textContent = `${timeRange(segment)} · ${ui.common.photos(all.length)}`;
 
   if (segment.summary) {
     const summary = el<HTMLParagraphElement>(`<p class="stop-summary"></p>`);
-    summary.textContent = segment.summary;
+    summary.textContent = loc(segment.summary);
     section.appendChild(summary);
   }
 
@@ -178,7 +178,7 @@ function renderPlace(segment: DaySegment, byId: Record<string, PhotoRecord>, dat
     const more = el<HTMLDetailsElement>(
       `<details class="stop-more"><summary></summary></details>`,
     );
-    more.querySelector("summary")!.textContent = `${rest.length} more photo${rest.length === 1 ? "" : "s"}`;
+    more.querySelector("summary")!.textContent = ui.day.morePhotos(rest.length);
     // Open by default when the grid *is* the stop — a place with no heroes and
     // no cards would otherwise render as a lone collapsed line.
     more.open = segment.highlights.length === 0;

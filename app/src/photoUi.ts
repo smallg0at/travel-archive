@@ -1,6 +1,7 @@
 import type { PhotoRecord } from "@travel-archive/shared";
 import { loadThumbnail, loadLarge } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
+import { loc } from "./contentLang";
 
 /** Builds an element from an HTML string. Used everywhere in place of a template engine. */
 export function el<T extends HTMLElement>(html: string): T {
@@ -134,7 +135,7 @@ export function lazyImg(photo: PhotoRecord, size: "medium" | "large" = "medium",
   // Empty alt until the AI pass writes a real caption. A filename is not a
   // description — it tells a screen reader nothing useful, and it's what
   // sprawled across every cell whenever an image failed to load.
-  img.alt = photo.caption ?? "";
+  img.alt = loc(photo.caption) ?? "";
   img.loading = "lazy";
   img.dataset.photoId = photo.id;
   if (size === "large") img.dataset.loader = "large";

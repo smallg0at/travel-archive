@@ -92,7 +92,7 @@ function selectTargets(shard: PhotoShard, opts: AnalyzeOptions): PhotoRecord[] {
 }
 
 /** Runs `worker` over `items` with a fixed number of workers pulling from a shared cursor. */
-async function pooled<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+export async function pooled<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
   let cursor = 0;
   const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (cursor < items.length) {

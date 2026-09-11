@@ -272,6 +272,25 @@ export async function runSync(
         onProgress({ done: i + 1, total: index.months.length, message: `Pulled ${month.month}` });
       }
 
+      // Text in a second language (jobs/translate.ts). Each language's index
+      // file names the months that have caption files, so only those are
+      // asked for — not a round trip per month for files that do not exist.
+      const { CONTENT_LANGUAGES } = await import("@travel-archive/shared");
+      for (const lang of CONTENT_LANGUAGES) {
+        if (signal?.aborted) return;
+        const text = await downloadMetadataJson<{ parts?: string[] }>(token, env.metadataFolder, `i18n/${lang}/index.json`);
+        if (!text) continue;
+        await mkdir(dataFile(`i18n/${lang}/photos`), { recursive: true });
+        await writeFile(dataFile(`i18n/${lang}/index.json`), JSON.stringify(text, null, 2), "utf-8");
+        result.metadataPulled++;
+        for (const month of text.parts ?? []) {
+          const part = await downloadMetadataJson(token, env.metadataFolder, `i18n/${lang}/photos/${month}.json`);
+          if (!part) continue;
+          await writeFile(dataFile(`i18n/${lang}/photos/${month}.json`), JSON.stringify(part, null, 2), "utf-8");
+          result.metadataPulled++;
+        }
+      }
+
       const remote = await fetchItemMeta(token, env.metadataFolder, INDEX_FILE);
       await markSynced(remote?.eTag ?? null);
     });

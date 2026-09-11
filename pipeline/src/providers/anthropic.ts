@@ -8,8 +8,12 @@ import type {
   SegmentResult,
   SummarizeDayInput,
   SummarizeTripInput,
+  TranslateInput,
+  TranslateResult,
   TripSummaryResult,
 } from "./types.js";
+import { translatePrompt } from "./translatePrompt.js";
+import { altInstructions, nativeText, withAltFields } from "./altLanguage.js";
 
 /**
  * Built on first use and rebuilt when the key changes, rather than once at
@@ -29,6 +33,42 @@ function api(): Anthropic {
     client = new Anthropic(clientKey ? { apiKey: clientKey } : {});
   }
   return client;
+}
+
+const TRANSLATE_SCHEMA = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { key: { type: "string" }, text: { type: "string" } },
+        required: ["key", "text"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+} as const;
+
+/** The same contract as gemini.ts's `translate`; kept so both providers stay complete. */
+async function translate(input: TranslateInput): Promise<TranslateResult> {
+  const response = await api().messages.create({
+    model: env.translateModel ?? env.anthropicModel,
+    max_tokens: 8000,
+    thinking: { type: "disabled" },
+    output_config: { effort: "low", format: { type: "json_schema", schema: TRANSLATE_SCHEMA } },
+    messages: [{ role: "user", content: translatePrompt(input) }],
+  });
+
+  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
+  if (!textBlock) throw new Error("No text block in translate response");
+  const parsed = JSON.parse(textBlock.text) as { items?: { key: string; text: string }[] };
+  return {
+    items: parsed.items ?? [],
+    usage: { promptTokens: response.usage.input_tokens, thoughtsTokens: 0, outputTokens: response.usage.output_tokens },
+  };
 }
 
 const CAPTION_SCHEMA = {
@@ -234,9 +274,13 @@ function stopBlocks(input: SummarizeDayInput): string {
 async function summarizeDay(input: SummarizeDayInput): Promise<DaySummaryResult> {
   const response = await api().messages.create({
     model: env.anthropicModel,
-    max_tokens: 4000,
+    // Two languages is roughly twice the output.
+    max_tokens: input.alsoIn ? 8000 : 4000,
     thinking: { type: "disabled" },
-    output_config: { effort: "low", format: { type: "json_schema", schema: DAY_SCHEMA } },
+    output_config: {
+      effort: "low",
+      format: { type: "json_schema", schema: input.alsoIn ? withAltFields(DAY_SCHEMA, input.alsoIn) : DAY_SCHEMA },
+    },
     messages: [
       {
         role: "user",
@@ -260,7 +304,7 @@ Use each photo at most once across the whole day — a photo already used by one
 
 Also write a 2-4 sentence summary of the day as a whole.
 
-${stopBlocks(input)}${metadataCaveats(input)}`,
+${stopBlocks(input)}${metadataCaveats(input)}${altInstructions(input.alsoIn)}`,
       },
     ],
   });
@@ -310,7 +354,7 @@ ${stopBlocks(input)}${metadataCaveats(input)}`,
       };
     });
 
-  return { summary: parsed.summary.trim(), segments };
+  return { summary: parsed.summary.trim(), segments, native: nativeText(input.alsoIn, parsed) };
 }
 
 
@@ -370,9 +414,12 @@ async function summarizeTrip(input: SummarizeTripInput): Promise<TripSummaryResu
 
   const response = await api().messages.create({
     model: env.anthropicModel,
-    max_tokens: 2000,
+    max_tokens: input.alsoIn ? 4000 : 2000,
     thinking: { type: "disabled" },
-    output_config: { effort: "low", format: { type: "json_schema", schema: TRIP_SCHEMA } },
+    output_config: {
+      effort: "low",
+      format: { type: "json_schema", schema: input.alsoIn ? withAltFields(TRIP_SCHEMA, input.alsoIn) : TRIP_SCHEMA },
+    },
     messages: [
       {
         role: "user",
@@ -387,7 +434,7 @@ The first and last days of a trip are usually spent travelling in and out, and t
 
 Days:
 
-${tripDayLines(input)}${tripContext(input)}`,
+${tripDayLines(input)}${tripContext(input)}${altInstructions(input.alsoIn)}`,
       },
     ],
   });
@@ -395,12 +442,14 @@ ${tripDayLines(input)}${tripContext(input)}`,
   const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
   if (!textBlock) throw new Error("No text block in trip-summary response");
 
-  const parsed = JSON.parse(textBlock.text) as { name: string; narrative: string; places: string[] };
+  const parsed = JSON.parse(textBlock.text) as { name: string; narrative: string; places: string[]; name_alt?: string };
+  const namePair: [string, string][] = input.name && parsed.name_alt ? [[input.name.trim(), parsed.name_alt]] : [];
   return {
     name: (input.name ?? parsed.name).trim(),
     narrative: parsed.narrative.trim(),
     places: parsed.places ?? [],
+    native: nativeText(input.alsoIn, parsed, namePair),
   };
 }
 
-export const anthropicProvider: AiProvider = { captionPhoto, summarizeDay, summarizeTrip };
+export const anthropicProvider: AiProvider = { captionPhoto, summarizeDay, summarizeTrip, translate };

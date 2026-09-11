@@ -12,6 +12,8 @@
  * flashing dark, which is worse than not offering the choice.
  */
 
+import { ui } from "./i18n";
+
 export type Theme = "light" | "dark" | "system";
 
 const KEY = "theme";
@@ -46,7 +48,7 @@ export function effectiveTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-const LABELS: Record<Theme, string> = { light: "Light", dark: "Dark", system: "System" };
+const LABELS: Record<Theme, string> = { light: ui.theme.light, dark: ui.theme.dark, system: ui.theme.system };
 
 /**
  * The three-way control. Same shape as the thumbnail density control beside it,
@@ -57,7 +59,7 @@ export function renderThemeControl(): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "density-control";
   wrap.setAttribute("role", "group");
-  wrap.setAttribute("aria-label", "Theme");
+  wrap.setAttribute("aria-label", ui.theme.label);
 
   const current = readTheme();
   for (const option of ["light", "dark", "system"] as Theme[]) {

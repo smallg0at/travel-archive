@@ -3,6 +3,7 @@ import { setPhotosTakenAt } from "./backend";
 import { forgetMonths } from "./archiveData";
 import { fillHours, isRetimable } from "./dayEdit";
 import { el } from "./photoUi";
+import { ui } from "./i18n";
 
 /**
  * Picking several photos in a grid and giving them one hour.
@@ -51,12 +52,12 @@ function localDate(iso: string): string {
 function ensureBar(): HTMLElement {
   if (bar) return bar;
   bar = el<HTMLElement>(`
-    <div class="retime-bar" role="toolbar" aria-label="Set the time of the selected photos" hidden>
+    <div class="retime-bar" role="toolbar" aria-label="${ui.retime.toolbar}" hidden>
       <span class="retime-count"></span>
-      <label><span>Date</span><input type="date" class="retime-date" /></label>
-      <label><span>Hour</span><select class="retime-hour"></select></label>
-      <button type="button" class="retime-save">Set time</button>
-      <button type="button" class="retime-clear">Clear</button>
+      <label><span>${ui.common.date}</span><input type="date" class="retime-date" /></label>
+      <label><span>${ui.retime.hour}</span><select class="retime-hour"></select></label>
+      <button type="button" class="retime-save">${ui.retime.setTime}</button>
+      <button type="button" class="retime-clear">${ui.retime.clear}</button>
       <p class="retime-status"></p>
     </div>
   `);
@@ -88,7 +89,7 @@ function update(): void {
   const b = ensureBar();
   document.body.classList.toggle("retime-selecting", entries.length > 0);
   b.hidden = entries.length === 0 && !lastStatus;
-  count.textContent = entries.length ? `${entries.length} selected` : "";
+  count.textContent = entries.length ? ui.retime.selected(entries.length) : "";
   for (const el of b.querySelectorAll<HTMLElement>("label, .retime-save, .retime-clear")) {
     el.hidden = entries.length === 0;
   }
@@ -96,9 +97,7 @@ function update(): void {
   // Sixty minutes in an hour, so sixty is as many as fit a minute apart.
   const tooMany = hourSelect.value !== "" && entries.length > 60;
   saveBtn.disabled = entries.length === 0 || tooMany;
-  status.textContent = tooMany
-    ? "At most 60 photos fit in one hour a minute apart — select fewer, or choose “Not known”."
-    : lastStatus;
+  status.textContent = tooMany ? ui.retime.tooMany : lastStatus;
 }
 
 function clear(): void {
@@ -161,7 +160,7 @@ async function apply(): Promise<void> {
   const entries = ordered();
   if (entries.length === 0) return;
   if (!dateInput.value) {
-    lastStatus = "Pick a date first.";
+    lastStatus = ui.time.pickDate;
     update();
     return;
   }
@@ -178,7 +177,7 @@ async function apply(): Promise<void> {
   });
 
   saveBtn.disabled = true;
-  saveBtn.textContent = `Saving ${items.length}…`;
+  saveBtn.textContent = ui.retime.saving(items.length);
   try {
     const result = await setPhotosTakenAt(items);
     // In place, as the single-photo control does: the record is the object
@@ -198,14 +197,11 @@ async function apply(): Promise<void> {
     forgetMonths(result.months);
 
     // Refusals stay selected, so they can be looked at or tried again.
-    const done = `Set ${result.results.length} photo${result.results.length === 1 ? "" : "s"}.`;
-    lastStatus = result.errors.length
-      ? `${done} ${result.errors.length} refused: ${result.errors[0].error}`
-      : `${done} The day regroups on the next reload.`;
+    lastStatus = ui.retime.result(result.results.length, result.errors.length, result.errors[0]?.error ?? null);
   } catch (err) {
     lastStatus = (err as Error).message.slice(0, 160);
   } finally {
-    saveBtn.textContent = "Set time";
+    saveBtn.textContent = ui.retime.setTime;
     update();
   }
 }

@@ -5,6 +5,7 @@ import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
 import { addDayControls, isRetimable, setDayEditingAvailable } from "./dayEdit";
 import { selectionClick } from "./retime";
+import { loc, locDay } from "./contentLang";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
@@ -12,6 +13,7 @@ import { checkHealth, setPin as savePin, syncStatus } from "./backend";
 import { releaseSettings, showSettings } from "./settings";
 import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
+import { fmtDate, num, ui } from "./i18n";
 
 /**
  * How long a view must be looked at before anything is fetched for it.
@@ -81,7 +83,7 @@ type Density = "compact" | "comfortable" | "spacious";
 
 const DENSITY_KEY = "album-density";
 const DENSITY_CELL_PX: Record<Density, number> = { compact: 78, comfortable: 120, spacious: 190 };
-const DENSITY_LABEL: Record<Density, string> = { compact: "Small", comfortable: "Medium", spacious: "Large" };
+const DENSITY_LABEL: Record<Density, string> = ui.album.density;
 
 function readDensity(): Density {
   try {
@@ -100,7 +102,7 @@ function applyDensity(): void {
 }
 
 export function renderDensityControl(): HTMLElement {
-  const wrap = el<HTMLDivElement>(`<div class="density-control" role="group" aria-label="Thumbnail size"></div>`);
+  const wrap = el<HTMLDivElement>(`<div class="density-control" role="group" aria-label="${ui.album.thumbnailSize}"></div>`);
   for (const option of ["compact", "comfortable", "spacious"] as Density[]) {
     const button = el<HTMLButtonElement>(`<button type="button"></button>`);
     button.textContent = DENSITY_LABEL[option];
@@ -131,9 +133,16 @@ export function renderDensityControl(): HTMLElement {
  */
 function addExportButton(heading: HTMLElement): void {
   if (!canPrint()) return;
-  const button = el<HTMLButtonElement>(`<button class="page-export" type="button">Save as PDF</button>`);
+  const button = el<HTMLButtonElement>(`<button class="page-export" type="button">${ui.nav.savePdf}</button>`);
   button.addEventListener("click", () => void printView());
   heading.appendChild(button);
+}
+
+/** A placeholder line. Text, not markup: it can carry a trip's model-written name. */
+function loadingNote(text: string): HTMLElement {
+  const note = el<HTMLDivElement>(`<div class="loading"></div>`);
+  note.textContent = text;
+  return note;
 }
 
 function dayOf(photo: PhotoRecord): string {
@@ -142,14 +151,14 @@ function dayOf(photo: PhotoRecord): string {
 
 /**
  * Month labels are formatted here rather than read from `MonthSummary.label`,
- * which the pipeline bakes in as en-US. Day headings are formatted client-side
- * in the viewer's locale, so taking the month from the pipeline left the nav
- * reading "September" above a heading reading "2026年9月1日周二". Deriving both
- * from the raw `yyyy-mm` keeps them in one language — the viewer's.
+ * which the pipeline bakes in as en-US. Taking the month from the pipeline
+ * once left the nav reading "September" above a heading reading
+ * "2026年9月1日周二". Deriving both from the raw `yyyy-mm` keeps them in one
+ * language — the reader's, via `fmtDate`.
  */
 export function formatMonthLabel(month: string, withYear = true): string {
   const [year, m] = month.split("-").map(Number);
-  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString(undefined, {
+  return fmtDate(new Date(Date.UTC(year, m - 1, 1)), {
     month: "long",
     ...(withYear ? { year: "numeric" } : {}),
     timeZone: "UTC",
@@ -157,9 +166,9 @@ export function formatMonthLabel(month: string, withYear = true): string {
 }
 
 function formatDayHeading(date: string): string {
-  if (date === UNDATED) return "Undated";
+  if (date === UNDATED) return ui.album.undated;
   const d = new Date(`${date}T00:00:00Z`);
-  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  return fmtDate(d, { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 /** Every day `organize` has written, flattened across sections, keyed by date. */
@@ -205,6 +214,9 @@ function renderDaySection(
   byId: Record<string, PhotoRecord>,
   layout: "trip" | "album",
 ): HTMLElement {
+  // In the reader's language, with their hand edits in it over the top — and
+  // so the editors below open on the text they are actually looking at.
+  day = day && locDay(day);
   const section = el<HTMLElement>(`<section class="day-page"></section>`);
 
   const header = el<HTMLDivElement>(`
@@ -215,11 +227,11 @@ function renderDaySection(
   `);
   header.querySelector(".day-title")!.textContent = formatDayHeading(date);
   header.querySelector(".day-meta")!.textContent =
-    `${photos.length} photo${photos.length === 1 ? "" : "s"}${day?.place ? ` · ${day.place}` : ""}`;
+    `${ui.common.photos(photos.length)}${day?.place ? ` · ${day.place}` : ""}`;
 
   if (day?.summary) {
     const summary = el<HTMLDivElement>(`<div class="day-summary"></div>`);
-    summary.textContent = day.summary;
+    summary.textContent = loc(day.summary);
     header.appendChild(summary);
   }
   // Only a day `organize` has actually written can be corrected — there is no
@@ -282,11 +294,11 @@ function scrollToStop(anchor: string): void {
  */
 async function showTrip(trip: TripRecord): Promise<void> {
   const content = document.getElementById("content")!;
-  setTitle(trip.name);
+  setTitle(loc(trip.name));
   cancelLookAhead();
   releaseSettings();
   releaseThumbnails();
-  content.replaceChildren(el(`<div class="loading">Loading ${trip.name}…</div>`));
+  content.replaceChildren(loadingNote(ui.common.loading(loc(trip.name))));
 
   const months = [...new Set(trip.days.map((d) => d.date.slice(0, 7)))];
   const photos: Record<string, PhotoRecord> = {};
@@ -300,7 +312,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
   } catch (err) {
     if (err instanceof SignInRequiredError) {
       window.dispatchEvent(new CustomEvent("signin-required"));
-      content.replaceChildren(el(`<div class="loading">Sign in to load ${trip.name}.</div>`));
+      content.replaceChildren(loadingNote(ui.common.signInToLoad(loc(trip.name))));
       return;
     }
     throw err;
@@ -313,17 +325,17 @@ async function showTrip(trip: TripRecord): Promise<void> {
       <span></span>
     </div>
   `);
-  header.querySelector("h1")!.textContent = trip.name;
+  header.querySelector("h1")!.textContent = loc(trip.name);
   const photoCount = trip.days.reduce((n, d) => n + d.photoIds.length, 0);
   header.querySelector("span")!.textContent =
-    `${formatDayHeading(trip.startDate)} – ${formatDayHeading(trip.endDate)} · ${trip.days.length} days · ${photoCount} photos`;
+    `${formatDayHeading(trip.startDate)} – ${formatDayHeading(trip.endDate)} · ${ui.common.days(trip.days.length)} · ${ui.common.photos(photoCount)}`;
   frag.appendChild(header);
 
   if (trip.narrative) {
     const narrative = el<HTMLDivElement>(`<div class="trip-narrative"></div>`);
     // Paragraph by paragraph as text nodes — this is model output and must
     // never be parsed as markup.
-    for (const para of trip.narrative.split(/\n\s*\n/)) {
+    for (const para of loc(trip.narrative).split(/\n\s*\n/)) {
       const p = document.createElement("p");
       p.textContent = para.trim();
       narrative.appendChild(p);
@@ -335,7 +347,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
     const places = el<HTMLDivElement>(`<div class="trip-places"></div>`);
     for (const place of trip.places) {
       const chip = document.createElement("span");
-      chip.textContent = place;
+      chip.textContent = loc(place);
       places.appendChild(chip);
     }
     frag.appendChild(places);
@@ -381,7 +393,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   // blob URLs now rather than pinning every thumbnail decoded this session.
   // Coming back to this month re-reads from IndexedDB, not the network.
   releaseThumbnails();
-  content.replaceChildren(el(`<div class="loading">Loading ${label}…</div>`));
+  content.replaceChildren(loadingNote(ui.common.loading(label)));
 
   let shard;
   try {
@@ -389,7 +401,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   } catch (err) {
     if (err instanceof SignInRequiredError) {
       window.dispatchEvent(new CustomEvent("signin-required"));
-      content.replaceChildren(el(`<div class="loading">Sign in to load ${label}.</div>`));
+      content.replaceChildren(loadingNote(ui.common.signInToLoad(label)));
       return;
     }
     throw err;
@@ -415,7 +427,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   const heading = el<HTMLDivElement>(`<div class="month-heading"><h1></h1><span></span></div>`);
   heading.querySelector("h1")!.textContent = label;
   heading.querySelector("span")!.textContent =
-    `${summary.photoCount} photo${summary.photoCount === 1 ? "" : "s"} · ${ordered.length} day${ordered.length === 1 ? "" : "s"}`;
+    `${ui.common.photos(summary.photoCount)} · ${ui.common.days(ordered.length)}`;
   frag.appendChild(heading);
 
   for (const date of ordered) {
@@ -510,7 +522,7 @@ function navGroup(nav: HTMLElement, id: string, title: string, count: number, op
      </button>`,
   );
   header.querySelector(".nav-year-name")!.textContent = title;
-  header.querySelector(".nav-year-count")!.textContent = count.toLocaleString();
+  header.querySelector(".nav-year-count")!.textContent = num(count);
 
   const body = el<HTMLDivElement>(`<div class="nav-months"></div>`);
   body.dataset.group = id;
@@ -576,15 +588,15 @@ function renderNav(index: ArchiveIndexFile): void {
     const body = navGroup(
       nav,
       "trips",
-      "Trips",
+      ui.nav.trips,
       sorted.reduce((n, t) => n + t.days.reduce((d, day) => d + day.photoIds.length, 0), 0),
       open,
     );
 
     for (const trip of sorted) {
       const row = navRow(
-        trip.name,
-        trip.days.reduce((n, d) => n + d.photoIds.length, 0).toLocaleString(),
+        loc(trip.name),
+        num(trip.days.reduce((n, d) => n + d.photoIds.length, 0)),
         "trip",
         trip.id,
         () => void showTrip(trip),
@@ -611,7 +623,7 @@ function renderNav(index: ArchiveIndexFile): void {
       body.appendChild(
         navRow(
           formatMonthLabel(summary.month, false),
-          summary.photoCount.toLocaleString(),
+          num(summary.photoCount),
           "month",
           summary.month,
           () => void showMonth(summary, index),
@@ -642,7 +654,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
        <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
          <path d="M7.39804 12.8088C7.57428 12.9331 7.78476 12.9997 8.00043 12.9993C8.21633 12.9995 8.42686 12.932 8.60243 12.8063C8.77993 12.6758 8.91464 12.4955 8.98943 12.2883L9.43643 10.9153C9.55086 10.571 9.74391 10.2581 10.0003 10.0014C10.2566 9.74467 10.5693 9.5512 10.9134 9.4363L12.3044 8.9853C12.4564 8.93095 12.5936 8.84214 12.7055 8.72586C12.8174 8.60957 12.9008 8.46896 12.9492 8.31503C12.9977 8.16111 13.0098 7.99806 12.9847 7.83867C12.9596 7.67927 12.8979 7.52786 12.8044 7.3963C12.6703 7.21038 12.4794 7.07314 12.2604 7.0053L10.8854 6.5583C10.5409 6.44407 10.2278 6.25111 9.97087 5.99472C9.71396 5.73833 9.52035 5.42558 9.40543 5.0813L8.95343 3.6933C8.88113 3.491 8.74761 3.31624 8.57143 3.1933C8.43877 3.09957 8.28607 3.03809 8.12548 3.01375C7.96489 2.9894 7.80083 3.00286 7.64636 3.05306C7.49188 3.10326 7.35125 3.18881 7.23564 3.3029C7.12004 3.417 7.03265 3.5565 6.98043 3.7103L6.52343 5.1103C6.40884 5.44513 6.21967 5.74954 5.97022 6.00055C5.72076 6.25157 5.41753 6.44263 5.08343 6.5593L3.69243 7.0073C3.54065 7.0617 3.40352 7.15048 3.29177 7.26669C3.18001 7.3829 3.09666 7.5234 3.04824 7.67719C2.99982 7.83097 2.98764 7.99388 3.01265 8.15315C3.03767 8.31243 3.0992 8.46376 3.19243 8.5953C3.32027 8.77475 3.50105 8.90972 3.70943 8.9813L5.08343 9.4263C5.52354 9.57278 5.90999 9.84713 6.19343 10.2143C6.35585 10.4249 6.4813 10.6616 6.56443 10.9143L7.01643 12.3053C7.08846 12.5086 7.22179 12.6845 7.39804 12.8088ZM7.48343 5.3943L8.01043 4.0173L8.44943 5.3943C8.61312 5.88745 8.88991 6.33546 9.25767 6.70253C9.62544 7.0696 10.074 7.34554 10.5674 7.5083L11.9734 8.0373L10.5914 8.4853C10.0987 8.6496 9.65095 8.92646 9.28382 9.29393C8.9167 9.66141 8.64026 10.1094 8.47643 10.6023L7.95343 11.9803L7.50443 10.6013C7.34335 10.108 7.06943 9.65913 6.70443 9.2903C6.3356 8.92226 5.88653 8.64467 5.39243 8.4793L4.01443 7.9573L5.40043 7.5073C5.88672 7.33867 6.32775 7.06051 6.68943 6.6943C7.04901 6.3266 7.32049 5.88211 7.48343 5.3943ZM13.5353 16.8513C13.6713 16.9475 13.8337 16.9992 14.0003 16.9993C14.1654 16.9994 14.3264 16.9484 14.4613 16.8533C14.6008 16.7548 14.7058 16.6149 14.7613 16.4533L15.0093 15.6913C15.0625 15.5329 15.1515 15.3888 15.2693 15.2703C15.3867 15.1518 15.5307 15.063 15.6893 15.0113L16.4613 14.7593C16.619 14.7048 16.7557 14.6024 16.8523 14.4663C16.9257 14.3633 16.9736 14.2444 16.9921 14.1193C17.0106 13.9942 16.9992 13.8665 16.9588 13.7467C16.9184 13.6268 16.8501 13.5183 16.7597 13.4299C16.6692 13.3415 16.5591 13.2759 16.4383 13.2383L15.6743 12.9893C15.5162 12.9368 15.3724 12.8481 15.2544 12.7305C15.1364 12.6128 15.0473 12.4693 14.9943 12.3113L14.7423 11.5383C14.6886 11.3805 14.586 11.2439 14.4493 11.1483C14.3473 11.0754 14.2295 11.0274 14.1056 11.0084C13.9816 10.9893 13.8549 10.9997 13.7357 11.0386C13.6164 11.0775 13.508 11.1439 13.4192 11.2325C13.3304 11.321 13.2636 11.4292 13.2243 11.5483L12.9773 12.3103C12.925 12.468 12.8375 12.6116 12.7213 12.7303C12.6066 12.8468 12.4667 12.9354 12.3123 12.9893L11.5393 13.2413C11.3803 13.2952 11.2422 13.3978 11.1447 13.5346C11.0472 13.6713 10.9952 13.8353 10.9961 14.0032C10.997 14.1712 11.0507 14.3346 11.1496 14.4703C11.2486 14.606 11.3877 14.7071 11.5473 14.7593L12.3103 15.0063C12.4692 15.0597 12.6136 15.149 12.7323 15.2673C12.8505 15.3856 12.939 15.5302 12.9903 15.6893L13.2433 16.4633C13.2981 16.6198 13.4001 16.7554 13.5353 16.8513ZM12.6223 14.0583L12.4433 13.9993L12.6273 13.9353C12.9291 13.8304 13.2027 13.6576 13.4273 13.4303C13.6537 13.2013 13.8248 12.9236 13.9273 12.6183L13.9853 12.4403L14.0443 12.6213C14.1463 12.928 14.3185 13.2067 14.5471 13.4352C14.7757 13.6636 15.0545 13.8356 15.3613 13.9373L15.5563 14.0003L15.3763 14.0593C15.0689 14.1615 14.7898 14.3342 14.5611 14.5636C14.3324 14.793 14.1606 15.0727 14.0593 15.3803L14.0003 15.5613L13.9423 15.3803C13.8409 15.0722 13.6687 14.792 13.4394 14.5625C13.2102 14.3329 12.9303 14.1602 12.6223 14.0583Z"/>
        </svg>
-       <span class="nav-label">Generate</span>
+       <span class="nav-label">${ui.nav.generate}</span>
      </button>`,
   );
   generate.addEventListener("click", () => {
@@ -651,7 +663,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
     clearActive();
     generate.classList.add("active");
     enter("#generate");
-    setTitle("Generate");
+    setTitle(ui.nav.generate);
     showGenerate();
   });
   tools.appendChild(generate);
@@ -661,7 +673,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
        <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
          <path d="M1.91099 7.38266C2.28028 6.24053 2.88863 5.19213 3.69133 4.30364C3.82707 4.15339 4.04002 4.09984 4.23069 4.16802L6.14897 4.85392C6.66905 5.03977 7.24131 4.76883 7.42716 4.24875C7.44544 4.19762 7.45952 4.14507 7.46925 4.09173L7.83471 2.08573C7.87104 1.88627 8.02422 1.7285 8.22251 1.6863C8.8027 1.5628 9.39758 1.5 10.0003 1.5C10.6026 1.5 11.1971 1.56273 11.7769 1.68607C11.9752 1.72824 12.1284 1.88591 12.1648 2.08529L12.5313 4.09165C12.6303 4.63497 13.1511 4.9951 13.6944 4.89601C13.7479 4.88627 13.8004 4.87219 13.8515 4.85395L15.7698 4.16802C15.9605 4.09984 16.1734 4.15339 16.3092 4.30364C17.1119 5.19213 17.7202 6.24053 18.0895 7.38266C18.1518 7.57534 18.0918 7.78658 17.9374 7.91764L16.3825 9.23773C15.9615 9.5952 15.9101 10.2263 16.2675 10.6473C16.3027 10.6887 16.3411 10.7271 16.3825 10.7623L17.9374 12.0824C18.0918 12.2134 18.1518 12.4247 18.0895 12.6173C17.7202 13.7595 17.1119 14.8079 16.3092 15.6964C16.1734 15.8466 15.9605 15.9002 15.7698 15.832L13.8515 15.1461C13.3315 14.9602 12.7592 15.2312 12.5733 15.7512C12.5551 15.8024 12.541 15.8549 12.5312 15.9085L12.1648 17.9147C12.1284 18.1141 11.9752 18.2718 11.7769 18.3139C11.1971 18.4373 10.6026 18.5 10.0003 18.5C9.39758 18.5 8.8027 18.4372 8.22251 18.3137C8.02422 18.2715 7.87104 18.1137 7.83471 17.9143L7.46926 15.9084C7.37018 15.365 6.8494 15.0049 6.30608 15.104C6.25265 15.1137 6.20011 15.1278 6.14906 15.1461L4.23069 15.832C4.04002 15.9002 3.82707 15.8466 3.69133 15.6964C2.88863 14.8079 2.28028 13.7595 1.91099 12.6173C1.84869 12.4247 1.90876 12.2134 2.06313 12.0824L3.61798 10.7623C4.03897 10.4048 4.09046 9.77373 3.73299 9.35274C3.69784 9.31135 3.65937 9.27288 3.618 9.23775L2.06313 7.91764C1.90876 7.78658 1.84869 7.57534 1.91099 7.38266ZM2.97154 7.37709L4.26523 8.47546C4.34803 8.54576 4.42496 8.62269 4.49526 8.70548C5.2102 9.54746 5.10721 10.8096 4.26521 11.5246L2.97154 12.6229C3.26359 13.4051 3.68504 14.1322 4.21648 14.7751L5.81246 14.2044C5.91473 14.1679 6.01982 14.1397 6.12667 14.1202C7.21332 13.922 8.25487 14.6423 8.45305 15.729L8.75702 17.3975C9.16489 17.4655 9.58024 17.5 10.0003 17.5C10.42 17.5 10.8351 17.4656 11.2427 17.3976L11.5475 15.7289C11.567 15.6221 11.5951 15.517 11.6317 15.4147C12.0034 14.3746 13.1479 13.8327 14.1881 14.2044L15.784 14.7751C16.3155 14.1322 16.7369 13.4051 17.029 12.6229L15.7353 11.5245C15.6525 11.4542 15.5756 11.3773 15.5053 11.2945C14.7903 10.4525 14.8933 9.1904 15.7353 8.47544L17.029 7.37709C16.7369 6.59486 16.3155 5.86783 15.784 5.22494L14.1881 5.79559C14.0858 5.83214 13.9807 5.8603 13.8738 5.87979C12.7872 6.07796 11.7456 5.3577 11.5475 4.27119L11.2427 2.60235C10.8351 2.53443 10.42 2.5 10.0003 2.5C9.58024 2.5 9.16489 2.53448 8.75702 2.60249L8.45304 4.27105C8.43355 4.37791 8.40539 4.48299 8.36884 4.58527C7.99714 5.62542 6.8526 6.1673 5.81237 5.79556L4.21648 5.22494C3.68504 5.86783 3.26359 6.59486 2.97154 7.37709ZM7.50026 10C7.50026 8.61929 8.61954 7.5 10.0003 7.5C11.381 7.5 12.5003 8.61929 12.5003 10C12.5003 11.3807 11.381 12.5 10.0003 12.5C8.61954 12.5 7.50026 11.3807 7.50026 10ZM8.50026 10C8.50026 10.8284 9.17183 11.5 10.0003 11.5C10.8287 11.5 11.5003 10.8284 11.5003 10C11.5003 9.17157 10.8287 8.5 10.0003 8.5C9.17183 8.5 8.50026 9.17157 8.50026 10Z"/>
        </svg>
-       <span class="nav-label">Settings</span>
+       <span class="nav-label">${ui.nav.settings}</span>
      </button>`,
   );
   settings.addEventListener("click", () => {
@@ -673,7 +685,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
     clearActive();
     settings.classList.add("active");
     enter("#settings");
-    setTitle("Settings");
+    setTitle(ui.nav.settings);
     void showSettings();
   });
   tools.appendChild(settings);
@@ -754,11 +766,9 @@ function addPinControl(heading: HTMLElement, kind: "trip" | "month", id: string)
     let pinned = status.pins.some((p) => p.kind === kind && p.id === id);
 
     const paint = () => {
-      button.textContent = pinned ? "▣ Kept on this device" : "☁ Keep on this device";
+      button.textContent = pinned ? ui.nav.kept : ui.nav.keep;
       button.classList.toggle("pinned", pinned);
-      button.title = pinned
-        ? "Photos here are kept on this device and are never evicted to make room."
-        : "Fetch these photos and keep them on this device.";
+      button.title = pinned ? ui.nav.keptTitle : ui.nav.keepTitle;
     };
     paint();
 
@@ -921,7 +931,7 @@ function enter(hash: string): void {
  * whatever it showed, and so did every entry in the Back menu — which made the
  * history this file now keeps unreadable.
  */
-const APP_TITLE = "Photo Archive";
+const APP_TITLE = ui.app.title;
 
 function setTitle(page: string): void {
   document.title = `${page} · ${APP_TITLE}`;
@@ -995,7 +1005,7 @@ export function renderAlbum(index: ArchiveIndexFile): void {
 
   if (index.months.length === 0) {
     content.replaceChildren(
-      el(`<div class="loading">Archive is empty. Run <code>npm run --workspace pipeline scan</code> to index your photos.</div>`),
+      el(`<div class="loading">${ui.app.emptyArchiveHtml}</div>`),
     );
     return;
   }

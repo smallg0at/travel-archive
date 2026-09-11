@@ -1,5 +1,6 @@
 import type { ArchiveIndexFile, DayEdits, DayRecord, StopEdit } from "@travel-archive/shared";
-import { loadIndex, saveIndex } from "../archiveStore.js";
+import { CONTENT_LANGUAGES } from "@travel-archive/shared";
+import { loadIndex, loadTranslations, saveIndex, saveTranslations } from "../archiveStore.js";
 import { getAccessToken } from "../auth.js";
 import { withArchiveLock } from "../lock.js";
 
@@ -31,11 +32,25 @@ export interface DayPatch {
   summary?: string | null;
   /** Per-stop corrections, each anchored to a photo — see `StopEdit`. */
   stops?: { anchorPhotoId: string; title?: string | null; summary?: string | null }[];
+  /**
+   * The language the summary and stop edits are written in.
+   *
+   * Absent or null: the original, on the day record, as it always was. A
+   * language code: that language's edits, kept in its sidecar file
+   * (`TranslationFile.owner`) and shown over its translation — touched by
+   * neither a translate run nor a rewrite, and anchored the same way. `null`
+   * there hands the text back to the translation.
+   *
+   * The note is not per-language. It is an instruction to the summarizer, in
+   * whatever language the owner writes it, and always lives on the day.
+   */
+  lang?: string | null;
 }
 
 export interface DayEditResult {
   date: string;
   note: string | null;
+  /** The edits now in force for the language written to. */
   edits: DayEdits | null;
   /** True when the change means the next `organize` run will rewrite this day. */
   stale: boolean;
@@ -58,6 +73,12 @@ function prune(edits: DayEdits): DayEdits | null {
   return next.summary === undefined && !next.stops ? null : next;
 }
 
+function copyEdits(edits: DayEdits | null | undefined): DayEdits {
+  const next: DayEdits = { ...(edits ?? {}) };
+  if (next.stops) next.stops = next.stops.map((s) => ({ ...s }));
+  return next;
+}
+
 function applyStopPatch(edits: DayEdits, patch: NonNullable<DayPatch["stops"]>[number]): void {
   const stops = (edits.stops ??= []);
   let entry = stops.find((s) => s.anchorPhotoId === patch.anchorPhotoId);
@@ -78,7 +99,7 @@ function applyStopPatch(edits: DayEdits, patch: NonNullable<DayPatch["stops"]>[n
 }
 
 /**
- * Applies a patch to one day and writes the index.
+ * Applies a patch to one day and writes what it touched.
  *
  * The visible text is updated in place as well as frozen, so a correction shows
  * immediately instead of waiting for a run that costs money. Clearing a freeze
@@ -87,6 +108,11 @@ function applyStopPatch(edits: DayEdits, patch: NonNullable<DayPatch["stops"]>[n
  * reported `stale` so the caller can offer that.
  */
 export async function editDay(date: string, patch: DayPatch): Promise<DayEditResult> {
+  const lang = patch.lang ?? null;
+  if (lang !== null && !(CONTENT_LANGUAGES as readonly string[]).includes(lang)) {
+    throw new Error(`No content language "${lang}".`);
+  }
+
   return withArchiveLock("edit day", async () => {
     // The Graph copy, not the mirror: this is a write path, and a mirror gone
     // stale on another machine would be merged onto and uploaded over the
@@ -96,39 +122,66 @@ export async function editDay(date: string, patch: DayPatch): Promise<DayEditRes
     const day = findDay(index, date);
     if (!day) throw new Error(`No day ${date} in the archive. Run organize for it first.`);
 
+    // Checked before anything is written, in either language, so a bad anchor
+    // leaves nothing half-saved.
+    for (const stopPatch of patch.stops ?? []) {
+      if (!day.segments.some((seg) => seg.photoIds.includes(stopPatch.anchorPhotoId))) {
+        throw new Error(`No stop in ${date} contains photo ${stopPatch.anchorPhotoId}.`);
+      }
+    }
+
+    let indexChanged = false;
     if (patch.note !== undefined) {
       const note = patch.note?.trim();
       day.note = note ? note : null;
+      indexChanged = true;
     }
 
-    const edits: DayEdits = { ...(day.edits ?? {}) };
-    if (edits.stops) edits.stops = edits.stops.map((s) => ({ ...s }));
+    const touchesText = patch.summary !== undefined || (patch.stops?.length ?? 0) > 0;
+    let edits: DayEdits | null = day.edits ?? null;
 
-    if (patch.summary !== undefined) {
-      if (patch.summary === null) delete edits.summary;
-      else {
-        edits.summary = patch.summary;
-        day.summary = patch.summary;
+    if (touchesText && lang) {
+      // Another language's edits: its own file, loaded from Graph for the same
+      // reason as the index. The day record is not touched.
+      const file = await loadTranslations(token, lang, "index");
+      file.parts ??= [];
+      file.owner ??= {};
+      const next = copyEdits(file.owner[date]);
+      if (patch.summary !== undefined) {
+        if (patch.summary === null) delete next.summary;
+        else next.summary = patch.summary;
       }
-    }
-
-    for (const stopPatch of patch.stops ?? []) {
-      applyStopPatch(edits, stopPatch);
-      const segment = day.segments.find((seg) => seg.photoIds.includes(stopPatch.anchorPhotoId));
-      if (!segment) {
-        throw new Error(`No stop in ${date} contains photo ${stopPatch.anchorPhotoId}.`);
+      for (const stopPatch of patch.stops ?? []) applyStopPatch(next, stopPatch);
+      edits = prune(next);
+      if (edits) file.owner[date] = edits;
+      else delete file.owner[date];
+      await saveTranslations(token, lang, "index", file);
+    } else if (touchesText) {
+      const next = copyEdits(day.edits);
+      if (patch.summary !== undefined) {
+        if (patch.summary === null) delete next.summary;
+        else {
+          next.summary = patch.summary;
+          day.summary = patch.summary;
+        }
       }
-      if (typeof stopPatch.title === "string") segment.title = stopPatch.title;
-      if (stopPatch.summary !== undefined && stopPatch.summary !== null) segment.summary = stopPatch.summary;
+      for (const stopPatch of patch.stops ?? []) {
+        applyStopPatch(next, stopPatch);
+        const segment = day.segments.find((seg) => seg.photoIds.includes(stopPatch.anchorPhotoId))!;
+        if (typeof stopPatch.title === "string") segment.title = stopPatch.title;
+        if (stopPatch.summary !== undefined && stopPatch.summary !== null) segment.summary = stopPatch.summary;
+      }
+      day.edits = prune(next);
+      edits = day.edits;
+      indexChanged = true;
     }
 
-    day.edits = prune(edits);
-    await saveIndex(token, index);
+    if (indexChanged) await saveIndex(token, index);
 
     return {
       date,
       note: day.note ?? null,
-      edits: day.edits,
+      edits,
       stale: (day.summarizedNote ?? null) !== (day.note ?? null),
     };
   });

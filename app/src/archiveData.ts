@@ -2,6 +2,8 @@ import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "./msAuth";
 import { localArchiveJson } from "./backend";
+import type { TranslationFile } from "@travel-archive/shared";
+import { contentLanguage, translatedMonths, useIndexTranslations, useMonthTranslations } from "./contentLang";
 
 /**
  * Archive metadata is read straight from OneDrive at runtime, not bundled.
@@ -107,10 +109,60 @@ const shardCache = new Map<string, Promise<PhotoShard>>();
  * long browsing session has loaded.
  */
 export function forgetMonths(months: string[]): void {
-  for (const month of months) shardCache.delete(month);
+  for (const month of months) {
+    shardCache.delete(month);
+    translationCache.delete(month);
+  }
 }
 
+/**
+ * The second language's day and trip text, when the reader has chosen one.
+ *
+ * Loaded beside `index.json`, and again on every reload of it: a translate run
+ * ends in exactly that reload, and the month caption files are dropped with it
+ * so they are fetched fresh too. Missing is fine — the page shows the original.
+ */
+export async function loadContentTranslations(): Promise<void> {
+  translationCache.clear();
+  const lang = contentLanguage();
+  if (lang === "en") {
+    useIndexTranslations(null);
+    return;
+  }
+  const file = await fetchMetadataJson<TranslationFile>(`i18n/${lang}/index.json`, `i18n/${lang}/index`).catch(
+    () => null,
+  );
+  useIndexTranslations(file);
+}
+
+const translationCache = new Map<string, Promise<void>>();
+
+/**
+ * A month's captions in the reader's language. Only for months the language's
+ * index lists: asking for the others would fall through to OneDrive for a file
+ * that does not exist, once per month opened.
+ */
+function loadMonthTranslations(month: string): Promise<void> {
+  const lang = contentLanguage();
+  if (lang === "en" || !translatedMonths().includes(month)) return Promise.resolve();
+  const cached = translationCache.get(month);
+  if (cached) return cached;
+  const pending = fetchMetadataJson<TranslationFile>(`i18n/${lang}/photos/${month}.json`, `i18n/${lang}/shard/${month}`)
+    .then((file) => useMonthTranslations(month, file))
+    .catch(() => {
+      // Untranslated captions are a fine fallback; try again next time.
+      translationCache.delete(month);
+    });
+  translationCache.set(month, pending);
+  return pending;
+}
+
+/** A month's photos, with their captions in the reader's language when there are any. */
 export function loadMonth(month: string): Promise<PhotoShard> {
+  return Promise.all([loadShardFile(month), loadMonthTranslations(month)]).then(([shard]) => shard);
+}
+
+function loadShardFile(month: string): Promise<PhotoShard> {
   const cached = shardCache.get(month);
   if (cached) return cached;
 

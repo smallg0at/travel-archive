@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**33 open, 32 done.** The list grows because each session surfaces defects that
+**32 open, 35 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -60,6 +60,56 @@ working practice this list was built with.
       **Not done, on purpose**: the mobile horizontal strip is unchanged and
       still tracked separately below — it needs its own redesign, not a
       Fluent pass on top of a layout due to be replaced.
+
+- [x] **Content in a second language — 简体中文 beside the English.** Raised by
+      the owner 2026-09-10: two languages' worth of content stored together, and
+      a text-only way to move existing content across by translation, quality
+      not expected to be great. Built the same day to an approved plan:
+
+      1. **Storage** — sidecars `i18n/zh-Hans/index.json` and
+         `i18n/zh-Hans/photos/<yyyy-mm>.json`, keyed by `textKey()` of the
+         original (HANDOFF, "Shape"). No schema bump; `index.json` and the
+         shards are never written. Settings → Content language, per device;
+         every display site goes through `loc()`, and anything untranslated
+         shows as written.
+      2. **Machine translation** — Generate → Translate (plan, then run),
+         `jobs/translate.ts`. Text only, on Gemini `gemini-3.7-flash`, the
+         configured provider (there is no Anthropic key); `TRANSLATE_MODEL`
+         overrides. Captions stay English and are translated.
+      3. **Native day and trip text** — organize and trip ask for an `_alt`
+         twin of every text field in the same call and store it
+         `via: "native"`, which a translation never overwrites.
+      4. **Per-language edits** — an edit made while reading Chinese goes to
+         the sidecar's `owner`, anchored like `StopEdit`; emptying a field
+         hands it back to the translation.
+
+      | | |
+      |---|---|
+      | whole archive, free plan | 6,557 texts, 608,847 chars |
+      | September 2026, paid run | 948 texts, 16 calls, 51s, 36,498 in / 47,497 out tokens |
+      | August captions, cancelled | stopped at 480 of 3,758; all 480 kept |
+      | archive files after both runs and an edit cycle | byte-identical (sha256) |
+
+      The first token estimate was 35% low on input (each item carries its key
+      and kind as JSON); the constants are recalibrated from that run.
+
+      Verified in the preview: a town fully Chinese — stop titles 9/9, card
+      descriptions 48/48, day summaries 2/2, narrative, places, nav, tab title
+      and the viewer; the train mixed exactly as translated (Sep 1–2 Chinese,
+      the August days English); a Chinese stop edit survives a reload and
+      clears back to the translation; English untouched throughout.
+
+      **Not verified**: native generation against the real model — it costs an
+      organize or trip call, the owner's to spend; sync pulling the sidecars on
+      a `behind` machine; whether a stop title redraws at once after a Chinese
+      save (read 4s after Save it still showed the old title — a save is 1.8s
+      of index download plus the sidecar round trip, so probably still saving;
+      after a reload it was right). One of a town's 48 card titles stayed
+      English; not looked at.
+
+      **Still to translate**: 5,129 texts — 3,278 August captions, 32 from
+      2025-04, 1,819 day and trip texts outside September. Generate →
+      Translate → Estimate first.
 
 - [x] **A page refresh lost the reader's place — always back to the newest
       trip.** Raised by the owner 2026-09-10. `captureView` only kept the view
@@ -189,6 +239,38 @@ working practice this list was built with.
       renames, one `saveShard`, one `saveIndex`. 118 photos become one round
       trip instead of 118. The renames themselves still cost a Graph call each,
       but those are small and can run pooled.
+
+- [x] **The interface around the content is English only.** Content could be
+      Chinese; the chrome could not. Measured 2026-09-10: roughly 150–250
+      strings, 10 English-only plurals and a "photo(s)", 11 sentences glued
+      together in code, 14 date and number calls following the browser's
+      locale rather than an app setting.
+
+      Done 2026-09-11 to an approved plan, the owner's call being **one
+      language setting** for content and interface: Settings → Language, same
+      storage key as the old Content language, so the choice carried over. The
+      words are `app/src/i18n/` (HANDOFF, "Shape") — `zh-Hans.ts` is typed
+      against `en.ts`, so a missing key fails `tsc`; plurals live in message
+      functions; every date and number goes through `fmtDate`/`num` in the
+      chosen language (English takes the browser's English variant, en-GB
+      here). `index.html`'s nine strings are set from `main.ts`.
+
+      Verified against the rebuilt bundle, by capturing every visible line of a
+      trip, the viewer, a month, Settings and all four Generate tabs:
+
+      - **English, before vs after** — identical apart from two intended
+        changes: "1 photos" → "1 photo" and "Content language" → "Language".
+      - **简体中文** — the same views plus the retime bar and the photo time
+        editor have no interface words left in Latin script. What remains is
+        names (OneDrive, API, Claude, Gemini, file paths), geocoded day places
+        ("a town, United Kingdom"), basemap labels, and proper nouns inside
+        translated text. Console clean.
+
+      Left English on purpose: server and job log text, including job result
+      keys ("summarized 3"). Not done: day `place` strings come from geocoding
+      and are not in the translation sidecar; basemap labels would need a
+      second name set; `render.ts:27` stop times are still sliced from UTC
+      (the filename-clock item).
 
 - [ ] **There is no incremental refresh — every change reloads the archive.**
       Raised by the owner 2026-09-10, and it is the shared cause behind three
@@ -964,7 +1046,11 @@ working practice this list was built with.
 
 ## Todo
 
-- [ ] **i18n — Chinese and English.** UI strings are the easy part and dates
+- [x] **i18n — Chinese and English.** *Closed 2026-09-11: done as the two
+      "Content in a second language" and "The interface around the content"
+      items under Open issues. The storage turned out not to need a schema
+      break — the second language is a sidecar beside the archive. Kept below
+      for the original reasoning.* UI strings are the easy part and dates
       are already locale-aware (`toLocaleDateString(undefined, ...)`). The hard
       part is that **the archive's prose is model output stored in one
       language**: captions, place and day summaries, the trip narrative, and

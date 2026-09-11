@@ -9,13 +9,16 @@ import {
   archiveStatus,
   planAnalyze,
   planOrganize,
+  planTranslate,
   rememberJob,
   rememberedJob,
   startAnalyze,
   startOrganize,
+  startTranslate,
   startTrip,
   watchJob,
 } from "./backend";
+import { num, ui } from "./i18n";
 
 /**
  * The generation panel: pick a date range, name it or let the model name it,
@@ -50,8 +53,9 @@ function renderProgress(panel: HTMLElement, job: JobRecord): void {
   const pct = job.progress.total > 0 ? Math.round((job.progress.done / job.progress.total) * 100) : 0;
   (box.querySelector(".job-bar-fill") as HTMLElement).style.width = `${pct}%`;
 
+  const phase = `${ui.generate.jobKind[job.kind]} · ${ui.generate.jobStatus[job.status]}`;
   box.querySelector(".job-phase")!.textContent =
-    `${job.kind} · ${job.status}${job.progress.total > 0 ? ` · ${job.progress.done}/${job.progress.total}` : ""}`;
+    `${phase}${job.progress.total > 0 ? ` · ${num(job.progress.done)}/${num(job.progress.total)}` : ""}`;
 
   // Model output and file names end up in here, so it is set as text.
   box.querySelector(".job-log")!.textContent = job.log.slice(-6).join("\n");
@@ -62,12 +66,14 @@ function renderProgress(panel: HTMLElement, job: JobRecord): void {
 
   if (finished) {
     forgetJob();
+    // The result's keys are the server's own names ("summarized 3") and stay
+    // as it wrote them, like the log above.
     const result = job.error
-      ? `failed: ${job.error}`
+      ? ui.generate.jobFailed(job.error)
       : Object.entries(job.result ?? {})
           .map(([k, v]) => `${k} ${v}`)
           .join(", ");
-    box.querySelector(".job-phase")!.textContent = `${job.kind} · ${job.status}${result ? ` · ${result}` : ""}`;
+    box.querySelector(".job-phase")!.textContent = `${phase}${result ? ` · ${result}` : ""}`;
     // A finished job has almost always changed index.json, so the caller
     // reloads rather than leaving a stale nav on screen.
     if (job.status === "done") onFinished();
@@ -90,7 +96,7 @@ function attach(panel: HTMLElement, job: JobRecord): void {
 function fail(panel: HTMLElement, message: string): void {
   const box = panel.querySelector(".job-progress") as HTMLElement;
   box.hidden = false;
-  box.querySelector(".job-phase")!.textContent = "failed";
+  box.querySelector(".job-phase")!.textContent = ui.generate.jobStatus.failed;
   box.querySelector(".job-log")!.textContent = message;
   (box.querySelector(".job-cancel") as HTMLElement).hidden = true;
 }
@@ -111,62 +117,67 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   const panel = el<HTMLElement>(`
     <section class="job-panel">
       <div class="job-tabs">
-        <button type="button" data-mode="trip" class="active">Trip</button>
-        <button type="button" data-mode="analyze">Analyze</button>
-        <button type="button" data-mode="organize">Day summaries</button>
+        <button type="button" data-mode="trip" class="active">${ui.generate.tabs.trip}</button>
+        <button type="button" data-mode="analyze">${ui.generate.tabs.analyze}</button>
+        <button type="button" data-mode="organize">${ui.generate.tabs.organize}</button>
+        <button type="button" data-mode="translate">${ui.generate.tabs.translate}</button>
       </div>
 
       <form class="job-form" data-mode="trip">
-        <p class="job-note">
-          Writes the story of a trip from its <em>day summaries</em> — so run Analyze and Day summaries
-          for the range first, or it will have nothing to work from.
-        </p>
+        <p class="job-note">${ui.generate.tripNoteHtml}</p>
         <div class="job-row"></div>
-        <label class="job-field"><span>Notes (optional)</span><textarea rows="3" name="notes" placeholder="Anything worth knowing — plans, who you were with, what the trip was for."></textarea></label>
-        <label class="job-field"><span>Context documents (.txt, .md)</span><input type="file" name="documents" multiple accept=".txt,.md,.markdown" /></label>
-        <button type="submit">Write the narrative</button>
+        <label class="job-field"><span>${ui.generate.notes}</span><textarea rows="3" name="notes" placeholder="${ui.generate.notesPlaceholder}"></textarea></label>
+        <label class="job-field"><span>${ui.generate.documents}</span><input type="file" name="documents" multiple accept=".txt,.md,.markdown" /></label>
+        <button type="submit">${ui.generate.writeNarrative}</button>
       </form>
 
       <form class="job-form" data-mode="analyze" hidden>
         <div class="job-row"></div>
-        <p class="job-note">
-          Captions every photo in the range that has never been looked at, one model call each.
-          <strong>This is the step that costs money</strong> — check the estimate first. Re-running is safe:
-          photos that already have a caption are skipped.
-        </p>
+        <p class="job-note">${ui.generate.analyzeNoteHtml}</p>
         <div class="job-buttons">
-          <button type="button" class="job-estimate">Estimate cost</button>
-          <button type="submit">Analyze</button>
+          <button type="button" class="job-estimate">${ui.generate.estimateCost}</button>
+          <button type="submit">${ui.generate.analyze}</button>
         </div>
       </form>
 
       <form class="job-form" data-mode="organize" hidden>
-        <p class="job-note">
-          Turns the captions from Analyze into day pages: groups each day into the places you stopped,
-          names them, and picks what to show. One text-only model call per day — no images, so it is cheap.
-          <strong>Run this after Analyze and before Trip.</strong>
-        </p>
+        <p class="job-note">${ui.generate.organizeNoteHtml}</p>
         <div class="job-row job-scope">
           <label class="job-field">
-            <span>Months</span>
-            <select name="scope" class="job-select"><option value="">Everything</option></select>
+            <span>${ui.generate.months}</span>
+            <select name="scope" class="job-select"><option value="">${ui.common.everything}</option></select>
           </label>
           <label class="job-check">
             <input type="checkbox" name="force" />
-            <span>Include days that have not changed</span>
+            <span>${ui.generate.includeUnchanged}</span>
           </label>
         </div>
         <div class="job-buttons">
-          <button type="button" class="job-preview">Find days to summarise</button>
+          <button type="button" class="job-preview">${ui.generate.findDays}</button>
         </div>
         <div class="job-plan" hidden></div>
+      </form>
+
+      <form class="job-form" data-mode="translate" hidden>
+        <p class="job-note">${ui.generate.translateNote}</p>
+        <div class="job-row job-scope">
+          <label class="job-field">
+            <span>${ui.generate.whatToTranslate}</span>
+            <select name="translate-scope" class="job-select"></select>
+          </label>
+        </div>
+        <div class="job-buttons">
+          <button type="button" class="job-estimate">${ui.generate.estimate}</button>
+          <button type="submit">${ui.generate.translate}</button>
+        </div>
+        <p class="job-note job-translate-plan" hidden></p>
       </form>
 
       <div class="job-progress" hidden>
         <div class="job-phase"></div>
         <div class="job-bar"><div class="job-bar-fill"></div></div>
         <pre class="job-log"></pre>
-        <button type="button" class="job-cancel">Cancel</button>
+        <button type="button" class="job-cancel">${ui.common.cancel}</button>
       </div>
     </section>
   `);
@@ -176,10 +187,10 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     // date row to fill — and its scope row is not one.
     const row = form.querySelector(".job-row:not(.job-scope)");
     if (!row) continue;
-    row.appendChild(field("From", `<input type="date" name="from" required />`));
-    row.appendChild(field("To", `<input type="date" name="to" required />`));
+    row.appendChild(field(ui.common.from, `<input type="date" name="from" required />`));
+    row.appendChild(field(ui.common.to, `<input type="date" name="to" required />`));
     if (form.dataset.mode === "trip") {
-      row.appendChild(field("Name (blank = let the model propose one)", `<input type="text" name="name" />`));
+      row.appendChild(field(ui.generate.name, `<input type="text" name="name" />`));
     }
   }
 
@@ -231,10 +242,10 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       const plan = await planAnalyze({ from: String(data.get("from")), to: String(data.get("to")) });
       note.textContent =
         plan.total === 0
-          ? "Nothing to analyze in that range — already done, or filtered out as duplicates and withheld screenshots."
-          : `${plan.total} photo(s) across ${plan.months.length} month(s) — about ${(plan.estimatedInputTokens / 1e6).toFixed(2)}M input and ${(plan.estimatedOutputTokens / 1e6).toFixed(2)}M output tokens.`;
+          ? ui.generate.nothingToAnalyze
+          : ui.generate.analyzePlan(plan.total, plan.months.length, plan.estimatedInputTokens, plan.estimatedOutputTokens);
     } catch (err) {
-      note.textContent = `Could not estimate: ${(err as Error).message}`;
+      note.textContent = ui.generate.couldNotEstimate((err as Error).message);
     }
   });
 
@@ -250,7 +261,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       // Not el(): an <option> parsed inside a <div> is dropped on the floor.
       const option = document.createElement("option");
       option.value = m.month;
-      option.textContent = `${m.month} · ${m.photoCount.toLocaleString()} photos`;
+      option.textContent = ui.generate.monthOption(m.month, m.photoCount);
       scope.appendChild(option);
     }
   });
@@ -271,29 +282,26 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   organizeForm.querySelector<HTMLButtonElement>(".job-preview")!.addEventListener("click", async () => {
     const force = organizeForm.querySelector<HTMLInputElement>('input[name="force"]')!.checked;
     planBox.hidden = false;
-    planBox.textContent = "Checking…";
+    planBox.textContent = ui.common.checking;
     try {
       const plan = await planOrganize({ ...(scope.value ? { only: scope.value } : {}), force });
       planBox.replaceChildren();
 
       const lead = el<HTMLParagraphElement>(`<p class="job-plan-lead"></p>`);
-      lead.textContent =
-        plan.rewrite === 0
-          ? "No days need summarising here."
-          : `${plan.rewrite} day${plan.rewrite === 1 ? "" : "s"} can be summarised.`;
+      lead.textContent = plan.rewrite === 0 ? ui.generate.noDays : ui.generate.canSummarise(plan.rewrite);
       planBox.appendChild(lead);
 
       // Every day accounted for, each reason named. "No analyzed photos" is the
       // one worth spelling out: Analyze has to run first, and nothing said so.
-      for (const [n, label] of [
-        [plan.reuse, "already up to date, or outside this scope"],
-        [plan.skippedNoAnalyzed, "have no analyzed photos yet — run Analyze on them first"],
-        [plan.skippedOutOfScope, "outside this scope"],
-        [plan.skippedUndated, "have no usable date"],
-      ] as [number, string][]) {
+      for (const [n, line] of [
+        [plan.reuse, ui.generate.reuse],
+        [plan.skippedNoAnalyzed, ui.generate.noAnalyzed],
+        [plan.skippedOutOfScope, ui.generate.outOfScope],
+        [plan.skippedUndated, ui.generate.undated],
+      ] as [number, (n: number) => string][]) {
         if (n === 0) continue;
         const row = el<HTMLParagraphElement>(`<p class="job-plan-row"></p>`);
-        row.textContent = `${n.toLocaleString()} ${label}`;
+        row.textContent = line(n);
         planBox.appendChild(row);
       }
 
@@ -303,30 +311,30 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       for (const day of plan.days) {
         const row = el<HTMLLabelElement>(`<label class="job-day"><input type="checkbox" checked><span></span></label>`);
         row.querySelector("input")!.value = day.date;
-        row.querySelector("span")!.textContent = `${day.date} · ${day.analyzed} photo${day.analyzed === 1 ? "" : "s"}`;
+        row.querySelector("span")!.textContent = ui.generate.planDay(day.date, day.analyzed);
         list.appendChild(row);
       }
       planBox.appendChild(list);
 
       if (plan.truncated) {
         const more = el<HTMLParagraphElement>(`<p class="job-plan-row"></p>`);
-        more.textContent = "Only the first 300 are listed — narrow it by month to see the rest.";
+        more.textContent = ui.generate.truncated;
         planBox.appendChild(more);
       }
 
       const ticked = () => [...list.querySelectorAll<HTMLInputElement>("input:checked")].map((i) => i.value);
       const actions = el<HTMLDivElement>(`<div class="job-buttons"></div>`);
-      const none = el<HTMLButtonElement>(`<button type="button">Select none</button>`);
+      const none = el<HTMLButtonElement>(`<button type="button">${ui.generate.selectNone}</button>`);
       const go = el<HTMLButtonElement>(`<button type="button" class="job-go"></button>`);
       const label = () => {
         const n = ticked().length;
-        go.textContent = n === 0 ? "Nothing selected" : `Summarise ${n} day${n === 1 ? "" : "s"}`;
+        go.textContent = n === 0 ? ui.generate.nothingSelected : ui.generate.summarise(n);
         go.disabled = n === 0;
       };
       none.addEventListener("click", () => {
         const on = ticked().length > 0;
         list.querySelectorAll<HTMLInputElement>("input").forEach((i) => (i.checked = !on));
-        none.textContent = on ? "Select all" : "Select none";
+        none.textContent = on ? ui.generate.selectAll : ui.generate.selectNone;
         label();
       });
       list.addEventListener("change", label);
@@ -335,8 +343,49 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       planBox.appendChild(actions);
       label();
     } catch (err) {
-      planBox.textContent = `Could not check: ${(err as Error).message}`;
+      planBox.textContent = ui.generate.couldNotCheck((err as Error).message);
     }
+  });
+
+  const translateForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="translate"]')!;
+  const translateScope = translateForm.querySelector<HTMLSelectElement>('select[name="translate-scope"]')!;
+  const translatePlanBox = translateForm.querySelector<HTMLParagraphElement>(".job-translate-plan")!;
+  // Not el(): an <option> parsed inside a <div> is dropped on the floor.
+  for (const [value, label] of [
+    ["all", ui.generate.translateScopes.all],
+    ["day", ui.generate.translateScopes.day],
+    ["captions", ui.generate.translateScopes.captions],
+  ]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    translateScope.appendChild(option);
+  }
+  const translateBody = () => ({ lang: "zh-Hans", scope: translateScope.value as "all" | "day" | "captions" });
+
+  translateForm.querySelector<HTMLButtonElement>(".job-estimate")!.addEventListener("click", async () => {
+    translatePlanBox.hidden = false;
+    translatePlanBox.textContent = ui.common.checking;
+    try {
+      const plan = await planTranslate(translateBody());
+      translatePlanBox.textContent =
+        plan.missing === 0
+          ? ui.generate.nothingToTranslate(plan.strings)
+          : ui.generate.translatePlan(
+              plan.missing,
+              plan.strings,
+              plan.missingChars,
+              plan.estimatedInputTokens,
+              plan.estimatedOutputTokens,
+            );
+    } catch (err) {
+      translatePlanBox.textContent = ui.generate.couldNotEstimate((err as Error).message);
+    }
+  });
+
+  translateForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void start(() => startTranslate(translateBody()));
   });
 
   return panel;

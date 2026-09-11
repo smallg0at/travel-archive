@@ -2,6 +2,8 @@ import type { DayRecord, DaySegment, PhotoRecord } from "@travel-archive/shared"
 import { editDay, getJob, setPhotoTakenAt, startOrganize, type DayPatch } from "./backend";
 import { el } from "./photoUi";
 import { forgetMonths } from "./archiveData";
+import { contentLanguage } from "./contentLang";
+import { ui } from "./i18n";
 
 /**
  * Correcting what the summarizer wrote, from the page it wrote it on.
@@ -34,6 +36,24 @@ export function setArchiveRefresh(fn: () => void): void {
   refresh = fn;
 }
 
+/**
+ * Edits made while reading a translation are that language's edits: they are
+ * saved beside it and shown over it, and the original is left alone.
+ */
+function inReadersLanguage(patch: DayPatch): DayPatch {
+  const lang = contentLanguage();
+  return lang === "en" ? patch : { ...patch, lang };
+}
+
+/**
+ * The text to send for a field. In a translation, emptying a field hands it
+ * back to the translation (`null`) rather than freezing it blank — there is
+ * always a translation to fall back to, where the original has only the model.
+ */
+function fieldPatch(value: string): string | null {
+  return contentLanguage() !== "en" && !value.trim() ? null : value;
+}
+
 function button(label: string, className: string): HTMLButtonElement {
   const b = el<HTMLButtonElement>(`<button type="button" class="${className}"></button>`);
   b.textContent = label;
@@ -49,7 +69,7 @@ function button(label: string, className: string): HTMLButtonElement {
 async function save(action: HTMLButtonElement, patch: () => Promise<void>): Promise<boolean> {
   const label = action.textContent;
   action.disabled = true;
-  action.textContent = "Saving…";
+  action.textContent = ui.common.saving;
   try {
     await patch();
     return true;
@@ -58,7 +78,7 @@ async function save(action: HTMLButtonElement, patch: () => Promise<void>): Prom
     action.disabled = false;
     return false;
   } finally {
-    if (action.textContent === "Saving…") action.textContent = label;
+    if (action.textContent === ui.common.saving) action.textContent = label;
   }
 }
 
@@ -73,18 +93,18 @@ export function addDayControls(header: HTMLElement, day: DayRecord): void {
   if (!available) return;
 
   const bar = el<HTMLDivElement>(`<div class="day-tools"></div>`);
-  const edit = button("Edit", "day-edit-open");
+  const edit = button(ui.common.edit, "day-edit-open");
   bar.appendChild(edit);
   header.appendChild(bar);
 
   const panel = el<HTMLDivElement>(`
     <div class="day-editor" hidden>
       <label class="day-field">
-        <span>Note for the summarizer — kept, and used every time this day is rewritten</span>
-        <textarea rows="2" class="day-note" placeholder="e.g. the 11:00 stop is the the railway museum; the morning was a write-off."></textarea>
+        <span>${ui.edit.noteLabel}</span>
+        <textarea rows="2" class="day-note" placeholder="${ui.edit.notePlaceholder}"></textarea>
       </label>
       <label class="day-field">
-        <span>Day summary</span>
+        <span>${ui.edit.summaryLabel}</span>
         <textarea rows="4" class="day-summary-edit"></textarea>
       </label>
       <div class="day-editor-actions"></div>
@@ -102,21 +122,21 @@ export function addDayControls(header: HTMLElement, day: DayRecord): void {
   };
   reset();
 
-  const saveBtn = button("Save", "day-save");
-  const cancel = button("Cancel", "day-cancel");
-  const regen = button("Rewrite this day", "day-regen");
+  const saveBtn = button(ui.common.save, "day-save");
+  const cancel = button(ui.common.cancel, "day-cancel");
+  const regen = button(ui.edit.rewrite, "day-regen");
   actions.append(saveBtn, cancel, regen);
 
   edit.addEventListener("click", () => {
     panel.hidden = !panel.hidden;
-    edit.textContent = panel.hidden ? "Edit" : "Close";
+    edit.textContent = panel.hidden ? ui.common.edit : ui.common.close;
     if (!panel.hidden) note.focus();
   });
 
   cancel.addEventListener("click", () => {
     reset();
     panel.hidden = true;
-    edit.textContent = "Edit";
+    edit.textContent = ui.common.edit;
   });
 
   saveBtn.addEventListener("click", async () => {
@@ -125,32 +145,32 @@ export function addDayControls(header: HTMLElement, day: DayRecord): void {
     // to prevent.
     const patch: DayPatch = {};
     if ((note.value.trim() || null) !== (day.note ?? null)) patch.note = note.value;
-    if (summary.value !== (day.summary ?? "")) patch.summary = summary.value;
+    if (summary.value !== (day.summary ?? "")) patch.summary = fieldPatch(summary.value);
     if (Object.keys(patch).length === 0) {
       status.hidden = false;
-      status.textContent = "Nothing changed.";
+      status.textContent = ui.edit.nothingChanged;
       return;
     }
 
     const ok = await save(saveBtn, async () => {
-      const result = await editDay(day.date, patch);
+      const result = await editDay(day.date, inReadersLanguage(patch));
       day.note = result.note;
-      if (patch.summary !== undefined) {
+      // A `null` handed the text back to the translation, which only a reload
+      // redraws — so the page keeps what it shows rather than blanking it.
+      if (patch.summary !== undefined && patch.summary !== null) {
         day.summary = summary.value;
         const shown = header.querySelector(".day-summary");
         if (shown) shown.textContent = summary.value;
       }
       status.hidden = false;
-      status.textContent = result.stale
-        ? "Saved. The note has changed, so the next day-summaries run will rewrite this day — or press Rewrite this day."
-        : "Saved.";
+      status.textContent = result.stale ? ui.edit.savedStale : ui.edit.saved;
     });
-    if (ok) saveBtn.textContent = "Save";
+    if (ok) saveBtn.textContent = ui.common.save;
   });
 
   regen.addEventListener("click", async () => {
     status.hidden = false;
-    status.textContent = "Rewriting…";
+    status.textContent = ui.edit.rewriting;
     regen.disabled = true;
     try {
       // Forced: pressing this button *is* the intent to pay for a rewrite, and
@@ -163,13 +183,15 @@ export function addDayControls(header: HTMLElement, day: DayRecord): void {
       }
       if (job.status !== "done") {
         status.textContent =
-          job.status === "cancelled" ? "Rewrite cancelled." : `Rewrite failed: ${job.error ?? "unknown error"}`;
+          job.status === "cancelled"
+            ? ui.edit.rewriteCancelled
+            : ui.edit.rewriteFailed(job.error ?? ui.edit.unknownError);
         return;
       }
-      status.textContent = "Rewritten.";
+      status.textContent = ui.edit.rewritten;
       refresh?.();
     } catch (err) {
-      status.textContent = `Rewrite failed: ${(err as Error).message}`;
+      status.textContent = ui.edit.rewriteFailed((err as Error).message);
     } finally {
       regen.disabled = false;
     }
@@ -190,13 +212,13 @@ export function addStopControls(head: HTMLElement, section: HTMLElement, date: s
   const anchorPhotoId = segment.photoIds[0];
   if (!anchorPhotoId) return;
 
-  const open = button("Rename", "stop-edit-open");
+  const open = button(ui.edit.rename, "stop-edit-open");
   head.appendChild(open);
 
   const editor = el<HTMLDivElement>(`
     <div class="stop-editor" hidden>
       <input type="text" class="stop-title-edit" />
-      <textarea rows="2" class="stop-summary-edit" placeholder="What happened here (optional)"></textarea>
+      <textarea rows="2" class="stop-summary-edit" placeholder="${ui.edit.stopSummaryPlaceholder}"></textarea>
       <div class="stop-editor-actions"></div>
       <p class="stop-editor-note" hidden></p>
     </div>
@@ -212,18 +234,18 @@ export function addStopControls(head: HTMLElement, section: HTMLElement, date: s
   };
   reset();
 
-  const saveBtn = button("Save", "stop-save");
-  const cancel = button("Cancel", "stop-cancel");
+  const saveBtn = button(ui.common.save, "stop-save");
+  const cancel = button(ui.common.cancel, "stop-cancel");
   actions.append(saveBtn, cancel);
 
   const close = () => {
     editor.hidden = true;
-    open.textContent = "Rename";
+    open.textContent = ui.edit.rename;
   };
 
   open.addEventListener("click", () => {
     editor.hidden = !editor.hidden;
-    open.textContent = editor.hidden ? "Rename" : "Close";
+    open.textContent = editor.hidden ? ui.edit.rename : ui.common.close;
     if (!editor.hidden) title.focus();
   });
   cancel.addEventListener("click", () => {
@@ -233,21 +255,21 @@ export function addStopControls(head: HTMLElement, section: HTMLElement, date: s
 
   saveBtn.addEventListener("click", async () => {
     const stop: NonNullable<DayPatch["stops"]>[number] = { anchorPhotoId };
-    if (title.value !== segment.title) stop.title = title.value;
-    if (summary.value !== (segment.summary ?? "")) stop.summary = summary.value;
+    if (title.value !== segment.title) stop.title = fieldPatch(title.value);
+    if (summary.value !== (segment.summary ?? "")) stop.summary = fieldPatch(summary.value);
     if (stop.title === undefined && stop.summary === undefined) {
       status.hidden = false;
-      status.textContent = "Nothing changed.";
+      status.textContent = ui.edit.nothingChanged;
       return;
     }
 
     const ok = await save(saveBtn, async () => {
-      await editDay(date, { stops: [stop] });
-      if (stop.title !== undefined) {
+      await editDay(date, inReadersLanguage({ stops: [stop] }));
+      if (stop.title !== undefined && stop.title !== null) {
         segment.title = title.value;
         section.querySelector(".stop-title")!.textContent = title.value;
       }
-      if (stop.summary !== undefined) {
+      if (stop.summary !== undefined && stop.summary !== null) {
         segment.summary = summary.value;
         const shown = section.querySelector(".stop-summary");
         if (shown) shown.textContent = summary.value;
@@ -320,7 +342,7 @@ export function isRetimable(photo: PhotoRecord): boolean {
 export function fillHours(select: HTMLSelectElement): void {
   const unknown = document.createElement("option");
   unknown.value = "";
-  unknown.textContent = "Not known";
+  unknown.textContent = ui.time.notKnown;
   select.appendChild(unknown);
   for (let hour = 0; hour < 24; hour++) {
     const option = document.createElement("option");
@@ -338,8 +360,8 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
     <div class="photo-time">
       <button type="button" class="photo-time-open"></button>
       <div class="photo-time-editor" hidden>
-        <label><span>Date</span><input type="date" class="photo-time-date" /></label>
-        <label><span>Time (hour)</span><select class="photo-time-clock"></select></label>
+        <label><span>${ui.common.date}</span><input type="date" class="photo-time-date" /></label>
+        <label><span>${ui.time.hourLabel}</span><select class="photo-time-clock"></select></label>
         <div class="photo-time-actions"></div>
         <p class="photo-time-note"></p>
       </div>
@@ -352,7 +374,7 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   const status = wrap.querySelector<HTMLParagraphElement>(".photo-time-note")!;
   const actions = wrap.querySelector<HTMLDivElement>(".photo-time-actions")!;
 
-  open.textContent = photo.timeSuspect ? "Set the time" : "Change the time";
+  open.textContent = photo.timeSuspect ? ui.time.set : ui.time.change;
 
   // Local, because the line right above this control is local — `takenAt` is a
   // UTC instant and the viewer formats it for the reader. Prefilling from the
@@ -365,14 +387,13 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   // A suspect clock is a fabricated midnight, so offering it as the starting
   // value would invite confirming a number nothing measured.
   clock.value = photo.timeSuspect ? "" : `${pad(local.getHours())}:00`;
-  status.textContent =
-    "Renames the file in OneDrive, so it survives a rescan. To set several at once, Ctrl-click them in the day's grid.";
+  status.textContent = ui.time.note;
 
-  const saveBtn = button("Save", "photo-time-save");
+  const saveBtn = button(ui.common.save, "photo-time-save");
   actions.appendChild(saveBtn);
 
   editor.hidden = !timeEditorOpen;
-  if (lastTimeSave?.id === photo.id) status.textContent = `Saved as ${lastTimeSave.fileName}.`;
+  if (lastTimeSave?.id === photo.id) status.textContent = ui.time.savedAs(lastTimeSave.fileName);
 
   open.addEventListener("click", () => {
     timeEditorOpen = editor.hidden;
@@ -382,7 +403,7 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
 
   saveBtn.addEventListener("click", async () => {
     if (!date.value) {
-      status.textContent = "Pick a date first.";
+      status.textContent = ui.time.pickDate;
       return;
     }
     // Back to the instant the archive stores. With no time there is nothing to

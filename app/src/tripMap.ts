@@ -1,4 +1,6 @@
 import type { DayRecord, PhotoRecord, TripRecord } from "@travel-archive/shared";
+import { loc } from "./contentLang";
+import { ui } from "./i18n";
 
 /**
  * The trip as a map: which cities, in what order.
@@ -260,7 +262,7 @@ export async function renderTripMap(
 
   const root = document.createElement("div");
   root.className = "trip-map";
-  root.appendChild(Object.assign(document.createElement("div"), { className: "trip-map-loading", textContent: "Loading map…" }));
+  root.appendChild(Object.assign(document.createElement("div"), { className: "trip-map-loading", textContent: ui.map.loading }));
 
   // Dynamic, so the basemap is never fetched by a phone browsing the album and
   // never delays first paint.
@@ -319,7 +321,7 @@ export async function renderTripMap(
   cities.push(...kept);
 
   root.replaceChildren();
-  const canvas = svgEl("svg", { class: "trip-map-svg", role: "img", "aria-label": `Cities visited on ${trip.name}` });
+  const canvas = svgEl("svg", { class: "trip-map-svg", role: "img", "aria-label": ui.map.label(loc(trip.name)) });
   const world = svgEl("g");
 
   // Bounding boxes, computed once, so the basemap can be culled to the view.
@@ -467,12 +469,12 @@ export async function renderTripMap(
     group.appendChild(circle);
 
     const label = svgEl("text", { x: x * 1e5, y: y * 1e5, "text-anchor": "middle" });
-    label.textContent = city.name || `${city.photoCount} photos`;
+    label.textContent = city.name || ui.common.photos(city.photoCount);
     group.appendChild(label);
     labelNodes.set(i, label);
 
     const title = svgEl("title");
-    title.textContent = `${city.name || "Unnamed stop"} — ${city.photoCount} photos`;
+    title.textContent = `${city.name || ui.map.unnamed} — ${ui.common.photos(city.photoCount)}`;
     group.appendChild(title);
 
     if (city.anchor) {
@@ -587,12 +589,12 @@ export async function renderTripMap(
   const expand = document.createElement("button");
   expand.type = "button";
   expand.className = "trip-map-expand";
-  expand.textContent = "Expand";
+  expand.textContent = ui.map.expand;
 
   const setExpanded = (on: boolean) => {
     root.classList.toggle("is-expanded", on);
     document.body.classList.toggle("map-expanded", on);
-    expand.textContent = on ? "Close" : "Expand";
+    expand.textContent = on ? ui.common.close : ui.map.expand;
     // The container changes shape, so the fitted view has to be recomputed or
     // the map sits letterboxed inside its old aspect ratio.
     requestAnimationFrame(() => {
@@ -614,7 +616,7 @@ export async function renderTripMap(
   const reset = document.createElement("button");
   reset.type = "button";
   reset.className = "trip-map-reset";
-  reset.textContent = "Fit";
+  reset.textContent = ui.common.fit;
   reset.addEventListener("click", () => {
     Object.assign(view, home);
     apply();

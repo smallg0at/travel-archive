@@ -98,6 +98,11 @@ export interface SummarizeDayInput {
    * and should not be dressed up as an activity.
    */
   note: string | null;
+  /**
+   * A second language to write the same page in, natively, in the same call —
+   * see altLanguage.ts. Absent or null for English only.
+   */
+  alsoIn?: string | null;
 }
 
 export interface SegmentResult {
@@ -107,9 +112,19 @@ export interface SegmentResult {
   highlights: { size: "full" | "half" | "normal"; title: string; description: string | null; photoIds: string[]; documentPhotoIds: string[]; documentTranslation: string | null }[];
 }
 
+/**
+ * Text the model wrote in a second language beside the English, as
+ * (English, other) pairs — stored keyed by the English, like a translation.
+ */
+export interface NativeText {
+  lang: string;
+  pairs: [string, string][];
+}
+
 export interface DaySummaryResult {
   summary: string;
   segments: SegmentResult[];
+  native?: NativeText | null;
 }
 
 /**
@@ -146,6 +161,8 @@ export interface SummarizeTripInput {
   /** Free text the user pasted — typically an LLM trip-planning conversation. */
   notes: string | null;
   documents: { name: string; text: string }[];
+  /** A second language to write the name, narrative and places in too. */
+  alsoIn?: string | null;
 }
 
 export interface TripSummaryResult {
@@ -154,6 +171,26 @@ export interface TripSummaryResult {
   narrative: string;
   /** Places actually visited — transit stops excluded. */
   places: string[];
+  usage?: CallUsage;
+  native?: NativeText | null;
+}
+
+/** One text to translate. `kind` tells the model what it is — a caption, a title, a placard. */
+export interface TranslateItem {
+  key: string;
+  text: string;
+  kind: string;
+}
+
+export interface TranslateInput {
+  sourceLang: string;
+  targetLang: string;
+  items: TranslateItem[];
+}
+
+export interface TranslateResult {
+  /** Keyed like the input. Anything missing is simply not translated this time. */
+  items: { key: string; text: string }[];
   usage?: CallUsage;
 }
 
@@ -169,4 +206,6 @@ export interface AiProvider {
   captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult>;
   summarizeDay(input: SummarizeDayInput): Promise<DaySummaryResult>;
   summarizeTrip(input: SummarizeTripInput): Promise<TripSummaryResult>;
+  /** Text only, no images: the cheap way to put existing text into another language. */
+  translate(input: TranslateInput): Promise<TranslateResult>;
 }

@@ -18,6 +18,8 @@ import { el } from "./photoUi";
 import { renderDensityControl, getCachedIndex, formatMonthLabel } from "./album";
 import { resetSidebarWidth } from "./chrome";
 import { renderThemeControl } from "./theme";
+import { renderContentLanguageControl } from "./contentLang";
+import { fmtDate, num, ui } from "./i18n";
 
 /**
  * Settings, as a page rather than a popup.
@@ -33,14 +35,7 @@ import { renderThemeControl } from "./theme";
  * perfectly readable without one.
  */
 
-const STATE_LABEL: Record<SyncState, string> = {
-  "in-sync": "In sync",
-  behind: "OneDrive has newer changes",
-  ahead: "This device has changes not uploaded",
-  conflict: "Both changed since the last sync",
-  "never-synced": "Never synced",
-  offline: "Not signed in",
-};
+const STATE_LABEL: Record<SyncState, string> = ui.settings.syncState;
 
 /** Green for settled, amber for "something to do", red only for a real decision. */
 const STATE_TONE: Record<SyncState, string> = {
@@ -55,12 +50,12 @@ const STATE_TONE: Record<SyncState, string> = {
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 function relative(iso: string | null): string {
-  if (!iso) return "never";
+  if (!iso) return ui.settings.never;
   const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.round(seconds / 60)} min ago`;
-  if (seconds < 86400) return `${Math.round(seconds / 3600)} h ago`;
-  return new Date(iso).toLocaleDateString();
+  if (seconds < 60) return ui.settings.justNow;
+  if (seconds < 3600) return ui.settings.minutesAgo(Math.round(seconds / 60));
+  if (seconds < 86400) return ui.settings.hoursAgo(Math.round(seconds / 3600));
+  return fmtDate(new Date(iso), {});
 }
 
 function section(title: string): HTMLElement {
@@ -104,16 +99,15 @@ function conflictBlock(status: SyncStatus, rerun: (r: ConflictChoice) => void): 
       <div class="set-conflict-actions"></div>
     </div>
   `);
-  box.querySelector(".set-conflict-lead")!.textContent =
-    "Both this device and OneDrive changed since the last sync. Choose which copy survives — this is not merged.";
+  box.querySelector(".set-conflict-lead")!.textContent = ui.settings.conflictLead;
 
   const sides = box.querySelector(".set-conflict-sides")!;
-  sides.appendChild(row("This device", relative(status.localGeneratedAt)));
-  sides.appendChild(row("OneDrive", relative(status.remoteLastModified)));
+  sides.appendChild(row(ui.settings.thisDevice, relative(status.localGeneratedAt)));
+  sides.appendChild(row(ui.settings.oneDrive, relative(status.remoteLastModified)));
 
   const actions = box.querySelector(".set-conflict-actions")!;
-  actions.appendChild(button("Upload mine (overwrites OneDrive)", () => rerun("upload-mine"), "danger"));
-  actions.appendChild(button("Replace mine (discards local changes)", () => rerun("replace-mine"), "danger"));
+  actions.appendChild(button(ui.settings.uploadMine, () => rerun("upload-mine"), "danger"));
+  actions.appendChild(button(ui.settings.replaceMine, () => rerun("replace-mine"), "danger"));
   return box;
 }
 
@@ -152,10 +146,10 @@ function followJob(job: JobRecord, line: HTMLElement, busy: HTMLButtonElement | 
     const p = j.progress;
     line.textContent =
       j.status === "running" || j.status === "queued"
-        ? `${p.message ?? p.phase}${p.total ? ` — ${p.done} of ${p.total}` : ""}`
+        ? `${p.message ?? p.phase}${p.total ? ui.settings.ofTotal(p.done, p.total) : ""}`
         : j.status === "failed"
-          ? `Failed: ${j.error}`
-          : (p.message ?? "Finished.");
+          ? ui.settings.failed(j.error ?? ui.edit.unknownError)
+          : (p.message ?? ui.settings.finished);
     if (j.status !== "running" && j.status !== "queued") {
       stop();
       if (busy) busy.disabled = false;
@@ -225,23 +219,19 @@ export function releaseSettings(): void {
 export async function showSettings(): Promise<void> {
   const content = document.getElementById("content")!;
   releaseSettings();
-  content.replaceChildren(el(`<div class="loading">Loading settings…</div>`));
+  content.replaceChildren(el(`<div class="loading">${ui.settings.loading}</div>`));
 
   // The cached status costs no Graph call, so the page paints from disk. The
   // checked one is fetched below and swapped in when it lands.
   const [sync, archive] = await Promise.all([syncStatus({ cached: true }), archiveStatus()]);
   const frag = document.createDocumentFragment();
-  frag.appendChild(el(`<div class="month-heading"><h1>Settings</h1><span></span></div>`));
+  frag.appendChild(el(`<div class="month-heading"><h1>${ui.nav.settings}</h1><span></span></div>`));
 
   if (!sync) {
     // No backend. Not an error state: the archive reads from OneDrive and the
     // phone lives here permanently.
-    const none = section("Local server");
-    none.querySelector(".set-body")!.append(
-      el(
-        `<p class="set-note">No local server is running, so the archive is being read directly from OneDrive and images are cached in this browser only. Sync, pinning and generation need the desktop app.</p>`,
-      ),
-    );
+    const none = section(ui.settings.localServer);
+    none.querySelector(".set-body")!.append(el(`<p class="set-note">${ui.settings.noServer}</p>`));
     frag.appendChild(none);
     content.replaceChildren(frag);
     return;
@@ -273,15 +263,15 @@ function applyState(node: HTMLElement, status: SyncStatus): void {
 }
 
 function librarySection(archive: ArchiveStatus | null): HTMLElement {
-  const s = section("Library");
+  const s = section(ui.settings.library);
   const body = s.querySelector(".set-body")!;
-  const note = el<HTMLParagraphElement>(`<p class="set-note">Not signed in.</p>`);
+  const note = el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.notSignedIn}</p>`);
   const rows = {
-    photos: row("Photos", ""),
-    analyzed: row("Described by AI", ""),
-    days: row("Days summarised", ""),
-    sections: row("Trips and months", ""),
-    schema: row("Schema version", ""),
+    photos: row(ui.settings.photos, ""),
+    analyzed: row(ui.settings.analyzed, ""),
+    days: row(ui.settings.days, ""),
+    sections: row(ui.settings.sections, ""),
+    schema: row(ui.settings.schema, ""),
   };
   body.append(note, ...Object.values(rows));
 
@@ -290,10 +280,10 @@ function librarySection(archive: ArchiveStatus | null): HTMLElement {
     note.hidden = signedIn;
     for (const r of Object.values(rows)) r.hidden = !signedIn;
     if (!next?.signedIn) return;
-    setRowValue(rows.photos, next.totals.photos.toLocaleString());
-    setRowValue(rows.analyzed, next.totals.analyzed.toLocaleString());
-    setRowValue(rows.days, next.totals.days.toLocaleString());
-    setRowValue(rows.sections, next.totals.sections.toLocaleString());
+    setRowValue(rows.photos, num(next.totals.photos));
+    setRowValue(rows.analyzed, num(next.totals.analyzed));
+    setRowValue(rows.days, num(next.totals.days));
+    setRowValue(rows.sections, num(next.totals.sections));
     setRowValue(rows.schema, `v${next.schemaVersion}`);
   };
   update(archive);
@@ -309,18 +299,18 @@ function librarySection(archive: ArchiveStatus | null): HTMLElement {
  * routinely. Generate is for the passes that cost money.
  */
 function scanSection(status: SyncStatus): HTMLElement {
-  const s = section("Scan");
+  const s = section(ui.settings.scan);
   const body = s.querySelector(".set-body")!;
 
-  const lastScan = row("Last scanned", relative(status.lastScanAt));
+  const lastScan = row(ui.settings.lastScanned, relative(status.lastScanAt));
   body.appendChild(lastScan);
 
-  const modeRow = el<HTMLDivElement>(`<div class="set-row"><span>What to scan</span></div>`);
+  const modeRow = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.whatToScan}</span></div>`);
   const mode = el<HTMLSelectElement>(`
     <select class="set-select">
-      <option value="incremental">Since the last scan</option>
-      <option value="full">The whole library</option>
-      <option value="range">A month range</option>
+      <option value="incremental">${ui.settings.scanModes.incremental}</option>
+      <option value="full">${ui.settings.scanModes.full}</option>
+      <option value="range">${ui.settings.scanModes.range}</option>
     </select>
   `);
   modeRow.appendChild(mode);
@@ -328,8 +318,8 @@ function scanSection(status: SyncStatus): HTMLElement {
 
   const range = el<HTMLDivElement>(`
     <div class="set-scan-range" hidden>
-      <label class="set-scan-field"><span>From</span><input type="month" name="from" /></label>
-      <label class="set-scan-field"><span>To</span><input type="month" name="to" /></label>
+      <label class="set-scan-field"><span>${ui.common.from}</span><input type="month" name="from" /></label>
+      <label class="set-scan-field"><span>${ui.common.to}</span><input type="month" name="to" /></label>
     </div>
   `);
   body.appendChild(range);
@@ -340,11 +330,7 @@ function scanSection(status: SyncStatus): HTMLElement {
   // Said plainly because it is the one surprise in how scanning works: a run
   // only reaps photos deleted from OneDrive inside the folders it listed, so
   // an incremental run leaves deletions in older months in place.
-  const NOTES: Record<string, string> = {
-    incremental: "Scans from the month of the last scan onwards. Photos deleted from OneDrive in earlier months are not noticed — run a full scan occasionally to catch those.",
-    full: "Lists every month folder. The only mode that notices photos deleted from OneDrive anywhere in the library.",
-    range: "Scans only the months you pick. Photos deleted outside that range are left alone.",
-  };
+  const NOTES: Record<string, string> = ui.settings.scanNotes;
   const applyMode = () => {
     range.hidden = mode.value !== "range";
     note.textContent = NOTES[mode.value] ?? "";
@@ -362,12 +348,12 @@ function scanSection(status: SyncStatus): HTMLElement {
   };
 
   const run = button(
-    "Scan now",
+    ui.settings.scanNow,
     () => {
       const from = range.querySelector<HTMLInputElement>('input[name="from"]')!.value.trim();
       const to = range.querySelector<HTMLInputElement>('input[name="to"]')!.value.trim();
       progress.hidden = false;
-      progress.textContent = "Starting…";
+      progress.textContent = ui.common.starting;
       run.disabled = true;
       void startScan({
         mode: mode.value as ScanMode,
@@ -411,13 +397,13 @@ function scanSection(status: SyncStatus): HTMLElement {
  * returns it, so this shows "saved" rather than a value.
  */
 function generationSection(): HTMLElement {
-  const s = section("Generation");
+  const s = section(ui.settings.generation);
   const body = s.querySelector(".set-body")!;
 
   const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
   body.appendChild(state);
 
-  const providerRow = el<HTMLDivElement>(`<div class="set-row"><span>AI provider</span></div>`);
+  const providerRow = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.provider}</span></div>`);
   const provider = el<HTMLSelectElement>(`
     <select class="set-select">
       <option value="anthropic">Claude (Anthropic)</option>
@@ -429,7 +415,7 @@ function generationSection(): HTMLElement {
 
   const keyField = el<HTMLLabelElement>(`
     <label class="set-scan-field set-key-field">
-      <span>API key</span>
+      <span>${ui.settings.apiKey}</span>
       <input type="password" name="key" autocomplete="off" spellcheck="false" />
     </label>
   `);
@@ -442,19 +428,19 @@ function generationSection(): HTMLElement {
 
   const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
   const save = button(
-    "Save",
+    ui.common.save,
     () => {
       const value = key.value.trim();
       const patch: Record<string, string> = { AI_PROVIDER: provider.value };
       if (value) patch[provider.value === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"] = value;
       status.hidden = false;
-      status.textContent = "Saving…";
+      status.textContent = ui.common.saving;
       save.disabled = true;
       void saveConfig(patch)
         .then((next) => {
           // Cleared on success so a key is never left sitting in the DOM.
           key.value = "";
-          status.textContent = next.ready ? "Saved. Generation is ready." : "Saved.";
+          status.textContent = next.ready ? ui.settings.savedReady : ui.settings.saved;
           apply(next);
         })
         .catch((err: Error) => (status.textContent = err.message))
@@ -484,7 +470,7 @@ function generationSection(): HTMLElement {
   const render = () => {
     const selected = provider.value;
     if (!latest) {
-      state.textContent = "Unavailable";
+      state.textContent = ui.settings.unavailable;
       state.className = "set-sync-state tone-muted";
       return;
     }
@@ -493,13 +479,13 @@ function generationSection(): HTMLElement {
 
     state.textContent = hasKey
       ? selected === latest.provider
-        ? "Ready"
-        : "Ready once saved"
-      : "No API key — generation is unavailable";
+        ? ui.settings.ready
+        : ui.settings.readyOnceSaved
+      : ui.settings.noKey;
     state.className = `set-sync-state tone-${ready ? "ok" : hasKey ? "warn" : "warn"}`;
 
-    key.placeholder = hasKey ? "Saved — type a new key to replace it" : "Paste your API key";
-    note.textContent = `Stored in ${latest.path}. Only generation needs this; browsing and reading the archive do not.`;
+    key.placeholder = hasKey ? ui.settings.keySaved : ui.settings.keyPaste;
+    note.textContent = ui.settings.keyNote(latest.path);
 
     // dotenv never overrides a real environment variable, so a key saved here
     // would work until the next restart and then quietly lose to the machine's
@@ -508,7 +494,7 @@ function generationSection(): HTMLElement {
     const shadowed = latest.shadowed.includes(name);
     warning.hidden = !shadowed;
     if (shadowed) {
-      warning.textContent = `${name} is also set as a system environment variable, which wins over this file when the app restarts. Change it there, or unset it, for a key saved here to survive.`;
+      warning.textContent = ui.settings.shadowed(name);
     }
   };
 
@@ -528,7 +514,7 @@ function generationSection(): HTMLElement {
 }
 
 function syncSection(status: SyncStatus): HTMLElement {
-  const s = section("Sync");
+  const s = section(ui.settings.sync);
   const body = s.querySelector(".set-body")!;
 
   const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
@@ -537,12 +523,12 @@ function syncSection(status: SyncStatus): HTMLElement {
 
   // A stale answer is labelled rather than silently presented as current: it is
   // the last state measured, not one just confirmed against OneDrive.
-  const checking = el<HTMLParagraphElement>(`<p class="set-note">Checking OneDrive…</p>`);
+  const checking = el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.checkingOneDrive}</p>`);
   checking.hidden = !status.stale;
   body.appendChild(checking);
 
-  const checked = row("Last checked", relative(status.checkedAt));
-  const synced = row("Last synced", relative(status.syncedAt));
+  const checked = row(ui.settings.lastChecked, relative(status.checkedAt));
+  const synced = row(ui.settings.lastSynced, relative(status.syncedAt));
   body.appendChild(checked);
   body.appendChild(synced);
 
@@ -557,7 +543,7 @@ function syncSection(status: SyncStatus): HTMLElement {
 
   const run = (resolve?: ConflictChoice) => {
     progress.hidden = false;
-    progress.textContent = "Starting…";
+    progress.textContent = ui.common.starting;
     void startSync(resolve ? { resolve } : {})
       .then((job) => followJob(job, progress, null, afterSync))
       .catch((err: Error) => (progress.textContent = err.message));
@@ -566,8 +552,8 @@ function syncSection(status: SyncStatus): HTMLElement {
   // Same reattach as the scan section: a sync outlives a visit to this page.
   followRunningJob("sync", progress, null, afterSync);
 
-  actions.appendChild(button("Check now", () => void refreshStatus(), ""));
-  const syncNow = button("Sync now", () => run(), "primary");
+  actions.appendChild(button(ui.settings.checkNow, () => void refreshStatus(), ""));
+  const syncNow = button(ui.settings.syncNow, () => run(), "primary");
   body.appendChild(actions);
   body.appendChild(conflictHost);
   body.appendChild(progress);
@@ -594,18 +580,14 @@ function syncSection(status: SyncStatus): HTMLElement {
 }
 
 function offlineSection(status: SyncStatus): HTMLElement {
-  const s = section("Kept on this device");
+  const s = section(ui.settings.kept);
   const body = s.querySelector(".set-body")!;
   const list = el<HTMLDivElement>(`<div class="set-pins"></div>`);
   body.appendChild(list);
 
   const renderPins = (pins: SyncStatus["pins"]) => {
     if (pins.length === 0) {
-      list.replaceChildren(
-        el(
-          `<p class="set-note">Nothing is pinned. Pin a trip or a month in the sidebar to keep its photos on this device — they are fetched when you sync and are never evicted to make room.</p>`,
-        ),
-      );
+      list.replaceChildren(el(`<p class="set-note">${ui.settings.nothingPinned}</p>`));
       return;
     }
     const rows = pins.map((pin) => {
@@ -618,9 +600,10 @@ function offlineSection(status: SyncStatus): HTMLElement {
         pin.kind === "trip"
           ? (getCachedIndex()?.sections.find((s) => s.id === pin.id)?.name ?? pin.id)
           : formatMonthLabel(pin.id);
-      r.querySelector("span")!.textContent = `${pin.kind === "trip" ? "Trip" : "Month"} · ${label}${pin.originals ? " · with originals" : ""}`;
+      r.querySelector("span")!.textContent =
+        `${pin.kind === "trip" ? ui.settings.pinTrip : ui.settings.pinMonth} · ${label}${pin.originals ? ` · ${ui.settings.withOriginals}` : ""}`;
       r.appendChild(
-        button("Unpin", () => {
+        button(ui.settings.unpin, () => {
           // The server answers with the new pin list, so the section can be
           // rebuilt from that alone rather than reloading the whole page.
           void setPin({ ...pin, pinned: false }).then((res) => renderPins(res.pins));
@@ -635,7 +618,7 @@ function offlineSection(status: SyncStatus): HTMLElement {
   updaters.push((next) => renderPins(next.pins));
 
   const auto = el<HTMLLabelElement>(
-    `<label class="set-check"><input type="checkbox"><span>Check for changes when the app starts</span></label>`,
+    `<label class="set-check"><input type="checkbox"><span>${ui.settings.autoCheck}</span></label>`,
   );
   const box = auto.querySelector("input") as HTMLInputElement;
   box.checked = true;
@@ -645,32 +628,39 @@ function offlineSection(status: SyncStatus): HTMLElement {
 }
 
 function appearanceSection(): HTMLElement {
-  const s = section("Appearance");
+  const s = section(ui.settings.appearance);
   const body = s.querySelector(".set-body")!;
 
-  const theme = el<HTMLDivElement>(`<div class="set-row"><span>Theme</span></div>`);
+  const theme = el<HTMLDivElement>(`<div class="set-row"><span>${ui.theme.label}</span></div>`);
   theme.appendChild(renderThemeControl());
   body.appendChild(theme);
 
-  const density = el<HTMLDivElement>(`<div class="set-row"><span>Thumbnail size</span></div>`);
+  const density = el<HTMLDivElement>(`<div class="set-row"><span>${ui.album.thumbnailSize}</span></div>`);
   density.appendChild(renderDensityControl());
   body.appendChild(density);
 
-  const sidebar = el<HTMLDivElement>(`<div class="set-row"><span>Sidebar width</span></div>`);
-  sidebar.appendChild(button("Reset", resetSidebarWidth));
+  // One setting for the interface and the archive's own text — captions, day
+  // pages, trips. That text needs translating from Generate first; anything
+  // without a translation shows as written.
+  const language = el<HTMLDivElement>(`<div class="set-row"><span>${ui.language.label}</span></div>`);
+  language.appendChild(renderContentLanguageControl(ui.language.label));
+  body.appendChild(language);
+
+  const sidebar = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.sidebarWidth}</span></div>`);
+  sidebar.appendChild(button(ui.common.reset, resetSidebarWidth));
   body.appendChild(sidebar);
   return s;
 }
 
 function storageSection(status: SyncStatus): HTMLElement {
-  const s = section("Local storage");
+  const s = section(ui.settings.storage);
   const body = s.querySelector(".set-body")!;
 
-  const files = (n: number) => `${n.toLocaleString()} file${n === 1 ? "" : "s"}`;
-  const metadata = row("Archive metadata", "");
-  const thumbs = row("Thumbnails", "");
-  const originals = row("Full-size photos", "");
-  const total = row("Total", "");
+  const files = ui.settings.files;
+  const metadata = row(ui.settings.metadata, "");
+  const thumbs = row(ui.settings.thumbnails, "");
+  const originals = row(ui.settings.originals, "");
+  const total = row(ui.settings.total, "");
   body.append(metadata, thumbs, originals, total);
 
   const update = (next: SyncStatus) => {
@@ -686,8 +676,8 @@ function storageSection(status: SyncStatus): HTMLElement {
   const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
   // Pinned files survive: clearing a cache must not silently undo "keep this".
   for (const [label, category] of [
-    ["Clear thumbnails", "thumbnails"],
-    ["Clear full-size photos", "originals"],
+    [ui.settings.clearThumbnails, "thumbnails"],
+    [ui.settings.clearOriginals, "originals"],
   ] as const) {
     actions.appendChild(
       button(label, () => {
@@ -697,7 +687,7 @@ function storageSection(status: SyncStatus): HTMLElement {
   }
   body.appendChild(actions);
   body.appendChild(
-    el(`<p class="set-note">Pinned items are kept even when clearing. Anything else is fetched again when needed.</p>`),
+    el(`<p class="set-note">${ui.settings.storageNote}</p>`),
   );
   return s;
 }

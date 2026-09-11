@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { dirname } from "node:path";
-import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
+import type { ArchiveIndexFile, PhotoShard, TranslationFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { downloadMetadataJson, uploadMetadataJson } from "./graph.js";
 import { env } from "./env.js";
@@ -114,6 +114,44 @@ async function readLocal<T>(fileName: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/* --- Content in a second language (see TranslationFile) ------------------ */
+
+/** `index` for day and trip text; otherwise a `yyyy-mm` month of captions. */
+const translationFile = (lang: string, part: string) =>
+  part === "index" ? `i18n/${lang}/index.json` : `i18n/${lang}/photos/${part}.json`;
+
+export function emptyTranslations(lang: string, part: string): TranslationFile {
+  const file: TranslationFile = { lang, sourceLang: "en", generatedAt: new Date().toISOString(), entries: {} };
+  if (part === "index") {
+    file.parts = [];
+    file.owner = {};
+  }
+  return file;
+}
+
+/** For write paths: from Graph, like `loadShard`. Empty when the file does not exist yet. */
+export async function loadTranslations(token: string, lang: string, part: string): Promise<TranslationFile> {
+  const existing = await downloadMetadataJson<TranslationFile>(token, env.metadataFolder, translationFile(lang, part));
+  return existing ?? emptyTranslations(lang, part);
+}
+
+/** The mirror's copy alone, or null — for a read that must not cost a round trip per file. */
+export async function readTranslationsLocal(lang: string, part: string): Promise<TranslationFile | null> {
+  return readLocal<TranslationFile>(translationFile(lang, part));
+}
+
+/** Read-only load: the mirror if it has it, Graph if not. */
+export async function loadTranslationsForReading(token: string, lang: string, part: string): Promise<TranslationFile> {
+  return (await readTranslationsLocal(lang, part)) ?? (await loadTranslations(token, lang, part));
+}
+
+/** Local first, then upload — the same order as `saveShard`, so the mirror is never behind OneDrive. */
+export async function saveTranslations(token: string, lang: string, part: string, file: TranslationFile): Promise<void> {
+  file.generatedAt = new Date().toISOString();
+  await writeLocal(translationFile(lang, part), file);
+  await uploadMetadataJson(token, env.metadataFolder, translationFile(lang, part), file);
 }
 
 /** Read-only shard load: the mirror if it has it, Graph if not. */

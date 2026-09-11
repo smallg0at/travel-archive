@@ -1,6 +1,7 @@
 import { hydrateAll } from "./photoUi";
 import { cachedSizes } from "./thumbCache";
 import { thumbnailSource } from "./photoSource";
+import { ui } from "./i18n";
 
 /**
  * Export the page as a document — a PDF via Chrome's "Save as PDF", or paper.
@@ -256,18 +257,18 @@ export async function printView(): Promise<void> {
   const images = exportableImages();
   const box = overlay();
 
-  const label = (verb: string) => (done: number, total: number) => {
-    box.textContent = `${verb} ${total} photo${total === 1 ? "" : "s"} — ${done} of ${total}`;
+  const label = (line: (done: number, total: number) => string) => (done: number, total: number) => {
+    box.textContent = line(done, total);
   };
-  label("Preparing")(0, images.length);
+  label(ui.print.preparing)(0, images.length);
 
-  await hydrateAll(images, label("Preparing"));
+  await hydrateAll(images, label(ui.print.preparing));
 
   // Downscaling before printing, not after: Chrome embeds whatever is in the
   // DOM when the dialog opens.
-  const swapped = await rasteriseAll(images, label("Sizing"));
+  const swapped = await rasteriseAll(images, label(ui.print.sizing));
 
-  box.textContent = "Opening the print dialog…";
+  box.textContent = ui.print.openingPrint;
   // Two frames: one for the last decode to be painted, one for the layout it
   // changes to settle. Printing before this leaves the final cards blank.
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

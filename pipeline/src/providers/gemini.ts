@@ -9,8 +9,12 @@ import type {
   SegmentResult,
   SummarizeDayInput,
   SummarizeTripInput,
+  TranslateInput,
+  TranslateResult,
   TripSummaryResult,
 } from "./types.js";
+import { translatePrompt } from "./translatePrompt.js";
+import { altInstructions, nativeText, withAltFields } from "./altLanguage.js";
 
 // Written against @google/genai's documented structured-output shape
 // (responseSchema + the Type enum, nullable fields instead of Claude-style
@@ -62,6 +66,51 @@ async function withRetry<T>(label: string, call: () => Promise<T>): Promise<T> {
 // compare models side by side (scripts/bakeoff.mjs) and so a future job can
 // pick a model per task — a cheap one for bulk captioning, a stronger one for
 // a trip narrative.
+
+const TRANSLATE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: { key: { type: Type.STRING }, text: { type: Type.STRING } },
+        required: ["key", "text"],
+      },
+    },
+  },
+  required: ["items"],
+};
+
+/**
+ * Existing text into another language — no images, so it costs a fraction of a
+ * caption. Thinking is asked off; see `thinkingFor` on how far that is honoured.
+ */
+async function translate(model: string, input: TranslateInput): Promise<TranslateResult> {
+  const response = await withRetry("translate", () => ai().models.generateContent({
+    model,
+    contents: [{ role: "user", parts: [{ text: translatePrompt(input) }] }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: TRANSLATE_SCHEMA,
+      temperature: 0,
+      ...thinkingFor(0),
+    },
+  }));
+
+  const text = response.text;
+  if (!text) throw new Error(`Empty response from Gemini translate call — ${emptyReason(response)}`);
+  const parsed = JSON.parse(text) as { items?: { key: string; text: string }[] };
+  const meta = response.usageMetadata;
+  return {
+    items: parsed.items ?? [],
+    usage: {
+      promptTokens: meta?.promptTokenCount ?? 0,
+      thoughtsTokens: meta?.thoughtsTokenCount ?? 0,
+      outputTokens: meta?.candidatesTokenCount ?? 0,
+    },
+  };
+}
 
 const CAPTION_SCHEMA = {
   type: Type.OBJECT,
@@ -441,14 +490,14 @@ Use each photo at most once across the whole day — a photo already used by one
 
 Also write a 2-4 sentence summary of the day as a whole.
 
-${stopBlocks(input)}${metadataCaveats(input)}`,
+${stopBlocks(input)}${metadataCaveats(input)}${altInstructions(input.alsoIn)}`,
           },
         ],
       },
     ],
     config: {
       responseMimeType: "application/json",
-      responseSchema: DAY_SCHEMA,
+      responseSchema: input.alsoIn ? withAltFields(DAY_SCHEMA, input.alsoIn) : DAY_SCHEMA,
       temperature: 0,
       ...thinkingFor(thinkingBudget),
     },
@@ -501,7 +550,7 @@ ${stopBlocks(input)}${metadataCaveats(input)}`,
       };
     });
 
-  return { summary: parsed.summary.trim(), segments };
+  return { summary: parsed.summary.trim(), segments, native: nativeText(input.alsoIn, parsed) };
 }
 
 const TRIP_SCHEMA = {
@@ -582,14 +631,14 @@ The first and last days of a trip are usually spent travelling in and out, and t
 
 Days:
 
-${tripDayLines(input)}${tripContext(input)}`,
+${tripDayLines(input)}${tripContext(input)}${altInstructions(input.alsoIn)}`,
           },
         ],
       },
     ],
     config: {
       responseMimeType: "application/json",
-      responseSchema: TRIP_SCHEMA,
+      responseSchema: input.alsoIn ? withAltFields(TRIP_SCHEMA, input.alsoIn) : TRIP_SCHEMA,
       temperature: 0,
       ...thinkingFor(thinkingBudget),
     },
@@ -598,12 +647,16 @@ ${tripDayLines(input)}${tripContext(input)}`,
   const text = response.text;
   if (!text) throw new Error(`Empty response from Gemini trip-summary call — ${emptyReason(response)}`);
 
-  const parsed = JSON.parse(text) as { name: string; narrative: string; places: string[] };
+  const parsed = JSON.parse(text) as { name: string; narrative: string; places: string[]; name_alt?: string };
+  // A given name is used verbatim, so pair its twin with that, not with
+  // whatever the model echoed back.
+  const namePair: [string, string][] = input.name && parsed.name_alt ? [[input.name.trim(), parsed.name_alt]] : [];
   return {
     name: (input.name ?? parsed.name).trim(),
     narrative: parsed.narrative.trim(),
     places: parsed.places ?? [],
     usage: usageOf(response),
+    native: nativeText(input.alsoIn, parsed, namePair),
   };
 }
 
@@ -615,6 +668,8 @@ export function createGeminiProvider(
     captionPhoto: (input) => captionPhoto(model, thinkingBudget, input),
     summarizeDay: (input) => summarizeDay(model, thinkingBudget, input),
     summarizeTrip: (input) => summarizeTrip(model, thinkingBudget, input),
+    // Its own model when set: bulk translation is the place for the cheapest one.
+    translate: (input) => translate(env.translateModel ?? model, input),
   };
 }
 
