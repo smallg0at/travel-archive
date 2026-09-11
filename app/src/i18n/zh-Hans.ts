@@ -237,6 +237,7 @@ export const zhHans: Messages = {
     documents: "背景文档（.txt、.md）",
     name: "名称（留空则由模型提议）",
     writeNarrative: "撰写游记",
+    tripAllowMissing: "即使大多数日子还没有摘要，也照样撰写",
 
     analyzeNoteHtml:
       "为范围内所有还没看过的照片写说明，每张调用一次模型。<strong>这是花钱的一步</strong>——请先查看估算。重复运行是安全的：已有说明的照片会被跳过。",

@@ -763,6 +763,7 @@ const routes: [RegExp, string, Handler][] = [
         name?: string;
         notes?: string;
         documents?: { name: string; text: string }[];
+        allowMissingSummaries?: boolean;
       }>(req);
 
       if (!body.startDate || !body.endDate) {
@@ -774,6 +775,7 @@ const routes: [RegExp, string, Handler][] = [
         name: body.name?.trim() || null,
         notes: body.notes ?? null,
         documents: body.documents ?? [],
+        allowMissingSummaries: body.allowMissingSummaries === true,
       };
       json(res, 202, jobs.start({ kind: "trip", run: (onProgress, signal) => runTrip(opts, onProgress, signal) }));
     },

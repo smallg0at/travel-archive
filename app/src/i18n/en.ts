@@ -240,6 +240,7 @@ export const en = {
     documents: "Context documents (.txt, .md)",
     name: "Name (blank = let the model propose one)",
     writeNarrative: "Write the narrative",
+    tripAllowMissing: "Write it anyway if most days have no summary yet",
 
     analyzeNoteHtml:
       "Captions every photo in the range that has never been looked at, one model call each. <strong>This is the step that costs money</strong> — check the estimate first. Re-running is safe: photos that already have a caption are skipped.",

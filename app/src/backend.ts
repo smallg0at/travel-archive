@@ -376,6 +376,8 @@ export interface TripRequest {
   name?: string;
   notes?: string;
   documents?: { name: string; text: string }[];
+  /** The server refuses when most days have no summary, unless this is set. */
+  allowMissingSummaries?: boolean;
 }
 
 export function startTrip(body: TripRequest): Promise<JobRecord> {

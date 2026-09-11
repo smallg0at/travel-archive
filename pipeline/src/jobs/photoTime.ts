@@ -4,6 +4,7 @@ import { getAccessToken } from "../auth.js";
 import { renamePhoto } from "../graph.js";
 import { withArchiveLock } from "../lock.js";
 import { renameForTakenAt } from "../util.js";
+import { assignDuplicates } from "../duplicates.js";
 import { summarize } from "./scan.js";
 
 /**
@@ -187,6 +188,11 @@ export async function setPhotosTakenAt(items: BatchItem[]): Promise<BatchResult>
     const before = JSON.stringify(index.months);
     for (const month of touched) {
       const shard = shards.get(month)!;
+      // Duplicate groups are per shard and derived, as in scan. A group's
+      // representative moved to another month left its copies here pointing
+      // at a photo that was gone, and `analysisTargets` then skipped every one
+      // of them until the next scan; a new time can also change a burst.
+      assignDuplicates(Object.values(shard.photos));
       await saveShard(token, shard);
       index.months = upsertMonth(index.months, summarize(shard));
     }

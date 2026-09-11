@@ -29,6 +29,8 @@ export interface TripOptions {
   name: string | null;
   notes: string | null;
   documents: { name: string; text: string }[];
+  /** Write the narrative even when most days have no summary. Off unless asked for. */
+  allowMissingSummaries?: boolean;
 }
 
 export interface TripResult {
@@ -129,6 +131,14 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
   }
 
   const missing = inRange.filter((d) => !d.summary);
+  // Most of the trip unsummarized: the narrative would rest on place names and
+  // little else, yet read as authoritative — and be paid for. A few missing
+  // days only thin it, which the warning below says.
+  if (missing.length * 2 > inRange.length && !opts.allowMissingSummaries) {
+    throw new Error(
+      `${missing.length} of ${inRange.length} day(s) have no summary yet, so a narrative written now would have little to go on. Write the day summaries for this range first, or tick "Write it anyway".`,
+    );
+  }
   if (missing.length > 0) {
     onProgress({
       message: `${missing.length} of ${inRange.length} day(s) have no summary yet (${missing.map((d) => d.date).join(", ")}) — the narrative will be thinner for them.`,

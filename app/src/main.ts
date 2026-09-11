@@ -1,5 +1,5 @@
 import { captureView, renderAlbum } from "./album";
-import { loadContentTranslations, loadIndex, SignInRequiredError } from "./archiveData";
+import { forgetAllMonths, loadContentTranslations, loadIndex, SignInRequiredError } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
 import { initSidebarResize } from "./chrome";
@@ -51,8 +51,14 @@ async function loadAndRender(): Promise<void> {
     if (!panelMounted) {
       panelMounted = true;
       setArchiveRefresh(() => void loadAndRender());
-      setActivityRefresh(() => void loadAndRender());
-      void initGeneration(() => void loadAndRender());
+      // After a job, every cached month may be stale — see forgetAllMonths.
+      // The day editor above knows its months and forgets only those.
+      const afterJob = () => {
+        forgetAllMonths();
+        void loadAndRender();
+      };
+      setActivityRefresh(afterJob);
+      void initGeneration(afterJob);
     }
   } catch (err) {
     if (err instanceof SignInRequiredError) {

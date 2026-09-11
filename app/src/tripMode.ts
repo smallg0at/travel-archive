@@ -134,6 +134,10 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         <div class="job-row"></div>
         <label class="job-field"><span>${ui.generate.notes}</span><textarea rows="3" name="notes" placeholder="${ui.generate.notesPlaceholder}"></textarea></label>
         <label class="job-field"><span>${ui.generate.documents}</span><input type="file" name="documents" multiple accept=".txt,.md,.markdown" /></label>
+        <label class="job-check">
+          <input type="checkbox" name="allowMissing" />
+          <span>${ui.generate.tripAllowMissing}</span>
+        </label>
         <button type="submit">${ui.generate.writeNarrative}</button>
       </form>
 
@@ -235,6 +239,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         name: String(data.get("name") ?? "").trim() || undefined,
         notes: String(data.get("notes") ?? "").trim() || undefined,
         documents: await readDocuments(files),
+        allowMissingSummaries: data.get("allowMissing") === "on",
       }),
     );
   });

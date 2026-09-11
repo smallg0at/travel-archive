@@ -108,6 +108,17 @@ const shardCache = new Map<string, Promise<PhotoShard>>();
  * lot, so a correction in one month does not throw away every other month a
  * long browsing session has loaded.
  */
+export function forgetAllMonths(): void {
+  shardCache.clear();
+  translationCache.clear();
+}
+
+/**
+ * Drops these months' cached shards. `forgetAllMonths` above is the same for a
+ * job that does not report which months it touched — a batch collect writes
+ * captions into thirty at once, and without this the reload after it fetched a
+ * fresh index but kept serving the uncaptioned shards until a page refresh.
+ */
 export function forgetMonths(months: string[]): void {
   for (const month of months) {
     shardCache.delete(month);

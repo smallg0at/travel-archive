@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**29 open, 40 done.** The list grows because each session surfaces defects that
+**26 open, 43 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -860,10 +860,15 @@ working practice this list was built with.
 - [ ] **Label suppression is aggressive** — 7 of 23 shown at the fitted view.
       Honest (they don't fit) and zooming reveals more, but the Randstad stays
       anonymous. Leader lines or offset placement would beat dropping.
-- [ ] **Captions only appear after a page refresh.** `shardCache` in
+- [x] **Captions only appear after a page refresh.** `shardCache` in
       `app/src/archiveData.ts` caches each month's shard per session and never
       invalidates, so a finished job updates OneDrive but not the open tab. The
       job panel already re-renders on completion; it needs to clear that cache.
+      *Fixed 2026-09-11: the reload after a job (Generate's, and Activity's for
+      jobs the page did not start, such as a batch collect) now calls
+      `forgetAllMonths` first. A collect reports no months and touched 30 in
+      one run, so it forgets them all; the day editor and retime still forget
+      only the months they name.*
 - [ ] Zoom-out reaches the whole world; cap at continental?
 - [ ] Mobile view: design needs rethinking; a Figma would help.
 
@@ -1407,13 +1412,21 @@ resample from the source: no seams at 152% or 506%, and sharper.
 
 ## Correctness / safety backlog
 
-- [ ] **`trip` proceeds when most days have no summary** — warns in a scrolling
+- [x] **`trip` proceeds when most days have no summary** — warns in a scrolling
       log, then writes a full narrative anyway. Should refuse without an
       explicit override. A paid-for result that reads as authoritative but is
-      ungrounded is the worst failure mode here.
-- [ ] Guard in `analysisTargets()` (pipeline/src/duplicates.ts): if a duplicate
+      ungrounded is the worst failure mode here. *Fixed 2026-09-11: `runTrip`
+      refuses when more than half the days in range have no summary, before
+      any model call, unless `allowMissingSummaries` — a "Write it anyway"
+      box on the trip form. A few missing days still only warn.*
+- [x] Guard in `analysisTargets()` (pipeline/src/duplicates.ts): if a duplicate
       group's representative is deleted at source, survivors keep a dead
       `duplicateGroupId` and are never analyzed. Self-heals on the next scan.
+      *Closed 2026-09-11 — the deletion case cannot happen: `scan.ts` deletes a
+      record and re-forms the shard's groups a few lines later. The path that
+      could orphan a group was retime moving a representative to another month
+      (`photoTime.ts` moved the record between shards without regrouping);
+      it now re-runs `assignDuplicates` on every shard it touches.*
 - [ ] `dedupe` command — delete duplicate files from OneDrive. sha256 only,
       dry-run default, recycle bin. **Needs explicit approval and a shown dry
       run.** Now worth more: real duplicate count is 1,357, not 324.
