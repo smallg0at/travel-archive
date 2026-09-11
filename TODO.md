@@ -871,7 +871,10 @@ working practice this list was built with.
       no GPS (which is why "day's last run" alone missed it). Undated photos
       skip an arrival when the day has another place. 14 of 2,015 days change,
       each only by an arrival split off its last transit; a day's stored
-      segments change only when it is re-summarized.* The photos are correct and now
+      segments change only when it is re-summarized. Re-summarized 2026-09-02
+      and 2026-09-07 on the owner's go-ahead: 09-02 now ends "Flight to the capital
+      City" → "the capital" (14:38-21:58), 09-07 ends "Train to the capital" → "Selhurst
+      Depot", and "the capital region" is on the the train 1 map.* The photos are correct and now
       trusted (18 of 21 UK fixes), geocoded to the capital region / City of the capital.
       They land in a single **transit** segment (13:42–21:58 "Flight to the capital
       City") and `citiesOf` only builds markers from `place` segments. Needs a
