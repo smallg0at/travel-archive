@@ -1631,6 +1631,11 @@ body.resizing { cursor: col-resize; user-select: none; }
   .nav-activity-status { display: none; }
 }
 .act-job { border-bottom: 1px solid var(--border); padding: 6px 0; }
+/* A batch and its figures as one block — see renderBatches. */
+.act-batch { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.act-batch .set-row { border-bottom: none; padding: 0; }
+.act-batch .set-note { margin-top: 4px; }
+.act-total { margin-top: 10px; font-weight: 500; color: var(--text); }
 /* Sized like .set-row, which the batch list above it uses. */
 .act-job summary {
   display: flex;

@@ -358,6 +358,15 @@ export async function fetchItemHashes(token: string, itemId: string): Promise<It
   }
 }
 
+/**
+ * Deletes a file the way OneDrive's own Delete does: into the recycle bin,
+ * where it can be restored for about 30 days. The only caller is `dedupe
+ * --apply`, for copies whose bytes were just shown identical to a file kept.
+ */
+export async function recycleItem(token: string, itemId: string): Promise<void> {
+  await graphFetch(token, `/me/drive/items/${itemId}`, { method: "DELETE" });
+}
+
 export async function downloadPhotoBuffer(token: string, itemId: string): Promise<Buffer> {
   const res = await graphFetch(token, `/me/drive/items/${itemId}/content`);
   return Buffer.from(await res.arrayBuffer());

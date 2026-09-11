@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**15 open, 55 done.** The list grows because each session surfaces defects that
+**14 open, 56 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -1487,7 +1487,7 @@ resample from the source: no seams at 152% or 506%, and sharper.
       could orphan a group was retime moving a representative to another month
       (`photoTime.ts` moved the record between shards without regrouping);
       it now re-runs `assignDuplicates` on every shard it touches.*
-- [ ] `dedupe` command — delete duplicate files from OneDrive. sha256 only,
+- [x] `dedupe` command — delete duplicate files from OneDrive. sha256 only,
       dry-run default, recycle bin. **Needs explicit approval and a shown dry
       run.** Now worth more: real duplicate count is 1,357, not 324.
       *Dry run built 2026-09-11 (owner: build, dry run only):
@@ -1503,7 +1503,13 @@ resample from the source: no seams at 152% or 506%, and sharper.
       `IMG_20250629_143356.jpg`, byte-identical to `…143249.jpg`. 559 are in
       2026/08. The first run kept the suffixed copy in most groups (the
       representative is the largest file and identical copies tie); fixed by
-      keeping the original name.*
+      keeping the original name.
+      *Applied 2026-09-11 on the owner's go-ahead ("same hash images are
+      obviously safe"): `dedupe -- --apply <dry-run.json>` re-derives each
+      pair, re-reads both hashes, and recycles the copy only if they still
+      match with the kept file present. 1,377 recycled (5.68 GB), 0 skipped,
+      0 failed — `data/dedupe/applied-2026-09-11T17-14-09.json`. In OneDrive's
+      recycle bin for about 30 days. A full scan followed to drop the records.*
 - [x] Re-run analyze for the 2 photos that failed `503 UNAVAILABLE` on
       2026-09-05. Not lost — `analyzedAt` is still null — and the retry added
       afterwards should prevent a repeat. *Closed 2026-09-11: the whole-library

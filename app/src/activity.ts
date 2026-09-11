@@ -258,7 +258,11 @@ function renderBatches(host: HTMLElement, batches: AnalyzeBatchStatus[] | null, 
   }
   for (const b of [...batches].reverse()) {
     const state = ui.generate.batchState[b.collectedAt ? "collected" : b.state];
-    host.appendChild(row(`${fmtDateTime(new Date(b.createdAt), WHEN)} · ${ui.common.photos(b.photos)}`, state));
+    // One block per batch, its figures under its own heading. As loose rows
+    // the line below a batch read as the heading of the next one.
+    const item = el<HTMLDivElement>(`<div class="act-batch"></div>`);
+    item.appendChild(row(`${fmtDateTime(new Date(b.createdAt), WHEN)} · ${ui.common.photos(b.photos)}`, state));
+    host.appendChild(item);
     // `usage` and `costUsd` are absent from a server built before this page.
     const usage = b.usage ?? null;
     const detail = ui.activity.batchDetail(
@@ -268,14 +272,16 @@ function renderBatches(host: HTMLElement, batches: AnalyzeBatchStatus[] | null, 
       usage ? usage.outputTokens + usage.thoughtsTokens : null,
       b.costUsd != null ? money(b.costUsd) : null,
     );
-    if (detail) host.appendChild(note(detail));
+    if (detail) item.appendChild(note(detail));
   }
 
   const spent = batches.reduce((sum, b) => sum + (b.costUsd ?? 0), 0);
   const waiting = batches
     .filter((b) => !b.collectedAt && !GIVEN_UP.has(b.state))
     .reduce((n, b) => n + b.photos, 0);
-  host.appendChild(note(ui.activity.batchTotal(money(spent), waiting)));
+  const total = note(ui.activity.batchTotal(money(spent), waiting));
+  total.classList.add("act-total");
+  host.appendChild(total);
 
   if (batches.some((b) => !b.collectedAt && b.state === "succeeded")) {
     const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
