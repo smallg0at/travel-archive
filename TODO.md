@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**14 open, 57 done.** The list grows because each session surfaces defects that
+**14 open, 58 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -15,6 +15,16 @@ Open items are listed first in each section; fixes are kept below them
 working practice this list was built with.
 
 ## Open issues
+
+- [x] **Day summaries only where they earn their cost.** Owner's rule,
+      2026-09-11: a day outside any trip is summarized only when it holds
+      more than 15 photos (`SUMMARY_MIN_PHOTOS` in shared); trip days always
+      are. Measured on the archive that day: 1,715 of 2,018 dated days fall
+      under the line (6,442 photos), 1,706 of them never summarized — each a
+      model call saved once captions land. The 9 already summarized keep
+      their summary. Generate's preview names the skipped days. Catch: a new
+      trip made of small days needs an organize run *after* the trip is
+      defined (`bef86a0`).
 
 - [x] **UI style refresh — the whole app, not a patch.** Raised 2026-09-09,
       done the same day on `design/material-you-refresh` (merged to `main`
