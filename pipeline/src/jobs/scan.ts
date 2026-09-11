@@ -128,6 +128,7 @@ function merge(fresh: PhotoRecord, prior: PhotoRecord | undefined): PhotoRecord 
   return {
     ...fresh,
     place: prior.place,
+    near: prior.near,
     analyzedAt: prior.analyzedAt,
     contentType: prior.contentType,
     caption: prior.caption,

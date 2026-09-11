@@ -1,4 +1,4 @@
-import type { JobKind, JobStatus, SyncState } from "@travel-archive/shared";
+import type { AnalyzeBatchState, JobKind, JobStatus, SyncState } from "@travel-archive/shared";
 import { millions, num } from "./format";
 
 /**
@@ -248,6 +248,21 @@ export const en = {
       "Nothing to analyze in that range — already done, or filtered out as duplicates and withheld screenshots.",
     analyzePlan: (photos: number, months: number, input: number, output: number) =>
       `${count(photos, "photo", "photos")} across ${count(months, "month", "months")} — about ${millions(input)}M input and ${millions(output)}M output tokens.`,
+    batchLabel: "As a batch — half price, results within a day, collected automatically",
+    batchEstimate: "As a batch, about half that.",
+    batchesTitle: "Batches",
+    batchState: {
+      pending: "waiting",
+      running: "running",
+      succeeded: "ready to collect",
+      failed: "failed",
+      cancelled: "cancelled",
+      expired: "expired",
+      collected: "collected",
+    } satisfies Record<AnalyzeBatchState | "collected", string>,
+    batchRow: (when: string, photos: number, state: string, applied: number | null) =>
+      `${when} · ${count(photos, "photo", "photos")} · ${state}${applied !== null ? ` · ${num(applied)} captioned` : ""}`,
+    collectNow: "Collect now",
 
     organizeNoteHtml:
       "Turns the captions from Analyze into day pages: groups each day into the places you stopped, names them, and picks what to show. One text-only model call per day — no images, so it is cheap. <strong>Run this after Analyze and before Trip.</strong>",
@@ -288,6 +303,7 @@ export const en = {
       trip: "trip",
       sync: "sync",
       translate: "translate",
+      collect: "collect",
     } satisfies Record<JobKind, string>,
     jobStatus: {
       queued: "queued",

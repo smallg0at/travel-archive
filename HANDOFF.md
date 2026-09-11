@@ -248,10 +248,29 @@ over the library casually.
 
 ## The one piece of work with real value left
 
-Captions are written with **no context at all** — `CaptionPhotoInput` is
-`{ imageBase64, mediaType }`, so the model cannot know a blue carriage is in the
-the railway museum. Day summaries are written in isolation, and the owner's own
-notes reach only the trip narrator. Fixing those needs a re-analysis of the
-library, which costs money — and the i18n decision (the owner wants Chinese)
-changes the storage shape, so **settle i18n first or the library gets paid for
-twice**. This has been deferred three times and is the item most worth doing.
+**Caption the rest of the library** — 23,425 photos were still uncaptioned on
+2026-09-11. Everything it needs is built and was run end to end on 3 photos:
+
+- **Context.** The prompt carries the camera's clock in words, the trip, the
+  town, a street-level venue and street (Nominatim `zoom=18`, looked up
+  *before* captioning and cached on disk in `data/geocode-cache.json`) and the
+  owner's note for the day. Measured: a real place name added to 6 of 24
+  captions, nothing invented (TODO.md, "Photo captions are written with no
+  context"). The name of a museum still first appears in the stop title.
+- **Low image resolution** (`CAPTION_RESOLUTION`, `gemini.ts`) — ~600 input
+  tokens a photo instead of 1,429, same naming, same transcriptions.
+- **Batch** — Generate → Analyze → "As a batch": half price, results within a
+  day (the test took 4 minutes), in files of 4,000 requests
+  (`jobs/analyzeBatch.ts`). The server collects finished batches itself every
+  ten minutes. `data/batches/analyze.json` records what was submitted and is
+  the only way back to a batch being paid for — never delete it while one is
+  open.
+
+At batch prices on gemini-3.7-flash (they double on 2027-01-01) the whole run
+is about **$17**; output, including thinking, is two thirds of it. A photo that
+comes back empty (RECITATION) stays uncaptioned — one interactive Analyze
+afterwards picks those up with its fallback.
+
+The i18n decision no longer blocks this: captions stay English and are
+translated beside the archive. Still open and cheaper: day summaries are
+written in isolation, and the owner's notes reach only the trip narrator.

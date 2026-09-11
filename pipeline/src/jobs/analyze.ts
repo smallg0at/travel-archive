@@ -1,8 +1,15 @@
-import type { AnalyzePlan, JobProgress, PhotoRecord, PhotoShard } from "@travel-archive/shared";
+import type {
+  AnalyzePlan,
+  ArchiveIndexFile,
+  JobProgress,
+  PhotoRecord,
+  PhotoShard,
+  TripRecord,
+} from "@travel-archive/shared";
 import type { CaptionContext } from "../providers/types.js";
 import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
-import { reverseGeocode } from "../exif.js";
+import { flushGeocodeCache, nearPlace, reverseGeocode } from "../exif.js";
 import { getProvider } from "../providers/index.js";
 import { env } from "../env.js";
 import {
@@ -40,8 +47,13 @@ import { mayBeAnalyzed } from "../screenshots.js";
  */
 const SAVE_EVERY = 150;
 
-/** Measured on this library: ~1227 input, ~250 output+thinking tokens per photo. */
-const TOKENS_IN_PER_PHOTO = 1227;
+/**
+ * Per photo, measured on this library. Output+thinking ~250. Input was ~1,227
+ * at the default image resolution with no context; with the context block and
+ * low resolution (gemini.ts, `CAPTION_RESOLUTION`) it measured 628 across 24
+ * photos, rounded up here.
+ */
+const TOKENS_IN_PER_PHOTO = 640;
 const TOKENS_OUT_PER_PHOTO = 250;
 
 export interface AnalyzeOptions {
@@ -83,7 +95,7 @@ function inRange(takenAt: string | null, from: string | null, to: string | null)
  *  - allowed by the screenshot policy, which is what keeps private screenshots
  *    (WeChat, mail, banking) off the wire entirely
  */
-function selectTargets(shard: PhotoShard, opts: AnalyzeOptions): PhotoRecord[] {
+export function selectTargets(shard: PhotoShard, opts: AnalyzeOptions): PhotoRecord[] {
   return analysisTargets(Object.values(shard.photos))
     .filter(mayBeAnalyzed)
     .filter((p) => !p.analyzedAt)
@@ -108,7 +120,7 @@ export async function pooled<T>(items: T[], limit: number, worker: (item: T) => 
  * never sent to the model. Without this, the siblings would stay uncaptioned
  * forever and the album would show blanks beside a described photo.
  */
-function inheritToDuplicates(shard: PhotoShard, representative: PhotoRecord): number {
+export function inheritToDuplicates(shard: PhotoShard, representative: PhotoRecord): number {
   if (!representative.duplicateGroupId) return 0;
 
   let count = 0;
@@ -125,6 +137,7 @@ function inheritToDuplicates(shard: PhotoShard, representative: PhotoRecord): nu
       notable: representative.notable,
       quality: representative.quality,
       place: representative.place,
+      near: representative.near,
       inheritedFrom: representative.id,
     };
     count++;
@@ -212,41 +225,103 @@ export async function planAnalyze(opts: AnalyzeOptions): Promise<AnalyzePlan> {
   };
 }
 
-/** How many neighbouring captions a photo is given. Orientation, not a transcript. */
-const NEARBY_CAPTIONS = 6;
-/** Trimmed so six of them stay a hint rather than a page. */
-const NEARBY_CAPTION_CHARS = 140;
+/** What the caption context reads from the index, gathered once per run. */
+export interface ContextSources {
+  trips: { name: string; startDate: string; endDate: string }[];
+  /** The owner's day notes, by date. */
+  notes: Map<string, string>;
+}
+
+export function contextSources(index: ArchiveIndexFile): ContextSources {
+  const trips = index.sections
+    .filter((s): s is TripRecord => s.kind === "trip")
+    .map((t) => ({ name: t.name, startDate: t.startDate, endDate: t.endDate }));
+  const notes = new Map<string, string>();
+  for (const section of index.sections) {
+    for (const day of section.days) if (day.note?.trim()) notes.set(day.date, day.note.trim());
+  }
+  return { trips, notes };
+}
 
 /**
- * Where and when this photo was taken, and what else was photographed near it.
- *
- * Read from the shard at call time, so a run picks up the captions it has
- * already written this pass as well as those from earlier runs — the first
- * photo of a museum visit has no neighbours, the hundredth has six.
+ * The camera's clock in words. `takenAt` is that clock read in this machine's
+ * zone and stored as an instant (exif.ts), so formatting it back in the same
+ * zone returns what the camera showed — on a trip, local time wherever the
+ * phone was set. Words rather than an ISO string: "Tuesday … 21:40" says
+ * evening, where "2026-08-18T20:40:00.000Z" says nothing a model reliably uses.
+ */
+const CLOCK = new Intl.DateTimeFormat("en-GB", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const DATE_ONLY = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+/**
+ * Where and when this photo was taken, in fields that can name something —
+ * see `CaptionContext` for why these and not the town-and-neighbours of the
+ * first version.
  *
  * `timeSuspect` photos give the date without the clock. Their day is right and
  * their hour is not (phone clock drift, and filenames that carry a date only),
  * so offering "14:32" would be inventing precision the record does not have.
  */
-export function captionContextFor(shard: PhotoShard, record: PhotoRecord): CaptionContext | null {
+export function captionContextFor(record: PhotoRecord, sources: ContextSources): CaptionContext | null {
   const day = record.takenAt?.slice(0, 10) ?? null;
+  const context: CaptionContext = {
+    takenAt: record.takenAt ? (record.timeSuspect ? DATE_ONLY : CLOCK).format(new Date(record.takenAt)) : null,
+    trip: day ? (sources.trips.find((t) => t.startDate <= day && day <= t.endDate)?.name ?? null) : null,
+    place: record.place ?? null,
+    venue: record.near?.venue ?? null,
+    street: record.near?.street ?? null,
+    dayNote: day ? (sources.notes.get(day) ?? null) : null,
+  };
+  return Object.values(context).some(Boolean) ? context : null;
+}
 
-  const nearby = day
-    ? Object.values(shard.photos)
-        .filter((p) => p.id !== record.id && p.caption && p.takenAt?.slice(0, 10) === day)
-        .sort(
-          (a, b) =>
-            Math.abs(Date.parse(a.takenAt!) - Date.parse(record.takenAt!)) -
-            Math.abs(Date.parse(b.takenAt!) - Date.parse(record.takenAt!)),
-        )
-        .slice(0, NEARBY_CAPTIONS)
-        .map((p) => p.caption!.slice(0, NEARBY_CAPTION_CHARS))
-    : [];
-
-  const takenAt = record.takenAt ? (record.timeSuspect ? record.takenAt.slice(0, 10) : record.takenAt) : null;
-  const place = record.place ?? null;
-  if (!takenAt && !place && nearby.length === 0) return null;
-  return { takenAt, place, nearbyCaptions: nearby };
+/**
+ * Looks up the town and the street-level place for photos about to be
+ * captioned, so the prompt can carry them — before captioning now, where it
+ * used to run after (`geocodePending` is still the sweep for anything missed).
+ *
+ * Serial, at Nominatim's one request a second, and cached on disk (exif.ts):
+ * the first pass over the whole library is ~3,500 cells a zoom, later runs
+ * almost none. A failed street-level lookup leaves `near` unset, so it is
+ * retried next run rather than recorded as "nothing here".
+ *
+ * Replaces the records in `shard.photos`; a caller holding the old objects
+ * must read them back from the shard.
+ */
+export async function geocodeBeforeCaptioning(
+  shard: PhotoShard,
+  targets: PhotoRecord[],
+  onProgress: ProgressFn,
+  signal?: AbortSignal,
+): Promise<number> {
+  const needing = targets.filter((t) => {
+    const p = shard.photos[t.id];
+    return p?.gps && !p.gpsSuspect && (!p.place || p.near === undefined);
+  });
+  let located = 0;
+  for (const [i, target] of needing.entries()) {
+    if (signal?.aborted) break;
+    if (i % 25 === 0) onProgress({ phase: "geocoding", done: i, total: needing.length });
+    const photo = shard.photos[target.id];
+    const place = photo.place ?? (await reverseGeocode(photo.gps!, env.geocodeContactEmail));
+    let near = photo.near;
+    try {
+      if (near === undefined) near = await nearPlace(photo.gps!, env.geocodeContactEmail);
+    } catch (err) {
+      onProgress({ message: `street lookup failed for ${photo.fileName}: ${(err as Error).message}` });
+    }
+    shard.photos[target.id] = { ...photo, place, near };
+    located++;
+  }
+  await flushGeocodeCache();
+  return located;
 }
 
 export async function runAnalyze(
@@ -260,6 +335,7 @@ export async function runAnalyze(
   onProgress({ phase: "planning", message: "Loading index..." });
   const index = await loadIndex(token);
   const provider = getProvider();
+  const sources = contextSources(index);
 
   const months = index.months.filter(
     (m) => (!opts.from || m.month >= opts.from.slice(0, 7)) && (!opts.to || m.month <= opts.to.slice(0, 7)),
@@ -319,6 +395,8 @@ export async function runAnalyze(
     if (result.analyzed >= opts.limit || signal?.aborted) break;
     const batch = targets.slice(0, opts.limit - result.analyzed);
     onProgress({ phase: "analyzing", message: `${month} — ${batch.length} photo(s)` });
+    // Before captioning, so the prompt can name the place.
+    await geocodeBeforeCaptioning(shard, batch, onProgress, signal);
 
     const analyzed: PhotoRecord[] = [];
     let sinceSave = 0;
@@ -349,14 +427,17 @@ export async function runAnalyze(
           return;
         }
 
+        // The shard's copy, not the target list's: geocoding has since given it
+        // a place, which both the prompt and the saved record need.
+        const current = shard.photos[record.id] ?? record;
         const caption = await provider.captionPhoto({
           imageBase64: image.toString("base64"),
           mediaType: mediaTypeFor(record.fileName),
-          context: captionContextFor(shard, record),
+          context: captionContextFor(current, sources),
         });
 
         const updated: PhotoRecord = {
-          ...record,
+          ...current,
           analyzedAt: new Date().toISOString(),
           contentType: caption.contentType,
           caption: caption.caption,

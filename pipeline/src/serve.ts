@@ -18,6 +18,7 @@ import { getCachedAccessToken } from "./auth.js";
 import { loadIndex } from "./archiveStore.js";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
+import { collectAnalyzeBatches, listAnalyzeBatches, readyToCollect, submitAnalyzeBatch } from "./jobs/analyzeBatch.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
@@ -630,15 +631,31 @@ const routes: [RegExp, string, Handler][] = [
     "POST",
     async (req, res) => {
       if (refuseIfBusy(res)) return;
-      const body = await readJsonBody<{ from?: string; to?: string; limit?: number }>(req);
+      const body = await readJsonBody<{ from?: string; to?: string; limit?: number; batch?: boolean }>(req);
       const opts = {
         from: body.from ?? null,
         to: body.to ?? null,
         limit: body.limit ?? Number.MAX_SAFE_INTEGER,
       };
-      json(res, 202, jobs.start({ kind: "analyze", run: (onProgress, signal) => runAnalyze(opts, onProgress, signal) }));
+      // `batch`: submit to the Batch API at half price instead of captioning
+      // now. The job ends at submission; the timer below collects the results.
+      const run = body.batch
+        ? (onProgress: Parameters<typeof runAnalyze>[1], signal: AbortSignal) => submitAnalyzeBatch(opts, onProgress, signal)
+        : (onProgress: Parameters<typeof runAnalyze>[1], signal: AbortSignal) => runAnalyze(opts, onProgress, signal);
+      json(res, 202, jobs.start<object>({ kind: "analyze", run }));
     },
   ],
+  /** Merges finished batches now, rather than at the timer's next tick. */
+  [
+    /^\/jobs\/analyze\/collect$/,
+    "POST",
+    async (_req, res) => {
+      if (refuseIfBusy(res)) return;
+      json(res, 202, jobs.start({ kind: "collect", run: (onProgress, signal) => collectAnalyzeBatches(onProgress, signal) }));
+    },
+  ],
+  /** Submitted batches and their state. Asks Google about open ones; spends nothing, takes no lock. */
+  [/^\/jobs\/analyze\/batches$/, "GET", async (_req, res) => json(res, 200, await listAnalyzeBatches())],
   /**
    * What an organize run would do, spending nothing. Same shape as the analyze
    * plan, and for the same reason: this is the step that costs money, so it
@@ -868,7 +885,9 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`  POST /config              {AI_PROVIDER,ANTHROPIC_API_KEY,...}`);
   console.log(`  POST /jobs/scan           {mode,from,to}    free, Graph listing only`);
   console.log(`  POST /jobs/analyze/plan   {from,to,limit}   what it would cost, spends nothing`);
-  console.log(`  POST /jobs/analyze        {from,to,limit}`);
+  console.log(`  POST /jobs/analyze        {from,to,limit,batch}   batch: half price, results within a day`);
+  console.log(`  POST /jobs/analyze/collect                  merge finished batches now`);
+  console.log(`  GET  /jobs/analyze/batches                  submitted batches and their state`);
   console.log(`  POST /jobs/organize/plan  {only,force}      what it would rewrite, spends nothing`);
   console.log(`  POST /jobs/organize       {only,force}`);
   console.log(`  POST /jobs/translate/plan {lang,scope}      what it would translate, spends nothing`);
@@ -877,3 +896,22 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`  GET  /jobs/:id/events     SSE progress`);
   console.log(`  POST /jobs/:id/cancel`);
 });
+
+/**
+ * Collects finished caption batches without anyone asking. A batch takes up to
+ * a day and the point of it is that nobody waits, so the server checks every
+ * ten minutes — and once shortly after starting, for a batch that finished
+ * while it was down. Skipped while any job runs; the next tick comes soon.
+ */
+const COLLECT_EVERY_MS = 10 * 60 * 1000;
+async function collectIfReady(): Promise<void> {
+  try {
+    if (jobs.runningJob() || !(await readyToCollect())) return;
+    console.log("  caption batch finished — collecting");
+    jobs.start({ kind: "collect", run: (onProgress, signal) => collectAnalyzeBatches(onProgress, signal) });
+  } catch (err) {
+    console.warn(`  batch check failed: ${(err as Error).message}`);
+  }
+}
+setInterval(() => void collectIfReady(), COLLECT_EVERY_MS);
+setTimeout(() => void collectIfReady(), 30_000);

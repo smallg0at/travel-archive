@@ -6,35 +6,34 @@ export interface CaptionPhotoInput {
   imageBase64: string;
   mediaType: ImageMediaType;
   /**
-   * Where and when, and what was photographed around it.
-   *
-   * The captioner used to see one image and a static prompt, which is why it
-   * could not know that a blue carriage is in the the railway museum — the *day*
-   * summarizer can, because it sees every caption, the place and the placard
-   * OCR at once. This is that same context moved one step earlier, where it is
-   * cheap: the fields already exist on the photo record.
-   *
-   * It is a hint for **naming**, never licence to describe what the image does
-   * not show — the caution `placeFromMetadataOnly` already encodes for days.
-   * Null throughout for a photo with no date, no location and no captioned
-   * neighbours, which is the pre-context behaviour exactly.
+   * Where and when — a hint for **naming**, never licence to describe what the
+   * image does not show (see `captionContextBlock`). Null for a photo with
+   * nothing known about it, which is the pre-context behaviour exactly.
    */
   context: CaptionContext | null;
 }
 
+/**
+ * Only fields that can name something. The first version passed the town and
+ * the six nearest captions, and on 20 photos of the the railway museum none named
+ * the museum, before or after (TODO.md, 2026-09-09): a town cannot name a
+ * museum, and neighbours written without context cannot either. The neighbours
+ * are gone — marginal in that test, +16% input on every photo, and impossible
+ * in a batch, where every photo is sent before any caption exists.
+ */
 export interface CaptionContext {
-  /** ISO instant, or a date alone when the clock is not to be trusted. */
+  /** The camera's clock in words ("Tuesday 18 August 2026 at 11:12"), or the date alone when the clock is suspect. */
   takenAt: string | null;
-  /** Reverse-geocoded from GPS, so a hint rather than an observation. */
+  /** The trip this day falls in, by the owner's name for it. */
+  trip: string | null;
+  /** Reverse-geocoded town, so a hint rather than an observation. */
   place: string | null;
-  /**
-   * Captions of the nearest photos in time from the same day, already written.
-   *
-   * The cheapest way to tell the model it is looking at one frame of a museum
-   * visit rather than an isolated object. Deliberately few and short: this is
-   * orientation, not a transcript, and every one is input tokens on every photo.
-   */
-  nearbyCaptions: string[];
+  /** The nearest named venue on the map at street level — a candidate name, often a neighbour. */
+  venue: string | null;
+  /** The street and district. */
+  street: string | null;
+  /** The owner's note for the day: the one field a person wrote. */
+  dayNote: string | null;
 }
 
 /**

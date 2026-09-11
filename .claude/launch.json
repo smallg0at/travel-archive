@@ -6,6 +6,15 @@
       "runtimeExecutable": "powershell.exe",
       "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "C:\\Code\\proj\\run-preview.ps1"],
       "port": 4173
+    },
+    {
+      "name": "app-17923",
+      "runtimeExecutable": "powershell.exe",
+      "runtimeArgs": [
+        "-ExecutionPolicy", "Bypass", "-Command",
+        "$env:PATH = '%APPDATA%\\fnm\\node-versions\<version>\\installation;' + $env:PATH; npm run preview --workspace app -- --port 17923 --strictPort"
+      ],
+      "port": 17923
     }
   ]
 }

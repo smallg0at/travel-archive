@@ -244,6 +244,21 @@ export const zhHans: Messages = {
     nothingToAnalyze: "这段日期内没有需要分析的照片——已经分析过，或作为重复照片和不公开的截图被过滤掉了。",
     analyzePlan: (photos, months, input, output) =>
       `${num(photos)} 张照片，分布在 ${num(months)} 个月——约 ${millions(input)}M 输入 token、${millions(output)}M 输出 token。`,
+    batchLabel: "批量提交——半价，一天内出结果，自动收取",
+    batchEstimate: "批量提交约为一半。",
+    batchesTitle: "批量任务",
+    batchState: {
+      pending: "等待中",
+      running: "运行中",
+      succeeded: "可以收取",
+      failed: "失败",
+      cancelled: "已取消",
+      expired: "已过期",
+      collected: "已收取",
+    },
+    batchRow: (when, photos, state, applied) =>
+      `${when} · ${num(photos)} 张照片 · ${state}${applied !== null ? ` · 已写说明 ${num(applied)} 张` : ""}`,
+    collectNow: "立即收取",
 
     organizeNoteHtml:
       "把“分析”写出的说明整理成每天的页面：把每一天按停留的地点分组、命名，并挑选要展示的内容。每天一次纯文本模型调用——不发送图片，所以很便宜。<strong>请在“分析”之后、“旅行”之前运行。</strong>",
@@ -283,6 +298,7 @@ export const zhHans: Messages = {
       trip: "旅行",
       sync: "同步",
       translate: "翻译",
+      collect: "收取结果",
     },
     jobStatus: {
       queued: "排队中",

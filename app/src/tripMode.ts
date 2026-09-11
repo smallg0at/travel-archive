@@ -7,18 +7,20 @@ import {
   forgetJob,
   getJob,
   archiveStatus,
+  listBatches,
   planAnalyze,
   planOrganize,
   planTranslate,
   rememberJob,
   rememberedJob,
   startAnalyze,
+  startCollect,
   startOrganize,
   startTranslate,
   startTrip,
   watchJob,
 } from "./backend";
-import { num, ui } from "./i18n";
+import { fmtDateTime, num, ui } from "./i18n";
 
 /**
  * The generation panel: pick a date range, name it or let the model name it,
@@ -38,6 +40,8 @@ import { num, ui } from "./i18n";
 type Refresh = () => void;
 
 let onFinished: Refresh = () => {};
+/** Redraws the batch list; any job may have submitted or collected one. */
+let onJobSettled: () => void = () => {};
 let stopWatching: (() => void) | null = null;
 
 function field(label: string, control: string): HTMLElement {
@@ -74,6 +78,7 @@ function renderProgress(panel: HTMLElement, job: JobRecord): void {
           .map(([k, v]) => `${k} ${v}`)
           .join(", ");
     box.querySelector(".job-phase")!.textContent = `${phase}${result ? ` · ${result}` : ""}`;
+    onJobSettled();
     // A finished job has almost always changed index.json, so the caller
     // reloads rather than leaving a stale nav on screen.
     if (job.status === "done") onFinished();
@@ -134,10 +139,15 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       <form class="job-form" data-mode="analyze" hidden>
         <div class="job-row"></div>
         <p class="job-note">${ui.generate.analyzeNoteHtml}</p>
+        <label class="job-check">
+          <input type="checkbox" name="batch" />
+          <span>${ui.generate.batchLabel}</span>
+        </label>
         <div class="job-buttons">
           <button type="button" class="job-estimate">${ui.generate.estimateCost}</button>
           <button type="submit">${ui.generate.analyze}</button>
         </div>
+        <div class="job-plan job-batches" hidden></div>
       </form>
 
       <form class="job-form" data-mode="organize" hidden>
@@ -232,18 +242,54 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   analyzeForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(analyzeForm);
-    void start(() => startAnalyze({ from: String(data.get("from")), to: String(data.get("to")) }));
+    void start(() =>
+      startAnalyze({ from: String(data.get("from")), to: String(data.get("to")), batch: data.get("batch") === "on" }),
+    );
   });
+
+  // Batches outlive the page and the job that submitted them, so what they
+  // are doing is asked of the server, not remembered here.
+  const batchBox = analyzeForm.querySelector<HTMLDivElement>(".job-batches")!;
+  const renderBatches = async () => {
+    const batches = await listBatches();
+    if (!batches || batches.length === 0) {
+      batchBox.hidden = true;
+      return;
+    }
+    batchBox.hidden = false;
+    const lead = el<HTMLParagraphElement>(`<p class="job-plan-lead"></p>`);
+    lead.textContent = ui.generate.batchesTitle;
+    const rows = [...batches]
+      .reverse()
+      .slice(0, 8)
+      .map((b) => {
+        const row = el<HTMLParagraphElement>(`<p class="job-plan-row"></p>`);
+        const when = fmtDateTime(new Date(b.createdAt), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        row.textContent = ui.generate.batchRow(when, b.photos, ui.generate.batchState[b.collectedAt ? "collected" : b.state], b.applied);
+        return row;
+      });
+    batchBox.replaceChildren(lead, ...rows);
+    if (batches.some((b) => !b.collectedAt && b.state === "succeeded")) {
+      const collect = el<HTMLButtonElement>(`<button type="button">${ui.generate.collectNow}</button>`);
+      collect.addEventListener("click", () => void start(() => startCollect()));
+      batchBox.appendChild(collect);
+    }
+  };
+  onJobSettled = () => void renderBatches();
+  panel.querySelector<HTMLButtonElement>('.job-tabs button[data-mode="analyze"]')!.addEventListener("click", () => void renderBatches());
+  void renderBatches();
 
   analyzeForm.querySelector<HTMLButtonElement>(".job-estimate")!.addEventListener("click", async () => {
     const data = new FormData(analyzeForm);
     const note = analyzeForm.querySelector(".job-note")!;
     try {
       const plan = await planAnalyze({ from: String(data.get("from")), to: String(data.get("to")) });
+      const batch = data.get("batch") === "on";
       note.textContent =
         plan.total === 0
           ? ui.generate.nothingToAnalyze
-          : ui.generate.analyzePlan(plan.total, plan.months.length, plan.estimatedInputTokens, plan.estimatedOutputTokens);
+          : ui.generate.analyzePlan(plan.total, plan.months.length, plan.estimatedInputTokens, plan.estimatedOutputTokens) +
+            (batch ? ` ${ui.generate.batchEstimate}` : "");
     } catch (err) {
       note.textContent = ui.generate.couldNotEstimate((err as Error).message);
     }

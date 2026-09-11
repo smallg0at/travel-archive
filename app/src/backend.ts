@@ -1,4 +1,5 @@
 import type {
+  AnalyzeBatchStatus,
   AnalyzePlan,
   ArchiveStatus,
   ConfigStatus,
@@ -220,8 +221,24 @@ export function startScan(body: { mode: ScanMode; from?: string; to?: string }):
   return post<JobRecord>("/jobs/scan", body);
 }
 
-export function startAnalyze(body: { from?: string; to?: string; limit?: number }): Promise<JobRecord> {
+/** `batch`: half price through the Batch API; the server collects the results within a day. */
+export function startAnalyze(body: { from?: string; to?: string; limit?: number; batch?: boolean }): Promise<JobRecord> {
   return post<JobRecord>("/jobs/analyze", body);
+}
+
+/** Submitted caption batches, newest last. Null with no backend. */
+export async function listBatches(): Promise<AnalyzeBatchStatus[] | null> {
+  try {
+    const res = await fetch(`${BACKEND}/jobs/analyze/batches`);
+    return res.ok ? ((await res.json()) as AnalyzeBatchStatus[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Merges finished batches now instead of at the server's next ten-minute check. */
+export function startCollect(): Promise<JobRecord> {
+  return post<JobRecord>("/jobs/analyze/collect", {});
 }
 
 /**

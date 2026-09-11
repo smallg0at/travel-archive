@@ -4,7 +4,7 @@ State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
 days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
 narrative written, map rendering. That run cost **under £8**.
 
-**32 open, 35 done.** The list grows because each session surfaces defects that
+**29 open, 38 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. The cluster with real user-visible value still in it is
 captions and summarizers, and it has now been deferred three times.
@@ -704,9 +704,9 @@ working practice this list was built with.
       alone", or the next run silently discards the correction. Any direct-edit
       feature also needs somewhere to write to — the app is a pure reader today
       and the server is the only writer.
-- [ ] **Photo captions are written with no context at all.** *(Plumbing built
-      2026-09-09 and the small-scale test run. **The premise does not hold** —
-      read the measurement below before spending anything on this.)*
+- [x] **Photo captions are written with no context at all.** *(Plumbing built
+      2026-09-09; reworked and re-measured 2026-09-11 — see the end of this
+      entry. The first version's measurement comes first.)*
 
       `CaptionPhotoInput` now carries a `context` of `takenAt`, the geocoded
       `place`, and the six nearest already-written captions from the same day,
@@ -753,9 +753,33 @@ working practice this list was built with.
       saying, or drop it. Nothing has been re-analyzed and no captions were
       overwritten.
 
+      **Reworked 2026-09-11, the owner's call being "with context".** The
+      context is now only fields that can name something: a street-level
+      geocode (`zoom=18`, kept as a venue only when it is a real one —
+      measured on twelve named stops it found the venue for five, and once
+      offered a waste basket), the street, the trip, the owner's note for the
+      day, and the camera's clock in words. The neighbour captions are gone —
+      marginal above, and impossible in a batch. Geocoding now runs *before*
+      captioning, cached on disk (`data/geocode-cache.json`).
+
+      Re-run on 24 already-captioned photos from twelve named stops, writing
+      nothing: **six new captions carry a place the old one lacked** —
+      Maliebaanstation in Utrecht (the the railway museum's station),
+      Karl-Liebknecht-Straße, the New Palace in a city, the a city railway,
+      Burgstraße in Nuremberg, Jenbach. Nearby shop names offered as venues
+      ("Stromma", "Belstaff", a builders' merchant) were ignored every time,
+      and nothing was asserted that the image did not show. Still not the
+      museum's own name: that first exists in the stop title.
+
+      Same test at **low image resolution**: input 1,429 → 628 tokens a photo,
+      the same places named, and 10 long transcriptions matching the stored
+      text at 97% word overlap either way. Low is now the default
+      (`CAPTION_RESOLUTION` in `gemini.ts`).
+
       Original entry follows.
 
-- [ ] **Photo captions are written with no context at all.** Confirmed at the
+- [x] **Photo captions are written with no context at all.** *Superseded by
+      the entry above.* Confirmed at the
       source: `CaptionPhotoInput` is `{ imageBase64, mediaType }` and nothing
       else, so the model sees one image and a static prompt. It cannot know a
       blue carriage is in the the railway museum; the *day* summarizer can, because
@@ -1072,9 +1096,17 @@ working practice this list was built with.
       twice. Note `documentTranslation` currently renders foreign placards
       *into English* specifically; under a Chinese UI that target changes too.
 - [ ] Trip management — rename, delete.
-- [ ] **Gemini Batch API** — roughly half price, async, up to 24h. Not worth it
+- [x] **Gemini Batch API** — roughly half price, async, up to 24h. Not worth it
       for a 35-minute interactive run; worth building if backfilling the other
       ~14,000 photos (£20 vs £40 overnight).
+      *Built 2026-09-11* (`jobs/analyzeBatch.ts`; HANDOFF, "The one piece of
+      work"). Submit locates the photos, writes JSONL files of 4,000 requests
+      from the server's thumbnail cache (Graph when missing), uploads and
+      records each batch in `data/batches/analyze.json` the moment it exists;
+      collect merges only into photos still uncaptioned, and the server runs
+      it on a ten-minute timer. Round trip on 3 photos: accepted, finished in
+      4 minutes, 3 of 3 captioned, 1,742 input / 749 output tokens — 581 and
+      250 a photo, as estimated. The backlog is now 23,425, about $17 batched.
 
 ### Resolved
 

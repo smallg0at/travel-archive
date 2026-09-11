@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, MediaResolution, Type } from "@google/genai";
 import { env } from "../env.js";
 import type {
   AiProvider,
@@ -15,6 +15,7 @@ import type {
 } from "./types.js";
 import { translatePrompt } from "./translatePrompt.js";
 import { altInstructions, nativeText, withAltFields } from "./altLanguage.js";
+import { captionContextBlock } from "./captionContext.js";
 
 // Written against @google/genai's documented structured-output shape
 // (responseSchema + the Type enum, nullable fields instead of Claude-style
@@ -152,6 +153,19 @@ function thinkingFor(budget: number | undefined) {
   return budget === undefined ? {} : { thinkingConfig: { thinkingBudget: budget } };
 }
 
+/**
+ * Captions read the image at low resolution.
+ *
+ * Measured 2026-09-11, default against low, with the context block: on 24
+ * photos from twelve named stops, input fell from 1,429 to 628 tokens a photo
+ * (−56%) and the captions named places as often; on 10 documents with long
+ * transcriptions, both matched the stored text at 97% word overlap. The one
+ * visible loss was a little detail in a caption or two — "a printed food menu
+ * from Stöckl im Park" where default listed its sections. Set this to
+ * `MEDIA_RESOLUTION_UNSPECIFIED` for the model's default.
+ */
+const CAPTION_RESOLUTION = MediaResolution.MEDIA_RESOLUTION_LOW;
+
 interface UsageMetadata {
   promptTokenCount?: number;
   candidatesTokenCount?: number;
@@ -194,34 +208,9 @@ function usageOf(response: { usageMetadata?: UsageMetadata }): CallUsage {
   };
 }
 
-/**
- * Where the photo was taken and what was around it, as a prompt block.
- *
- * Framed hard as naming help. Context invites a model to assert what it cannot
- * see — a photo tagged "the railway museum" becomes "a locomotive in the
- * the railway museum" whether or not the picture shows one — and a caption that
- * confidently states the wrong thing is worse than a vague one, because
- * everything downstream reads captions as observations.
- */
+/** Where and when, as a prompt block — shared with the other provider. */
 function captionContext(input: CaptionPhotoInput): string {
-  const context = input.context;
-  if (!context) return "";
-  const lines: string[] = [];
-  if (context.takenAt) lines.push(`Taken: ${context.takenAt}`);
-  if (context.place) lines.push(`Location from GPS (a hint, not confirmed by this image): ${context.place}`);
-  if (context.nearbyCaptions.length) {
-    const list = context.nearbyCaptions.map((c) => `- ${c}`).join("\n");
-    lines.push(`Other photos from the same day, nearest in time:\n${list}`);
-  }
-  if (!lines.length) return "";
-  return [
-    "",
-    "",
-    "CONTEXT — use it only to name what you can already see, never to add what you cannot:",
-    lines.join("\n"),
-    "",
-    "If this context lets you name a place, a building or an exhibit that the image shows, use the name. If the image does not support it, ignore the context entirely and describe only what is in the frame. Never state that the photo was taken somewhere on the strength of the context alone.",
-  ].join("\n");
+  return captionContextBlock(input.context);
 }
 
 async function captionPhoto(model: string, thinkingBudget: number | undefined, input: CaptionPhotoInput): Promise<CaptionResult> {
@@ -248,6 +237,7 @@ async function captionPhoto(model: string, thinkingBudget: number | undefined, i
       // unchanged days alone in organize.ts. Those three rules are what keep
       // the archive's prose stable between runs.
       temperature: 0,
+      mediaResolution: CAPTION_RESOLUTION,
       ...thinkingFor(thinkingBudget),
     },
   }));
@@ -281,6 +271,7 @@ Describe this in your own words. Do not transcribe or quote any text in the imag
         responseMimeType: "application/json",
         responseSchema: CAPTION_SCHEMA,
         temperature: 0,
+        mediaResolution: CAPTION_RESOLUTION,
         ...thinkingFor(thinkingBudget),
       },
     }));
@@ -658,6 +649,57 @@ ${tripDayLines(input)}${tripContext(input)}${altInstructions(input.alsoIn)}`,
     usage: usageOf(response),
     native: nativeText(input.alsoIn, parsed, namePair),
   };
+}
+
+/**
+ * One caption request as the Batch API takes it: the same prompt, schema and
+ * settings as `captionPhoto`, so a batched caption is the one an interactive
+ * run would have asked for. Plain JSON, because it goes into a JSONL file
+ * rather than through the SDK.
+ *
+ * No RECITATION fallback here — a batch cannot retry mid-flight. A photo that
+ * comes back empty stays uncaptioned, and the next interactive run, which has
+ * the fallback, picks it up.
+ */
+export function captionBatchRequest(input: CaptionPhotoInput): object {
+  return {
+    contents: [
+      {
+        role: "user",
+        parts: [{ inlineData: { mimeType: input.mediaType, data: input.imageBase64 } }, { text: CAPTION_PROMPT + captionContext(input) }],
+      },
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: CAPTION_SCHEMA,
+      temperature: 0,
+      mediaResolution: CAPTION_RESOLUTION,
+      ...thinkingFor(env.geminiThinkingBudget),
+    },
+  };
+}
+
+/** A caption response's JSON, read the way `captionPhoto` reads it. */
+export function parseCaptionJson(text: string): Omit<CaptionResult, "usage"> {
+  const parsed = JSON.parse(text) as {
+    content_type: CaptionResult["contentType"];
+    caption: string;
+    tags: string[];
+    extracted_text: string | null;
+    notable: boolean;
+  };
+  return {
+    contentType: parsed.content_type,
+    caption: parsed.caption,
+    tags: parsed.tags,
+    extractedText: parsed.extracted_text,
+    notable: parsed.notable,
+  };
+}
+
+/** The client itself, for the batch and file calls that have no provider-neutral shape. */
+export function geminiClient(): GoogleGenAI {
+  return ai();
 }
 
 export function createGeminiProvider(

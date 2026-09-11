@@ -6,6 +6,18 @@ export interface GeoPoint {
 }
 
 /**
+ * What a street-level map lookup found at a photo's coordinates. A hint for the
+ * captioner, never a location of record — `PhotoRecord.place` stays the town,
+ * which is what days and the trip map group by.
+ */
+export interface NearPlace {
+  /** The nearest named venue — a museum, a station, a castle — or null when the nearest thing was only a street. */
+  venue: string | null;
+  /** The street and district, e.g. "Paulusbrug, Binnenstad". */
+  street: string | null;
+}
+
+/**
  * Bumped whenever the on-disk/OneDrive layout changes shape. The app checks
  * this so a stale index written by an older pipeline fails loudly instead of
  * rendering half-empty.
@@ -128,6 +140,12 @@ export interface PhotoRecord {
 
   gps: GeoPoint | null;
   place: string | null;
+  /**
+   * Street-level context from the same coordinates, looked up before the photo
+   * is captioned. Undefined until looked up; null when there was nothing to
+   * find. No schema bump: older readers ignore it.
+   */
+  near?: NearPlace | null;
   /**
    * GPS that contradicts the rest of its day (>100km from the day's median).
    * Phone location fixes go wrong often enough — and 92% of this library
@@ -384,7 +402,7 @@ export interface ArchiveIndexFile {
  * `trip` writes one trip's narrative from day summaries that already exist; it
  * is a single model call, so it finishes in seconds.
  */
-export type JobKind = "scan" | "analyze" | "organize" | "trip" | "sync" | "translate";
+export type JobKind = "scan" | "analyze" | "organize" | "trip" | "sync" | "translate" | "collect";
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
@@ -421,6 +439,25 @@ export interface JobRecord {
  * both the CLI and the app show it before committing to a run — this is the
  * only step that costs money.
  */
+/** Where a submitted caption batch has got to, in Google's terms simplified. */
+export type AnalyzeBatchState = "pending" | "running" | "succeeded" | "failed" | "cancelled" | "expired";
+
+/**
+ * One batch of caption requests sent to the Gemini Batch API — half price,
+ * results within a day. The server collects finished ones on its own.
+ */
+export interface AnalyzeBatchStatus {
+  name: string;
+  displayName: string;
+  createdAt: string;
+  photos: number;
+  state: AnalyzeBatchState;
+  /** When its captions were merged into the archive; null until then. */
+  collectedAt: string | null;
+  applied: number | null;
+  failed: number | null;
+}
+
 export interface AnalyzePlan {
   total: number;
   months: { month: string; count: number }[];
