@@ -718,7 +718,10 @@ const routes: [RegExp, string, Handler][] = [
     "POST",
     async (_req, res) => {
       if (refuseIfBusy(res)) return;
-      json(res, 202, jobs.start({ kind: "collect", run: (onProgress, signal) => collectAnalyzeBatches(onProgress, signal) }));
+      const job = jobs.start({ kind: "collect", run: (onProgress, signal) => collectAnalyzeBatches(onProgress, signal) });
+      // A collect from the page frees the queue just as the timer's does.
+      checkBatchesAfter(job.id);
+      json(res, 202, job);
     },
   ],
   /** Submitted batches and their state. Asks Google about open ones; spends nothing, takes no lock. */
@@ -1004,19 +1007,25 @@ server.listen(env.servePort, "127.0.0.1", () => {
  * while it was down. Skipped while any job runs; the next tick comes soon.
  */
 const COLLECT_EVERY_MS = 10 * 60 * 1000;
+/**
+ * Looks at the batches again shortly after this job ends, not at the next
+ * tick: the automatic submit waits on a collect, and a submit that stopped at
+ * the queue limit on the next one.
+ */
+function checkBatchesAfter(jobId: string): void {
+  const stop = jobs.subscribe(jobId, (record) => {
+    if (record.status === "running" || record.status === "queued") return;
+    stop();
+    setTimeout(() => void collectIfReady(), 5_000);
+  });
+}
 async function collectIfReady(): Promise<void> {
   try {
     if (jobs.runningJob()) return;
     if (await readyToCollect()) {
       console.log("  caption batch finished — collecting");
       const job = jobs.start({ kind: "collect", run: (onProgress, signal) => collectAnalyzeBatches(onProgress, signal) });
-      // The automatic submit waits on this collect, so look again as soon as
-      // it ends rather than at the next tick.
-      const stop = jobs.subscribe(job.id, (record) => {
-        if (record.status === "running" || record.status === "queued") return;
-        stop();
-        setTimeout(() => void collectIfReady(), 5_000);
-      });
+      checkBatchesAfter(job.id);
       return;
     }
     // A submit that stopped at Google's queue limit carries on once no batch is open.
@@ -1027,12 +1036,8 @@ async function collectIfReady(): Promise<void> {
         kind: "analyze",
         run: (onProgress, signal) => submitAnalyzeBatch(next, onProgress, signal),
       });
-      // Straight on to locating the round after, rather than at the next tick.
-      const stop = jobs.subscribe(job.id, (record) => {
-        if (record.status === "running" || record.status === "queued") return;
-        stop();
-        setTimeout(() => void collectIfReady(), 5_000);
-      });
+      // Straight on to locating the round after.
+      checkBatchesAfter(job.id);
       return;
     }
     // While a batch is out, look up places for the next one — see locateAhead.
