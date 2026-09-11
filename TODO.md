@@ -1494,7 +1494,16 @@ resample from the source: no seams at 152% or 506%, and sharper.
       `npm run --workspace pipeline dedupe` checks every copy in an "exact"
       group against the photo the group keeps by content hash (SHA-256, else
       SHA-1, else QuickXor) and writes `data/dedupe/dry-run-*.csv`. It has no
-      way to delete; that step waits on the owner reviewing the list.*
+      way to delete; that step waits on the owner reviewing the list.
+      Result (dry-run-2026-09-11T17-01-39): 1,390 copies in 1,132 groups;
+      1,377 byte-identical (5.68 GB, 1,389 compared by SHA-256), 13 not
+      (`VID_*.jpg` stills sharing a name and time) and kept. Every identical
+      copy is in the same folder as the file kept, and 1,376 of the 1,377 to
+      delete carry a " 1"/" 2" suffix — the one that does not is
+      `IMG_20250629_143356.jpg`, byte-identical to `…143249.jpg`. 559 are in
+      2026/08. The first run kept the suffixed copy in most groups (the
+      representative is the largest file and identical copies tie); fixed by
+      keeping the original name.*
 - [x] Re-run analyze for the 2 photos that failed `503 UNAVAILABLE` on
       2026-09-05. Not lost — `analyzedAt` is still null — and the retry added
       afterwards should prevent a repeat. *Closed 2026-09-11: the whole-library
