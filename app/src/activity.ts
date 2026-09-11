@@ -118,8 +118,20 @@ function row(label: string, value: string): HTMLElement {
   return node;
 }
 
+/**
+ * A job kind or status in the reader's language, or the server's own word
+ * when this build has no label for it. A window left open across a server
+ * upgrade runs the old catalogue against new kinds — the first `locate` job
+ * showed as "undefined · running".
+ */
+export function jobLabel(kind: JobKind, status?: JobRecord["status"]): string {
+  const k = (ui.generate.jobKind as Partial<Record<string, string>>)[kind] ?? kind;
+  if (!status) return k;
+  return `${k} · ${(ui.generate.jobStatus as Partial<Record<string, string>>)[status] ?? status}`;
+}
+
 function jobTitle(job: Pick<JobRecord, "kind" | "status">): string {
-  return `${ui.generate.jobKind[job.kind]} · ${ui.generate.jobStatus[job.status]}`;
+  return jobLabel(job.kind, job.status);
 }
 
 /** The server's own result keys ("summarized 3"), as it wrote them — like the job log. */
@@ -391,7 +403,7 @@ export function startActivityIndicator(button: HTMLElement): void {
     const warm = health.warming && !health.warming.finishedAt ? health.warming : null;
     const status = button.querySelector<HTMLElement>(".nav-activity-status");
     if (status) {
-      status.textContent = job ? `${ui.generate.jobKind[job.kind]}…` : warm ? `${ui.activity.thumbnails}…` : "";
+      status.textContent = job ? `${jobLabel(job.kind)}…` : warm ? `${ui.activity.thumbnails}…` : "";
     }
     button.title = job ? jobTitle(job) : warm ? ui.activity.warming(warm.done, warm.total, warm.failed, false) : "";
 

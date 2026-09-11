@@ -21,7 +21,7 @@ import {
   watchJob,
 } from "./backend";
 import { fmtDateTime, num, ui } from "./i18n";
-import { claimRefresh } from "./activity";
+import { claimRefresh, jobLabel } from "./activity";
 
 /**
  * The generation panel: pick a date range, name it or let the model name it,
@@ -58,7 +58,7 @@ function renderProgress(panel: HTMLElement, job: JobRecord): void {
   const pct = job.progress.total > 0 ? Math.round((job.progress.done / job.progress.total) * 100) : 0;
   (box.querySelector(".job-bar-fill") as HTMLElement).style.width = `${pct}%`;
 
-  const phase = `${ui.generate.jobKind[job.kind]} · ${ui.generate.jobStatus[job.status]}`;
+  const phase = jobLabel(job.kind, job.status);
   box.querySelector(".job-phase")!.textContent =
     `${phase}${job.progress.total > 0 ? ` · ${num(job.progress.done)}/${num(job.progress.total)}` : ""}`;
 
