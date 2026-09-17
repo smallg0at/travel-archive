@@ -23,6 +23,7 @@ import { readFileSync, writeFileSync, statSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { toSimplified } from "./zh-simplify.mjs";
 
 const GEO = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "geo");
 const CITIES = join(GEO, "cities500.txt");
@@ -123,7 +124,9 @@ async function main() {
     // the fallback for both, and an empty column means "same as local".
     const local = slot.local?.value ?? city.name;
     const en = slot.en?.value ?? city.name;
-    const zh = slot.zh?.value ?? "";
+    // Some places carry only a generic `zh` name, and a seventh of those are
+    // Traditional — see zh-simplify.mjs.
+    const zh = toSimplified(slot.zh?.value ?? "");
     if (slot.local) withLocal++;
     if (zh) withZh++;
     out.push([city.lat, city.lon, city.cc, city.pop, local, en === local ? "" : en, zh === local ? "" : zh].join("\t"));
@@ -142,7 +145,7 @@ async function main() {
     const en = names.get(iso) ?? slot.en?.value ?? iso;
     // Where the country speaks English, that column is also its own name.
     const local = langs.get(iso) === "en" ? en : (slot.local?.value ?? en);
-    countries.push([iso, local, en, slot.zh?.value ?? ""].join("\t"));
+    countries.push([iso, local, en, toSimplified(slot.zh?.value ?? "")].join("\t"));
   }
   writeFileSync(COUNTRIES_OUT, countries.join("\n"), "utf8");
   console.log(`wrote ${COUNTRIES_OUT} — ${countryIds.size} countries`);
