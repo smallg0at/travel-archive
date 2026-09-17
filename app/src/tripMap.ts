@@ -434,24 +434,66 @@ export async function renderTripMap(
    * Recomputed per repaint, so zooming in reveals the labels that were hidden.
    */
   const labelled = new Set<number>();
+  /** Where a label may sit relative to its dot, in order of preference. */
+  const SIDES = ["above", "below", "right", "left"] as const;
+  /** Sizes tried before a label is given up on, as fractions of the base. */
+  const SCALES = [1, 0.82, 0.68];
   const placeLabels = () => {
     labelled.clear();
     const taken: { x0: number; y0: number; x1: number; y1: number }[] = [];
     const k = view.h / home.h;
-    const charW = fontBase * k * 0.55;
-    const lineH = fontBase * k * 1.25;
+    /** The base font in view units; offsets are multiples of it, so they hold through a zoom. */
+    const unit = fontBase * k;
+
+    /** A city's disc in view units, from the same expression the CSS sizes it with. */
+    const discRadius = (i: number) => home.h * 0.028 * (0.55 + 0.75 * Math.sqrt(cities[i].photoCount / biggest)) * k;
+    // The discs are reserved before any label is placed: a name written across
+    // a neighbouring city's dot hides the very thing the map is drawing.
+    for (const [i] of cities.entries()) {
+      const r = discRadius(i);
+      const [x, y] = points[i];
+      taken.push({ x0: x * 1e5 - r, x1: x * 1e5 + r, y0: y * 1e5 - r, y1: y * 1e5 + r });
+    }
 
     const order = cities.map((c, i) => i).sort((a, b) => cities[b].photoCount - cities[a].photoCount);
     for (const i of order) {
       const name = cities[i].name;
-      if (!name) continue;
+      const node = labelNodes.get(i);
+      if (!name || !node) continue;
       const [x, y] = points[i];
       const cx = x * 1e5;
       const cy = y * 1e5;
-      const halfW = (name.length * charW) / 2;
-      const box = { x0: cx - halfW, x1: cx + halfW, y0: cy - lineH * 1.6, y1: cy - lineH * 0.4 };
-      if (taken.some((t) => box.x0 < t.x1 && box.x1 > t.x0 && box.y0 < t.y1 && box.y1 > t.y0)) continue;
-      taken.push(box);
+      // Clearance from the centre: the dot's own radius plus a gap. Both are
+      // expressed in font units, which is what the CSS transform multiplies.
+      const radius = ((home.h * 0.028 * (0.55 + 0.75 * Math.sqrt(cities[i].photoCount / biggest))) / fontBase) * 1.15;
+
+      let placed: { dx: number; dy: number; anchor: string; scale: number } | null = null;
+      // Size is the outer loop: a label at full size on its second-choice side
+      // reads better than a shrunken one above.
+      for (const scale of SCALES) {
+        const size = unit * scale;
+        const width = name.length * 0.55 * size;
+        for (const side of SIDES) {
+          const dx = side === "right" ? radius + 0.35 : side === "left" ? -(radius + 0.35) : 0;
+          const dy = side === "above" ? -(radius + 0.55) : side === "below" ? radius + 0.95 : 0.32;
+          const anchor = side === "right" ? "start" : side === "left" ? "end" : "middle";
+          const baseX = cx + dx * unit;
+          const baseY = cy + dy * unit;
+          const x0 = anchor === "start" ? baseX : anchor === "end" ? baseX - width : baseX - width / 2;
+          const box = { x0, x1: x0 + width, y0: baseY - size * 0.78, y1: baseY + size * 0.22 };
+          if (taken.some((t) => box.x0 < t.x1 && box.x1 > t.x0 && box.y0 < t.y1 && box.y1 > t.y0)) continue;
+          taken.push(box);
+          placed = { dx, dy, anchor, scale };
+          break;
+        }
+        if (placed) break;
+      }
+
+      if (!placed) continue;
+      node.style.setProperty("--label-dx", String(placed.dx));
+      node.style.setProperty("--label-dy", String(placed.dy));
+      node.style.setProperty("--label-scale", String(placed.scale));
+      node.setAttribute("text-anchor", placed.anchor);
       labelled.add(i);
     }
     for (const [i, node] of labelNodes) node.style.display = labelled.has(i) ? "" : "none";

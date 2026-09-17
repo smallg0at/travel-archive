@@ -2060,6 +2060,9 @@ body.resizing { cursor: col-resize; user-select: none; }
   height: 380px;
   cursor: grab;
   touch-action: none;
+  /* Dragging the map used to sweep a text selection across every city name. */
+  user-select: none;
+  -webkit-user-select: none;
   /* The sea. Land is drawn over it as filled country polygons. */
   background: color-mix(in srgb, #4b7fb5 26%, var(--bg));
 }
@@ -2130,15 +2133,21 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .trip-map-city:hover circle,
 .trip-map-city:focus circle { fill-opacity: 1; stroke: var(--text); }
+/* Offset and scale come from placeLabels() in tripMap.ts, which moves a label
+   around its dot and shrinks it rather than dropping it. Both are multiples of
+   the base font size, so they hold their place through a zoom. */
 .trip-map-city text {
   fill: var(--text);
-  font-size: calc(var(--map-f, 12px) * var(--map-k, 1));
+  font-size: calc(var(--map-f, 12px) * var(--label-scale, 1) * var(--map-k, 1));
   font-weight: 600;
   paint-order: stroke;
   stroke: var(--bg);
   stroke-width: calc(var(--map-s, 1px) * 2.2 * var(--map-k, 1));
   pointer-events: none;
-  transform: translateY(calc(-1 * (var(--map-r, 6px) * var(--city-weight, 1) + var(--map-f, 12px) * 0.55) * var(--map-k, 1)));
+  transform: translate(
+    calc(var(--label-dx, 0) * var(--map-f, 12px) * var(--map-k, 1)),
+    calc(var(--label-dy, -1) * var(--map-f, 12px) * var(--map-k, 1))
+  );
 }
 .trip-map-city:focus { outline: none; }
 
