@@ -1049,6 +1049,29 @@ async function collectIfReady(): Promise<void> {
     console.warn(`  batch check failed: ${(err as Error).message}`);
   }
 }
+/**
+ * Keeps the server up when an error arrives outside any job's `await`.
+ *
+ * undici emits a dropped connection on the request object, not at the call
+ * site, so a stream reset mid-download reaches the process rather than the
+ * job's catch. On 2026-09-17, on a mobile link, exactly that killed the server
+ * in the middle of collecting a 4,000-photo batch and nothing restarted it.
+ *
+ * The running job cannot be trusted after this, so it is cancelled — which
+ * also releases the archive lock it holds. The server itself keeps serving,
+ * and the ten-minute check picks the work up again.
+ */
+for (const event of ["uncaughtException", "unhandledRejection"] as const) {
+  process.on(event, (err: unknown) => {
+    console.error(`  ${event}: ${(err as Error)?.message ?? String(err)}`);
+    const running = jobs.runningJob();
+    if (running) {
+      console.error(`  cancelling ${running.kind} ${running.id} after that error`);
+      jobs.cancel(running.id);
+    }
+  });
+}
+
 setInterval(() => void collectIfReady(), COLLECT_EVERY_MS);
 setTimeout(() => void collectIfReady(), 30_000);
 startSyncChecks(() => jobs.runningJob() !== null);

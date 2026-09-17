@@ -1,5 +1,5 @@
 import type { DateSource, GeoPoint } from "@travel-archive/shared";
-import { parseDateFromFileName } from "./util.js";
+import { isNetworkError, parseDateFromFileName } from "./util.js";
 import { getAccessToken } from "./auth.js";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -57,10 +57,20 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function graphFetchUrl(initialToken: string, url: string, init: RequestInit = {}): Promise<Response> {
   let token = initialToken;
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(url, {
-      ...init,
-      headers: { Authorization: `Bearer ${token}`, ...init.headers },
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...init,
+        headers: { Authorization: `Bearer ${token}`, ...init.headers },
+      });
+    } catch (err) {
+      // No answer at all — a dropped socket. Throttling is handled below by
+      // status; this is the case where there is no status to read, and on a
+      // weak link it must not end a job that has run for an hour.
+      if (attempt >= MAX_ATTEMPTS || !isNetworkError(err)) throw err;
+      await sleep(DEFAULT_BACKOFF_MS * attempt);
+      continue;
+    }
     if (res.ok) return res;
 
     // A Graph token lasts about an hour. `analyze` acquires one at the start of

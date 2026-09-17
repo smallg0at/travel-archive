@@ -101,6 +101,23 @@ export function renameForTakenAt(fileName: string, date: string, time: string | 
   return fileName.slice(0, match.index) + replacement + fileName.slice(match.index + whole.length);
 }
 
+/**
+ * A dropped or refused connection, rather than an answer from the server.
+ *
+ * Worth telling apart from every other failure: it is the one kind a later
+ * attempt, unchanged, may simply succeed at. On a mobile link it is also the
+ * common one — on 2026-09-17 a single ECONNRESET mid-download killed the job
+ * server outright, losing an hour of collecting.
+ */
+export function isNetworkError(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string }; message?: string };
+  const code = e?.code ?? e?.cause?.code ?? "";
+  return (
+    /^(ECONNRESET|ECONNABORTED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|ECONNREFUSED|UND_ERR_[A-Z_]+)$/.test(code) ||
+    /fetch failed|socket hang up|network|timed? ?out|terminated/i.test(e?.message ?? "")
+  );
+}
+
 export function parseDateFromFileName(fileName: string): { iso: string; hasTime: boolean } | null {
   const match = FILENAME_DATE.exec(fileName);
   if (!match) return null;

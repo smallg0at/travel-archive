@@ -7,7 +7,7 @@ import { readThumb } from "../thumbStore.js";
 import { loadIndex, loadShard, saveIndex, saveShard } from "../archiveStore.js";
 import { dataFile } from "../paths.js";
 import { env } from "../env.js";
-import { mediaTypeFor } from "../util.js";
+import { isNetworkError, mediaTypeFor } from "../util.js";
 import { captionBatchRequest, geminiClient, parseCaptionJson } from "../providers/gemini.js";
 import {
   captionContextFor,
@@ -95,6 +95,8 @@ interface AutoSubmit {
   /** What is left of the original limit. */
   limit: number;
   since: string;
+  /** Network failures in a row; the chain stops at NETWORK_FAILURES_ALLOWED. */
+  failures?: number;
 }
 
 interface StateFile {
@@ -117,6 +119,15 @@ interface StateFile {
   /** The open batch `locateAhead` last finished for, so it runs once per round. */
   locatedAheadFor?: string | null;
 }
+
+/** Attempts at the request-file upload before the submit gives up. */
+const UPLOAD_ATTEMPTS = 3;
+
+/** Attempts at downloading a finished batch's results before the collect gives up. */
+const DOWNLOAD_ATTEMPTS = 3;
+
+/** Network failures in a row before the automatic chain switches itself off. */
+const NETWORK_FAILURES_ALLOWED = 3;
 
 /** Google's "too much enqueued" answer — HTTP 429, RESOURCE_EXHAUSTED. */
 function isQueueFull(err: unknown): boolean {
@@ -196,7 +207,8 @@ function closeStream(stream: WriteStream): Promise<void> {
  *
  * A cancel or a failure clears `autoSubmit`: a chain that has gone wrong must
  * stop rather than try again every ten minutes, uploading hundreds of
- * megabytes each time.
+ * megabytes each time. The exception is a dropped connection, which the next
+ * check may simply get through — three of those in a row still stops it.
  */
 export async function submitAnalyzeBatch(
   opts: AnalyzeOptions,
@@ -208,10 +220,21 @@ export async function submitAnalyzeBatch(
   try {
     return await submitBatches(state, opts, onProgress, signal);
   } catch (err) {
-    if (state.autoSubmit) {
-      state.autoSubmit = null;
-      await writeState(state);
-      onProgress({ message: "Automatic submit stopped." });
+    // Read again: the submit writes the state as it goes, and `state` here may
+    // be several batches out of date.
+    const fresh = await readState();
+    if (fresh.autoSubmit) {
+      const failures = (fresh.autoSubmit.failures ?? 0) + 1;
+      if (isNetworkError(err) && failures < NETWORK_FAILURES_ALLOWED) {
+        fresh.autoSubmit.failures = failures;
+        onProgress({
+          message: `Network problem, ${failures} of ${NETWORK_FAILURES_ALLOWED} — the next check tries again.`,
+        });
+      } else {
+        fresh.autoSubmit = null;
+        onProgress({ message: "Automatic submit stopped." });
+      }
+      await writeState(fresh);
     }
     throw err;
   }
@@ -271,7 +294,21 @@ async function submitBatches(
     const displayName = `analyze ${new Date().toISOString().slice(0, 16)} #${state.batches.length + 1}`;
     onProgress({ phase: "uploading", message: `Uploading ${refs.length} request(s) — ${displayName}` });
     const ai = geminiClient();
-    const uploaded = await ai.files.upload({ file: path, config: { mimeType: "jsonl", displayName } });
+    // ~330MB over whatever connection is to hand. A reset half way through is
+    // not a reason to throw away a file that took 10 minutes to prepare.
+    let uploaded!: Awaited<ReturnType<typeof ai.files.upload>>;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        uploaded = await ai.files.upload({ file: path, config: { mimeType: "jsonl", displayName } });
+        break;
+      } catch (err) {
+        if (signal?.aborted || attempt >= UPLOAD_ATTEMPTS || !isNetworkError(err)) throw err;
+        onProgress({
+          message: `Upload failed (${(err as Error).message}) — trying again, attempt ${attempt + 1} of ${UPLOAD_ATTEMPTS}.`,
+        });
+        await new Promise((resolve) => setTimeout(resolve, attempt * 15_000));
+      }
+    }
     const anyOpen = state.batches.some(isOpen);
     let job: Awaited<ReturnType<typeof ai.batches.create>>;
     try {
@@ -584,7 +621,18 @@ export async function collectAnalyzeBatches(onProgress: ProgressFn, signal?: Abo
     if (signal?.aborted) break;
     const local = `${BATCH_DIR}/results-${Date.now()}.jsonl`;
     onProgress({ phase: "downloading", message: `Downloading ${batch.displayName}...` });
-    await ai.files.download({ file: resultFile, downloadPath: local });
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await ai.files.download({ file: resultFile, downloadPath: local });
+        break;
+      } catch (err) {
+        if (signal?.aborted || attempt >= DOWNLOAD_ATTEMPTS || !isNetworkError(err)) throw err;
+        onProgress({
+          message: `Download failed (${(err as Error).message}) — trying again, attempt ${attempt + 1} of ${DOWNLOAD_ATTEMPTS}.`,
+        });
+        await new Promise((resolve) => setTimeout(resolve, attempt * 15_000));
+      }
+    }
     const lines = (await readFile(local, "utf-8")).split("\n").filter((l) => l.trim());
 
     const usage = { promptTokens: 0, outputTokens: 0, thoughtsTokens: 0 };
