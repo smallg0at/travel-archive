@@ -164,6 +164,32 @@ and the form warns.
 | trip map | `app/src/tripMap.ts` |
 | thumbnails / disk cache | `pipeline/src/thumbStore.ts`, `serve.ts` |
 | sync | `pipeline/src/jobs/sync.ts`, `syncStore.ts` |
+| place names (offline) | `pipeline/src/geocodeOffline.ts` + `scripts/build-geo.mjs` |
+
+### Place names come from a local gazetteer, not a service
+
+Reverse geocoding used to call Nominatim once a second per photo. Their usage
+policy allows **4 requests a minute** for anything scheduled or running longer
+than a day, which a library-wide captioning pass is, so it moved offline.
+
+`pipeline/data/geo/` holds `places.tsv` (235,822 settlements — position,
+population, and the name in its own language, English and Simplified Chinese)
+and `countries.tsv`. Both are built from the GeoNames dumps by:
+
+```
+npm run geo:build --workspace pipeline
+```
+
+which needs `cities500.txt`, `alternateNamesV2.txt` and `countryInfo.txt`
+downloaded into that folder first (see the script's header). The data folder is
+gitignored, so a fresh clone must run this before analyzing anything; without
+it, geocoding throws on the missing file. GeoNames is CC BY 4.0 — the credit
+line in Settings (`settings.dataCredits`) is the attribution, and it must stay.
+
+Lookups are ~57µs, so locating a 4,000-photo round is about a second where
+Nominatim took 40 minutes. Street-level detail ("The Quay, a coastal suburb")
+was dropped with the move: measured on this archive it reached 9% of captions,
+and street names 0.1%, for a second request per photo.
 
 ---
 

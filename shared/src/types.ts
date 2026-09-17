@@ -141,6 +141,14 @@ export interface PhotoRecord {
   gps: GeoPoint | null;
   place: string | null;
   /**
+   * The same place in the app's display languages, from the offline gazetteer
+   * (see pipeline/src/geocodeOffline.ts). `place` stays the endonym — what the
+   * place calls itself, which is what a caption should use — while a reader in
+   * 简体中文 can be shown 城市 for a city. Absent for photos placed before this
+   * existed.
+   */
+  placeNames?: { en: string; zh: string | null } | null;
+  /**
    * Street-level context from the same coordinates, looked up before the photo
    * is captioned. Undefined until looked up; null when there was nothing to
    * find. No schema bump: older readers ignore it.

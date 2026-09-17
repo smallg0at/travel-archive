@@ -233,6 +233,7 @@ export const zhHans: Messages = {
     total: "合计",
     clearThumbnails: "清除缩略图",
     clearOriginals: "清除原图",
+    dataCredits: "地名数据来自 GeoNames（CC BY 4.0）。地图轮廓来自 Natural Earth（公有领域）。",
     storageNote: "即使清除，保存到本机的内容也会保留。其余内容需要时会重新下载。",
   },
 

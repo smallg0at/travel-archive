@@ -237,6 +237,7 @@ export const en = {
     total: "Total",
     clearThumbnails: "Clear thumbnails",
     clearOriginals: "Clear full-size photos",
+    dataCredits: "Place names from GeoNames (CC BY 4.0). Map outlines from Natural Earth (public domain).",
     storageNote: "Pinned items are kept even when clearing. Anything else is fetched again when needed.",
   },
 

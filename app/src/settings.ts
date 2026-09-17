@@ -244,6 +244,9 @@ export async function showSettings(): Promise<void> {
   frag.appendChild(offlineSection(sync));
   frag.appendChild(storageSection(sync));
   frag.appendChild(appearanceSection());
+  // GeoNames is CC BY 4.0, which asks for credit "as suitable for your medium".
+  // Natural Earth is public domain and needs none, but naming it costs a line.
+  frag.appendChild(el(`<p class="set-credits"></p>`)).textContent = ui.settings.dataCredits;
 
   content.replaceChildren(frag);
 

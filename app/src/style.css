@@ -1759,6 +1759,14 @@ body.resizing { cursor: col-resize; user-select: none; }
 .set-row > span { color: var(--text-secondary); }
 .set-row > b { font-weight: 500; }
 
+/* Data credits, under the last section: GeoNames is CC BY 4.0 and asks for it. */
+.set-credits {
+  margin: 18px 2px 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
 .set-note {
   margin: 8px 0 0;
   font-size: 11.5px;

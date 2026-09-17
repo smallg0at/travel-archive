@@ -9,7 +9,7 @@ import type {
 import type { CaptionContext } from "../providers/types.js";
 import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
-import { flushGeocodeCache, nearPlace, reverseGeocode } from "../exif.js";
+import { offlinePlace, placeString } from "../geocodeOffline.js";
 import { getProvider } from "../providers/index.js";
 import { env } from "../env.js";
 import {
@@ -172,9 +172,13 @@ async function geocodePending(
   for (const [i, photo] of needing.entries()) {
     if (signal?.aborted) break;
     if (i % 20 === 0) onProgress({ phase: "geocoding", done: i, total: needing.length });
-    const place = await reverseGeocode(photo.gps!, env.geocodeContactEmail);
-    if (!place) continue;
-    shard.photos[photo.id] = { ...shard.photos[photo.id], place };
+    const found = await offlinePlace(photo.gps!);
+    if (!found) continue;
+    shard.photos[photo.id] = {
+      ...shard.photos[photo.id],
+      place: placeString(found),
+      placeNames: { en: placeString(found, "en"), zh: found.locality.zh ? placeString(found, "zh") : null },
+    };
     count++;
   }
   return count;
@@ -287,10 +291,11 @@ export function captionContextFor(record: PhotoRecord, sources: ContextSources):
  * captioned, so the prompt can carry them — before captioning now, where it
  * used to run after (`geocodePending` is still the sweep for anything missed).
  *
- * Serial, at Nominatim's one request a second, and cached on disk (exif.ts):
- * the first pass over the whole library is ~3,500 cells a zoom, later runs
- * almost none. A failed street-level lookup leaves `near` unset, so it is
- * retried next run rather than recorded as "nothing here".
+ * Answered from the local gazetteer (geocodeOffline.ts) — no network, ~57µs a
+ * photo, so a round of 4,000 is a second rather than the ~40 minutes Nominatim
+ * took at the one request a second its policy allows. Street-level detail is
+ * no longer looked up at all: it reached 9% of captions and cost a second
+ * request per photo.
  *
  * Replaces the records in `shard.photos`; a caller holding the old objects
  * must read them back from the shard.
@@ -303,24 +308,22 @@ export async function geocodeBeforeCaptioning(
 ): Promise<number> {
   const needing = targets.filter((t) => {
     const p = shard.photos[t.id];
-    return p?.gps && !p.gpsSuspect && (!p.place || p.near === undefined);
+    return p?.gps && !p.gpsSuspect && !p.place;
   });
   let located = 0;
   for (const [i, target] of needing.entries()) {
     if (signal?.aborted) break;
-    if (i % 25 === 0) onProgress({ phase: "geocoding", done: i, total: needing.length });
+    if (i % 200 === 0) onProgress({ phase: "geocoding", done: i, total: needing.length });
     const photo = shard.photos[target.id];
-    const place = photo.place ?? (await reverseGeocode(photo.gps!, env.geocodeContactEmail));
-    let near = photo.near;
-    try {
-      if (near === undefined) near = await nearPlace(photo.gps!, env.geocodeContactEmail);
-    } catch (err) {
-      onProgress({ message: `street lookup failed for ${photo.fileName}: ${(err as Error).message}` });
-    }
-    shard.photos[target.id] = { ...photo, place, near };
+    const found = await offlinePlace(photo.gps!);
+    if (!found) continue;
+    shard.photos[target.id] = {
+      ...photo,
+      place: placeString(found),
+      placeNames: { en: placeString(found, "en"), zh: found.locality.zh ? placeString(found, "zh") : null },
+    };
     located++;
   }
-  await flushGeocodeCache();
   return located;
 }
 
