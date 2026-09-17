@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
-import { pins, removePin, setPin, writeSync } from "./syncStore.js";
+import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
 import { readFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { downloadPhotoBuffer, downloadThumbnailBuffer } from "./graph.js";
@@ -1074,4 +1074,38 @@ for (const event of ["uncaughtException", "unhandledRejection"] as const) {
 
 setInterval(() => void collectIfReady(), COLLECT_EVERY_MS);
 setTimeout(() => void collectIfReady(), 30_000);
+
+/**
+ * How stale the archive may get before the server looks for new photos itself.
+ *
+ * Adding photos to OneDrive did nothing until someone opened the app and
+ * pressed Sync, so a week of photos could sit outside the archive while the
+ * captioner worked through everything else. Six hours means a day's photos are
+ * picked up the same evening.
+ */
+const SCAN_EVERY_MS = 6 * 60 * 60 * 1000;
+/** How often that staleness is checked — the scan itself is skipped while busy. */
+const SCAN_CHECK_MS = 30 * 60 * 1000;
+
+/**
+ * An incremental scan when the last one has aged out. Listing only: it reads
+ * folder metadata from Graph and downloads no photos, so it costs nothing but
+ * time, and anything new it finds joins the next caption batch by itself.
+ */
+async function scanIfDue(): Promise<void> {
+  try {
+    if (jobs.runningJob()) return;
+    const { lastScanAt } = await readSync();
+    if (lastScanAt && Date.now() - Date.parse(lastScanAt) < SCAN_EVERY_MS) return;
+    const range = await resolveRange("incremental", { from: null, to: null });
+    console.log(`  looking for new photos (from ${range.from ?? "the beginning"})`);
+    jobs.start({ kind: "scan", run: (onProgress, signal) => runScan(range, onProgress, signal) });
+  } catch (err) {
+    console.warn(`  scan check failed: ${(err as Error).message}`);
+  }
+}
+setInterval(() => void scanIfDue(), SCAN_CHECK_MS);
+// After the collect check, so a batch waiting to be merged is not held up by a
+// scan that has six hours of slack in it.
+setTimeout(() => void scanIfDue(), 60_000);
 startSyncChecks(() => jobs.runningJob() !== null);
