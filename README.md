@@ -165,6 +165,37 @@ npm run --workspace app cap:sync          # after every rebuild
 
 Requires Android Studio / Xcode installed for the respective platform.
 
+## The desktop shell
+
+One window, and the only way to use the parts that need a local machine —
+generation, sync, pinning photos to disk. From a checkout:
+
+```
+npm run --workspace app build      # the shell serves app/dist; build it first
+npm run desktop                    # build the shell and open the window
+npm run package                    # installer -> desktop/release
+```
+
+`npm run desktop` builds `desktop/` and starts Electron. The shell then serves
+the built app on **17923** and starts the pipeline's job server as a child
+process on **4319**, waiting for it to answer `/health` before relying on it. If
+the job server cannot start, the window still opens and the archive still reads
+from OneDrive — only generation is unavailable, which is the same read-only path
+the phone takes.
+
+Two things that follow from it being a child process:
+
+- **Only one instance may run.** A second would fight over both ports and, worse,
+  run a second job server writing the same archive. The shell enforces this, and
+  quitting stops the child — a job server left holding port 4319 and the archive
+  lock is a failure with nothing on screen to explain it.
+- **The window serves a build, not a dev server.** After
+  `npm run --workspace app build`, press **Ctrl+R** in the window to pick the new
+  bundle up. For UI work `npm run --workspace app dev` is the faster loop; the
+  shell is for testing what it actually ships.
+
+`DESKTOP_PORT` and `SERVE_PORT` override the two ports.
+
 ## Authentication
 
 Two different flows against **one** Azure app registration, because the pipeline
@@ -193,7 +224,7 @@ app is configured.
 
 - `app/src/msAuth.ts` — `loginPopup()` **requires a genuine user click**; popups opened from anywhere else (e.g. from an IntersectionObserver callback during lazy-loading) get silently blocked, confirmed live as `BrowserAuthError: popup_window_error`. That's *why* sign-in is a visible banner button rather than something that fires on its own. It also auto-clears MSAL's stale `interaction_in_progress` lock, which otherwise sticks on forever after an abandoned popup and blocks every future attempt.
 - `app/auth/` — a **dedicated redirect bridge page**, separate from the main app. `loginPopup()`'s popup has to land on a page that hands the response back to the opener via `BroadcastChannel` and closes itself; pointing `redirectUri` at the main app means the popup loads the whole UI and nothing does the handoff. `auth/main.ts` doesn't even construct a `PublicClientApplication` — an earlier fix attempt did, and still didn't work (popup landed on the right URL with a valid code and just sat there). Reading the installed package source (`node_modules/@azure/msal-browser/dist/redirect_bridge/index.mjs`) turned up the actual answer: `broadcastResponseToMainFrame` from the `@azure/msal-browser/redirect-bridge` subpath, which is the entire job of that page. `vite.config.ts` builds it as a second Rollup entry.
-- Redirect URIs are `http://localhost:5173/auth/` and `http://localhost:4173/auth/` — **the trailing slash matters**, confirmed live: Vite only resolves `auth/index.html` for the exact path `/auth/`; `/auth` falls through to the SPA fallback and serves the main app. Add the Capacitor app's own origin + `/auth/` once packaged (`https://localhost` is Capacitor's Android default; iOS commonly uses `capacitor://localhost`).
+- Redirect URIs are `http://localhost:5173/auth/` and `http://localhost:4173/auth/` — **the trailing slash matters**, confirmed live: Vite only resolves `auth/index.html` for the exact path `/auth/`; `/auth` falls through to the SPA fallback and serves the main app. Add the Capacitor app's own origin + `/auth/` once packaged (`https://localhost` is Capacitor's Android default; iOS commonly uses `capacitor://localhost`). The desktop shell needs `http://localhost:17923/auth/` registered too — it serves the same built app on its own port, so without that entry the window opens and sign-in fails there alone.
 
 The browser half is verified end-to-end, including a completed real sign-in:
 tokens land in `localStorage`, the banner disappears, and the app renders signed
