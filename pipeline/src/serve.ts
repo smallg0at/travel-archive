@@ -12,7 +12,8 @@ import {
   writeThumb,
   type ThumbSize,
 } from "./thumbStore.js";
-import type { ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
+import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
+import { readPrefs, writePrefs } from "./prefsStore.js";
 import { env } from "./env.js";
 import { getCachedAccessToken } from "./auth.js";
 import { loadIndex } from "./archiveStore.js";
@@ -371,6 +372,32 @@ const routes: [RegExp, string, Handler][] = [
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }
+    },
+  ],
+
+  /**
+   * The app's interface preferences — theme, thumbnail density, sidebar width,
+   * content language, which nav groups are open.
+   *
+   * Nothing to do with the archive: no lock, no upload, no schema version. It
+   * is here because this process is the one thing that is running whenever the
+   * desktop shell is *and* writes to a disk that survives the renderer being
+   * killed, which `localStorage` demonstrably did not — see prefsStore.ts.
+   *
+   * The app keeps its own `localStorage` copy regardless and falls back to it
+   * when nothing answers here, because a browser reading OneDrive directly has
+   * no server at all and must still remember a theme.
+   */
+  [/^\/prefs$/, "GET", async (_req, res) => json(res, 200, await readPrefs())],
+  [
+    /^\/prefs$/,
+    "POST",
+    async (req, res) => {
+      // Validation is `writePrefs`'s, not this route's: the field rules belong
+      // beside the file they are written to, and the app is not the only thing
+      // that could post here.
+      const body = await readJsonBody<Partial<AppPrefs>>(req);
+      json(res, 200, await writePrefs(body));
     },
   ],
 
@@ -996,6 +1023,8 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`  GET  /archive/status`);
   console.log(`  GET  /config              generation settings; never returns keys`);
   console.log(`  POST /config              {AI_PROVIDER,ANTHROPIC_API_KEY,...}`);
+  console.log(`  GET  /prefs               the app's theme, density, sidebar width, language`);
+  console.log(`  POST /prefs               {theme,density,sidebarWidth,contentLang,navOpenGroups}`);
   console.log(`  POST /jobs/scan           {mode,from,to}    free, Graph listing only`);
   console.log(`  POST /jobs/analyze/plan   {from,to,limit}   what it would cost, spends nothing`);
   console.log(`  POST /jobs/analyze        {from,to,limit,batch}   batch: half price, results within a day`);

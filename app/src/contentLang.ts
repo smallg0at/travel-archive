@@ -1,5 +1,6 @@
 import type { DayRecord, TranslationFile } from "@travel-archive/shared";
 import { applyEdits, textKey } from "@travel-archive/shared";
+import { CONTENT_LANG_KEY, rememberPref } from "./prefs";
 
 /**
  * The reader's language — one setting for both the archive's own text
@@ -7,7 +8,8 @@ import { applyEdits, textKey } from "@travel-archive/shared";
  * around it, whose words are in `i18n/`.
  *
  * Nothing here may import `i18n/`: that module reads `contentLanguage()` while
- * it loads, so the dependency only runs one way.
+ * it loads, so the dependency only runs one way. (`prefs.ts` is safe by the
+ * same rule — it imports nothing but the backend client.)
  *
  * The second language lives in sidecar files beside the archive (see
  * `TranslationFile` in shared), keyed by a hash of the original text. So the
@@ -15,8 +17,11 @@ import { applyEdits, textKey } from "@travel-archive/shared";
  * one. A text with no entry shows as written — never blank — which is also
  * what a day rewritten since the last translation looks like.
  *
- * Per device, like the theme: two people reading the same archive can read it
- * in different languages.
+ * Per archive rather than per browser now, like the theme: the local job server
+ * holds it (prefs.ts), because the browser's own copy did not survive the
+ * desktop shell being killed. Two people reading the same archive from
+ * *different* machines still read it in different languages — nothing is
+ * uploaded — but two windows onto the same server agree.
  */
 
 export type ContentLang = "en" | "zh-Hans";
@@ -26,11 +31,9 @@ export const CONTENT_LANG_OPTIONS: { value: ContentLang; label: string }[] = [
   { value: "zh-Hans", label: "简体中文" },
 ];
 
-const KEY = "content-language";
-
 function stored(): ContentLang {
   try {
-    return localStorage.getItem(KEY) === "zh-Hans" ? "zh-Hans" : "en";
+    return localStorage.getItem(CONTENT_LANG_KEY) === "zh-Hans" ? "zh-Hans" : "en";
   } catch {
     return "en";
   }
@@ -52,10 +55,16 @@ export function contentLanguage(): ContentLang {
  * back to the same place.
  */
 export function setContentLanguage(lang: ContentLang): void {
+  // To the server first, and with `keepalive` so the reload below cannot cancel
+  // it in flight — this is the one setting whose save is immediately followed
+  // by the page going away. It is also the copy that outlives the browser's,
+  // which is the point of prefs.ts.
+  rememberPref({ contentLang: lang });
   try {
-    localStorage.setItem(KEY, lang);
+    localStorage.setItem(CONTENT_LANG_KEY, lang);
   } catch {
-    // Storage blocked: nothing to remember it in, so nothing changes.
+    // Storage blocked. The server has it, so the next launch reads it back and
+    // applies it; there is nothing to reload into now.
     return;
   }
   location.reload();

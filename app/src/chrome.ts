@@ -7,7 +7,8 @@
  * it cannot be pressed before that page exists.
  */
 
-const WIDTH_KEY = "sidebar-width";
+import { rememberPref, SIDEBAR_WIDTH_KEY as WIDTH_KEY } from "./prefs";
+
 /* 230, not 210: measured against "a town Seaside Getaway" (24 characters,
    an entirely normal trip name length) truncating at the old default. No
    fixed width avoids truncation for arbitrary user-chosen trip names — that
@@ -32,6 +33,20 @@ function storedWidth(): number {
   return DEFAULT_WIDTH;
 }
 
+/**
+ * Remembers a width, in both places: the browser, which the next paint reads
+ * synchronously, and the job server, which is the copy that survives the
+ * renderer being killed (see prefs.ts).
+ */
+function storeWidth(px: number): void {
+  try {
+    localStorage.setItem(WIDTH_KEY, String(px));
+  } catch {
+    // Not persisting locally is fine; the width still applies for this session.
+  }
+  rememberPref({ sidebarWidth: px });
+}
+
 /** Drag the sidebar's right edge to resize it. Width persists per browser. */
 export function initSidebarResize(): void {
   applyWidth(storedWidth());
@@ -53,11 +68,7 @@ export function initSidebarResize(): void {
     dragging = false;
     handle.releasePointerCapture(event.pointerId);
     document.body.classList.remove("resizing");
-    try {
-      localStorage.setItem(WIDTH_KEY, String(sidebar.getBoundingClientRect().width));
-    } catch {
-      // Not persisting is fine; the width still applies for this session.
-    }
+    storeWidth(sidebar.getBoundingClientRect().width);
   };
 
   handle.addEventListener("pointerdown", (event) => {
@@ -75,11 +86,7 @@ export function initSidebarResize(): void {
   // knowing that the width was stored at all.
   handle.addEventListener("dblclick", () => {
     applyWidth(DEFAULT_WIDTH);
-    try {
-      localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH));
-    } catch {
-      /* see above */
-    }
+    storeWidth(DEFAULT_WIDTH);
   });
 }
 
@@ -89,9 +96,5 @@ export function initSidebarResize(): void {
  */
 export function resetSidebarWidth(): void {
   applyWidth(DEFAULT_WIDTH);
-  try {
-    localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH));
-  } catch {
-    /* not persisting is fine; it still applies for this session */
-  }
+  storeWidth(DEFAULT_WIDTH);
 }

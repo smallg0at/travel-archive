@@ -13,14 +13,13 @@
  */
 
 import { ui } from "./i18n";
+import { rememberPref, THEME_KEY } from "./prefs";
 
 export type Theme = "light" | "dark" | "system";
 
-const KEY = "theme";
-
 export function readTheme(): Theme {
   try {
-    const stored = localStorage.getItem(KEY);
+    const stored = localStorage.getItem(THEME_KEY);
     if (stored === "light" || stored === "dark") return stored;
   } catch {
     // Storage blocked (private browsing). The OS preference still applies.
@@ -28,17 +27,30 @@ export function readTheme(): Theme {
   return "system";
 }
 
-export function applyTheme(theme: Theme): void {
+/**
+ * The attribute only, with nothing stored. For the startup path, where the
+ * theme has just been restored from the server into `localStorage` and the
+ * inline script in index.html painted the page before it arrived — saving it
+ * again there would only send the server back the value it just supplied.
+ */
+export function showTheme(theme: Theme): void {
   const root = document.documentElement;
   if (theme === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", theme);
+}
+
+export function applyTheme(theme: Theme): void {
+  showTheme(theme);
 
   try {
-    if (theme === "system") localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, theme);
+    if (theme === "system") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, theme);
   } catch {
     // Not persisting is fine; the choice still holds for this session.
   }
+  // And to the server, which is the copy that survives the renderer being
+  // killed — see prefs.ts.
+  rememberPref({ theme });
 }
 
 /** Which theme is actually showing, with "system" resolved. */

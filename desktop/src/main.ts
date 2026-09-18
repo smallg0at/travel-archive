@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
 import type { Server } from "node:http";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -324,7 +324,34 @@ app.on("window-all-closed", () => app.quit());
  * the archive lock too — leaving the next launch refusing to work for reasons
  * nothing on screen could explain.
  */
+/**
+ * Push whatever the renderer has stored to disk before the process goes.
+ *
+ * Chromium keeps `localStorage` in a LevelDB under the userData directory and
+ * commits it on a clean shutdown. This one had not committed in days: on
+ * 2026-09-11 that store held a `CURRENT` dated 06/09 and a last `.ldb` table
+ * dated 11/09, while every launch wrote a fresh `000003.log` and left the
+ * previous session's — 20KB of MSAL keys, theme and content language — behind
+ * as an orphaned `000004.log` that was never recovered. That is the signature
+ * of the renderer being killed rather than quitting, which this machine has
+ * done repeatedly.
+ *
+ * The real fix is elsewhere: the settings now live in the job server's own
+ * file (pipeline/src/prefsStore.ts), which survives a kill -9 outright. This
+ * is the belt-and-braces half, and it only helps on the paths that reach
+ * `before-quit` at all — a force-kill or a power cut reaches nothing, which is
+ * precisely why it could not be the fix on its own.
+ */
+function flushRendererStorage(): void {
+  try {
+    void session.defaultSession.flushStorageData();
+  } catch {
+    // Nothing here is worth failing a quit over.
+  }
+}
+
 app.on("before-quit", () => {
+  flushRendererStorage();
   stopPipelineServer(pipeline);
   staticServer?.close();
 });

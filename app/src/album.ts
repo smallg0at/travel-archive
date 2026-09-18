@@ -18,6 +18,7 @@ import { releaseActivity, showActivity, startActivityIndicator } from "./activit
 import { showSearch } from "./search";
 import { addTripControls } from "./dayEdit";
 import { jumpTo, withContents, type ContentsEntry } from "./contents";
+import { DENSITY_KEY, OPEN_GROUPS_KEY, rememberPref } from "./prefs";
 
 /**
  * How long a view must be looked at before anything is fetched for it.
@@ -85,7 +86,6 @@ const UNDATED = "undated";
  */
 type Density = "compact" | "comfortable" | "spacious";
 
-const DENSITY_KEY = "album-density";
 const DENSITY_CELL_PX: Record<Density, number> = { compact: 78, comfortable: 120, spacious: 190 };
 const DENSITY_LABEL: Record<Density, string> = ui.album.density;
 
@@ -105,6 +105,16 @@ function applyDensity(): void {
   document.documentElement.style.setProperty("--album-cell", `${DENSITY_CELL_PX[density]}px`);
 }
 
+/**
+ * Re-reads the stored density. Called once at startup when the setting has
+ * just come back from the server (see prefs.ts): this module read it while it
+ * loaded, which was before the fetch could have answered.
+ */
+export function refreshDensity(): void {
+  density = readDensity();
+  applyDensity();
+}
+
 export function renderDensityControl(): HTMLElement {
   const wrap = el<HTMLDivElement>(`<div class="density-control" role="group" aria-label="${ui.album.thumbnailSize}"></div>`);
   for (const option of ["compact", "comfortable", "spacious"] as Density[]) {
@@ -118,6 +128,7 @@ export function renderDensityControl(): HTMLElement {
       } catch {
         // Not persisting is fine; the setting still applies for this session.
       }
+      rememberPref({ density: option });
       applyDensity();
       wrap.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
       button.classList.add("active");
@@ -491,8 +502,6 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   lookAhead(photos.map((p) => p.id));
 }
 
-const OPEN_GROUPS_KEY = "nav-open-groups";
-
 /**
  * Which nav groups are expanded, remembered per browser.
  *
@@ -519,6 +528,7 @@ function rememberOpenGroups(open: Set<string>): void {
   } catch {
     // Not persisting is fine; the pane still works for this session.
   }
+  rememberPref({ navOpenGroups: [...open] });
 }
 
 /**

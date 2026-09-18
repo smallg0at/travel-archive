@@ -1,6 +1,7 @@
 import type {
   AnalyzeBatchStatus,
   AnalyzePlan,
+  AppPrefs,
   ArchiveStatus,
   ConfigStatus,
   JobRecord,
@@ -232,6 +233,39 @@ export async function getConfig(): Promise<ConfigStatus | null> {
  */
 export function saveConfig(patch: Record<string, string>): Promise<ConfigStatus> {
   return post<ConfigStatus>("/config", patch);
+}
+
+/**
+ * The interface preferences the server holds — theme, density, sidebar width,
+ * content language, open nav groups. Null with no backend, which is the phone
+ * and any plain browser: there `localStorage` is the whole story.
+ */
+export async function getPrefs(): Promise<AppPrefs | null> {
+  try {
+    const res = await fetch(`${BACKEND}/prefs`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS), cache: "no-store" });
+    return res.ok ? ((await res.json()) as AppPrefs) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Saves the settings that changed. Fire and forget, and deliberately not
+ * `post()`: `keepalive` is what makes the write survive the page going away,
+ * and changing the content language reloads the page the instant after this is
+ * called (see contentLang.ts). Without it that one save would be cancelled
+ * mid-flight and the language would be the one setting that never persisted.
+ */
+export function savePrefs(patch: Partial<AppPrefs>): void {
+  void fetch(`${BACKEND}/prefs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+    keepalive: true,
+  }).catch(() => {
+    // No backend, which is a supported state: the browser's own copy already
+    // holds this, and that is all a phone ever had.
+  });
 }
 
 export type ScanMode = "full" | "range" | "incremental";

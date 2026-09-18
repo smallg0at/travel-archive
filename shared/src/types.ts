@@ -521,6 +521,37 @@ export interface Pin {
 }
 
 /**
+ * The app's interface preferences, held by the local server.
+ *
+ * These lived only in the browser's `localStorage`, which on the desktop shell
+ * turned out not to survive a hard kill: Chromium's LevelDB store for
+ * `http://localhost:17923` never commits, so each launch starts a fresh
+ * `000003.log` and the previous session's (20KB, measured 2026-09-11) is
+ * orphaned unrecovered. The owner therefore signed in again and reset the
+ * theme, the density and the sidebar width on every launch. The server already
+ * persists config to disk and is running whenever the shell is, so it is the
+ * durable place for this — and it makes the settings the same in every window
+ * talking to the same server, rather than per browser profile.
+ *
+ * **Every field is nullable, and null means "never set here".** That is what
+ * lets a first launch after this change adopt whatever the browser already
+ * holds rather than overwrite a working setup with defaults — the app pushes
+ * its local value up for any field the server has none for. The browser keeps
+ * its copy either way, because `localStorage` is still the whole story with no
+ * server: a phone reading OneDrive directly has nowhere else to put this.
+ */
+export interface AppPrefs {
+  theme: "light" | "dark" | "system" | null;
+  density: "compact" | "comfortable" | "spacious" | null;
+  /** Pixels. The app clamps to its own min/max; the server only rejects nonsense. */
+  sidebarWidth: number | null;
+  /** One setting for the archive's text and the interface around it — see app/src/contentLang.ts. */
+  contentLang: "en" | "zh-Hans" | null;
+  /** Which nav groups are expanded. A short list of group ids. */
+  navOpenGroups: string[] | null;
+}
+
+/**
  * The generation settings, as reported by the local server.
  *
  * **Never carries an API key back out** — `keys` says only whether each one is

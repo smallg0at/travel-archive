@@ -1,4 +1,4 @@
-import { captureView, renderAlbum } from "./album";
+import { captureView, refreshDensity, renderAlbum } from "./album";
 import { forgetAllMonths, loadContentTranslations, loadIndex, SignInRequiredError } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
@@ -6,6 +6,10 @@ import { initSidebarResize } from "./chrome";
 import { setArchiveRefresh } from "./dayEdit";
 import { setActivityRefresh } from "./activity";
 import { ui } from "./i18n";
+import { restorePrefs } from "./prefs";
+import { readTheme, showTheme } from "./theme";
+import { checkHealth } from "./backend";
+import { localServerSource, setThumbnailSource } from "./photoSource";
 
 let panelMounted = false;
 
@@ -89,6 +93,42 @@ function localiseShell(): void {
 }
 
 async function main() {
+  // Before anything reads a setting or paints with one. The browser's copy of
+  // these was being lost on every launch of the desktop shell — see prefs.ts —
+  // and the job server's copy is what puts them back. With no server this
+  // answers immediately with nothing to do, which is the phone's path.
+  //
+  // Only the theme and the density need re-applying: their modules read the
+  // setting while they loaded, which was before this could have answered. The
+  // sidebar width is read by `initSidebarResize` below, the open nav groups
+  // when the nav is built, and the content language reloads the page.
+  //
+  //
+  // Together with the health check below, and not one after the other: both
+  // are requests to a server that is usually not there, and an absent one that
+  // *drops* rather than refuses costs the full 1.5s timeout each. Neither
+  // needs the other.
+  const [restored, health] = await Promise.all([restorePrefs(), checkHealth()]);
+  if (restored.theme) showTheme(readTheme());
+  if (restored.density) refreshDensity();
+
+  /**
+   * Where photos come from, decided before the first render rather than after
+   * it.
+   *
+   * `initGeneration` also sets this, but it runs after `renderAlbum`, so the
+   * first screen's thumbnails resolved against the Graph path — which needs a
+   * token the renderer may not have, and which raises the sign-in banner when
+   * it does not. On the desktop shell the server can serve every one of those
+   * images from its own disk cache without the renderer holding any Microsoft
+   * session at all.
+   *
+   * `initGeneration`'s own health check stays: it is a loopback request in the
+   * same machine, and sharing this one would mean attaching to a snapshot of
+   * the running job taken before the archive had even loaded.
+   */
+  if (health?.ok) setThumbnailSource(localServerSource);
+
   localiseShell();
   initSidebarResize();
 
@@ -113,7 +153,18 @@ async function main() {
   // to stop at the banner with the whole archive sitting on disk. Offer the
   // sign-in, then try anyway: with no mirror the load raises
   // SignInRequiredError and lands on exactly the same banner.
-  if (!(await getActiveAccount())) showSignInBanner();
+  //
+  // And do not offer it at all when the server is signed in itself: it then
+  // supplies the metadata from the mirror and the images from `/thumb`, so the
+  // renderer needs no Microsoft session of its own and asking for one is
+  // asking for something nothing will use. That was the whole of "I have to
+  // sign in to Microsoft every time" — MSAL's cache lives in the same
+  // localStorage that was being lost, while the pipeline's own token cache is
+  // a file and was never affected. Anything that genuinely still needs Graph
+  // — a month with no mirror — raises SignInRequiredError and the banner
+  // appears then.
+  const serverHasGraph = health?.ok === true && health.signedIn;
+  if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
 
   await loadAndRender();
 }
