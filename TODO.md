@@ -282,6 +282,19 @@ working practice this list was built with.
       second name set; `render.ts:27` stop times are still sliced from UTC
       (the filename-clock item).
 
+- [ ] **The upload phase reports no progress.** Raised by the owner
+      2026-09-18. `finish()` in `pipeline/src/jobs/analyzeBatch.ts` hands a
+      ~300MB file to `ai.files.upload()` and the job sits on one message for
+      minutes — the `done/total` still on screen is the *preparing* count that
+      finished before it started. On a weak link that is the exact moment the
+      reader needs to know whether anything is happening, and it is also when
+      the upload retry may be quietly on attempt 2 of 3.
+
+      The SDK's `files.upload` takes a path and exposes no progress callback,
+      so this needs either its resumable-upload endpoint driven by hand (POST
+      for a session URI, then PUT byte ranges, reporting after each) or, at
+      the least, an elapsed-time line so the phase does not look hung.
+
 - [ ] **There is no incremental refresh — every change reloads the archive.**
       Raised by the owner 2026-09-10, and it is the shared cause behind three
       separate patches made this week rather than a defect of its own.
