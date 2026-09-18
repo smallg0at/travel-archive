@@ -75,7 +75,35 @@ async function fetchMetadataJson<T>(fileName: string, localPath: string): Promis
   }
 }
 
-export async function loadIndex(): Promise<ArchiveIndexFile> {
+/**
+ * Held for the session, like the shards.
+ *
+ * It used to be fetched on every call, and the album, the home page and search
+ * each call it: 34ms from the mirror, but on a phone a second 3.7MB Graph
+ * download the first time anyone searched. Every reload after a job goes
+ * through `loadAndRender`, which forgets it first — see `forgetIndex`.
+ */
+let indexPromise: Promise<ArchiveIndexFile> | null = null;
+
+export function loadIndex(): Promise<ArchiveIndexFile> {
+  if (!indexPromise) {
+    const pending = fetchIndex();
+    indexPromise = pending;
+    // A failure is not kept: the usual one is "sign in first", and caching it
+    // would make signing in change nothing until a reload.
+    pending.catch(() => {
+      if (indexPromise === pending) indexPromise = null;
+    });
+  }
+  return indexPromise;
+}
+
+/** After a job, or anything else that rewrote the archive: the next read fetches again. */
+export function forgetIndex(): void {
+  indexPromise = null;
+}
+
+async function fetchIndex(): Promise<ArchiveIndexFile> {
   const index = await fetchMetadataJson<ArchiveIndexFile>("index.json", "index");
   if (!index) {
     throw new Error(

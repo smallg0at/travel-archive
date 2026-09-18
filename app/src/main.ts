@@ -1,5 +1,13 @@
 import { captureView, refreshDensity, renderAlbum } from "./album";
-import { forgetAllMonths, loadContentTranslations, loadIndex, SignInRequiredError } from "./archiveData";
+import {
+  forgetAllMonths,
+  forgetHomeIndex,
+  forgetIndex,
+  forgetSearchIndex,
+  loadContentTranslations,
+  loadIndex,
+  SignInRequiredError,
+} from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
 import { initSidebarResize } from "./chrome";
@@ -42,6 +50,13 @@ async function loadAndRender(): Promise<void> {
   // the newest trip.
   captureView();
   showMessage(ui.app.loadingArchive);
+  // Every caller of this is a reload — after a job, a day edit, a sign-in — so
+  // the session copies go here, in one place, rather than at each caller.
+  // Search and the map index were never forgotten at all before: after a
+  // collect added 1,164 captions, search kept answering from the old ones.
+  forgetIndex();
+  forgetSearchIndex();
+  forgetHomeIndex();
   try {
     // Together, not one after the other: the second language's text is small
     // and neither needs the other to start.
