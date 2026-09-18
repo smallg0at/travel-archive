@@ -2,7 +2,6 @@ import type { ArchiveIndexFile, PhotoRecord, SearchIndexFile } from "@travel-arc
 import { dayMeta, loadIndex, loadMonth, loadSearchIndex } from "./archiveData";
 import { el, hydrateAll, lazyImg } from "./photoUi";
 import { ui } from "./i18n";
-import { openDay } from "./album";
 
 /**
  * Search across everything the archive has in words.
@@ -103,10 +102,16 @@ export interface SearchOptions {
   lazy?: boolean;
   /** Told when results start or stop filling the space, so a host page can make room. */
   onActive?: (active: boolean) => void;
+  /**
+   * Opens a result's day. Passed in rather than imported from album.ts, so a
+   * page with its own album — the mobile build — can use search without
+   * bundling the desktop one; it also ended an album ↔ search import cycle.
+   */
+  onOpenDay: (date: string, section: { kind: "trip" | "month"; id: string }) => void;
 }
 
 /** The search box and its results, ready to be placed wherever the caller wants them. */
-export function mountSearch(opts: SearchOptions = {}): HTMLElement {
+export function mountSearch(opts: SearchOptions): HTMLElement {
   const page = el<HTMLDivElement>(`
     <div class="search-page">
       <div class="search-head">
@@ -190,7 +195,7 @@ export function mountSearch(opts: SearchOptions = {}): HTMLElement {
       const text = day.summaryMatched ? snippet(meta.summary, terms) : null;
       if (text) summary.textContent = text;
       else summary.remove();
-      if (meta.section) block.querySelector(".search-day-head")!.addEventListener("click", () => void openDay(day.date, meta.section!));
+      if (meta.section) block.querySelector(".search-day-head")!.addEventListener("click", () => opts.onOpenDay(day.date, meta.section!));
       hosts.push({ day, host: block.querySelector<HTMLElement>(".search-day-photos")! });
       frag.appendChild(block);
     }
@@ -209,7 +214,7 @@ export function mountSearch(opts: SearchOptions = {}): HTMLElement {
       const images = photos.map((photo) => {
         const img = lazyImg(photo, "medium", "search-thumb");
         img.title = photo.caption ?? "";
-        if (section) img.addEventListener("click", () => void openDay(day.date, section));
+        if (section) img.addEventListener("click", () => opts.onOpenDay(day.date, section));
         host.appendChild(img);
         return img;
       });
@@ -225,8 +230,8 @@ export function mountSearch(opts: SearchOptions = {}): HTMLElement {
   return page;
 }
 
-export function showSearch(): void {
-  const page = mountSearch();
+export function showSearch(onOpenDay: SearchOptions["onOpenDay"]): void {
+  const page = mountSearch({ onOpenDay });
   document.getElementById("content")!.replaceChildren(page);
   page.querySelector<HTMLInputElement>(".search-input")!.focus();
 }

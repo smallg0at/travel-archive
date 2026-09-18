@@ -700,7 +700,14 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     if (!moved && pointers.size === 1 && pressedAt && Math.hypot(e.clientX - pressedAt.x, e.clientY - pressedAt.y) < DRAG_SLOP_PX) return;
     if (!moved) {
       moved = true;
-      for (const id of pointers.keys()) canvas.setPointerCapture(id);
+      for (const id of pointers.keys()) {
+        try {
+          canvas.setPointerCapture(id);
+        } catch {
+          // The browser no longer tracks that pointer (lifted between events).
+          // The pan still works without capture; it just stops at the edge.
+        }
+      }
     }
 
     if (pointers.size === 2) {

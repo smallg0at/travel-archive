@@ -189,7 +189,11 @@ export function dayMeta(index: ArchiveIndexFile, date: string): DayMeta {
       };
     }
   }
-  return { place: null, summary: null, section: null };
+  // A day newer than the last organize belongs to no section yet — 2026-09-17
+  // did, the day after a sync — but its month page is built from the shard,
+  // not from sections, so the day is there to open. Without this, search
+  // listed it and clicking it did nothing.
+  return { place: null, summary: null, section: /^\d{4}-\d{2}/.test(date) ? { kind: "month", id: date.slice(0, 7) } : null };
 }
 
 /**

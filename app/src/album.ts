@@ -764,7 +764,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
     searchButton.classList.add("active");
     enter("#search");
     setTitle(ui.nav.search);
-    void showSearch();
+    showSearch((date, section) => void openDay(date, section));
   });
   tools.appendChild(searchButton);
 

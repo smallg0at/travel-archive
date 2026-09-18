@@ -130,7 +130,11 @@ export async function showHome(): Promise<void> {
 
   // Results replace the page rather than stacking under the map, where a
   // reader who has just typed would have to scroll past the world to see them.
-  const search = mountSearch({ lazy: true, onActive: (active) => (body.hidden = active) });
+  const search = mountSearch({
+    lazy: true,
+    onActive: (active) => (body.hidden = active),
+    onOpenDay: (date, section) => void openDay(date, section),
+  });
   search.classList.add("is-embedded");
   page.querySelector(".home-search")!.replaceWith(search);
   content.replaceChildren(page);
