@@ -1094,8 +1094,16 @@ setTimeout(() => void collectIfReady(), 30_000);
  * picked up the same evening.
  */
 const SCAN_EVERY_MS = 6 * 60 * 60 * 1000;
-/** How often that staleness is checked — the scan itself is skipped while busy. */
-const SCAN_CHECK_MS = 30 * 60 * 1000;
+/**
+ * How often that staleness is checked.
+ *
+ * Deliberately far shorter than SCAN_EVERY_MS, because a check while any job
+ * runs does nothing but wait for the next one. At 30 minutes, with the
+ * captioner submitting batches back to back, the first build of this went a
+ * whole evening without ever finding a free moment — every check landed on a
+ * busy server and the scan never ran at all.
+ */
+const SCAN_CHECK_MS = 5 * 60 * 1000;
 
 /**
  * An incremental scan when the last one has aged out. Listing only: it reads
