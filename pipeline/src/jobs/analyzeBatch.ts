@@ -1,5 +1,5 @@
 import { createWriteStream, type WriteStream } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import type { AnalyzeBatchState, AnalyzeBatchStatus, AutoSubmitStatus, PhotoShard } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
@@ -126,6 +126,102 @@ const UPLOAD_ATTEMPTS = 3;
 
 /** Attempts at downloading a finished batch's results before the collect gives up. */
 const DOWNLOAD_ATTEMPTS = 3;
+
+/**
+ * How long the results file may go without growing before the attempt is dead.
+ *
+ * The SDK's download either resolves or rejects; it does not notice a socket
+ * that simply stops delivering. Observed 2026-09-18 on a weak connection: a
+ * collect sat in "downloading" for 37 minutes with its partial file untouched
+ * since the first second — holding the archive lock, blocking every other job,
+ * and deaf to a cancel, because the retry loop only ever sees errors. Progress
+ * is therefore watched from the outside.
+ */
+const DOWNLOAD_STALL_MS = 60_000;
+/** How often the partial file is measured. Cheap: one stat of a local file. */
+const STALL_CHECK_MS = 5_000;
+
+/** Raised by the watchdog, and retried like any other broken connection. */
+class DownloadStalled extends Error {
+  constructor(seconds: number) {
+    super(`no data for ${seconds}s`);
+  }
+}
+
+/**
+ * Rejects when `path` stops growing, or when the job is cancelled.
+ *
+ * Returned with its own `stop`, which the caller must call: this races against
+ * a download that usually wins, and an unstopped interval would keep the
+ * process awake and keep measuring a file nobody is writing.
+ */
+function watchProgress(
+  path: string,
+  label: string,
+  onProgress: ProgressFn,
+  signal?: AbortSignal,
+): { promise: Promise<never>; stop: () => void } {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const promise = new Promise<never>((_resolve, reject) => {
+    let lastSize = -1;
+    let lastGrewAt = Date.now();
+    timer = setInterval(() => {
+      if (signal?.aborted) return reject(new Error("Cancelled"));
+      void stat(path)
+        .then(({ size }) => {
+          if (size !== lastSize) {
+            lastSize = size;
+            lastGrewAt = Date.now();
+            // The measurement is taken anyway, so it may as well be shown:
+            // this phase is otherwise a single line that sits there for
+            // minutes with no sign of whether anything is arriving.
+            onProgress({ phase: "downloading", message: `${label} — ${(size / 1e6).toFixed(1)}MB` });
+            return;
+          }
+          const still = Date.now() - lastGrewAt;
+          if (still >= DOWNLOAD_STALL_MS) reject(new DownloadStalled(Math.round(still / 1000)));
+        })
+        // The file does not exist until the first byte lands; that is not a stall.
+        .catch(() => undefined);
+    }, STALL_CHECK_MS);
+  });
+  return { promise, stop: () => clearInterval(timer) };
+}
+
+/**
+ * One batch's results, retrying a connection that breaks or goes quiet.
+ *
+ * Each attempt writes to its own path: an abandoned download may still be
+ * alive and writing, and two of them appending to one file would produce a
+ * JSONL that parses as neither.
+ */
+async function downloadResults(
+  ai: ReturnType<typeof geminiClient>,
+  resultFile: string,
+  basePath: string,
+  label: string,
+  onProgress: ProgressFn,
+  signal?: AbortSignal,
+): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    const path = attempt === 1 ? basePath : `${basePath}.${attempt}`;
+    const watch = watchProgress(path, label, onProgress, signal);
+    try {
+      await Promise.race([ai.files.download({ file: resultFile, downloadPath: path }), watch.promise]);
+      return path;
+    } catch (err) {
+      const stalled = err instanceof DownloadStalled;
+      if (signal?.aborted || attempt >= DOWNLOAD_ATTEMPTS || !(stalled || isNetworkError(err))) throw err;
+      onProgress({
+        message: `Download ${stalled ? "stalled" : "failed"} (${(err as Error).message}) — trying again, attempt ${attempt + 1} of ${DOWNLOAD_ATTEMPTS}.`,
+      });
+      await rm(path, { force: true });
+      await new Promise((resolve) => setTimeout(resolve, attempt * 15_000));
+    } finally {
+      watch.stop();
+    }
+  }
+}
 
 /** Network failures in a row before the automatic chain switches itself off. */
 const NETWORK_FAILURES_ALLOWED = 3;
@@ -620,20 +716,15 @@ export async function collectAnalyzeBatches(onProgress: ProgressFn, signal?: Abo
 
   for (const { batch, resultFile } of ready) {
     if (signal?.aborted) break;
-    const local = `${BATCH_DIR}/results-${Date.now()}.jsonl`;
     onProgress({ phase: "downloading", message: `Downloading ${batch.displayName}...` });
-    for (let attempt = 1; ; attempt++) {
-      try {
-        await ai.files.download({ file: resultFile, downloadPath: local });
-        break;
-      } catch (err) {
-        if (signal?.aborted || attempt >= DOWNLOAD_ATTEMPTS || !isNetworkError(err)) throw err;
-        onProgress({
-          message: `Download failed (${(err as Error).message}) — trying again, attempt ${attempt + 1} of ${DOWNLOAD_ATTEMPTS}.`,
-        });
-        await new Promise((resolve) => setTimeout(resolve, attempt * 15_000));
-      }
-    }
+    const local = await downloadResults(
+      ai,
+      resultFile,
+      `${BATCH_DIR}/results-${Date.now()}.jsonl`,
+      `Downloading ${batch.displayName}`,
+      onProgress,
+      signal,
+    );
     const lines = (await readFile(local, "utf-8")).split("\n").filter((l) => l.trim());
 
     const usage = { promptTokens: 0, outputTokens: 0, thoughtsTokens: 0 };
