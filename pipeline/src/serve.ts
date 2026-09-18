@@ -438,6 +438,16 @@ const routes: [RegExp, string, Handler][] = [
       sendJsonText(res, local);
     },
   ],
+  /** Where the library has been, for the home page — see jobs/homeIndex.ts. */
+  [
+    /^\/archive\/home$/,
+    "GET",
+    async (_req, res) => {
+      const local = await readLocalJson("home.json");
+      if (!local) return json(res, 404, { error: "No local home.json — run organize" });
+      sendJsonText(res, local);
+    },
+  ],
   [
     /^\/archive\/shard\/(\d{4}-\d{2})$/,
     "GET",

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { dirname } from "node:path";
-import type { ArchiveIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
+import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { downloadMetadataJson, uploadMetadataJson } from "./graph.js";
 import { env } from "./env.js";
@@ -22,6 +22,7 @@ import { markDirty, markSynced } from "./syncStore.js";
 
 const INDEX_FILE = "index.json";
 const SEARCH_FILE = "search.json";
+const HOME_FILE = "home.json";
 const shardFile = (month: string) => `photos/${month}.json`;
 
 function emptyIndex(): ArchiveIndexFile {
@@ -102,6 +103,13 @@ export async function saveIndex(token: string, index: ArchiveIndexFile): Promise
 export async function saveSearchIndex(token: string, file: SearchIndexFile): Promise<number> {
   await writeLocalCompact(SEARCH_FILE, file);
   await uploadMetadataJson(token, env.metadataFolder, SEARCH_FILE, file);
+  return Buffer.byteLength(JSON.stringify(file));
+}
+
+/** The map index — derived data, same terms as the search index above. */
+export async function saveHomeIndex(token: string, file: HomeIndexFile): Promise<number> {
+  await writeLocalCompact(HOME_FILE, file);
+  await uploadMetadataJson(token, env.metadataFolder, HOME_FILE, file);
   return Buffer.byteLength(JSON.stringify(file));
 }
 

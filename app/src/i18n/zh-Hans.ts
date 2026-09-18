@@ -44,6 +44,7 @@ export const zhHans: Messages = {
   },
 
   nav: {
+    home: "首页",
     trips: "旅行",
     generate: "生成",
     activity: "活动",
@@ -128,6 +129,20 @@ export const zhHans: Messages = {
     savingPdf: "正在保存 PDF…",
     openingPrint: "正在打开打印对话框…",
     exportFailed: (error) => `导出失败：${error}`,
+  },
+
+  home: {
+    title: "足迹",
+    mapLabel: "档案中所有地点的世界地图",
+    totals: (photos: number, places: number, countries: number) =>
+      `${num(photos)} 张照片，分布在 ${num(countries)} 个国家的 ${num(places)} 个地点。`,
+    noMap: "还没有地点信息 — 先运行扫描，再生成每日摘要。",
+    photos: (n: number) => `${num(n)} 张照片`,
+    placeMeta: (photos: number, days: number) => `${num(days)} 天，共 ${num(photos)} 张照片`,
+    thenTitle: "历史上的今天",
+    thenNearTitle: "这些天",
+    nothingToday: "这个日期前后没有拍过照片。",
+    yearsAgo: (n: number) => (n === 0 ? "今年" : `${num(n)} 年前`),
   },
 
   map: {

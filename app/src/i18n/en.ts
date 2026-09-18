@@ -46,6 +46,7 @@ export const en = {
   },
 
   nav: {
+    home: "Home",
     trips: "Trips",
     generate: "Generate",
     activity: "Activity",
@@ -130,6 +131,20 @@ export const en = {
     savingPdf: "Saving the PDF…",
     openingPrint: "Opening the print dialog…",
     exportFailed: (error: string) => `Export failed: ${error}`,
+  },
+
+  home: {
+    title: "Everywhere",
+    mapLabel: "A world map of every place in this archive",
+    totals: (photos: number, places: number, countries: number) =>
+      `${num(photos)} photos placed across ${num(places)} places in ${count(countries, "country", "countries")}.`,
+    noMap: "No places yet — run a scan, then Day summaries, to put this library on the map.",
+    photos: (n: number) => count(n, "photo", "photos"),
+    placeMeta: (photos: number, days: number) => `${count(photos, "photo", "photos")} on ${count(days, "day", "days")}`,
+    thenTitle: "On this day",
+    thenNearTitle: "Around this time",
+    nothingToday: "Nothing was photographed on this date, or near it, in any year.",
+    yearsAgo: (n: number) => (n === 0 ? "this year" : n === 1 ? "a year ago" : `${num(n)} years ago`),
   },
 
   map: {

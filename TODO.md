@@ -919,7 +919,35 @@ working practice this list was built with.
 - [x] Zoom-out reaches the whole world; cap at continental? *Capped 2026-09-11
       at a sixth of the world's width, or four times the trip's own extent if
       that is wider: a town opens 942 units wide and zooms out to 16,667.*
-- [ ] Mobile view: design needs rethinking; a Figma would help.
+- [x] **Home page: a map of everywhere, and this day in other years.** Done
+      2026-09-18. The map needed coordinates the app had no cheap way to get —
+      GPS lives in 30 shards totalling 38MB and `index.json` carries none — so
+      the pipeline now writes `home.json` beside `search.json`: 515 places in
+      17 countries, 21,887 photos placed, 103KB. "On this day" needed no new
+      file at all; every date and summary is already in the index the page has
+      loaded, so it is computed in the browser and cannot go stale.
+
+      Land rings are culled by size rather than by viewport (a world view has
+      no viewport to cull to): 285 paths drawn of the basemap's 5,272.
+
+      Built by `npm run --workspace pipeline home` as well as at the end of an
+      organize, because after a caption batch organize has 305 stale days to
+      rewrite and none of that is needed to draw coordinates that were read
+      during the scan.
+
+      **Not done:** the map does not zoom or pan, so on a phone its markers are
+      1.8px wide and untappable — measured at 375px. It is a desktop view until
+      the mobile work gives it a zoom or a list.
+- [ ] Day places are still the old Nominatim strings. `npm run places` rewrote
+      the photo shards, but `DayRecord.place` in `index.json` is written by
+      organize, so the home page's "on this day" still shows "城区, 中国" and
+      "City of Westminster, United Kingdom". Fixed by the next organize, which
+      is a paid run (305 stale days as of 2026-09-18) — so it waits for a
+      decision rather than being triggered quietly.
+- [ ] Mobile view: design needs rethinking; a Figma would help. Handed to a
+      separate agent 2026-09-18 with `MOBILE-BRIEF.md`; the two blockers are
+      that no phone can reach the app (the job server binds 127.0.0.1 on
+      purpose) and that any new origin needs an Azure redirect URI.
 
 ### Resolved
 

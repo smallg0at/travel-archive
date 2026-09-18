@@ -6,6 +6,7 @@ import { downloadThumbnailBuffer } from "../graph.js";
 import { readThumb } from "../thumbStore.js";
 import { loadIndex, loadShard, saveIndex, saveShard } from "../archiveStore.js";
 import { buildSearchIndex } from "./searchIndex.js";
+import { buildHomeIndex } from "./homeIndex.js";
 import { dataFile } from "../paths.js";
 import { env } from "../env.js";
 import { isNetworkError, mediaTypeFor } from "../util.js";
@@ -818,7 +819,14 @@ export async function collectAnalyzeBatches(onProgress: ProgressFn, signal?: Abo
 
   // Once, after every batch in this run: thousands of new captions are the
   // whole point of search, and rebuilding per batch would read the mirror twice.
-  if (result.applied > 0) await buildSearchIndex(token, index, onProgress);
+  if (result.applied > 0) {
+    await buildSearchIndex(token, index, onProgress);
+    // New captions do not move photographs, but a collect is also the first
+    // time newly scanned photos get their coordinates read, so the map index
+    // is rebuilt on the same trigger.
+    await buildHomeIndex(token, index, onProgress);
+  }
+
 
   onProgress({
     phase: "done",

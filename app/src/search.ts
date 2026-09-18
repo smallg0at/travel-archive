@@ -1,5 +1,5 @@
-import type { ArchiveIndexFile, PhotoRecord, SearchIndexFile } from "@travel-archive/shared";
-import { loadIndex, loadMonth, loadSearchIndex } from "./archiveData";
+import type { PhotoRecord, SearchIndexFile } from "@travel-archive/shared";
+import { dayMeta, loadIndex, loadMonth, loadSearchIndex } from "./archiveData";
 import { el, hydrateAll, lazyImg } from "./photoUi";
 import { ui } from "./i18n";
 import { openDay } from "./album";
@@ -76,27 +76,6 @@ async function photosFor(hit: DayHit): Promise<PhotoRecord[]> {
     .slice(0, MAX_PHOTOS_PER_DAY)
     .map((id) => shard.photos[id])
     .filter(Boolean);
-}
-
-interface DayMeta {
-  place: string | null;
-  summary: string | null;
-  /** The page that holds this day, for opening it. */
-  section: { kind: "trip" | "month"; id: string } | null;
-}
-
-function dayMeta(index: ArchiveIndexFile, date: string): DayMeta {
-  for (const section of index.sections) {
-    const day = section.days.find((d) => d.date === date);
-    if (day) {
-      return {
-        place: day.place,
-        summary: day.summary,
-        section: { kind: section.kind === "trip" ? "trip" : "month", id: section.id },
-      };
-    }
-  }
-  return { place: null, summary: null, section: null };
 }
 
 /** One line of the day's summary, around the first match, so the hit is visible. */

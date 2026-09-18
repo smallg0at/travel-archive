@@ -1,4 +1,4 @@
-import type { ArchiveIndexFile, PhotoShard, SearchIndexFile } from "@travel-archive/shared";
+import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "./msAuth";
 import { localArchiveJson } from "./backend";
@@ -144,6 +144,52 @@ export function loadSearchIndex(): Promise<SearchIndexFile | null> {
 /** After a job that rewrote captions or summaries. */
 export function forgetSearchIndex(): void {
   searchIndex = null;
+}
+
+/**
+ * Where the library has been (see pipeline/src/jobs/homeIndex.ts).
+ *
+ * ~100KB for 515 places, so unlike the search index this is cheap enough to
+ * fetch whenever the home page opens; it is cached for the session anyway
+ * because returning to the home page is the common move.
+ */
+let homeIndex: Promise<HomeIndexFile | null> | null = null;
+
+export function loadHomeIndex(): Promise<HomeIndexFile | null> {
+  homeIndex ??= fetchMetadataJson<HomeIndexFile>("home.json", "home").catch(() => null);
+  return homeIndex;
+}
+
+/** After a job that moved photos or re-placed them. */
+export function forgetHomeIndex(): void {
+  homeIndex = null;
+}
+
+/** Where a day lives and what it says, from the index the app already holds. */
+export interface DayMeta {
+  place: string | null;
+  summary: string | null;
+  /** The page that holds this day, for opening it. */
+  section: { kind: "trip" | "month"; id: string } | null;
+}
+
+/**
+ * Lives here rather than in a view because search and the home page both ask
+ * it, and neither should have to import the other to find out where a date
+ * belongs.
+ */
+export function dayMeta(index: ArchiveIndexFile, date: string): DayMeta {
+  for (const section of index.sections) {
+    const day = section.days.find((d) => d.date === date);
+    if (day) {
+      return {
+        place: day.place,
+        summary: day.summary,
+        section: { kind: section.kind === "trip" ? "trip" : "month", id: section.id },
+      };
+    }
+  }
+  return { place: null, summary: null, section: null };
 }
 
 /**

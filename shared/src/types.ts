@@ -521,6 +521,51 @@ export interface Pin {
 }
 
 /**
+ * `home.json` — where this library has been, small enough to draw a world map
+ * from.
+ *
+ * The map needs one coordinate per place and a count; the shards that hold
+ * coordinates are 38MB across 30 files, and `index.json` carries no GPS at all
+ * by design. So this is aggregated once by the pipeline, like `search.json`,
+ * and for the same reason: the reader may be a phone with no server.
+ *
+ * "On this day" is deliberately **not** here. Every date and summary it needs
+ * is already in `index.json`, which the app has loaded before the home page
+ * opens, so prebuilding it would be a second copy that could go stale.
+ *
+ * Derived data: never migrated, just rebuilt.
+ */
+export interface HomeIndexFile {
+  schemaVersion: number;
+  builtAt: string;
+  places: HomePlace[];
+  totals: {
+    /** Photos with a usable position — not the library's size; see `placedOf`. */
+    placed: number;
+    photos: number;
+    days: number;
+    countries: number;
+  };
+}
+
+/** One place, as the map draws it: a dot, a label, and what it opens. */
+export interface HomePlace {
+  /** The endonym, as `PhotoRecord.place` holds it — "a city, Osterreich". */
+  name: string;
+  /** English and Chinese, when the gazetteer had them. */
+  nameEn: string | null;
+  nameZh: string | null;
+  /** The last comma-separated part of the English name, for grouping and the totals. */
+  country: string | null;
+  /** Median of the photos here, which a single bad fix cannot move. */
+  lat: number;
+  lon: number;
+  photoCount: number;
+  /** The dates with photos here, ascending. Short — a place is visited on few days. */
+  days: string[];
+}
+
+/**
  * The app's interface preferences, held by the local server.
  *
  * These lived only in the browser's `localStorage`, which on the desktop shell

@@ -16,6 +16,7 @@ import { canPrint, printView } from "./print";
 import { fmtDate, num, ui } from "./i18n";
 import { releaseActivity, showActivity, startActivityIndicator } from "./activity";
 import { showSearch } from "./search";
+import { showHome } from "./home";
 import { addTripControls } from "./dayEdit";
 import { jumpTo, withContents, type ContentsEntry } from "./contents";
 import { DENSITY_KEY, OPEN_GROUPS_KEY, rememberPref } from "./prefs";
@@ -727,6 +728,26 @@ function renderNavTools(index: ArchiveIndexFile): void {
   });
   tools.appendChild(generate);
 
+  const home = el<HTMLButtonElement>(
+    `<button class="month-link nav-tool" id="nav-home" type="button">
+       <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
+         <path d="M10 2.4a.75.75 0 0 1 .48.17l6.25 5.2a.75.75 0 0 1-.96 1.15L15.5 8.6V16a1.5 1.5 0 0 1-1.5 1.5h-2.25a.75.75 0 0 1-.75-.75V13.5h-2v3.25a.75.75 0 0 1-.75.75H6a1.5 1.5 0 0 1-1.5-1.5V8.6l-.27.32a.75.75 0 1 1-.96-1.15l6.25-5.2A.75.75 0 0 1 10 2.4Zm4 5.05-4-3.33-4 3.33V16h1.5v-3.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75V16H14V7.45Z" />
+       </svg>
+       <span class="nav-label">${ui.nav.home}</span>
+     </button>`,
+  );
+  home.addEventListener("click", () => {
+    cancelLookAhead();
+    releaseSettings();
+    releaseActivity();
+    clearActive();
+    home.classList.add("active");
+    enter("#home");
+    setTitle(ui.nav.home);
+    void showHome();
+  });
+  tools.appendChild(home);
+
   const searchButton = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" id="nav-search" type="button">
        <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
@@ -951,13 +972,15 @@ type View =
   | { kind: "settings" }
   | { kind: "generate" }
   | { kind: "activity" }
-  | { kind: "search" };
+  | { kind: "search" }
+  | { kind: "home" };
 
 function viewFromHash(): View | null {
   if (location.hash === "#settings") return { kind: "settings" };
   if (location.hash === "#generate") return { kind: "generate" };
   if (location.hash === "#activity") return { kind: "activity" };
   if (location.hash === "#search") return { kind: "search" };
+  if (location.hash === "#home") return { kind: "home" };
   const match = /^#(trip|month)\/(.+)$/.exec(location.hash);
   return match ? { kind: match[1] as "trip" | "month", id: decodeURIComponent(match[2]) } : null;
 }
@@ -969,6 +992,7 @@ function rowFor(view: View | null): HTMLElement | null {
   if (view.kind === "generate") return document.getElementById("nav-generate");
   if (view.kind === "activity") return document.getElementById("nav-activity");
   if (view.kind === "search") return document.getElementById("nav-search");
+  if (view.kind === "home") return document.getElementById("nav-home");
   return document.querySelector<HTMLElement>(
     `#month-nav .month-link[data-pin-kind="${view.kind}"][data-pin-id="${CSS.escape(view.id)}"]`,
   );

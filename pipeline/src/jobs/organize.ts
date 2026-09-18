@@ -7,6 +7,7 @@ import { dayKey, sameIds } from "../util.js";
 import { findTripFor, loadTripDefinitions } from "../tripDefs.js";
 import { bucketDays } from "./sections.js";
 import { buildSearchIndex } from "./searchIndex.js";
+import { buildHomeIndex } from "./homeIndex.js";
 import { detectStops } from "../stops.js";
 import { mayBeAnalyzed } from "../screenshots.js";
 import { withheldFromSummaries } from "../sensitive.js";
@@ -513,6 +514,7 @@ export async function runOrganize(
   // The summaries just written are searchable text; rebuild rather than let
   // search go stale until the next collect.
   await buildSearchIndex(token, index, onProgress, shards);
+  await buildHomeIndex(token, index, onProgress, shards);
 
   result.days = days.length;
   result.trips = index.sections.filter((s) => s.kind === "trip").length;
