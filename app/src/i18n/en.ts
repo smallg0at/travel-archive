@@ -133,7 +133,16 @@ export const en = {
     exportFailed: (error: string) => `Export failed: ${error}`,
   },
 
+  server: {
+    offline:
+      "Local server is offline — running in fallback mode, reading straight from OneDrive. Everything will be much slower. Start it with npm run desktop.",
+    back: "The local server is running again. Reload to use it.",
+    lost: "The local server stopped responding. Reload to switch to fallback mode.",
+    reload: "Reload",
+  },
+
   home: {
+    openDay: "Open this day",
     title: "Everywhere",
     mapLabel: "A world map of every place in this archive",
     totals: (photos: number, places: number, countries: number) =>

@@ -1,4 +1,4 @@
-import type { PhotoRecord, SearchIndexFile } from "@travel-archive/shared";
+import type { ArchiveIndexFile, PhotoRecord, SearchIndexFile } from "@travel-archive/shared";
 import { dayMeta, loadIndex, loadMonth, loadSearchIndex } from "./archiveData";
 import { el, hydrateAll, lazyImg } from "./photoUi";
 import { ui } from "./i18n";
@@ -93,8 +93,20 @@ function snippet(text: string | null, terms: string[]): string | null {
   return `${from > 0 ? "…" : ""}${text.slice(from, to).trim()}${to < text.length ? "…" : ""}`;
 }
 
-export async function showSearch(): Promise<void> {
-  const content = document.getElementById("content")!;
+export interface SearchOptions {
+  /**
+   * Fetch the index when the box is first used rather than when it is drawn.
+   * The home page carries a search box on every visit; the index is 6.5MB, and
+   * a reader who came to look at the map should not pay for it — least of all
+   * on a phone, where it comes over Graph.
+   */
+  lazy?: boolean;
+  /** Told when results start or stop filling the space, so a host page can make room. */
+  onActive?: (active: boolean) => void;
+}
+
+/** The search box and its results, ready to be placed wherever the caller wants them. */
+export function mountSearch(opts: SearchOptions = {}): HTMLElement {
   const page = el<HTMLDivElement>(`
     <div class="search-page">
       <div class="search-head">
@@ -109,21 +121,31 @@ export async function showSearch(): Promise<void> {
   const results = page.querySelector<HTMLElement>(".search-results")!;
   input.placeholder = ui.search.placeholder;
   input.setAttribute("aria-label", ui.search.placeholder);
-  status.textContent = ui.search.loading;
-  content.replaceChildren(page);
-  input.focus();
 
-  const [index, archive] = await Promise.all([loadSearchIndex(), loadIndex().catch(() => null)]);
-  if (!index || !archive) {
-    status.textContent = ui.search.unavailable;
-    return;
-  }
-  status.textContent = ui.search.ready(index.photos.length, index.days.length);
+  let loaded: Promise<{ index: SearchIndexFile; archive: ArchiveIndexFile } | null> | null = null;
+  const load = () =>
+    (loaded ??= (async () => {
+      status.textContent = ui.search.loading;
+      const [index, archive] = await Promise.all([loadSearchIndex(), loadIndex().catch(() => null)]);
+      if (!index || !archive) {
+        status.textContent = ui.search.unavailable;
+        return null;
+      }
+      status.textContent = ui.search.ready(index.photos.length, index.days.length);
+      return { index, archive };
+    })());
+  if (opts.lazy) input.addEventListener("focus", () => void load(), { once: true });
+  else void load();
 
   let run = 0;
   const render = async (query: string) => {
     const mine = ++run;
-    if (query.trim().length < MIN_QUERY) {
+    const data = await load();
+    if (!data || mine !== run) return;
+    const { index, archive } = data;
+    const active = query.trim().length >= MIN_QUERY;
+    opts.onActive?.(active);
+    if (!active) {
       results.replaceChildren();
       status.textContent = ui.search.ready(index.photos.length, index.days.length);
       return;
@@ -200,4 +222,11 @@ export async function showSearch(): Promise<void> {
     window.clearTimeout(timer);
     timer = window.setTimeout(() => void render(input.value), DEBOUNCE_MS);
   });
+  return page;
+}
+
+export function showSearch(): void {
+  const page = mountSearch();
+  document.getElementById("content")!.replaceChildren(page);
+  page.querySelector<HTMLInputElement>(".search-input")!.focus();
 }

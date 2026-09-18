@@ -10,6 +10,7 @@ import { restorePrefs } from "./prefs";
 import { readTheme, showTheme } from "./theme";
 import { checkHealth } from "./backend";
 import { localServerSource, setThumbnailSource } from "./photoSource";
+import { initServerStatus } from "./serverStatus";
 
 let panelMounted = false;
 
@@ -131,6 +132,7 @@ async function main() {
 
   localiseShell();
   initSidebarResize();
+  initServerStatus(health?.ok === true);
 
   // Photo/shard loads that hit an expired session ask for a re-auth click
   // via this event rather than popping a popup themselves — browsers block

@@ -935,9 +935,14 @@ working practice this list was built with.
       rewrite and none of that is needed to draw coordinates that were read
       during the scan.
 
-      **Not done:** the map does not zoom or pan, so on a phone its markers are
-      1.8px wide and untappable — measured at 375px. It is a desktop view until
-      the mobile work gives it a zoom or a list.
+      *Revised the same day:* the first map was a separate renderer with no
+      zoom, pan or label handling. Home now uses the trip map's own renderer
+      (`drawPlaceMap` in `tripMap.ts`), which also gained pinch zoom, pointer-
+      anchored wheel zoom, and two speedups both maps share — at 515 cities a
+      pan went 18ms → 2ms (grid-bucketed label collisions) and a zoom step
+      51ms → 10ms (path elements built once and re-attached; rivers only below
+      a 60° view). On a 375px screen discs hold ~12px and a pinch reveals the
+      rest; whether that is a good enough touch target is the mobile work's call.
 - [ ] Day places are still the old Nominatim strings. `npm run places` rewrote
       the photo shards, but `DayRecord.place` in `index.json` is written by
       organize, so the home page's "on this day" still shows "城区, 中国" and

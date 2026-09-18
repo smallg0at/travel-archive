@@ -131,7 +131,15 @@ export const zhHans: Messages = {
     exportFailed: (error) => `导出失败：${error}`,
   },
 
+  server: {
+    offline: "本地服务器未运行 — 当前为降级模式，直接从 OneDrive 读取，速度会慢很多。请用 npm run desktop 启动。",
+    back: "本地服务器已恢复运行。刷新页面即可使用。",
+    lost: "本地服务器已停止响应。刷新页面以切换到降级模式。",
+    reload: "刷新",
+  },
+
   home: {
+    openDay: "打开这一天",
     title: "足迹",
     mapLabel: "档案中所有地点的世界地图",
     totals: (photos: number, places: number, countries: number) =>
