@@ -401,6 +401,16 @@ const routes: [RegExp, string, Handler][] = [
       sendJsonText(res, local);
     },
   ],
+  /** The searchable text of the whole archive — see jobs/searchIndex.ts. */
+  [
+    /^\/archive\/search$/,
+    "GET",
+    async (_req, res) => {
+      const local = await readLocalJson("search.json");
+      if (!local) return json(res, 404, { error: "No local search.json — run organize" });
+      sendJsonText(res, local);
+    },
+  ],
   [
     /^\/archive\/shard\/(\d{4}-\d{2})$/,
     "GET",

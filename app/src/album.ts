@@ -15,6 +15,7 @@ import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
 import { fmtDate, num, ui } from "./i18n";
 import { releaseActivity, showActivity, startActivityIndicator } from "./activity";
+import { showSearch } from "./search";
 import { addTripControls } from "./dayEdit";
 import { jumpTo, withContents, type ContentsEntry } from "./contents";
 
@@ -210,6 +211,32 @@ function renderAlbumGrid(photos: PhotoRecord[]): HTMLElement {
  * a picture inside a card could not be selected, and a placard bound to one
  * did not appear at all.
  */
+/** The element id of a day's section, wherever it is rendered. */
+export const dayAnchor = (date: string) => `day-${date}`;
+
+/**
+ * Opens whichever page holds a date, then scrolls to that day.
+ *
+ * Search results are dates; the album is organised by trip and month. Rather
+ * than teach search about sections, it asks for a date and this finds the nav
+ * row that opens it — the same row a reader would click, so the view, the
+ * highlight and the scroll memory all behave as usual.
+ */
+export async function openDay(date: string, section: { kind: "trip" | "month"; id: string }): Promise<void> {
+  const row = rowFor(section);
+  row?.click();
+  // The page is built by the click's own async work; the day exists a frame or
+  // two later, and thumbnails keep growing after that — jumpTo re-aligns.
+  for (const wait of [0, 120, 400]) {
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    const target = document.getElementById(dayAnchor(date));
+    if (target) {
+      jumpTo(target);
+      return;
+    }
+  }
+}
+
 function renderDaySection(
   date: string,
   photos: PhotoRecord[],
@@ -221,6 +248,8 @@ function renderDaySection(
   // so the editors below open on the text they are actually looking at.
   day = day && locDay(day);
   const section = el<HTMLElement>(`<section class="day-page"></section>`);
+  // So search results, and anything else holding only a date, can scroll to it.
+  section.id = dayAnchor(date);
 
   const header = el<HTMLDivElement>(`
     <div class="day-header">
@@ -688,6 +717,26 @@ function renderNavTools(index: ArchiveIndexFile): void {
   });
   tools.appendChild(generate);
 
+  const searchButton = el<HTMLButtonElement>(
+    `<button class="month-link nav-tool" id="nav-search" type="button">
+       <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
+         <path d="M8.5 3a5.5 5.5 0 1 0 3.36 9.86l3.64 3.64a.75.75 0 1 0 1.06-1.06l-3.64-3.64A5.5 5.5 0 0 0 8.5 3Zm-4 5.5a4 4 0 1 1 8 0a4 4 0 0 1-8 0Z" />
+       </svg>
+       <span class="nav-label">${ui.nav.search}</span>
+     </button>`,
+  );
+  searchButton.addEventListener("click", () => {
+    cancelLookAhead();
+    releaseSettings();
+    releaseActivity();
+    clearActive();
+    searchButton.classList.add("active");
+    enter("#search");
+    setTitle(ui.nav.search);
+    void showSearch();
+  });
+  tools.appendChild(searchButton);
+
   // Hidden until a backend answers, like Generate — see activity.ts.
   const activity = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" id="nav-activity" type="button" hidden>
@@ -887,12 +936,18 @@ let wantedView: { kind: string; id: string } | null = null;
 const SCROLL_KEY = "view-scroll";
 
 /** Where the reader is: a nav row, or one of the two tool pages below the list. */
-type View = { kind: "trip" | "month"; id: string } | { kind: "settings" } | { kind: "generate" } | { kind: "activity" };
+type View =
+  | { kind: "trip" | "month"; id: string }
+  | { kind: "settings" }
+  | { kind: "generate" }
+  | { kind: "activity" }
+  | { kind: "search" };
 
 function viewFromHash(): View | null {
   if (location.hash === "#settings") return { kind: "settings" };
   if (location.hash === "#generate") return { kind: "generate" };
   if (location.hash === "#activity") return { kind: "activity" };
+  if (location.hash === "#search") return { kind: "search" };
   const match = /^#(trip|month)\/(.+)$/.exec(location.hash);
   return match ? { kind: match[1] as "trip" | "month", id: decodeURIComponent(match[2]) } : null;
 }
@@ -903,6 +958,7 @@ function rowFor(view: View | null): HTMLElement | null {
   if (view.kind === "settings") return document.getElementById("nav-settings");
   if (view.kind === "generate") return document.getElementById("nav-generate");
   if (view.kind === "activity") return document.getElementById("nav-activity");
+  if (view.kind === "search") return document.getElementById("nav-search");
   return document.querySelector<HTMLElement>(
     `#month-nav .month-link[data-pin-kind="${view.kind}"][data-pin-id="${CSS.escape(view.id)}"]`,
   );

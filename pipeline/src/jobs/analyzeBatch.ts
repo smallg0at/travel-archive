@@ -5,6 +5,7 @@ import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
 import { readThumb } from "../thumbStore.js";
 import { loadIndex, loadShard, saveIndex, saveShard } from "../archiveStore.js";
+import { buildSearchIndex } from "./searchIndex.js";
 import { dataFile } from "../paths.js";
 import { env } from "../env.js";
 import { isNetworkError, mediaTypeFor } from "../util.js";
@@ -723,6 +724,10 @@ export async function collectAnalyzeBatches(onProgress: ProgressFn, signal?: Abo
       message: `${batch.displayName}: ${applied} captioned, ${failed} without a caption — ${usage.promptTokens} input, ${usage.outputTokens + usage.thoughtsTokens} output tokens.`,
     });
   }
+
+  // Once, after every batch in this run: thousands of new captions are the
+  // whole point of search, and rebuilding per batch would read the mirror twice.
+  if (result.applied > 0) await buildSearchIndex(token, index, onProgress);
 
   onProgress({
     phase: "done",

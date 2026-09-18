@@ -47,6 +47,7 @@ export const zhHans: Messages = {
     trips: "旅行",
     generate: "生成",
     activity: "活动",
+    search: "搜索",
     settings: "设置",
     savePdf: "导出 PDF",
     kept: "▣ 已保存在本机",
@@ -322,6 +323,15 @@ export const zhHans: Messages = {
       cancelled: "已取消",
     },
     jobFailed: (message) => `失败：${message}`,
+  },
+
+  search: {
+    placeholder: "搜索说明、地点与摘要",
+    loading: "正在加载搜索索引…",
+    unavailable: "还没有可搜索的内容——请先运行“分析”和“当天摘要”。",
+    ready: (photos, days) => `${num(photos)} 张照片、${num(days)} 天可供搜索。`,
+    found: (photos, days, ms) => `${num(photos)} 张照片，分布在 ${num(days)} 天 · ${num(ms)} 毫秒`,
+    photosMatched: (n) => `${num(n)} 张匹配`,
   },
 
   activity: {

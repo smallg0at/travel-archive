@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { dirname } from "node:path";
-import type { ArchiveIndexFile, PhotoShard, TranslationFile } from "@travel-archive/shared";
+import type { ArchiveIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { downloadMetadataJson, uploadMetadataJson } from "./graph.js";
 import { env } from "./env.js";
@@ -21,6 +21,7 @@ import { markDirty, markSynced } from "./syncStore.js";
  */
 
 const INDEX_FILE = "index.json";
+const SEARCH_FILE = "search.json";
 const shardFile = (month: string) => `photos/${month}.json`;
 
 function emptyIndex(): ArchiveIndexFile {
@@ -32,6 +33,13 @@ async function writeLocal(fileName: string, data: unknown): Promise<void> {
   const localPath = dataFile(fileName);
   await mkdir(dirname(localPath), { recursive: true });
   await writeFile(localPath, JSON.stringify(data, null, 2), "utf-8");
+}
+
+/** As writeLocal, without the indentation — for files that are read by machines only. */
+async function writeLocalCompact(fileName: string, data: unknown): Promise<void> {
+  const localPath = dataFile(fileName);
+  await mkdir(dirname(localPath), { recursive: true });
+  await writeFile(localPath, JSON.stringify(data), "utf-8");
 }
 
 /**
@@ -84,6 +92,17 @@ export async function saveIndex(token: string, index: ArchiveIndexFile): Promise
   await markDirty();
   const etag = await uploadMetadataJson(token, env.metadataFolder, INDEX_FILE, index);
   await markSynced(etag);
+}
+
+/**
+ * The search index — derived data, so no dirty/synced bookkeeping: losing it
+ * costs one rebuild, and marking the replica dirty for it would make every
+ * collect look like an unsynced change. Returns the size written.
+ */
+export async function saveSearchIndex(token: string, file: SearchIndexFile): Promise<number> {
+  await writeLocalCompact(SEARCH_FILE, file);
+  await uploadMetadataJson(token, env.metadataFolder, SEARCH_FILE, file);
+  return Buffer.byteLength(JSON.stringify(file));
 }
 
 /** One month's photo records. Returns an empty shard if that month has never been scanned. */

@@ -554,6 +554,32 @@ export interface ConfigStatus {
  * and on an archive where 4,386 of 31,374 photos have captions, the last is by
  * far the most common and the least guessable.
  */
+/**
+ * Everything the archive holds in words, in one file the app can search
+ * without asking the server — so search works the same in the desktop app and
+ * in the browser build reading OneDrive directly.
+ *
+ * Deliberately not an inverted index. The whole corpus is 3.5MB of captions,
+ * tags and places across 24,296 photos, which a browser scans in milliseconds;
+ * and a substring scan finds 京都 in Chinese text, where a word-boundary index
+ * would need a tokenizer to split a language that has no spaces.
+ *
+ * Rows are tuples rather than objects because the field names would otherwise
+ * be two thirds of the file.
+ */
+export interface SearchIndexFile {
+  schemaVersion: number;
+  builtAt: string;
+  /** Every photo id starts with the drive's own id; stored once. */
+  idPrefix: string;
+  /** [id without the prefix, date or "", caption + tags + place, lowercased]. */
+  photos: [string, string, string][];
+  /** [date, day summary + stop titles and summaries + place, lowercased]. */
+  days: [string, string][];
+  /** [section id, name, first date, last date]. */
+  trips: [string, string, string, string][];
+}
+
 export interface OrganizePlan {
   /** Days that would be summarized, i.e. what this run would cost. */
   rewrite: number;

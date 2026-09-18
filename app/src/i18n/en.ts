@@ -49,6 +49,7 @@ export const en = {
     trips: "Trips",
     generate: "Generate",
     activity: "Activity",
+    search: "Search",
     settings: "Settings",
     savePdf: "Save as PDF",
     kept: "▣ Kept on this device",
@@ -328,6 +329,16 @@ export const en = {
       cancelled: "cancelled",
     } satisfies Record<JobStatus, string>,
     jobFailed: (message: string) => `failed: ${message}`,
+  },
+
+  search: {
+    placeholder: "Search captions, places and summaries",
+    loading: "Loading the search index…",
+    unavailable: "Nothing to search yet — run Analyze and Day summaries first.",
+    ready: (photos: number, days: number) => `${num(photos)} photos and ${num(days)} days ready to search.`,
+    found: (photos: number, days: number, ms: number) =>
+      `${num(photos)} ${photos === 1 ? "photo" : "photos"} across ${num(days)} ${days === 1 ? "day" : "days"} · ${num(ms)}ms`,
+    photosMatched: (n: number) => `${num(n)} matching`,
   },
 
   activity: {

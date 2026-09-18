@@ -1,4 +1,4 @@
-import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
+import type { ArchiveIndexFile, PhotoShard, SearchIndexFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "./msAuth";
 import { localArchiveJson } from "./backend";
@@ -124,6 +124,26 @@ export function forgetMonths(months: string[]): void {
     shardCache.delete(month);
     translationCache.delete(month);
   }
+}
+
+/**
+ * The archive's searchable text (see pipeline/src/jobs/searchIndex.ts).
+ *
+ * ~5MB for 27,000 photos, fetched once and kept for the session: search is
+ * typed at, and a fetch per keystroke — or even per visit — would make it
+ * useless. Null when the archive has never been organized, which is not an
+ * error: the search view says so rather than throwing.
+ */
+let searchIndex: Promise<SearchIndexFile | null> | null = null;
+
+export function loadSearchIndex(): Promise<SearchIndexFile | null> {
+  searchIndex ??= fetchMetadataJson<SearchIndexFile>("search.json", "search").catch(() => null);
+  return searchIndex;
+}
+
+/** After a job that rewrote captions or summaries. */
+export function forgetSearchIndex(): void {
+  searchIndex = null;
 }
 
 /**
