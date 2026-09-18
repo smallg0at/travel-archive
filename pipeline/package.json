@@ -11,6 +11,7 @@
     "redact": "node dist/redact.js",
     "trip": "node dist/trip.js",
     "dedupe": "node dist/dedupe.js",
+    "places": "node dist/replaceplaces.js",
     "geo:build": "node scripts/build-geo.mjs",
     "serve": "node dist/serve.js"
   },
