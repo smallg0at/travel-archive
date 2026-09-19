@@ -206,10 +206,21 @@ One window, and the only way to use the parts that need a local machine —
 generation, sync, pinning photos to disk. From a checkout:
 
 ```
+npm run --workspace pipeline build # the shell runs pipeline/dist/serve.js as built
 npm run --workspace app build      # the shell serves app/dist; build it first
 npm run desktop                    # build the shell and open the window
 npm run package                    # installer -> desktop/release
 ```
+
+`npm run desktop` builds only the shell. The job server and the app are run
+from their last build, so after pulling or editing either one, rebuild it
+first — a stale `pipeline/dist` runs yesterday's server with no warning.
+
+**Don't also start the job server by hand** (`npm run --workspace pipeline
+serve`). If anything already holds 4319 the shell's own child fails to bind,
+and `/health` answers from the other one — possibly older code, and not
+stopped when the window closes. Stop it first; the shell starts and stops its
+own.
 
 `npm run desktop` builds `desktop/` and starts Electron. The shell then serves
 the built app on **17923** and starts the pipeline's job server as a child
