@@ -112,6 +112,43 @@ function isAuthWindowUrl(url: string): boolean {
   return url === "about:blank" || url.startsWith(LOGIN_ORIGIN) || url.startsWith(APP_URL);
 }
 
+/**
+ * How long the window holds its "Starting…" page for the job server.
+ *
+ * Long enough for a cold start — the first launch after a boot, when Node and
+ * the pipeline's modules come off a cold disk, was measurably slower than the
+ * window and the app came up in fallback mode — and short enough that a server
+ * which is never coming still costs little. A server that *exits* ends the
+ * wait at once, so a fresh install with no `.env` is not held here at all.
+ */
+const STARTUP_WAIT_MS = 15_000;
+
+/**
+ * Shown while the job server starts, instead of the app.
+ *
+ * Painted by the shell, not the app, because the whole point is not to load
+ * the app yet. It follows the system theme so it does not flash the wrong one
+ * before the app's own theme applies.
+ */
+const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
+<meta charset="utf-8"><title>Photo Archive</title>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { height: 100%; margin: 0; }
+  body { display: grid; place-items: center; background: #f6f5f1; color: #6b6a64;
+         font: 13px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
+  @media (prefers-color-scheme: dark) { body { background: #161614; color: #9a988f; } }
+</style>
+<p>Starting the archive…</p>`)}`;
+
+/** Set once the app itself may be shown — after the job server answers, or the wait above gives up. */
+let appLoadable = false;
+
+function loadApp(): void {
+  appLoadable = true;
+  void mainWindow?.loadURL(APP_URL);
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -166,7 +203,7 @@ function createWindow(): void {
     return { action: "deny" };
   });
 
-  void mainWindow.loadURL(APP_URL);
+  void mainWindow.loadURL(appLoadable ? APP_URL : STARTING_PAGE);
   mainWindow.on("closed", () => (mainWindow = null));
 }
 
@@ -263,12 +300,19 @@ async function startup(): Promise<void> {
   staticServer = await serveApp(APP_DIST, APP_PORT);
   log(staticServer ? `Serving ${APP_DIST} on ${APP_URL}` : `Reusing whatever already serves ${APP_URL}`);
 
-  // The window opens as soon as the app can be served, and the job server
-  // starts behind it. Waiting for the server first cost a fresh install the
-  // full 20s health timeout staring at nothing — the one machine where it is
-  // guaranteed to fail is the one that has no `.env` yet. app/src/backend.ts
-  // polls /health and reveals the generate controls when it answers, so a
-  // server that arrives a second after the window is not a problem.
+  // The window opens at once, on a "Starting…" page, and the app loads into
+  // it once the job server answers.
+  //
+  // It used to load the app immediately and let the server arrive behind it.
+  // That stopped being harmless once the app began deciding things from its
+  // one health check at startup — where photos come from, whether to offer
+  // sign-in, the offline banner, the preferences sync. On the first launch
+  // after a boot the server lost that race, and the app came up in fallback
+  // mode, reading OneDrive directly, until a reload.
+  //
+  // Waiting is bounded (STARTUP_WAIT_MS) and ends early if the server dies,
+  // which keeps what the old ordering was protecting: a fresh install with no
+  // `.env`, where the server is certain to fail, still opens promptly.
   createWindow();
 
   void (async () => {
@@ -284,9 +328,26 @@ async function startup(): Promise<void> {
       // Not fatal: the archive still reads from OneDrive and only generation
       // is unavailable — the same read-only path the phone takes.
       log(`Job server unavailable: ${(err as Error).message}`);
+      loadApp();
       return;
     }
-    if (!(await waitForHealthy(PIPELINE_PORT))) {
+
+    const started = Date.now();
+    const healthy = waitForHealthy(PIPELINE_PORT);
+    const child = pipeline.child;
+    const exited = new Promise<false>((done) => {
+      if (!child) return;
+      if (child.exitCode !== null) return done(false);
+      child.once("exit", () => done(false));
+    });
+    const capped = new Promise<false>((done) => setTimeout(() => done(false), STARTUP_WAIT_MS));
+    const ready = await Promise.race([healthy, exited, capped]);
+    log(ready ? `Job server ready in ${Date.now() - started}ms` : `Loading the app without the job server after ${Date.now() - started}ms`);
+    loadApp();
+
+    // A server slower than the cap can still arrive; the app's own banner
+    // (app/src/serverStatus.ts) notices within 30s and offers a reload.
+    if (!ready && !(await healthy)) {
       log(`Job server did not become healthy on ${PIPELINE_PORT}; continuing read-only.`);
     }
   })();
