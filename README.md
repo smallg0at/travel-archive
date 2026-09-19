@@ -195,10 +195,54 @@ What it does differently from the desktop, and why:
 - **Android's back button** closes the viewer or a sheet, then pops a page,
   then goes to Home, then leaves — not WebView history, which after a
   redirect sign-in holds Microsoft's login pages.
+- **Photographs come from the phone itself where it has them**, which is most
+  of them: measured on the owner's phone, 24,110 of 31,721 photos and 79GB of
+  103GB, over 90% for every year since 2021. This is the third source
+  `photoSource.ts` was written for, and it is off until allowed in Settings —
+  it needs `READ_MEDIA_IMAGES`, and Android's own dialog says nothing about
+  why an archive reader wants the camera folder.
+- **The sign-in survives a restart** because the key that unlocks MSAL's kept
+  tokens is rewritten as a persistent cookie. See "The phone keeps its own
+  sign-in" in `HANDOFF.md` — without it the app signed out every time Android
+  ended its process.
 
 **Before sign-in can work on a device**, add `https://localhost/auth/` as a
 redirect URI under the *Single-page application* platform of the Azure app
 registration (iOS, once added, will need `capacitor://localhost/auth/`).
+
+### Photographs from the phone's own storage
+
+`android/…/LocalPhotosPlugin.java` lists the phone's photo library — name, size
+and MediaStore id, nothing else — and `src/mobile/devicePhotos.ts` matches the
+archive against it. The bytes are served by MainActivity's `WebViewClient` from
+`https://localhost/_device/…`, so an `<img>` gets an ordinary same-origin URL
+and nothing leaves the phone. Photos are only read.
+
+**Matched on file name *and* exact byte size, never one alone.** This library
+holds 1,898 names whose archived copy is a different encoding of the same
+picture — 235KB against 2.6MB — and showing one for the other would show a
+different picture from the one the archive describes. A miss falls back to
+OneDrive, which is also what happens for the quarter of the archive that was
+never on this phone, so the feature cannot introduce a new failure.
+
+Three things the next person would otherwise rediscover:
+
+- **A `WebResourceResponse` with no `Content-Length` makes a page `fetch()` of
+  it hang forever.** An `<img>` does not care, so this hides until something
+  measures a photo rather than displaying it.
+- **MediaStore's thumbnail cache is an upscale above ~512px.** Asked for 1280
+  it returned 320x240. Up to 512 it is the fast path (26ms, no decode of a 5MB
+  original); larger sizes are sampled from the original with `ImageDecoder`
+  (1280 in 106ms).
+- **HEIC has to be decoded natively** — the WebView cannot display it, and
+  7,159 of this phone's photos are HEIC.
+
+The size the archive recorded rides on every URL as `?b=`, and the plugin
+re-reads the file's size before serving it, so a photo edited in place after
+the library was listed is refused rather than shown in place of what the
+archive describes. The refusal is not a broken square: `devicePhotos.ts`
+drops the match and re-requests from OneDrive. The list is rebuilt whenever
+the app is resumed, so photos taken or deleted meanwhile are picked up.
 
 ## The desktop shell
 

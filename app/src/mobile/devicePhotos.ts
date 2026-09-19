@@ -1,6 +1,8 @@
 import type { PhotoRecord } from "@travel-archive/shared";
 import { registerPlugin } from "@capacitor/core";
+import { App } from "@capacitor/app";
 import { setThumbnailSource, type ThumbnailSource } from "../photoSource";
+import { loadLarge, loadThumbnail } from "../graphPhoto";
 import { isNative } from "./native";
 
 /**
@@ -77,15 +79,18 @@ export function deviceLibrarySize(): number | null {
   return library ? library.size : null;
 }
 
-function mediaIdFor(itemId: string): string | null {
+/** The MediaStore id and the size the archive expects, or null when unmatched. */
+function deviceFile(itemId: string): { id: string; bytes: string } | null {
   const key = keys.get(itemId);
-  return key ? (library?.get(key) ?? null) : null;
+  if (!key) return null;
+  const id = library?.get(key);
+  return id ? { id, bytes: key.slice(key.lastIndexOf("|") + 1) } : null;
 }
 
 /** The original file on this phone, for "full resolution" — or null to fetch it. */
 export function deviceFullUrl(itemId: string): string | null {
-  const id = mediaIdFor(itemId);
-  return id ? `/_device/full/${id}` : null;
+  const file = deviceFile(itemId);
+  return file ? `/_device/full/${file.id}?b=${file.bytes}` : null;
 }
 
 /**
@@ -101,8 +106,11 @@ const deviceSource: ThumbnailSource = {
     // A thumbnail may be asked for before the library has been read; that is
     // one short wait on first paint, not a network round trip.
     if (building) await building;
-    const id = mediaIdFor(itemId);
-    return id ? `/_device/thumb/${id}?px=${PX[size] ?? 420}` : null;
+    const file = deviceFile(itemId);
+    // `b` is the size the archive recorded: the native side refuses to serve a
+    // file that no longer has it, so an edit made while the app was open can
+    // never be shown in place of what the archive describes.
+    return file ? `/_device/thumb/${file.id}?px=${PX[size] ?? 420}&b=${file.bytes}` : null;
   },
 };
 
@@ -119,7 +127,42 @@ export async function initDevicePhotos(): Promise<boolean> {
     library = null;
   });
   setThumbnailSource(deviceSource);
+  listenForChanges();
   return true;
+}
+
+let listening = false;
+function listenForChanges(): void {
+  if (listening) return;
+  listening = true;
+
+  // Photographs are taken, deleted and edited while this app is in the
+  // background. The list is cheap to rebuild — one MediaStore query — and
+  // doing it on every return keeps new photos showing from the phone and
+  // deleted ones from being asked for.
+  void App.addListener("resume", () => {
+    building = buildLibrary().catch(() => {});
+  });
+
+  // A photo edited in the moments since the list was built is refused by the
+  // native side (it checks the size again), and a deleted one is simply gone.
+  // Either way the picture would be a blank square, so the match is dropped
+  // and the photo fetched from OneDrive as if it had never been on the phone.
+  document.addEventListener(
+    "error",
+    (event) => {
+      const img = event.target as HTMLImageElement | null;
+      if (!(img instanceof HTMLImageElement) || !img.src.includes("/_device/")) return;
+      const itemId = img.dataset.photoId;
+      if (!itemId) return;
+      keys.delete(itemId);
+      const size = img.dataset.loader === "large" ? loadLarge : loadThumbnail;
+      void size(itemId).then((url) => {
+        if (url) img.src = url;
+      });
+    },
+    true, // capture: an <img> error does not bubble
+  );
 }
 
 /** Asks Android for access, from a real tap. Returns whether it is now on. */

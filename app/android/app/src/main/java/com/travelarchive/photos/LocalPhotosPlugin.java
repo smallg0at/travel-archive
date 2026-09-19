@@ -139,6 +139,16 @@ public class LocalPhotosPlugin extends Plugin {
     /** Largest thumbnail MediaStore's cache is worth asking for; see serve(). */
     private static final int THUMBNAIL_MAX_PX = 512;
 
+    /** This file's size as MediaStore holds it right now, or null. */
+    private static String sizeOf(ContentResolver resolver, Uri item) {
+        try (Cursor cursor = resolver.query(item, new String[] { MediaStore.Images.Media.SIZE }, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) return Long.toString(cursor.getLong(0));
+        } catch (Exception ignored) {
+            // Gone, or no longer permitted: treated as a mismatch by the caller.
+        }
+        return null;
+    }
+
     private static WebResourceResponse notFound() {
         return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", new HashMap<>(), new ByteArrayInputStream(new byte[0]));
     }
@@ -204,6 +214,13 @@ public class LocalPhotosPlugin extends Plugin {
         Uri item = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
         ContentResolver resolver = context.getContentResolver();
         try {
+            // The size the archive recorded, carried on every URL. The library
+            // was listed when the app started, and a photo edited in place
+            // since then — cropped in the gallery, say — would still match that
+            // stale entry. Checked again here, against the file as it is now,
+            // so what is served is always the picture the archive describes.
+            String expected = url.getQueryParameter("b");
+            if (expected != null && !expected.equals(sizeOf(resolver, item))) return notFound();
             if ("thumb".equals(path.get(1))) {
                 int px = 512;
                 String asked = url.getQueryParameter("px");

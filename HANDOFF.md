@@ -112,6 +112,28 @@ Every feature needs that path to degrade rather than error. The installed phone
 app does not even ask: its WebView is `https://localhost`, and a request to
 `http://127.0.0.1:4319` is mixed content.
 
+**A photo shown from the phone must be the file the archive describes.** The
+installed app serves photographs from the phone's own storage where it has them
+(README, "Photographs from the phone's own storage") — 76% of this library.
+The match is file name **plus exact byte size**, and both halves are load
+bearing: 1,898 names in this library have an archived copy that is a different
+encoding of the same picture, 235KB against 2.6MB. Match on the name alone and
+the reader is shown a different photograph from the one the caption, the day
+and the place were written about, which is the one failure this feature could
+introduce and the reason it cannot. Every URL carries the expected size and the
+plugin re-checks it before serving, so an edit made after the library was
+listed is refused; a refusal falls back to OneDrive rather than showing a gap.
+
+**The phone keeps its own sign-in.** msal-browser encrypts the tokens it keeps
+in `localStorage` with a key held in a *session* cookie, and an Android WebView
+ends that session whenever the process dies — an update, a swipe away, Android
+reclaiming memory. The app therefore rewrites `msal.cache.encryption` with a
+year's expiry (`keepSignInAcrossLaunches`, `mobile/native.ts`) and flushes
+cookies in `onPause`. Without it the app opened on its kept index, signed out,
+every time. Third-party cookies are enabled in `MainActivity` for the same
+reason: MSAL renews silently through a hidden Microsoft iframe once the SPA
+refresh token's 24 hours are up.
+
 **`Vary: Origin` must be sent whether or not the request had an Origin.**
 Thumbnails are cached `immutable` for a year. Send it only when an `Origin` is
 present and a no-CORS fetch caches a copy with no record that CORS mattered —
@@ -169,6 +191,7 @@ and the form warns.
 | trip map | `app/src/tripMap.ts` |
 | phone app: screens, stack, viewer | `app/src/mobile/` (`main.ts` routes, `router.ts`, `day.ts`) |
 | phone app: native shell | `app/capacitor.config.ts`, `app/vite.mobile.config.ts`, `app/android/` |
+| phone app: photos from the device | `app/src/mobile/devicePhotos.ts`, `android/…/LocalPhotosPlugin.java` |
 | thumbnails / disk cache | `pipeline/src/thumbStore.ts`, `serve.ts` |
 | sync | `pipeline/src/jobs/sync.ts`, `syncStore.ts` |
 | place names (offline) | `pipeline/src/geocodeOffline.ts` + `scripts/build-geo.mjs` |
