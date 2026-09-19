@@ -9,6 +9,20 @@ Rebuild with `app/scripts/build-basemap.mjs`, pointing it at the extracted
 `50m_physical.zip` and `50m_cultural.zip` from naturalearthdata.com. The
 archives are not in the repo; the generated file is.
 
+## China's standard-map worldview
+
+Natural Earth's default boundaries are de facto, which is not the PRC standard
+map. After `build-basemap.mjs`, run `scripts/china-worldview.mjs --src <dir>`
+(needs three GeoJSON files from `nvkelso/natural-earth-vector`, listed in the
+script header). It removes the McMahon line, draws the South Tibet boundary
+along the Assam foothills, and adds the nine-dash line as dashed `borders`.
+It edits `basemap.json` in place and is idempotent, but a rebuild from the
+shapefiles discards it — re-run it after every rebuild. `--diag` prints where
+the two worldviews disagree.
+
+Not done: Taiwan's status is only the absence of a border, and place labels
+are unchanged.
+
 ## Why 50m, and why size is not the constraint
 
 The app is served locally, so bytes are close to free. What costs is **DOM
