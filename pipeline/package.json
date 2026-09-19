@@ -13,6 +13,7 @@
     "dedupe": "node dist/dedupe.js",
     "places": "node dist/replaceplaces.js",
     "dayplaces": "node dist/dayplaces.js",
+    "accept-days": "node dist/acceptdays.js",
     "home": "node dist/buildhome.js",
     "geo:build": "node scripts/build-geo.mjs",
     "serve": "node dist/serve.js"
