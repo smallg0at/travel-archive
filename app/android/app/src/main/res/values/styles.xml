@@ -16,7 +16,12 @@
     </style>
 
 
+    <!-- The launch screen: the app mark on its accent, not Capacitor's logo. On
+         Android 12 and later the system draws it from these two items; before
+         that, the background alone shows. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:background">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_mark</item>
     </style>
 </resources>

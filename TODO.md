@@ -967,7 +967,10 @@ working practice this list was built with.
       button.
 - [ ] **Confirm `appId` `com.travelarchive.photos`** before installing it
       anywhere that matters — changing it later makes it a different app.
-- [ ] **Launcher icon and splash are Capacitor's defaults.**
+- [x] **Launcher icon and splash.** Done 2026-09-19: a route mark, ring to dot,
+      on the app's blue — a vector adaptive icon (with a themed-icon layer) and
+      PNGs for Android 6-7.1 drawn by `app/scripts/build-icons.mjs` from the same
+      geometry. The launch screen shows the mark, not Capacitor's logo.
 - [ ] **Month shards are not kept on the phone.** The index is (see
       `mobile/cache.ts`), so the app opens offline, but a day or month not
       opened this session cannot be read without a connection. Same eTag

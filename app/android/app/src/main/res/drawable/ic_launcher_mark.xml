@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The app mark: a route from where a trip started to where it went, the same
+  shape as the Trips tab (src/mobile/ui.ts ICONS.trips). Drawn for the 108dp
+  adaptive-icon canvas and kept inside its 66dp safe zone. Vector drawables
+  have no stroke dashes, so the dotted route is four dots, evenly spaced
+  with the same gap at either end so neither end looks attached.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Where it started: a ring. -->
+    <path
+        android:pathData="M31.5,70a6.5,6.5 0 1,0 13,0a6.5,6.5 0 1,0 -13,0Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.6"
+        android:fillColor="#00000000" />
+    <!-- The way there. -->
+    <path
+        android:pathData="M44.97,60.93a2.1,2.1 0 1,0 4.2,0a2.1,2.1 0 1,0 -4.2,0ZM49.66,56.24a2.1,2.1 0 1,0 4.2,0a2.1,2.1 0 1,0 -4.2,0ZM54.35,51.55a2.1,2.1 0 1,0 4.2,0a2.1,2.1 0 1,0 -4.2,0ZM59.04,46.86a2.1,2.1 0 1,0 4.2,0a2.1,2.1 0 1,0 -4.2,0Z"
+        android:fillColor="#FFFFFF" />
+    <!-- Where it went: a dot. -->
+    <path
+        android:pathData="M62,38a8,8 0 1,0 16,0a8,8 0 1,0 -16,0Z"
+        android:fillColor="#FFFFFF" />
+</vector>
