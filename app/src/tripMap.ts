@@ -706,6 +706,10 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
       }
     }
 
+    // Smallest first, so the busiest draws on top — as the places themselves
+    // are ordered. Biggest-first put the largest disc, and its name, under
+    // every smaller one around it.
+    clusters.sort((a, b) => a.count - b.count);
     for (const { seed, members } of clusters) {
       const centre = cityItems[seed];
       if (members.length === 1) {
@@ -809,7 +813,8 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     // neighbours only. A flat list meant every candidate against every box —
     // at the home page's 515 cities, several million comparisons a frame, and
     // a pan cost 18ms before anything was drawn.
-    type Box = { x0: number; y0: number; x1: number; y1: number };
+    /** A disc's box carries its centre and photo count; a label's carries neither. */
+    type Box = { x0: number; y0: number; x1: number; y1: number; cx?: number; cy?: number; count?: number };
     const k = view.h / home.h;
     /** The base font in view units; offsets are multiples of it, so they hold through a zoom. */
     const unit = fontBase * k;
@@ -844,8 +849,38 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
         else grid.set(key, [b]);
       }
     };
-    const clashes = (b: Box) => {
-      for (const key of keysOf(b)) if (grid.get(key)?.some((t) => overlaps(t, b))) return true;
+    /**
+     * A label may cover a smaller disc than its own, never a label or a disc
+     * at least as busy. Otherwise the busiest disc — full screen, the 12k over
+     * the UK and France, ringed by smaller ones — was the one left unnamed.
+     */
+    const clashes = (b: Box, count: number) => {
+      for (const key of keysOf(b)) {
+        if (grid.get(key)?.some((t) => (t.count === undefined || t.count >= count) && overlaps(t, b))) return true;
+      }
+      return false;
+    };
+    /**
+     * Whether another disc is nearer the label than its own. A name beside
+     * the wrong disc — "Germany" next to a 404 rather than its 1.9k — is
+     * worse than no name.
+     */
+    const strayed = (b: Box, own: Item) => {
+      const cx = (b.x0 + b.x1) / 2;
+      const cy = (b.y0 + b.y1) / 2;
+      // To each disc's edge, not its centre: measured centre to centre, a
+      // label beside the 12k cluster was "nearer" the small discs around it,
+      // and the busiest disc on the map went unnamed.
+      const mine = Math.hypot(cx - own.x, cy - own.y) - discRadius(own);
+      for (const key of keysOf(b)) {
+        for (const t of grid.get(key) ?? []) {
+          if (t.cx === undefined || (t.cx === own.x && t.cy === own.y)) continue;
+          // Clearly nearer, by a third of a line: in a packed cluster every
+          // side is within a pixel or two of some neighbour, and a strict
+          // comparison left the capital's 9.7k unnamed on every side.
+          if (Math.hypot(cx - t.cx, cy - t.cy!) - (t.x1 - t.x0) / 2 < mine - unit * 0.35) return true;
+        }
+      }
       return false;
     };
 
@@ -855,7 +890,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     // a neighbouring city's dot hides the very thing the map is drawing.
     for (const item of items) {
       const r = discRadius(item);
-      reserve({ x0: item.x - r, x1: item.x + r, y0: item.y - r, y1: item.y + r });
+      reserve({ x0: item.x - r, x1: item.x + r, y0: item.y - r, y1: item.y + r, cx: item.x, cy: item.y, count: item.count });
     }
 
     const order = [...items].sort((a, b) => b.count - a.count);
@@ -880,7 +915,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
           const baseY = item.y + dy * unit;
           const x0 = anchor === "start" ? baseX : anchor === "end" ? baseX - width : baseX - width / 2;
           const box = { x0, x1: x0 + width, y0: baseY - size * 0.78, y1: baseY + size * 0.22 };
-          if (!inFrame(box) || clashes(box)) continue;
+          if (!inFrame(box) || clashes(box, item.count) || strayed(box, item)) continue;
           reserve(box);
           placed = { dx, dy, anchor, scale };
           break;
@@ -913,7 +948,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
       const x0 = Number(group.dataset.x) + unit * 0.34;
       const baseY = Number(group.dataset.y) + unit * 0.22;
       const box = { x0, x1: x0 + (group.textContent ?? "").length * 0.55 * size, y0: baseY - size * 0.78, y1: baseY + size * 0.22 };
-      const hidden = clashes(box);
+      const hidden = clashes(box, Infinity);
       if (!hidden) reserve(box);
       setDisplay(group, hidden ? "none" : "");
     }
@@ -951,6 +986,15 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
    * and has to follow the container's height, while Fit follows the places.
    */
   const fitView = { ...view };
+  /**
+   * The view the last time it was put at a fit — first draw, Fit, or a
+   * restore of either. "Still at the fit" is the view equalling this, not
+   * fitView: after a close, fitView is recomputed for the card while the
+   * restored view is the fit it had before, and an untouched map re-expanded
+   * to contain(view), mostly empty ocean.
+   */
+  let lastFit = { ...view };
+  const markFit = () => (lastFit = { ...view });
   /** The places' own extent, padded the same way — what a refit must keep in view. */
   const extent = { w: Math.max(spanX, 0.004) * (1 + pad * 2) * 1e5, h: Math.max(spanY, 0.004) * (1 + pad * 2) * 1e5 };
 
@@ -1147,7 +1191,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     // Untouched since the last fit: expanded, it fits again to the new frame
     // rather than containing the old view — which, in a portrait frame, was
     // mostly empty ocean above and below.
-    const atFit = view.w === fitView.w && view.h === fitView.h && view.x === fitView.x && view.y === fitView.y;
+    const atFit = view.w === lastFit.w && view.h === lastFit.h && view.x === lastFit.x && view.y === lastFit.y;
     if (on) beforeExpand = { ...view };
     root.classList.toggle("is-expanded", on);
     document.body.classList.toggle("map-expanded", on);
@@ -1182,6 +1226,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
         if (!on && beforeExpand) Object.assign(view, beforeExpand);
         else if (on && atFit) Object.assign(view, fitView);
         else Object.assign(view, contain(view));
+        if (atFit) markFit();
       }
       clusterBucket = Number.NaN;
       pixelHeight = 0;
@@ -1205,6 +1250,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   setIcon(reset, MAP_ICONS.fit, ui.common.fit);
   reset.addEventListener("click", () => {
     Object.assign(view, fitView);
+    markFit();
     apply();
   });
 
