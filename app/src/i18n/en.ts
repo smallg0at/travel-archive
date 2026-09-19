@@ -165,7 +165,7 @@ export const en = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     /** A cluster on the home map: its biggest place, and how many more it holds. */
-    clusterMore: (biggest: string, more: number) => `${biggest} and ${more} more`,
+    clusterMore: (biggest: string, more: number) => `${biggest} +${more}`, /* User fix. */
   },
 
   theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },
@@ -274,6 +274,19 @@ export const en = {
   generate: {
     tabs: { trip: "Trip", analyze: "Analyze", organize: "Day summaries", translate: "Translate" },
 
+    suggest: {
+      loading: "Looking for trips…",
+      title: (n: number) => (n === 1 ? "1 possible trip" : `${n} possible trips`),
+      lead: "Found from the nights spent away from home. Create one as it is, or write its story below.",
+      nights: (n: number) => (n === 1 ? "1 night" : `${n} nights`),
+      fromHome: (km: string, home: string) => `up to ${km} km from ${home}`,
+      uncertain: "some nights uncertain",
+      create: "Create trip",
+      createHint: "Gathers these days under this name. No story is written, and nothing is spent.",
+      story: "Write its story…",
+      dismiss: "Not a trip",
+      showAll: (n: number) => `Show all ${n}`,
+    },
     tripNoteHtml:
       "Writes the story of a trip from its <em>day summaries</em> — so run Analyze and Day summaries for the range first, or it will have nothing to work from.",
     notes: "Notes (optional)",

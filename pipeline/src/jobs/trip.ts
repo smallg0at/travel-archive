@@ -158,6 +158,43 @@ export async function deleteTrip(id: string): Promise<void> {
   });
 }
 
+/**
+ * Makes a range a trip with no narrative: the days leave their months and
+ * gather under the name, and nothing is spent. What accepting a suggestion
+ * does — the narrative stays one click away in Generate, for the trips worth
+ * one.
+ *
+ * Refuses an overlap instead of replacing it, unlike upsertDefinition: that
+ * is for re-running a trip over its own range, and here a stale suggestion
+ * would silently delete a trip the owner had named by hand.
+ */
+export async function defineTrip(startDate: string, endDate: string, name: string): Promise<TripDefinition> {
+  const clean = name.trim();
+  if (!clean) throw new Error("A trip needs a name.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate) {
+    throw new Error("A trip needs a start and an end date, in order.");
+  }
+  return withArchiveLock("define trip", async () => {
+    const defs = await loadTripDefinitions();
+    const clash = defs.find((t) => t.startDate <= endDate && t.endDate >= startDate);
+    if (clash) throw new Error(`That overlaps "${clash.name}" (${clash.startDate} to ${clash.endDate}).`);
+    const def: TripDefinition = { id: idFor({ startDate, endDate, name: clean, notes: null, documents: [] }), name: clean, startDate, endDate };
+    const next = [...defs, def].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const token = await getAccessToken();
+    const index = await loadIndex(token);
+    index.sections = bucketDays(
+      index.sections.flatMap((s) => s.days),
+      next,
+      index.sections,
+    );
+    // The index first, as renameTrip does: a failure leaves no definition
+    // pointing at days that never moved.
+    await saveIndex(token, index);
+    await writeDefinitions(next);
+    return def;
+  });
+}
+
 function idFor(opts: TripOptions): string {
   const slug = (opts.name ?? "trip")
     .toLowerCase()

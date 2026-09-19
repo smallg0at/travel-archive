@@ -34,7 +34,8 @@ import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
-import { deleteTrip, renameTrip, runTrip } from "./jobs/trip.js";
+import { defineTrip, deleteTrip, renameTrip, runTrip } from "./jobs/trip.js";
+import { dismissTripSuggestion, listTripSuggestions } from "./jobs/tripSuggest.js";
 import { parseTranslateOptions, planTranslate, runTranslate } from "./jobs/translate.js";
 import * as jobs from "./server/jobs.js";
 
@@ -845,6 +846,45 @@ const routes: [RegExp, string, Handler][] = [
       try {
         await renameTrip(decodeURIComponent(id), body.name ?? "");
         json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+  /**
+   * Trips proposed from where the nights were spent (jobs/tripSuggest.ts).
+   * Read-only; accepting one defines it without a narrative, which costs
+   * nothing either.
+   */
+  [
+    /^\/trips\/suggestions$/,
+    "GET",
+    async (_req, res) => {
+      try {
+        json(res, 200, await listTripSuggestions());
+      } catch (err) {
+        json(res, 500, { error: (err as Error).message });
+      }
+    },
+  ],
+  [
+    /^\/trips\/suggestions\/dismiss$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ startDate?: string; endDate?: string }>(req);
+      if (!body.startDate || !body.endDate) return json(res, 400, { error: "startDate and endDate are required" });
+      await dismissTripSuggestion(body.startDate, body.endDate);
+      json(res, 200, { ok: true });
+    },
+  ],
+  [
+    /^\/trips\/define$/,
+    "POST",
+    async (req, res) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{ startDate?: string; endDate?: string; name?: string }>(req);
+      try {
+        json(res, 200, await defineTrip(body.startDate ?? "", body.endDate ?? "", body.name ?? ""));
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }

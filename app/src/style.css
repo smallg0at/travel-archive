@@ -2755,3 +2755,63 @@ body.map-expanded::after {
   .home-map .trip-map-svg { height: 320px; }
   .home-then-list { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------------------
+   Trip suggestions, above the trip form (tripSuggestions.ts).
+   --------------------------------------------------------------------------- */
+.trip-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  color: var(--text-secondary);
+}
+.sug-head { display: flex; flex-direction: column; gap: 2px; }
+.sug-head strong { font-size: 14px; color: var(--text); }
+.sug-lead { line-height: 1.5; }
+.sug-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-muted);
+}
+.sug-name {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s, 6px);
+  background: none;
+}
+.sug-name:hover { border-color: var(--border); }
+.sug-name:focus { border-color: var(--accent); background: var(--bg); outline: none; }
+.sug-meta, .sug-places { margin: 0; line-height: 1.45; }
+.sug-meta { font-variant-numeric: tabular-nums; }
+.sug-places { color: var(--text); }
+.sug-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* The job panel's buttons (.job-estimate and friends) — these are type="button"
+   too, and would otherwise be the browser's own grey default. */
+.sug-actions button,
+.sug-more {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.sug-actions button:hover:not(:disabled),
+.sug-more:hover { border-color: var(--accent); }
+.sug-actions button:disabled { opacity: 0.55; cursor: default; }
+.sug-create { border-color: var(--accent) !important; color: var(--accent) !important; font-weight: 600; }
+.sug-dismiss { margin-left: auto; }
+.sug-error { margin: 0; color: var(--danger, #c0392b); }
+.sug-more { align-self: flex-start; background: var(--bg-muted); }

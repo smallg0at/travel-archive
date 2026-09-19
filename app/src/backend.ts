@@ -429,6 +429,39 @@ export function renameTrip(id: string, name: string): Promise<{ ok: boolean }> {
   return post<{ ok: boolean }>(`/trips/${encodeURIComponent(id)}/rename`, { name });
 }
 
+/** A trip proposed from where the nights were spent — see pipeline jobs/tripSuggest.ts. */
+export interface TripSuggestion {
+  startDate: string;
+  endDate: string;
+  nights: number;
+  photoCount: number;
+  farthestKm: number;
+  places: { en: string; zh: string | null; photos: number }[];
+  countries: { en: string; zh: string | null }[];
+  name: { en: string; zh: string };
+  home: { en: string | null; zh: string | null };
+  unconfirmedNights: number;
+}
+
+/** Null when the server is too old to suggest, or unreachable. */
+export async function tripSuggestions(): Promise<TripSuggestion[] | null> {
+  try {
+    const res = await fetch(`${BACKEND}/trips/suggestions`);
+    return res.ok ? ((await res.json()) as TripSuggestion[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function dismissTripSuggestion(startDate: string, endDate: string): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>("/trips/suggestions/dismiss", { startDate, endDate });
+}
+
+/** Makes a range a trip without writing its story: free, and instant. */
+export function defineTrip(startDate: string, endDate: string, name: string): Promise<{ id: string; name: string }> {
+  return post<{ id: string; name: string }>("/trips/define", { startDate, endDate, name });
+}
+
 /** Deletes a trip's range and narrative; its days return to their months, no photo is touched. */
 export function deleteTrip(id: string): Promise<{ ok: boolean }> {
   return post<{ ok: boolean }>(`/trips/${encodeURIComponent(id)}/delete`, {});

@@ -268,6 +268,19 @@ export const zhHans: Messages = {
   generate: {
     tabs: { trip: "旅行", analyze: "分析", organize: "当天摘要", translate: "翻译" },
 
+    suggest: {
+      loading: "正在查找旅行…",
+      title: (n: number) => `${n} 个可能的旅行`,
+      lead: "根据离家过夜的记录找到。可以直接创建，或在下方撰写它的故事。",
+      nights: (n: number) => `${n} 晚`,
+      fromHome: (km: string, home: string) => `距${home}最远 ${km} 公里`,
+      uncertain: "部分夜晚不确定",
+      create: "创建旅行",
+      createHint: "将这些日子归入此名称下。不会撰写故事，也不产生费用。",
+      story: "撰写故事…",
+      dismiss: "不是旅行",
+      showAll: (n: number) => `显示全部 ${n} 个`,
+    },
     tripNoteHtml:
       "根据<em>当天摘要</em>撰写旅行故事——因此请先对该日期范围运行“分析”与“当天摘要”，否则将缺少生成素材。",
     notes: "备注（可选）",

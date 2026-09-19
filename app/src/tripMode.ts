@@ -23,6 +23,7 @@ import {
 import { SUMMARY_MIN_PHOTOS } from "@travel-archive/shared";
 import { fmtDateTime, num, ui } from "./i18n";
 import { claimRefresh, jobLabel } from "./activity";
+import { mountTripSuggestions } from "./tripSuggestions";
 
 /**
  * The generation panel: pick a date range, name it or let the model name it,
@@ -33,10 +34,11 @@ import { claimRefresh, jobLabel } from "./activity";
  * and holds OneDrive credentials. There is no mobile-specific code here; the
  * absent backend *is* the mobile path.
  *
- * The range is always chosen by hand. Inferring trips from GPS was tried and
- * dropped: it needs a fixed home to measure from and home moves, and no
- * distance threshold separates a trip from a day out — on this archive the real
- * trip's first day sat 105km from home and an ordinary local day sat at 87km.
+ * The range is always the owner's to confirm. Inferring trips from each day's
+ * distance from home was tried and dropped — no threshold separated a trip's
+ * first day (105km) from an ordinary day out (87km). The suggestions above
+ * the form measure nights away instead (tripSuggestions.ts), and still only
+ * propose.
  */
 
 type Refresh = () => void;
@@ -131,6 +133,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       </div>
 
       <form class="job-form" data-mode="trip">
+        <div class="trip-suggestions" hidden></div>
         <p class="job-note">${ui.generate.tripNoteHtml}</p>
         <div class="job-row"></div>
         <label class="job-field"><span>${ui.generate.notes}</span><textarea rows="3" name="notes" placeholder="${ui.generate.notesPlaceholder}"></textarea></label>
@@ -229,6 +232,15 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   };
 
   const tripForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="trip"]')!;
+  mountTripSuggestions(tripForm.querySelector<HTMLElement>(".trip-suggestions")!, {
+    fill: (from, to, name) => {
+      tripForm.querySelector<HTMLInputElement>('input[name="from"]')!.value = from;
+      tripForm.querySelector<HTMLInputElement>('input[name="to"]')!.value = to;
+      tripForm.querySelector<HTMLInputElement>('input[name="name"]')!.value = name;
+      tripForm.querySelector(".job-note")!.scrollIntoView({ block: "start" });
+    },
+    refresh: () => onFinished(),
+  });
   tripForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(tripForm);
