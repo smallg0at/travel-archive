@@ -119,7 +119,7 @@ export const zhHans: Messages = {
     saving: (n) => `正在保存 ${num(n)} 张…`,
     result: (set, refused, firstError) => {
       const done = `已设置 ${num(set)} 张照片。`;
-      return refused ? `${done} 其中 ${num(refused)} 张被拒绝：${firstError}` : `${done} 重新加载后当天照片将按新时间重新分组。`;
+      return refused ? `${done}其中 ${num(refused)} 张被拒绝：${firstError}` : `${done}重新加载后当天照片将按新时间重新分组。`;
     },
   },
 
@@ -139,12 +139,12 @@ export const zhHans: Messages = {
   },
 
   home: {
-    inView: (photos: number, places: number) => `视野内 ${num(places)} 个地点，共 ${num(photos)} 张照片`,
+    inView: (photos: number, places: number) => `当前视野内 ${num(places)} 个地点，共 ${num(photos)} 张照片`,
     openDay: "查看当天",
     title: "足迹",
     mapLabel: "档案中所有地点的世界地图",
     totals: (photos: number, places: number, countries: number) =>
-      `${num(photos)} 张照片，分布在 ${num(countries)} 个国家的 ${num(places)} 个地点。`,
+      `${num(photos)} 张照片，分布于 ${num(countries)} 个国家的 ${num(places)} 个地点。`,
     noMap: "暂无地点信息——请先运行“扫描”，再生成“当天摘要”，让照片在地图上呈现。",
     photos: (n: number) => `${num(n)} 张照片`,
     placeMeta: (photos: number, days: number) => `${num(days)} 天 · 共 ${num(photos)} 张照片`,
@@ -161,7 +161,7 @@ export const zhHans: Messages = {
     expand: "展开",
     zoomIn: "放大",
     zoomOut: "缩小",
-    clusterMore: (biggest: string, more: number) => `${biggest}等 ${more + 1} 处`,
+    clusterMore: (biggest: string, more: number) => `${biggest} 等 ${more + 1} 处`,
     clusterCountries: (countries: string[]) =>
       countries.length <= 2 ? countries.join(" 和 ") : `${countries.slice(0, 2).join("、")}等 ${countries.length} 国`, /* User fix. */
   },
@@ -273,18 +273,18 @@ export const zhHans: Messages = {
     suggest: {
       loading: "正在查找旅行…",
       title: (n: number) => `${n} 个可能的旅行`,
-      lead: "根据离家过夜的记录找到。可以直接创建，或用上方的表单撰写它的故事。",
+      lead: "根据在外过夜的行程记录自动检测。可直接创建旅行，或在上方表单中撰写游记。",
       nights: (n: number) => `${n} 晚`,
-      fromHome: (km: string, home: string) => `距${home}最远 ${km} 公里`,
-      uncertain: "部分夜晚不确定",
+      fromHome: (km: string, home: string) => `距 ${home} 最远 ${km} 公里`,
+      uncertain: "部分过夜地点待确认",
       create: "创建旅行",
-      createHint: "将这些日子归入此名称下。不会撰写故事，也不产生费用。",
-      story: "撰写故事…",
+      createHint: "将这些日期的记录归入此名称下。不撰写游记，亦不产生任何费用。",
+      story: "撰写游记…",
       dismiss: "不是旅行",
       showAll: (n: number) => `显示全部 ${n} 个`,
     },
     tripNoteHtml:
-      "根据<em>当天摘要</em>撰写旅行故事——因此请先对该日期范围运行“分析”与“当天摘要”，否则将缺少生成素材。",
+      "根据<em>当天摘要</em>撰写旅行游记——因此请先对该日期范围运行“分析”与“当天摘要”，否则将缺少生成素材。",
     notes: "备注（可选）",
     notesPlaceholder: "任何值得记录的信息——行程规划、同行人员、旅行目的等。",
     documents: "背景文档（.txt、.md）",
@@ -380,7 +380,7 @@ export const zhHans: Messages = {
     loading: "正在加载活动…",
     now: "进行中",
     idle: "当前没有正在运行的任务。",
-    waitingForGoogle: (photos, ago) => `本机暂无运行中的任务。正在等待 Google 处理：${num(photos)} 张照片，于 ${ago} 前提交。`,
+    waitingForGoogle: (photos, ago) => `本机暂无运行中的任务。正在等待 Google 处理：${num(photos)} 张照片，于 ${ago}前提交。`,
     readyToCollect: (photos) => `Google 已处理完毕 ${num(photos)} 张照片，将在 10 分钟内自动收取。`,
     batches: "照片说明批量任务",
     noBatches: "尚未提交过照片说明批量任务。",
@@ -422,9 +422,9 @@ export const zhHans: Messages = {
     signInLead: "请使用存放照片档案的 OneDrive 所属 Microsoft 账户登录。照片仍安全保存在 OneDrive 中，本应用仅进行读取。",
     sessionExpired: "Microsoft 登录会话已过期。",
     signInAgain: "重新登录",
-    archiveUpdated: "档案已有更新。",
+    archiveUpdated: "云端档案已有更新。",
     refresh: "刷新",
-    offline: "当前离线，仅显示本机已保存的内容。",
+    offline: "处于离线状态——仅显示手机已保留的内容。",
     trips: "旅行",
     seeAll: "查看全部",
     noTrips: "暂无旅行记录。旅行行程需在桌面端应用中创建与设定。",
@@ -439,7 +439,7 @@ export const zhHans: Messages = {
     previousDay: "前一天",
     nextDay: "后一天",
     noPhotos: "当天没有拍摄照片。",
-    stops: "地点",
+    stops: "途经点",
     moreInCard: (n: number) => `+${num(n)}`,
     info: "详情",
     fullResolution: "原图",
@@ -447,14 +447,14 @@ export const zhHans: Messages = {
     account: "账户",
     microsoftAccount: "Microsoft 账户",
     thumbnails: "缩略图",
-    devicePhotos: "手机里的照片",
+    devicePhotos: "手机相册照片",
     devicePhotosOn: "已开启",
     devicePhotosOff: "未开启",
-    devicePhotosCount: (photos: number) => `已开启 · 手机中有 ${num(photos)} 张照片`,
-    devicePhotosAllow: "使用手机里的照片",
+    devicePhotosCount: (photos: number) => `已开启 · 手机相册匹配到 ${num(photos)} 张照片`,
+    devicePhotosAllow: "使用手机相册照片",
     devicePhotosWhy:
-      "这个档案里的照片大多就是用这台手机拍的，至今还在相册里。直接从手机读取，打开即显示，也不耗流量；手机里没有的仍从 OneDrive 取。只读取照片，不会上传到任何地方。",
-    devicePhotosRefused: "Android 拒绝了访问。可在「设置 › 应用 › Photo Archive › 权限」中开启。",
+      "档案中的大多数照片就是用这台手机拍摄的，且仍保存在相册中。直接从本地相册读取可秒开且不消耗流量；手机中缺失的照片仍会从 OneDrive 获取。本应用仅读取照片，绝不会上传至任何其他地方。",
+    devicePhotosRefused: "Android 系统权限请求被拒绝。可在「设置 › 应用 › Photo Archive › 权限」中手动开启。",
     signedInAs: (name: string) => `已登录：${name}`,
     cache: "手机本地存储",
     cacheSize: (photos: number, mb: string) => `${num(photos)} 张缩略图 · ${mb} MB`,
