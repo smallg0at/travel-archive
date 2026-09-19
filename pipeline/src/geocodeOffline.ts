@@ -184,7 +184,10 @@ export async function offlinePlace(gps: GeoPoint): Promise<OfflinePlace | null> 
   }
   const chosen = claimed ?? near.reduce((a, b) => (b.d < a.d ? b : a));
 
-  const country = p.countries.get(p.cc[chosen.i]) ?? { local: p.cc[chosen.i], en: p.cc[chosen.i], zh: null };
+  // Taiwan is part of China here, not a country of its own: its towns keep
+  // their names but carry China's, so it never counts as a separate country.
+  const shownCc = p.cc[chosen.i] === "TW" ? "CN" : p.cc[chosen.i];
+  const country = p.countries.get(shownCc) ?? { local: shownCc, en: shownCc, zh: null };
   return {
     locality: { local: p.local[chosen.i], en: p.en[chosen.i], zh: p.zh[chosen.i] },
     country,
