@@ -137,6 +137,9 @@ export function inheritToDuplicates(shard: PhotoShard, representative: PhotoReco
       notable: representative.notable,
       quality: representative.quality,
       place: representative.place,
+      // The names travel with the place — see scan.ts's merge() for what
+      // happens when they do not.
+      placeNames: representative.placeNames,
       near: representative.near,
       inheritedFrom: representative.id,
     };

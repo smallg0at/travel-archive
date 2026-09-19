@@ -128,6 +128,11 @@ function merge(fresh: PhotoRecord, prior: PhotoRecord | undefined): PhotoRecord 
   return {
     ...fresh,
     place: prior.place,
+    // With the place, always. Carrying `place` alone stripped the English and
+    // Chinese names from every photo in a month each time it was rescanned —
+    // 1,650 in September 2026, which the six-hourly scan revisits as photos
+    // land — and the map and search fell back to endonyms for all of them.
+    placeNames: prior.placeNames,
     near: prior.near,
     analyzedAt: prior.analyzedAt,
     contentType: prior.contentType,
