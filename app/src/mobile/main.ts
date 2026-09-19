@@ -197,6 +197,11 @@ async function main(): Promise<void> {
   // First, before anything asks for a token: this load may be the return from
   // a redirect sign-in that MSAL left for this page to finish (msAuth.ts).
   await completeRedirect().catch((err) => console.error("Sign-in could not be completed:", err));
+  // In the installed app, Microsoft returns to /auth/, and Capacitor serves
+  // this page there too (its html5 fallback maps any extensionless path to
+  // index.html). Once the response is handled, be at the root again — a
+  // cancelled sign-in lands on the sign-in screen, not on a leftover path.
+  if (location.pathname.startsWith("/auth")) history.replaceState(null, "", "/");
   initBackButton();
   window.addEventListener("signin-required", showSessionBanner);
 
