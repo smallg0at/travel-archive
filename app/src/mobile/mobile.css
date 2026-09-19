@@ -265,7 +265,7 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
 /* The map's own word buttons give way to round icon ones (phoneMapControls,
    ui.ts). They were being drawn at body text size with no background, since
    `body.m button` outranks style.css's `.trip-map-expand`. */
-.m .m-map .trip-map-expand, .m .m-map .trip-map-reset { display: none; }
+.m .m-map .trip-map-controls { display: none; }
 .m .m-map-controls {
   position: absolute;
   right: 10px;
@@ -303,9 +303,13 @@ body.m .trip-map.m-map.is-expanded {
 }
 body.m .trip-map.m-map.is-expanded .trip-map-svg { height: 100dvh; }
 body.m.map-expanded::after { display: none; }
+/* Full screen, a column down the right edge like a maps app: zoom above,
+   Fit below, all within a thumb's reach. */
 .m .m-map.is-expanded .m-map-controls {
   bottom: calc(var(--safe-bottom) + 16px);
   right: 16px;
+  flex-direction: column;
+  gap: 10px;
 }
 body.m .m-map.is-expanded .m-map-expand { display: none; }
 .m .m-map.is-expanded .m-map-close {
@@ -739,8 +743,58 @@ body.m .m-map.is-expanded .m-map-expand { display: none; }
 .m .m-list-row small { color: var(--text-secondary); font-size: 13px; }
 @keyframes m-fade { from { opacity: 0; } }
 @keyframes m-rise { from { transform: translateY(40%); opacity: 0; } }
+
+/* --- Motion -------------------------------------------------------------- */
+
+/* What stops it feeling like a web page: pages come from a direction, layers
+   leave the way they came, and a press answers before the finger lifts.
+   Short, and on transform and opacity only, which the WebView runs on the
+   compositor — nothing here lays anything out.
+
+   Pages (router.ts `arrive`): pushed from the right, returned to from the
+   left, tabs and sideways day steps fade. Material's shared-axis pattern,
+   with the travel kept small so it reads as direction, not as a slide show. */
+body.m {
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+}
+@keyframes m-from-right { from { transform: translateX(28px); opacity: 0; } }
+@keyframes m-from-left { from { transform: translateX(-28px); opacity: 0; } }
+.m .m-screen[data-arrive="push"] { animation: m-from-right .26s var(--ease-out); }
+.m .m-screen[data-arrive="back"] { animation: m-from-left .24s var(--ease-out); }
+.m .m-screen[data-arrive="fade"] { animation: m-fade .18s ease-out; }
+
+/* Layers: the viewer opens out of the page and fades back into it; sheets
+   rise and fall. */
+@keyframes m-zoom-in { from { transform: scale(.94); opacity: 0; } }
+@keyframes m-fade-out { to { opacity: 0; } }
+@keyframes m-sink { to { transform: translateY(40%); opacity: 0; } }
+.m .m-viewer.is-leaving { animation: m-fade-out .16s var(--ease-in) forwards; pointer-events: none; }
+.m .m-sheet-wrap.is-leaving { pointer-events: none; }
+.m .m-sheet-wrap.is-leaving .m-sheet { animation: m-sink .18s var(--ease-in) forwards; }
+.m .m-sheet-wrap.is-leaving .m-sheet-backdrop { animation: m-fade-out .18s var(--ease-in) forwards; }
+.m .m-viewer-sheet { animation-timing-function: var(--ease-out); }
+
+/* The full-screen map grows out of its card rather than appearing. */
+.m .m-map.is-expanded { animation: m-zoom-in .22s var(--ease-out); }
+/* The session banner comes up from the tabs. */
+.m .m-banner:not([hidden]) { animation: m-rise .26s var(--ease-out); }
+
+/* Presses: everything tappable gives a little under the finger. The existing
+   :active backgrounds stay; this adds the physical part. */
+.m :is(.m-tab, .m-icon-btn, .m-map-btn, .m-chip, .m-primary, .m-trip-card, .m-then, .m-row-card, .m-day-row, .m-month-row, .m-list-row, .m-day-nav a, .m-day-nav button) {
+  transition: transform .12s var(--ease-out), background-color .12s, opacity .12s;
+}
+.m :is(.m-tab, .m-icon-btn, .m-map-btn, .m-primary):active { transform: scale(.92); }
+.m :is(.m-chip, .m-trip-card, .m-then, .m-row-card):active { transform: scale(.97); }
+.m :is(.m-day-row, .m-month-row, .m-list-row):active { transform: scale(.985); }
+/* The active tab's icon settles into place when chosen. */
+@keyframes m-pop { 40% { transform: scale(1.15); } }
+.m .m-tab.is-active svg { animation: m-pop .28s var(--ease-out); }
+
 @media (prefers-reduced-motion: reduce) {
-  .m .m-sheet, .m .m-sheet-backdrop { animation: none; }
+  .m .m-sheet, .m .m-sheet-backdrop, .m .m-screen, .m .m-viewer, .m .m-map, .m .m-banner, .m .m-tab svg, .m .m-viewer-sheet { animation: none !important; }
+  .m :is(.m-tab, .m-icon-btn, .m-map-btn, .m-chip, .m-primary, .m-trip-card, .m-then, .m-row-card, .m-day-row, .m-month-row, .m-list-row):active { transform: none; }
 }
 
 /* --- The viewer ---------------------------------------------------------- */
@@ -753,7 +807,8 @@ body.m .m-map.is-expanded .m-map-expand { display: none; }
   z-index: 60;
   background: #000;
   color: #fff;
-  animation: m-fade .15s;
+  /* Opens out of the page (Motion, above); leaves by fading. */
+  animation: m-zoom-in .22s var(--ease-out);
 }
 .m .m-viewer-track {
   display: flex;

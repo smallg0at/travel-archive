@@ -61,6 +61,26 @@ function match(hash: string): { route: Route; params: string[] } | null {
   return null;
 }
 
+/**
+ * How a page arrives, for mobile.css to animate: "push" slides in from the
+ * right, "back" from the left, and "fade" is for a tab or a day stepped
+ * sideways. Only the arriving page moves — the one leaving is hidden at once.
+ * The document is the scroller, so keeping both on screen for a crossing
+ * would mean lifting one out of the flow for the length of the animation;
+ * the arriving page carrying the direction is what reads as native, and
+ * costs nothing.
+ *
+ * The attribute comes off when the animation ends: a transform left on a
+ * screen would make it the containing block for everything `position: fixed`
+ * inside it, like the full-screen map.
+ */
+function arrive(el: HTMLElement, how: "push" | "back" | "fade"): void {
+  el.removeAttribute("data-arrive");
+  void el.offsetWidth; // restart, when the same page arrives twice in a row
+  el.setAttribute("data-arrive", how);
+  el.addEventListener("animationend", () => el.removeAttribute("data-arrive"), { once: true });
+}
+
 function cover(entry: Entry | undefined): void {
   if (!entry) return;
   entry.scrollY = window.scrollY;
@@ -95,6 +115,7 @@ function show(): void {
   if (below >= 0) {
     while (stack.length - 1 > below) drop(stack.pop()!);
     uncover(stack[below]);
+    arrive(stack[below].el, "back");
     replacing = false;
     return;
   }
@@ -119,17 +140,21 @@ function show(): void {
     }
     stack.push(entry);
     uncover(entry);
+    // Not on the first page of the session: the app opens on it, it does not arrive.
+    if (top) arrive(entry.el, "fade");
     onTab(route.tab);
     return;
   }
 
-  if (replacing && top && !roots.has(top.hash)) drop(stack.pop()!);
+  const sideways = replacing && top && !roots.has(top.hash);
+  if (sideways) drop(stack.pop()!);
   else cover(top);
   replacing = false;
   const entry: Entry = { hash, el: route.render(params), scrollY: 0 };
   host.appendChild(entry.el);
   stack.push(entry);
   window.scrollTo(0, 0);
+  if (top) arrive(entry.el, sideways ? "fade" : "push");
 }
 
 export function startRouter(opts: { routes: Route[]; host: HTMLElement; onTab: (tab: Tab) => void }): void {

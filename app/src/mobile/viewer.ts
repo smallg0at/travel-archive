@@ -4,7 +4,7 @@ import { el } from "../photoUi";
 import { contentLanguage, loc } from "../contentLang";
 import { fmtDateTime, ui } from "../i18n";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
-import { ICONS } from "./ui";
+import { ICONS, leave } from "./ui";
 import { overrideSystemBars } from "./native";
 
 /**
@@ -334,7 +334,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   });
 
   function close(): void {
-    root.remove();
+    leave(root);
     overrideSystemBars(null);
     document.body.classList.remove("m-locked");
     for (const url of fullUrls.values()) releaseFullPhoto(url);

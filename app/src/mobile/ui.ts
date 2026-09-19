@@ -151,7 +151,22 @@ export const ICONS = {
   search: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   expand: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   fit: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  minus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
 };
+
+/**
+ * Removes a layer after its exit animation (`.is-leaving` in mobile.css), so
+ * it goes the way it came rather than vanishing. The fallback timer covers
+ * reduced motion, where no animation runs to end.
+ */
+export function leave(el: HTMLElement): void {
+  if (el.classList.contains("is-leaving")) return;
+  el.classList.add("is-leaving");
+  const done = () => el.remove();
+  el.addEventListener("animationend", (event) => event.target === el && done(), { once: true });
+  setTimeout(done, 300);
+}
 
 /**
  * The phone's controls for a map drawn by tripMap.ts's `drawPlaceMap`.
@@ -168,14 +183,22 @@ export function phoneMapControls(root: HTMLElement): void {
   const controls = el<HTMLElement>(`
     <div class="m-map-controls">
       <button type="button" class="m-map-btn m-map-close">${ICONS.close}</button>
+      <button type="button" class="m-map-btn m-map-zoom-in">${ICONS.plus}</button>
+      <button type="button" class="m-map-btn m-map-zoom-out">${ICONS.minus}</button>
       <button type="button" class="m-map-btn m-map-fit">${ICONS.fit}</button>
       <button type="button" class="m-map-btn m-map-expand">${ICONS.expand}</button>
     </div>
   `);
-  const [close, fit, expand] = [".m-map-close", ".m-map-fit", ".m-map-expand"].map((s) => controls.querySelector<HTMLButtonElement>(s)!);
+  const [close, zoomIn, zoomOut, fit, expand] = [".m-map-close", ".m-map-zoom-in", ".m-map-zoom-out", ".m-map-fit", ".m-map-expand"].map(
+    (s) => controls.querySelector<HTMLButtonElement>(s)!,
+  );
   close.setAttribute("aria-label", ui.common.close);
+  zoomIn.setAttribute("aria-label", ui.map.zoomIn);
+  zoomOut.setAttribute("aria-label", ui.map.zoomOut);
   fit.setAttribute("aria-label", ui.common.fit);
   expand.setAttribute("aria-label", ui.map.expand);
+  zoomIn.addEventListener("click", () => own("trip-map-zoom-in")?.click());
+  zoomOut.addEventListener("click", () => own("trip-map-zoom-out")?.click());
   fit.addEventListener("click", () => own("trip-map-reset")?.click());
   expand.addEventListener("click", () => own("trip-map-expand")?.click());
   close.addEventListener("click", () => void dismiss());

@@ -8,7 +8,7 @@ import { dismiss, openLayer } from "./overlay";
 import { go, switchTab } from "./router";
 import { openDate } from "./day";
 import { tripCard } from "./trips";
-import { archive, coverIds, ICONS, note, phoneMapControls, screen, sectionFor, shortDate, thumb, trips } from "./ui";
+import { archive, coverIds, ICONS, leave, note, phoneMapControls, screen, sectionFor, shortDate, thumb, trips } from "./ui";
 
 /**
  * The phone's front page. The desktop's home (src/home.ts) asks the same two
@@ -98,7 +98,7 @@ function placeSheet(place: HomePlace): void {
     row.addEventListener("click", () => void dismiss().then(() => openDate(date)));
     list.appendChild(row);
   }
-  const close = () => sheet.remove();
+  const close = () => leave(sheet);
   sheet.querySelector(".m-sheet-backdrop")!.addEventListener("click", () => void dismiss());
   sheet.querySelector(".m-sheet-handle")!.addEventListener("click", () => void dismiss());
   document.body.appendChild(sheet);
