@@ -1,10 +1,10 @@
 import type { ArchiveIndexFile, HomePlace, PhotoRecord } from "@travel-archive/shared";
 import { dayMeta, loadHomeIndex, loadIndex, loadMonth } from "./archiveData";
 import { el, hydrateAll, lazyImg } from "./photoUi";
-import { contentLanguage } from "./contentLang";
 import { ui } from "./i18n";
 import { openDay } from "./album";
-import { drawPlaceMap, loadBasemap, type MapPoint } from "./tripMap";
+import { drawPlaceMap, loadBasemap } from "./tripMap";
+import { homeMapOptions, homeMapPoints, homePlaceLabel } from "./homeMap";
 import { mountSearch } from "./search";
 import { openPhoto } from "./viewer";
 
@@ -41,20 +41,6 @@ const STRIP_PHOTOS = 4;
 const NEAR_DAYS = 3;
 /** Days listed when a place is chosen on the map. A home city has hundreds; this panel is a way in, not the album. */
 const MAX_PLACE_DAYS = 24;
-
-/** The name to show, in the reader's language, falling back to what exists. */
-function placeLabel(place: HomePlace): string {
-  // The Chinese fallback is the endonym, never the English name: 349 of 515
-  // places carry no separate Chinese name, and for Beijing that is because
-  // `name` is already 城市 — falling back to `nameEn` printed "Beijing" in the
-  // middle of a Chinese map.
-  const name =
-    contentLanguage() === "zh-Hans" ? (place.nameZh ?? place.name) : (place.nameEn ?? place.name);
-  // The country is on the tooltip, not the label: at world scale the label is
-  // there to say *which* dot this is, and "a city" does that alone.
-  const comma = name.indexOf(",");
-  return comma === -1 ? name : name.slice(0, comma);
-}
 
 /* --- On this day -------------------------------------------------------- */
 
@@ -169,27 +155,12 @@ export async function showHome(): Promise<void> {
     const root = el<HTMLDivElement>(`<div class="trip-map home-map"></div>`);
     root.textContent = ui.map.loading;
     slot.replaceWith(root);
-    // Biggest drawn last, so on top. Discs keep a constant size on screen, so
-    // at world zoom the capital's is covered by its own suburbs if they come later:
-    // a tap on the dot labelled "the capital" opened a village. Zooming in separates
-    // them, which is how the small ones are reached.
-    const ordered = [...home.places].reverse();
-    const points: MapPoint[] = ordered.map((place) => ({
-      key: place.name,
-      name: placeLabel(place),
-      lat: place.lat,
-      lon: place.lon,
-      photoCount: place.photoCount,
-    }));
+    // Points and options shared with the phone's home map: see homeMap.ts.
+    const { ordered, points } = homeMapPoints(home.places);
     const basemap = await loadBasemap();
     if (!root.isConnected) return;
     drawPlaceMap(root, basemap, points, {
-      label: ui.home.mapLabel,
-      zoomOut: "world",
-      // 516 places at world zoom: grouped, weighted by photos, smaller type.
-      cluster: true,
-      fontScale: 0.62,
-      inView: ui.home.inView,
+      ...homeMapOptions(home.places),
       onPick: (i) => showPlace(panel, index, ordered[i]),
     });
   } else {
@@ -206,7 +177,7 @@ function showPlace(panel: HTMLElement, index: ArchiveIndexFile, place: HomePlace
   panel.replaceChildren();
 
   const head = el<HTMLElement>(`<div class="home-place-head"><strong></strong><span></span></div>`);
-  head.querySelector("strong")!.textContent = placeLabel(place);
+  head.querySelector("strong")!.textContent = homePlaceLabel(place);
   head.querySelector("span")!.textContent = ui.home.placeMeta(place.photoCount, place.days.length);
   panel.appendChild(head);
 

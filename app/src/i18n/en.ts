@@ -164,6 +164,8 @@ export const en = {
     expand: "Expand",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
+    /** A cluster on the home map: its biggest place, and how many more it holds. */
+    clusterMore: (biggest: string, more: number) => `${biggest} and ${more} more`,
   },
 
   theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },

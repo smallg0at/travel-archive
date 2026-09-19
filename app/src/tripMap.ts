@@ -39,11 +39,15 @@ const MAX_SCALE = 400;
 /** Widest view, in degrees of longitude, that still draws rivers — see paint(). */
 const RIVERS_MAX_SPAN_DEG = 60;
 /**
- * Places closer than this on screen are drawn as one cluster. A little over
- * two of the largest discs: close enough that neighbours merge before their
- * labels fight, not so far that a whole country becomes one dot.
+ * Space kept between two discs before they merge, in screen pixels.
+ *
+ * Places merge only when their discs would touch. The first rule merged
+ * anything within 44px, and at world zoom that folded Europe into "the capital
+ * +371" and "a city +9" — a disc labelled the capital standing for places in a
+ * dozen countries. The owner's word was "too conclusive": it hid where the
+ * library had been instead of summarising it.
  */
-const CLUSTER_PX = 44;
+const CLUSTER_GAP_PX = 3;
 
 /**
  * The map's control icons — the phone app's (mobile/ui.ts), so the two read
@@ -292,6 +296,12 @@ export interface MapPoint {
   lat: number;
   lon: number;
   photoCount: number;
+  /**
+   * What the point belongs to — the home page passes its country. A cluster
+   * never spans two groups, so a disc never claims one country's places for
+   * another's.
+   */
+  group?: string;
 }
 
 export interface PlaceMapOptions {
@@ -315,6 +325,17 @@ export interface PlaceMapOptions {
   cluster?: boolean;
   /** Label size relative to the trip map's. The home page's view is a world, not a trip, and wants smaller type. */
   fontScale?: number;
+  /**
+   * Label size on screen, in pixels, in place of `fontScale`; discs follow in
+   * proportion. `fontScale` is a fraction of the frame's height, so one value
+   * gave 14px labels in the desktop's 460px frame and 9px in the phone's
+   * 300px one.
+   */
+  labelPx?: number;
+  /** A group's display name, for a cluster that holds the whole of one (see MapPoint.group). */
+  groupName?: (group: string) => string;
+  /** A cluster's name: its biggest place, and how many more it holds. */
+  clusterName?: (biggest: string, more: number) => string;
   /** A line describing what is in view, kept current as the map moves. */
   inView?: (photos: number, places: number) => string;
 }
@@ -574,7 +595,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   /** The zoom the clusters were built for, quantised, so a pan never regroups them. */
   let clusterBucket = Number.NaN;
   /**
-   * The canvas's height in pixels, which is what CLUSTER_PX is measured in.
+   * The canvas's height in pixels, which the cluster gap is measured in.
    * Read once and again when the frame changes shape (expand), never per
    * regroup: reading it mid-zoom forced a synchronous layout, and was most of
    * why a zoom step went from 10ms to 31ms when clustering arrived.
@@ -585,15 +606,16 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   };
 
   /**
-   * Groups crowding places into clusters, biggest place first.
+   * Groups places whose discs would touch, biggest place first.
    *
    * Greedy and in screen space: the busiest ungrouped place takes every
-   * ungrouped neighbour within CLUSTER_PX, and the cluster sits on that place
-   * and is named after it — "the capital +37" — because a centroid lands in the
-   * sea as often as not and names nothing. Regrouped only when the zoom moves
-   * a quarter of a doubling, so panning never reshuffles what you are looking
-   * at.
+   * ungrouped place of its own group whose disc would touch its own, and the
+   * cluster sits on that place — a centroid lands in the sea as often as not.
+   * Regrouped only when the zoom moves half a doubling, so panning never
+   * reshuffles what you are looking at.
    */
+  const groupSizes = new Map<string, number>();
+  for (const c of cities) if (c.group) groupSizes.set(c.group, (groupSizes.get(c.group) ?? 0) + 1);
   const recluster = () => {
     if (!opts.cluster) return;
     // Per half-doubling of zoom: finer regrouped on nearly every wheel step.
@@ -604,8 +626,19 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     // clientHeight, not the bounding rect: the layout size, untouched by a CSS
     // transform — the phone scales the map in over 0.22s on expand, and the
     // rect read mid-animation is ~94% of it.
-    if (!pixelHeight) pixelHeight = canvas.clientHeight || HEIGHT;
-    const radius = CLUSTER_PX * (view.h / pixelHeight);
+    //
+    // The view's height as drawn, which is the frame's only when the frame is
+    // at least as wide as the view: "meet" fits a 1.9:1 view to the width of a
+    // narrower frame.
+    if (!pixelHeight) pixelHeight = Math.min(canvas.clientHeight || HEIGHT, (canvas.clientWidth || Infinity) * (view.h / view.w));
+    // A disc's radius at this zoom, in world units, is discBase * weight *
+    // (view.h / home.h); see placeMarkers().
+    const unitR = discBase * (view.h / home.h);
+    const gap = CLUSTER_GAP_PX * (view.h / pixelHeight);
+    const reach = (a: number, b: number) => unitR * (cityItems[a].weight + cityItems[b].weight) + gap;
+    // Grid cells as wide as the furthest two discs can be and still touch.
+    const maxWeight = Math.max(...cityItems.map((c) => c.weight));
+    const radius = unitR * maxWeight * 2 + gap;
     const cellKey = (x: number, y: number) => Math.floor(x / radius) * 1_000_003 + Math.floor(y / radius);
     const grid = new Map<number, number[]>();
     for (const [i, item] of cityItems.entries()) {
@@ -631,7 +664,8 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
         for (let gy = cy - 1; gy <= cy + 1; gy++) {
           for (const j of grid.get(gx * 1_000_003 + gy) ?? []) {
             if (grouped[j]) continue;
-            if (Math.hypot(cityItems[j].x - centre.x, cityItems[j].y - centre.y) > radius) continue;
+            if (cities[j].group !== cities[seed].group) continue;
+            if (Math.hypot(cityItems[j].x - centre.x, cityItems[j].y - centre.y) > reach(seed, j)) continue;
             grouped[j] = 1;
             members.push(j);
           }
@@ -650,32 +684,39 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
       const count = members.reduce((sum, m) => sum + cities[m].photoCount, 0);
       // Never smaller than a disc a two-digit badge fits in.
       const weight = Math.max(0.95, weightOf(count));
-      const group = svgEl("g", { class: "trip-map-city is-cluster", tabindex: "0", role: "button" });
-      group.dataset.x = String(centre.x);
-      group.dataset.y = String(centre.y);
+      const node = svgEl("g", { class: "trip-map-city is-cluster", tabindex: "0", role: "button" });
+      node.dataset.x = String(centre.x);
+      node.dataset.y = String(centre.y);
       const circle = svgEl("circle", { cx: 0, cy: 0 });
       circle.style.setProperty("--city-weight", weight.toFixed(3));
-      group.appendChild(circle);
+      node.appendChild(circle);
       const badge = svgEl("text", { x: 0, y: 0, class: "trip-map-count", "text-anchor": "middle" });
       badge.style.setProperty("--city-weight", weight.toFixed(3));
       badge.textContent = shortCount(count);
-      group.appendChild(badge);
-      const name = `${cities[seed].name} +${members.length - 1}`;
+      node.appendChild(badge);
+      // Named for what it is. The whole of a country is that country; part of
+      // one is its biggest place "and N more" — "+371" read as bookkeeping,
+      // and "the capital" alone as a claim about the capital.
+      const group = cities[seed].group;
+      const name =
+        group && opts.groupName && members.length === groupSizes.get(group)
+          ? opts.groupName(group)
+          : (opts.clusterName ?? ((b: string, n: number) => `${b} +${n}`))(cities[seed].name, members.length - 1);
       const label = svgEl("text", { x: 0, y: 0, "text-anchor": "middle" });
       label.textContent = name;
-      group.appendChild(label);
+      node.appendChild(label);
       const title = svgEl("title");
       title.textContent = `${name} — ${ui.common.photos(count)}`;
-      group.appendChild(title);
+      node.appendChild(title);
 
       const open = () => zoomTo(members);
-      group.addEventListener("click", () => {
+      node.addEventListener("click", () => {
         if (!moved) open();
       });
-      group.addEventListener("keydown", (e) => {
+      node.addEventListener("keydown", (e) => {
         if ((e as KeyboardEvent).key === "Enter") open();
       });
-      frag.appendChild(group);
+      frag.appendChild(node);
       next.push({ x: centre.x, y: centre.y, count, weight, name, label });
     }
     clusterLayer.replaceChildren(frag);
@@ -859,8 +900,17 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   // sized as a fraction of the *fitted* view, then multiplied by how far you
   // have zoomed. That keeps them a constant size on screen whatever the trip's
   // extent, whether it spans a continent or two neighbouring cities.
-  const fontBase = home.h * 0.05 * (opts.fontScale ?? 1);
-  const discBase = home.h * 0.028;
+  //
+  // labelPx pins the label to a size on screen instead, from the frame's
+  // height as drawn; discs keep the proportion to labels the trip map has.
+  // As in recluster(), the view's height as drawn: a narrow frame fits the
+  // view to its width, and sizing from the frame's height halved the type.
+  const framePx = Math.min(canvas.clientHeight || HEIGHT, (canvas.clientWidth || Infinity) * (home.h / home.w));
+  const fontBase = opts.labelPx ? home.h * (opts.labelPx / framePx) : home.h * 0.05 * (opts.fontScale ?? 1);
+  // Discs a little smaller against their labels than the trip map's: at world
+  // zoom a clustered map has Europe's countries side by side, and at the trip
+  // map's proportion their discs covered each other's counts.
+  const discBase = opts.labelPx ? fontBase * 0.68 : home.h * 0.028;
   canvas.style.setProperty("--map-r", `${discBase}px`);
   canvas.style.setProperty("--map-f", `${fontBase}px`);
   canvas.style.setProperty("--map-s", `${home.h * 0.0035}px`);

@@ -161,6 +161,7 @@ export const zhHans: Messages = {
     expand: "展开",
     zoomIn: "放大",
     zoomOut: "缩小",
+    clusterMore: (biggest: string, more: number) => `${biggest}等 ${more + 1} 处`,
   },
 
   theme: { label: "主题", light: "浅色", dark: "深色", system: "跟随系统" },
