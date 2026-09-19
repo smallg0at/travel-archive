@@ -601,7 +601,10 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     if (bucket === clusterBucket) return;
     clusterBucket = bucket;
 
-    if (!pixelHeight) pixelHeight = canvas.getBoundingClientRect().height || HEIGHT;
+    // clientHeight, not the bounding rect: the layout size, untouched by a CSS
+    // transform — the phone scales the map in over 0.22s on expand, and the
+    // rect read mid-animation is ~94% of it.
+    if (!pixelHeight) pixelHeight = canvas.clientHeight || HEIGHT;
     const radius = CLUSTER_PX * (view.h / pixelHeight);
     const cellKey = (x: number, y: number) => Math.floor(x / radius) * 1_000_003 + Math.floor(y / radius);
     const grid = new Map<number, number[]>();
