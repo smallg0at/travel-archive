@@ -115,6 +115,36 @@ async function persist(record: JobRecord): Promise<void> {
   }
 }
 
+/**
+ * Marks jobs left "running" by a previous process as failed.
+ *
+ * A record used to be written only when a job ended, so a run killed with the
+ * server — quitting the desktop app, or it restarting under an editor's
+ * changes — disappeared with no trace at all, and a summarizing run that had
+ * been going for minutes looked as though it had never happened. One is now
+ * written when the job starts, and this settles whatever the last process
+ * left behind.
+ */
+export async function reapAbandoned(): Promise<number> {
+  let reaped = 0;
+  try {
+    for (const file of await readdir(JOB_DIR)) {
+      if (!file.endsWith(".json")) continue;
+      const record = JSON.parse(await readFile(`${JOB_DIR}/${file}`, "utf-8")) as JobRecord;
+      if (record.status !== "running" && record.status !== "queued") continue;
+      record.status = "failed";
+      record.error = "The server stopped while this job was running.";
+      record.log.push(`error: ${record.error}`);
+      record.finishedAt = new Date().toISOString();
+      await persist(record);
+      reaped++;
+    }
+  } catch {
+    // Bookkeeping: never worth failing a start over.
+  }
+  return reaped;
+}
+
 function emit(job: LiveJob): void {
   for (const listener of job.subscribers) {
     try {
@@ -179,6 +209,10 @@ export function start<R extends object>(opts: StartOptions<R>): JobRecord {
     }
     emit(job);
   };
+
+  // Written before the work starts, so a job killed with the server leaves
+  // evidence rather than nothing; `reapAbandoned` settles it on next launch.
+  void persist(record);
 
   void (async () => {
     try {

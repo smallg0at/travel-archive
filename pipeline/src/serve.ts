@@ -1205,4 +1205,9 @@ setInterval(() => void scanIfDue(), SCAN_CHECK_MS);
 // After the collect check, so a batch waiting to be merged is not held up by a
 // scan that has six hours of slack in it.
 setTimeout(() => void scanIfDue(), 60_000);
+// A job that was running when the last process died is not running now.
+void jobs.reapAbandoned().then((n) => {
+  if (n) console.log(`${n} job(s) were interrupted when the server last stopped.`);
+});
+
 startSyncChecks(() => jobs.runningJob() !== null);
