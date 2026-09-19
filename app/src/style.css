@@ -345,9 +345,21 @@ html.sidebar-collapsed .main-header {
 }
 html.desktop-shell.sidebar-collapsed #main-column {
   margin-top: 0;
+  background: transparent;
   border-top-left-radius: 0;
+  border-top: none;
   border-left: none;
   box-shadow: none;
+}
+html.desktop-shell.sidebar-collapsed .main-header {
+  background: transparent;
+}
+html.desktop-shell.sidebar-collapsed #content {
+  background: var(--bg);
+  border-top: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.04);
 }
 
 #job-drawer {
@@ -1311,9 +1323,21 @@ html.desktop-shell .nav-year:hover {
   }
   html.desktop-shell #main-column {
     margin-top: 0;
+    background: transparent;
     border-top-left-radius: 0;
+    border-top: none;
     border-left: none;
     box-shadow: none;
+  }
+  html.desktop-shell .main-header {
+    background: transparent;
+  }
+  html.desktop-shell #content {
+    background: var(--bg);
+    border-top: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.04);
   }
   #sidebar {
     position: fixed;
