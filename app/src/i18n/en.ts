@@ -30,6 +30,7 @@ export const en = {
     saving: "Saving…",
     cancel: "Cancel",
     close: "Close",
+    back: "Back",
     edit: "Edit",
     fit: "Fit",
     date: "Date",

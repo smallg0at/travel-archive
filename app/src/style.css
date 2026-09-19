@@ -150,6 +150,15 @@ body {
   overflow: hidden;
 }
 
+/* --- Desktop shell Mica backdrop & WinUI 3 Navigation integration --- */
+html.desktop-shell {
+  -webkit-app-region: drag;
+}
+html.desktop-shell,
+html.desktop-shell body {
+  background: transparent;
+}
+
 #app {
   flex: 1;
   display: flex;
@@ -168,6 +177,121 @@ body {
   min-height: 0;
   background: var(--bg-muted);
   overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* Scrim backdrop for drawer mode (hidden on wide desktop) */
+.sidebar-scrim {
+  display: none;
+}
+
+/* Navigation toggle hamburger buttons */
+.nav-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 100ms ease, color 100ms ease;
+  -webkit-app-region: no-drag;
+}
+.nav-toggle-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.nav-toggle-btn:active {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.nav-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.nav-toggle-icon {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+/* Sidebar brand header */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  user-select: none;
+  flex-shrink: 0;
+  letter-spacing: -0.1px;
+}
+html.desktop-shell .sidebar-header {
+  -webkit-app-region: drag;
+}
+.sidebar-header-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+  fill: currentColor;
+  flex-shrink: 0;
+}
+.sidebar-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Main column top header (visible when sidebar is collapsed or narrow) */
+.main-header {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  user-select: none;
+  flex-shrink: 0;
+  letter-spacing: -0.1px;
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+}
+html.desktop-shell .main-header {
+  -webkit-app-region: drag;
+}
+.main-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.desktop-shell #sidebar {
+  background: transparent;
+  padding-top: 0;
+  -webkit-app-region: drag;
+}
+
+html.desktop-shell #sidebar > *,
+html.desktop-shell .month-link,
+html.desktop-shell .nav-year,
+html.desktop-shell .nav-tool,
+html.desktop-shell button,
+html.desktop-shell a,
+html.desktop-shell input {
+  -webkit-app-region: no-drag;
+}
+html.desktop-shell .sidebar-header {
+  -webkit-app-region: drag;
 }
 
 /* A grab strip rather than a 1px border: a hairline target is unhittable, so
@@ -181,19 +305,49 @@ body {
   border-right: 2px solid var(--bg);
 }
 #sidebar-resize:hover { background: var(--accent); }
+html.desktop-shell #sidebar-resize {
+  margin-top: 36px;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  -webkit-app-region: no-drag;
+}
 body.resizing { cursor: col-resize; user-select: none; }
 
 #main-column {
   flex: 1;
   min-width: 0;
-  /* `min-height: 0` is what lets this shrink below its content. Without it a
-     flex item's automatic minimum size is its content height, which is
-     harmless while #app is a row (height comes from stretch) and fatal once
-     the <=700px rule turns it into a column: the item grows past the viewport,
-     body has `overflow: hidden`, and the page simply cannot be scrolled. */
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+html.desktop-shell #main-column {
+  background: var(--bg);
+  margin-top: 36px;
+  border-top-left-radius: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.05);
+  -webkit-app-region: no-drag;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Wide screen collapsed state */
+html.sidebar-collapsed #sidebar {
+  display: none;
+}
+html.sidebar-collapsed #sidebar-resize {
+  display: none;
+}
+html.sidebar-collapsed .main-header {
+  display: flex;
+}
+html.desktop-shell.sidebar-collapsed #main-column {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-left: none;
+  box-shadow: none;
 }
 
 #job-drawer {
@@ -203,6 +357,11 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-top: 1px solid var(--border);
   background: var(--bg-muted);
 }
+html.desktop-shell #job-drawer {
+  background: color-mix(in srgb, var(--bg-muted) 85%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+}
 /* The month list scrolls; the job panel stays pinned below it. With 61 months
    in the nav, a panel that scrolled with them sat far below the fold and was
    effectively invisible. */
@@ -211,6 +370,24 @@ body.resizing { cursor: col-resize; user-select: none; }
   min-height: 0;
   overflow-y: auto;
   padding: 10px 8px;
+}
+html.desktop-shell #month-nav {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--border) 30%, transparent) transparent;
+}
+html.desktop-shell #month-nav::-webkit-scrollbar {
+  width: 6px;
+}
+html.desktop-shell #month-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+html.desktop-shell #month-nav::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border) 30%, transparent);
+  border: none;
+  border-radius: 999px;
+}
+html.desktop-shell #month-nav::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 .nav-group { position: relative; }
@@ -257,6 +434,14 @@ body.resizing { cursor: col-resize; user-select: none; }
      40px default. */
   padding: 8px 8px;
   cursor: pointer;
+}
+html.desktop-shell .nav-year {
+  position: relative;
+  top: 0;
+  background: transparent;
+}
+html.desktop-shell .nav-year:hover {
+  background: var(--surface-hover);
 }
 .nav-year:hover { background: var(--surface-hover); }
 
@@ -1085,9 +1270,13 @@ body.resizing { cursor: col-resize; user-select: none; }
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.92);
+  background: rgba(12, 12, 12, 0.88);
+  backdrop-filter: blur(28px) saturate(130%);
+  -webkit-backdrop-filter: blur(28px) saturate(130%);
   align-items: center;
   justify-content: center;
   z-index: 100;
+  z-index: 1000;
   cursor: zoom-out;
   display: none;
 }
@@ -1097,82 +1286,81 @@ body.resizing { cursor: col-resize; user-select: none; }
    it — so `.lightbox` stayed visually flex-rendered (and kept intercepting
    clicks) regardless of the `hidden` attribute/property. Only apply flex
    when NOT hidden. */
+/* Only apply flex when NOT hidden. */
 .lightbox:not([hidden]) {
   display: flex;
+  flex-direction: column;
 }
 .lightbox img {
   max-width: 92vw;
   max-height: 92vh;
+  max-width: 94vw;
+  max-height: calc(100dvh - 60px);
   object-fit: contain;
   border-radius: var(--radius-s);
 }
 
-/* --- Narrow screens: month tabs become a horizontal strip ------------- */
+/* --- Responsive WinUI 3 Navigation Drawer (<= 768px) ------------------ */
 
-@media (max-width: 700px) {
-  #app { flex-direction: column; }
-  #sidebar {
-    width: auto;
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--border);
-    overflow-y: visible;
+@media (max-width: 768px) {
+  #sidebar-resize {
+    display: none !important;
   }
-  /* No dragging a column that is now a horizontal strip. */
-  #sidebar-resize { display: none; }
-  /* The phone has no backend to talk to — the server binds to loopback — so
-     this is empty there in practice. Hidden anyway rather than left to collapse
-     to a stray border, since a desktop browser narrowed past this breakpoint
-     would otherwise get a full-width form under the month strip. */
-  #job-host { display: none; }
-  #month-nav {
-    width: auto;
+  .main-header {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 8px;
-    border-right: none;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
   }
-  #month-nav::-webkit-scrollbar { display: none; }
-  /* Grid's `1fr` track needs a definite container width to size against, which
-     an auto-width flex child sized by its own content does not reliably give
-     across browsers. The strip predates the grid template above and is not
-     being restyled in this pass, so it opts back out to the flex row it
-     already had rather than inheriting a layout mode built for the sidebar's
-     fixed width. */
-  .nav-year, .month-link { display: flex; align-items: center; }
-  .nav-year {
-    position: static;
-    width: auto;
-    padding: 0 4px 0 8px;
-    align-self: center;
-    flex-shrink: 0;
+  html.desktop-shell #main-column {
+    margin-top: 0;
+    border-top-left-radius: 0;
+    border-left: none;
+    box-shadow: none;
   }
-  /* Each header is the first child of its own section now, so a `:first-child`
-     rule would match every one of them. A rule about the first group has to
-     name the group. Deliberately the only mobile change here: the phone UX is
-     being redesigned wholesale, so this strip is not worth dressing up. */
-  .nav-group:first-child .nav-year { padding-left: 4px; }
-  .nav-year-count { display: none; }
-  /* `display: contents` keeps the months as direct flex children of the strip,
-     so an expanded year lays out inline instead of stacking. Scoped to
-     `:not([hidden])` — an unconditional `display` would defeat the attribute
-     and every year would be permanently open. */
-  .nav-group,
-  .nav-months:not([hidden]) { display: contents; }
-  .month-link {
-    width: auto;
-    flex-shrink: 0;
-    gap: 6px;
-    padding: 6px 12px;
-    white-space: nowrap;
+  #sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 280px;
+    max-width: 85vw;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 220ms cubic-bezier(0.1, 0.9, 0.2, 1);
+    background: var(--bg-muted);
+    border-right: 1px solid var(--border);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
   }
-  .month-count { display: none; }
-  #content { padding: 14px 12px 40px; }
-  .month-heading { flex-wrap: wrap; }
+  html.desktop-shell #sidebar {
+    background: color-mix(in srgb, var(--bg-muted) 85%, transparent);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+    box-shadow: 4px 0 28px rgba(0, 0, 0, 0.35);
+  }
+  html.sidebar-drawer-open #sidebar {
+    transform: translateX(0);
+  }
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+  }
+  html.sidebar-drawer-open .sidebar-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #content {
+    padding: 16px 14px 40px;
+  }
+  .month-heading {
+    flex-wrap: wrap;
+  }
 }
 
 /* --- Trip pages ------------------------------------------------------- */
@@ -1352,13 +1540,66 @@ body.resizing { cursor: col-resize; user-select: none; }
  * an album month, a collapsed grid, a transit strip — has no card section at
  * all and simply shows the second.
  */
+/* Lightbox top header / title bar */
+.lightbox-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  z-index: 10;
+  user-select: none;
+}
+html.desktop-shell .lightbox-header {
+  -webkit-app-region: drag;
+  padding-top: 2px;
+}
+.lightbox-header-drag {
+  flex: 1;
+  height: 100%;
+}
+.lightbox-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-s, 4px);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+  -webkit-app-region: no-drag;
+}
+.lightbox-back-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.lightbox-back-btn:active {
+  background: rgba(255, 255, 255, 0.22);
+}
+.lightbox-back-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
 .lightbox-figure {
   margin: 0;
+  padding-top: 40px;
   display: flex;
   align-items: stretch;
   gap: 18px;
-  width: 94vw;
-  height: 92vh;
+  width: 95vw;
+  height: calc(100dvh - 30px);
   cursor: auto;
 }
 
@@ -1374,6 +1615,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .lightbox img {
   max-width: 100%;
   max-height: 92vh;
+  max-height: calc(100dvh - 60px);
   object-fit: contain;
   border-radius: var(--radius-s);
   transform-origin: center;
@@ -1381,12 +1623,14 @@ body.resizing { cursor: col-resize; user-select: none; }
      and a text selection instead. */
   -webkit-user-drag: none;
   user-select: none;
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5));
 }
 /* Zoomed, the stage clips it square, so a rounded photo inside a square frame
    is simply a mismatch. */
 .lightbox img.zoomed { border-radius: 0; }
 /* The instantly-available thumbnail, upscaled. Softened so the swap to full
    resolution reads as sharpening rather than as the image changing. */
+.lightbox img.zoomed { border-radius: 0; filter: none; }
 .lightbox img.preview { filter: blur(0.5px); }
 
 #lightbox-zoom {
@@ -1400,6 +1644,11 @@ body.resizing { cursor: col-resize; user-select: none; }
   border-radius: var(--radius-m);
   background: rgb(0 0 0 / 0.55);
   border: 1px solid rgb(241 239 232 / 0.14);
+  background: rgba(24, 24, 24, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 #lightbox-zoom button {
   font: inherit;
@@ -1407,17 +1656,21 @@ body.resizing { cursor: col-resize; user-select: none; }
   min-width: 26px;
   padding: 3px 7px;
   color: rgb(241 239 232 / 0.85);
+  color: rgba(255, 255, 255, 0.85);
   background: none;
   border: none;
   border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
 }
 #lightbox-zoom button:hover { background: rgb(255 255 255 / 0.12); color: #fff; }
+#lightbox-zoom button:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .zoom-level {
   min-width: 40px;
   text-align: center;
   font-size: 11px;
   color: rgb(241 239 232 / 0.6);
+  color: rgba(255, 255, 255, 0.65);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1470,9 +1723,15 @@ body.resizing { cursor: col-resize; user-select: none; }
 #lightbox-card,
 #lightbox-photo {
   padding: 14px 16px;
+  padding: 16px 18px;
   border-radius: var(--radius-m);
   background: rgb(28 27 25 / 0.92);
   border: 1px solid rgb(241 239 232 / 0.1);
+  background: rgba(30, 30, 30, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1566,6 +1825,7 @@ body.resizing { cursor: col-resize; user-select: none; }
      narrower than what it holds. */
   min-width: 0;
   padding-bottom: 2px;
+  padding: 2px 0 4px;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
 }
@@ -1579,11 +1839,17 @@ body.resizing { cursor: col-resize; user-select: none; }
   opacity: 0.55;
   cursor: pointer;
   flex-shrink: 0;
+  transition: opacity 120ms ease, transform 120ms ease, border-color 120ms ease;
 }
 #lightbox-strip img:hover { opacity: 0.85; }
+#lightbox-strip img:hover {
+  opacity: 0.9;
+  transform: scale(1.04);
+}
 #lightbox-strip img.current {
   opacity: 1;
   border-color: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 /* Narrow: stack, and cap the panel so the photograph keeps most of the height. */
@@ -1594,6 +1860,7 @@ body.resizing { cursor: col-resize; user-select: none; }
     /* The height a phone actually shows, not the one behind its toolbars —
        92vh on a phone reaches under them, and the panel's end with it. */
     height: 92dvh;
+    height: calc(92dvh - 30px);
   }
   .lightbox-stage { min-height: 0; }
   .lightbox img { max-height: 100%; }
@@ -1610,29 +1877,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   #lightbox-photo { max-height: none; flex: 0 0 auto; overflow: visible; }
 }
 
-/* The viewer's close control. The figure fills the screen now, so the backdrop
-   is too small a target to be the only way out. */
-#lightbox-close {
-  position: fixed;
-  top: 14px;
-  right: 18px;
-  z-index: 1;
-  width: 34px;
-  height: 34px;
-  font: inherit;
-  font-size: 22px;
-  line-height: 1;
-  color: rgb(241 239 232 / 0.75);
-  background: rgb(0 0 0 / 0.35);
-  border: 1px solid rgb(241 239 232 / 0.18);
-  border-radius: 50%;
-  cursor: pointer;
-}
-#lightbox-close:hover {
-  color: #fff;
-  background: rgb(0 0 0 / 0.6);
-}
-
 /* --- Sidebar pins and tools ------------------------------------------- */
 
 /* OneDrive's vocabulary: a filled marker for kept on this device, a cloud for
@@ -1644,11 +1888,21 @@ body.resizing { cursor: col-resize; user-select: none; }
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
 }
+html.desktop-shell #nav-top {
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+}
 #nav-tools {
   flex-shrink: 0;
   padding: 6px 8px;
   border-top: 1px solid var(--border);
   background: var(--bg-muted);
+}
+html.desktop-shell #nav-tools {
+  background: transparent;
+  background: color-mix(in srgb, var(--bg-muted) 35%, transparent);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
 }
 .nav-tool .nav-label { color: var(--text-secondary); }
 .nav-tool.active .nav-label { color: var(--text); }
@@ -2247,23 +2501,87 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .trip-map-city:focus { outline: none; }
 
-/* Expanded: an overlay over the page, not a browser fullscreen takeover. */
+/* Top header for expanded map */
+.trip-map-header {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  z-index: 10;
+  user-select: none;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+}
+.trip-map.is-expanded .trip-map-header {
+  display: flex;
+}
+html.desktop-shell .trip-map-header {
+  -webkit-app-region: drag;
+  padding-top: 2px;
+}
+.trip-map-header-drag {
+  flex: 1;
+  height: 100%;
+}
+.trip-map-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s, 4px);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+  -webkit-app-region: no-drag;
+}
+.trip-map-back-btn:hover {
+  background: var(--surface-hover);
+}
+.trip-map-back-btn:active {
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+.trip-map-back-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* Expanded: full window overlay */
 .trip-map.is-expanded {
   position: fixed;
-  inset: 3vh 3vw;
-  z-index: 90;
+  inset: 0;
+  z-index: 1000;
   margin: 0;
-  box-shadow: var(--shadow-64);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg);
 }
-.trip-map.is-expanded .trip-map-svg { height: 94vh; }
+.trip-map.is-expanded .trip-map-svg {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+}
+.trip-map.is-expanded .trip-map-expand {
+  display: none;
+}
 /* Stops the page scrolling behind the overlay. */
 body.map-expanded { overflow: hidden; }
 body.map-expanded::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 89;
-  background: rgb(0 0 0 / 0.55);
+  display: none;
 }
 
 /* One stack of round icon buttons: zoom in, zoom out, fit, expand. The
@@ -2392,40 +2710,62 @@ body.map-expanded::after {
      153,000px document. Unwind it back into ordinary document flow. */
   html,
   body {
-    height: auto;
-    overflow: visible;
-    display: block;
-    background: #fff;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   #app {
-    display: block;
-    height: auto;
-    min-height: 0;
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
   #main-column {
-    display: block;
-    min-width: 0;
+    display: block !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
   #content {
-    display: block;
-    height: auto;
-    overflow: visible;
-    padding: 0;
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
-  /* Furniture. Navigation, controls and overlays are not part of the document. */
+  /* Furniture. Navigation, controls, headers and overlays are not part of the document. */
   #sidebar,
   #sidebar-resize,
+  #sidebar-scrim,
+  .sidebar-scrim,
+  #sidebar-header,
+  .sidebar-header,
+  #main-header,
+  .main-header,
+  .nav-toggle-btn,
   #lightbox,
+  .lightbox-header,
+  .trip-map-header,
   #signin-banner,
   #print-progress,
   .density-control,
   .trip-map-controls,
   .trip-map-status,
-  /* Page-level controls live in the heading now. `#menu`, `#job-drawer` and
-     `#settings-panel` used to be listed here and are gone — Generate and
-     Settings became pages, and neither is printable (`canPrint()` is false
-     without card images), so they need no rule of their own. */
+  .day-tools,
+  .trip-tools,
+  .photo-time-editor,
+  .time-edit-btn,
+  .time-editor-popover,
+  .edit-btn,
+  .card-edit-btn,
+  .edit-field-btn,
   .page-export,
   .page-pin,
   .page-pin-slot {

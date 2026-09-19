@@ -31,19 +31,6 @@ import { ui } from "./i18n";
 const OVERLAY_ID = "print-progress";
 
 /**
- * The desktop shell's bridge for exporting without Chrome's print dialog —
- * see desktop/src/preload.ts. Absent in a plain browser tab, where
- * `window.print()` is the only option.
- */
-declare global {
-  interface Window {
-    electronAPI?: {
-      printToPDF(): Promise<{ ok: boolean; path?: string; error?: string }>;
-    };
-  }
-}
-
-/**
  * Resolution the exported images are rasterised at.
  *
  * Thumbnails arrive at Graph's `large` — an 800px box — which is the right size
@@ -290,7 +277,7 @@ export async function printView(): Promise<void> {
   // cannot appear in the printed output even if the stylesheet missed it.
   box.hidden = true;
   try {
-    if (window.electronAPI) {
+    if (window.electronAPI?.printToPDF) {
       // The desktop shell: main process rasterises the same page straight to
       // a PDF file, with no dialog and no header/footer band. Awaited, same
       // as window.print() below, so restore() below only runs once the page

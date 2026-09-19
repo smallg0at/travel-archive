@@ -266,7 +266,8 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
 /* The map's own word buttons give way to round icon ones (phoneMapControls,
    ui.ts). They were being drawn at body text size with no background, since
    `body.m button` outranks style.css's `.trip-map-expand`. */
-.m .m-map .trip-map-controls { display: none; }
+.m .m-map .trip-map-controls,
+.m .trip-map-header { display: none !important; }
 /* The map's "N photos in view" line (tripMap.ts, bottom left on the desktop)
    ran under the phone's four buttons on a 380px map. Top left inline; bottom
    left full screen, where the buttons are a column on the right and the

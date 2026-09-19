@@ -25,10 +25,25 @@
     </div>
 
     <div id="app">
+      <!-- Backdrop scrim for narrow-screen overlay drawer mode -->
+      <div id="sidebar-scrim" class="sidebar-scrim"></div>
+
       <!-- The nav is rebuilt on every album render; the job panel must not be,
            or a finished job's result line and the form you just filled in are
            wiped the moment it completes. Hence a sibling host. -->
-      <div id="sidebar">
+      <aside id="sidebar">
+        <!-- Top-left brand header for WCO titlebar area in desktop shell -->
+        <div id="sidebar-header" class="sidebar-header">
+          <button id="nav-toggle" class="nav-toggle-btn" type="button" aria-label="Toggle navigation" title="Toggle navigation (Ctrl+B)">
+            <svg class="nav-toggle-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M2.5 4.75a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75z"/>
+            </svg>
+          </button>
+          <svg class="sidebar-header-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M4 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4zm0 1h12a1 1 0 0 1 1 1v5.293l-3.146-3.147a.5.5 0 0 0-.708 0L9.5 11.793l-2.146-2.147a.5.5 0 0 0-.708 0L3 13.293V6a1 1 0 0 1 1-1zm13 8.707V14a1 1 0 0 1-1 1H4a1 1 0 0 1-.293-.044l4.001-4.001 2.146 2.146a.5.5 0 0 0 .708 0l3.646-3.646 2.792 2.252zM6.5 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>
+          </svg>
+          <span class="sidebar-header-title">Photo Archive</span>
+        </div>
         <!-- Home, pinned above the nav: it is where the app starts, not one of
              the tools at the bottom. -->
         <div id="nav-top"></div>
@@ -37,18 +52,37 @@
              reachable at 61 months of scroll, which is the whole point of
              moving them out of a floating menu. -->
         <div id="nav-tools"></div>
-      </div>
+      </aside>
       <div id="sidebar-resize" role="separator" aria-orientation="vertical" title="Drag to resize · double-click to reset"></div>
 
       <div id="main-column">
+        <!-- Top titlebar & brand header for collapsed sidebar state / narrow screens -->
+        <header id="main-header" class="main-header">
+          <button id="nav-toggle-main" class="nav-toggle-btn" type="button" aria-label="Toggle navigation" title="Toggle navigation (Ctrl+B)">
+            <svg class="nav-toggle-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M2.5 4.75a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75z"/>
+            </svg>
+          </button>
+          <svg class="sidebar-header-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M4 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4zm0 1h12a1 1 0 0 1 1 1v5.293l-3.146-3.147a.5.5 0 0 0-.708 0L9.5 11.793l-2.146-2.147a.5.5 0 0 0-.708 0L3 13.293V6a1 1 0 0 1 1-1zm13 8.707V14a1 1 0 0 1-1 1H4a1 1 0 0 1-.293-.044l4.001-4.001 2.146 2.146a.5.5 0 0 0 .708 0l3.646-3.646 2.792 2.252zM6.5 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>
+          </svg>
+          <span class="main-header-title">Photo Archive</span>
+        </header>
         <main id="content"></main>
       </div>
     </div>
 
     <div id="lightbox" class="lightbox" hidden>
-      <!-- The figure fills most of the screen, so the backdrop is no longer a
-           big enough target to be the only way out. -->
-      <button id="lightbox-close" type="button" aria-label="Close">&times;</button>
+      <!-- Top header bar: Back button on top-left, drag region in desktop shell -->
+      <header class="lightbox-header">
+        <button id="lightbox-back" class="lightbox-back-btn" type="button" aria-label="Back" title="Back (Esc)">
+          <svg class="lightbox-back-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+            <path fill="currentColor" d="M16.75 10a.75.75 0 0 1-.75.75H5.81l4.72 4.72a.75.75 0 1 1-1.06 1.06l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.06 1.06L5.81 9.25H16a.75.75 0 0 1 .75.75z"/>
+          </svg>
+          <span class="lightbox-back-text">Back</span>
+        </button>
+        <div class="lightbox-header-drag"></div>
+      </header>
       <figure class="lightbox-figure">
         <div class="lightbox-stage">
           <img id="lightbox-img" alt="" draggable="false" />

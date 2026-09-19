@@ -15,6 +15,41 @@
 import { ui } from "./i18n";
 import { rememberPref, THEME_KEY } from "./prefs";
 
+function syncElectronTheme(): void {
+  try {
+    window.electronAPI?.setTheme?.(effectiveTheme());
+  } catch {
+    // Ignore outside Electron
+  }
+}
+
+function applyAccentColor(color: string): void {
+  document.documentElement.style.setProperty("--accent", color);
+}
+
+if (typeof window !== "undefined") {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (readTheme() === "system") syncElectronTheme();
+  });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      syncElectronTheme();
+      void window.electronAPI?.getSystemAccent?.().then((color) => {
+        if (color) applyAccentColor(color);
+      });
+    });
+  } else {
+    syncElectronTheme();
+    void window.electronAPI?.getSystemAccent?.().then((color) => {
+      if (color) applyAccentColor(color);
+    });
+  }
+
+  window.electronAPI?.onSystemAccentChanged?.((color) => {
+    applyAccentColor(color);
+  });
+}
+
 export type Theme = "light" | "dark" | "system";
 
 export function readTheme(): Theme {
@@ -37,6 +72,7 @@ export function showTheme(theme: Theme): void {
   const root = document.documentElement;
   if (theme === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", theme);
+  syncElectronTheme();
 }
 
 export function applyTheme(theme: Theme): void {

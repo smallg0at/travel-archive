@@ -1,7 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell, systemPreferences } from "electron";
 import type { Server } from "node:http";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
 import { join, resolve } from "node:path";
 import { serveApp } from "./static";
 import {
@@ -11,6 +13,39 @@ import {
   waitForHealthy,
   type PipelineServer,
 } from "./pipelineServer";
+
+/**
+ * Path for debug screenshots in development, placed in OS %TEMP%.
+ */
+const DEBUG_SCREENSHOT_PATH = join(tmpdir(), "photo-archive-debug.png");
+
+function captureDevScreenshot(win: BrowserWindow): void {
+  if (PACKAGED || !win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+
+  setTimeout(() => {
+    if (!win || win.isDestroyed()) return;
+    const bounds = win.getBounds();
+    const psScript = `
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+$bmp = New-Object System.Drawing.Bitmap(${bounds.width}, ${bounds.height})
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen(${bounds.x}, ${bounds.y}, 0, 0, (New-Object System.Drawing.Size(${bounds.width}, ${bounds.height})))
+$bmp.Save('${DEBUG_SCREENSHOT_PATH.replace(/\\/g, "\\\\")}', [System.Drawing.Imaging.ImageFormat]::Png)
+$g.Dispose()
+$bmp.Dispose()
+`;
+    execFile("powershell", ["-NoProfile", "-NonInteractive", "-Command", psScript], (err) => {
+      if (err) {
+        console.error(`[dev] Screenshot failed: ${err.message}`);
+      } else {
+        console.log(`[dev] Screenshot saved to ${DEBUG_SCREENSHOT_PATH}`);
+      }
+    });
+  }, 150);
+}
 
 /**
  * The desktop shell.
@@ -134,10 +169,10 @@ const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doct
 <meta charset="utf-8"><title>Photo Archive</title>
 <style>
   :root { color-scheme: light dark; }
-  html, body { height: 100%; margin: 0; }
-  body { display: grid; place-items: center; background: #f6f5f1; color: #6b6a64;
+  html, body { height: 100%; margin: 0; background: transparent; }
+  body { display: grid; place-items: center; color: #6b6a64;
          font: 13px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
-  @media (prefers-color-scheme: dark) { body { background: #161614; color: #9a988f; } }
+  @media (prefers-color-scheme: dark) { body { color: #9a988f; } }
 </style>
 <p>Starting the archive…</p>`)}`;
 
@@ -150,10 +185,20 @@ function loadApp(): void {
 }
 
 function createWindow(): void {
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    backgroundColor: "#161614",
+    autoHideMenuBar: true,
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#00000000",
+      symbolColor: "#ffffff",
+      height: 36,
+    },
+    backgroundColor: "#00000000",
+    backgroundMaterial: "mica",
     title: "Photo Archive",
     show: false,
     webPreferences: {
@@ -167,7 +212,43 @@ function createWindow(): void {
 
   // Paint only once there is something to see; otherwise the window flashes
   // white before the app's own theme applies.
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+    if (!PACKAGED && mainWindow) {
+      setTimeout(() => captureDevScreenshot(mainWindow!), 2500);
+    }
+  });
+
+  // Development shortcuts: F12 for DevTools, F5/Ctrl+R for reload, F8 for material, F9 for screenshot
+  if (!PACKAGED) {
+    const materials: Array<"mica" | "tabbed" | "acrylic"> = ["mica", "tabbed", "acrylic"];
+    let matIdx = 0;
+
+    mainWindow.webContents.on("before-input-event", (_event, input) => {
+      if (input.type !== "keyDown") return;
+      if (input.key === "F12" || ((input.control || input.meta) && input.shift && input.key.toLowerCase() === "i")) {
+        if (mainWindow?.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow?.webContents.openDevTools({ mode: "detach" });
+        }
+      } else if (input.key === "F5" || ((input.control || input.meta) && input.key.toLowerCase() === "r")) {
+        if (input.shift || input.control) {
+          mainWindow?.webContents.reloadIgnoringCache();
+        } else {
+          mainWindow?.webContents.reload();
+        }
+      } else if (input.key === "F8" && mainWindow) {
+        matIdx = (matIdx + 1) % materials.length;
+        const mat = materials[matIdx];
+        mainWindow.setBackgroundMaterial(mat);
+        console.log(`[dev] Switched backgroundMaterial to: ${mat}`);
+      } else if (input.key === "F9" && mainWindow) {
+        captureDevScreenshot(mainWindow);
+      }
+    });
+  }
+
 
   /**
    * MSAL signs in through `window.open`, which Electron denies by default.
@@ -205,6 +286,38 @@ function createWindow(): void {
 
   void mainWindow.loadURL(appLoadable ? APP_URL : STARTING_PAGE);
   mainWindow.on("closed", () => (mainWindow = null));
+}
+
+/**
+ * Dynamically adjust window controls overlay symbol color on theme switch.
+ */
+ipcMain.on("set-theme", (_event, theme: "light" | "dark") => {
+  mainWindow?.setTitleBarOverlay({
+    color: "#00000000",
+    symbolColor: theme === "light" ? "#161614" : "#ffffff",
+    height: 36,
+  });
+});
+
+function getSystemAccentColor(): string | null {
+  try {
+    if (process.platform === "win32") {
+      const hex = systemPreferences.getAccentColor();
+      if (hex) return `#${hex.slice(0, 6)}`;
+    }
+  } catch {
+    // Ignore fallback
+  }
+  return null;
+}
+
+ipcMain.handle("get-system-accent", () => getSystemAccentColor());
+
+if (process.platform === "win32") {
+  systemPreferences.on("accent-color-changed", (_event, newColor) => {
+    const formatted = `#${newColor.slice(0, 6)}`;
+    mainWindow?.webContents.send("system-accent-changed", formatted);
+  });
 }
 
 /**

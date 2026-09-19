@@ -28,6 +28,7 @@ export const zhHans: Messages = {
     saving: "正在保存…",
     cancel: "取消",
     close: "关闭",
+    back: "返回",
     edit: "编辑",
     fit: "适应窗口",
     date: "日期",

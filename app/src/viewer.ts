@@ -458,7 +458,7 @@ function step(delta: number): void {
 }
 
 document.getElementById("lightbox")?.addEventListener("click", close);
-document.getElementById("lightbox-close")?.addEventListener("click", close);
+document.getElementById("lightbox-back")?.addEventListener("click", close);
 // The figure fills the screen, so clicking inside it must not dismiss — beside
 // a portrait photo is still "inside".
 document.querySelector(".lightbox-figure")?.addEventListener("click", (e) => e.stopPropagation());

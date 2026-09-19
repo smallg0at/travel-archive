@@ -1279,6 +1279,27 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     updateStatus();
   }
 
+  const mapHeader = document.createElement("header");
+  mapHeader.className = "trip-map-header";
+
+  const backBtn = document.createElement("button");
+  backBtn.type = "button";
+  backBtn.className = "trip-map-back-btn";
+  backBtn.setAttribute("aria-label", ui.common.back ?? "Back");
+  backBtn.title = `${ui.common.back ?? "Back"} (Esc)`;
+  backBtn.innerHTML = `
+    <svg class="trip-map-back-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path fill="currentColor" d="M16.75 10a.75.75 0 0 1-.75.75H5.81l4.72 4.72a.75.75 0 1 1-1.06 1.06l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.06 1.06L5.81 9.25H16a.75.75 0 0 1 .75.75z"/>
+    </svg>
+    <span class="trip-map-back-text">${ui.common.back ?? "Back"}</span>
+  `;
+  backBtn.addEventListener("click", () => setExpanded(false));
+
+  const dragArea = document.createElement("div");
+  dragArea.className = "trip-map-header-drag";
+
+  mapHeader.append(backBtn, dragArea);
+  root.appendChild(mapHeader);
 }
 
 export async function renderTripMap(

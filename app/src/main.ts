@@ -10,7 +10,7 @@ import {
 } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
 import { initGeneration } from "./tripMode";
-import { initSidebarResize } from "./chrome";
+import { initSidebarNav, initSidebarResize } from "./chrome";
 import { setArchiveRefresh } from "./dayEdit";
 import { setActivityRefresh } from "./activity";
 import { ui } from "./i18n";
@@ -99,7 +99,13 @@ function localiseShell(): void {
   document.querySelector("#signin-banner span")!.textContent = ui.app.signInPrompt;
   document.getElementById("signin-button")!.textContent = ui.app.signInButton;
   document.getElementById("sidebar-resize")!.title = ui.app.resizeHandle;
-  document.getElementById("lightbox-close")!.setAttribute("aria-label", ui.common.close);
+  const lbBack = document.getElementById("lightbox-back");
+  if (lbBack) {
+    lbBack.setAttribute("aria-label", ui.common.back ?? "Back");
+    lbBack.title = `${ui.common.back ?? "Back"} (Esc)`;
+    const textNode = lbBack.querySelector(".lightbox-back-text");
+    if (textNode) textNode.textContent = ui.common.back ?? "Back";
+  }
   const zoom = document.getElementById("lightbox-zoom")!;
   zoom.querySelector('[data-zoom="out"]')!.setAttribute("aria-label", ui.viewer.zoomOut);
   zoom.querySelector('[data-zoom="in"]')!.setAttribute("aria-label", ui.viewer.zoomIn);
@@ -147,6 +153,7 @@ async function main() {
 
   localiseShell();
   initSidebarResize();
+  initSidebarNav();
   initServerStatus(health?.ok === true);
 
   // Photo/shard loads that hit an expired session ask for a re-auth click

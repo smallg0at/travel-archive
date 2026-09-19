@@ -19,6 +19,7 @@ import { showHome } from "./home";
 import { addTripControls } from "./dayEdit";
 import { jumpTo, withContents, type ContentsEntry } from "./contents";
 import { DENSITY_KEY, OPEN_GROUPS_KEY, rememberPref } from "./prefs";
+import { closeSidebarIfOverlay } from "./chrome";
 
 /**
  * How long a view must be looked at before anything is fetched for it.
@@ -635,10 +636,8 @@ function renderNav(index: ArchiveIndexFile): void {
   const trips = index.sections.filter((s): s is TripRecord => s.kind === "trip");
   const years = [...new Set(index.months.map((m) => m.month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
 
-  // First run opens the trips and the newest year only. Everything expanded is
-  // how this pane got to 123 rows of scroll; everything collapsed would hide
-  // the two things almost every visit wants.
-  const open = storedOpenGroups() ?? new Set([...(trips.length ? ["trips"] : []), ...years.slice(0, 1)]);
+  // First run opens the newest year only, keeping the nav tidy on first load.
+  const open = storedOpenGroups() ?? new Set(years.slice(0, 1));
 
   // Trips first: they are the things a person looks for by name. Months below
   // are the fallback for everything that was not part of one.
@@ -717,6 +716,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
      </button>`,
   );
   generate.addEventListener("click", () => {
+    closeSidebarIfOverlay();
     cancelLookAhead();
     releaseSettings();
     releaseActivity();
@@ -737,6 +737,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
      </button>`,
   );
   home.addEventListener("click", () => {
+    closeSidebarIfOverlay();
     cancelLookAhead();
     releaseSettings();
     releaseActivity();
@@ -763,6 +764,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
      </button>`,
   );
   activity.addEventListener("click", () => {
+    closeSidebarIfOverlay();
     cancelLookAhead();
     releaseSettings();
     clearActive();
@@ -782,6 +784,7 @@ function renderNavTools(index: ArchiveIndexFile): void {
      </button>`,
   );
   settings.addEventListener("click", () => {
+    closeSidebarIfOverlay();
     // Leaving a view cancels its look-ahead. Without this, glancing at a trip
     // and clicking straight to Settings still fired the warm two seconds later
     // — the dwell delay only helps if every exit cancels it, not just the two
@@ -828,6 +831,7 @@ function navRow(
   row.dataset.pinId = id;
 
   row.addEventListener("click", () => {
+    closeSidebarIfOverlay();
     clearActive();
     row.classList.add("active");
     revealRow(row);
@@ -982,13 +986,11 @@ function rowFor(view: View | null): HTMLElement | null {
 }
 
 /**
- * The newest thing — the nav is sorted newest-first — but only from a group
- * that is actually open. Picking the very first row would always land on a
- * trip and force the Trips section back open, which makes collapsing it look
- * broken.
+ * Default view on startup: Home page first.
  */
 function defaultRow(): HTMLElement | null {
   return (
+    document.getElementById("nav-home") ??
     document.querySelector<HTMLElement>("#month-nav .nav-months:not([hidden]) .month-link") ??
     document.querySelector<HTMLElement>("#month-nav .month-link")
   );
