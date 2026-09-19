@@ -252,6 +252,8 @@ export interface OrganizeResult {
   /** Days left unsummarized for having too few photos outside a trip. */
   small: number;
   withheld: number;
+  /** Days the model could not write this run. Their old text, if any, is kept. */
+  failed: number;
   trips: number;
   months: number;
 }
@@ -353,11 +355,40 @@ export async function runOrganize(
   }
 
   const dates = [...byDay.keys()].sort();
-  const result: OrganizeResult = { days: 0, summarized: 0, reused: 0, small: 0, withheld: 0, trips: 0, months: 0 };
+  const result: OrganizeResult = { days: 0, summarized: 0, reused: 0, small: 0, withheld: 0, failed: 0, trips: 0, months: 0 };
   const days: DayRecord[] = [];
   // What the summarizer wrote in the second language, saved with the index at
   // the end — and, like it, not at all if the run is cancelled.
   const nativePairs: [string, string][] = [];
+
+  /**
+   * Writes what has been summarized so far, part-way through the run.
+   *
+   * Everything used to be written at the end, so a 503 from the model on the
+   * ninth day threw away the eight before it — paid for, and gone. Days not
+   * reached yet are carried through unchanged, so the index is always whole.
+   */
+  let sinceCheckpoint = 0;
+  const checkpoint = async () => {
+    sinceCheckpoint = 0;
+    const done = new Set(days.map((d) => d.date));
+    const merged = [...days, ...[...existingDaysByDate.values()].filter((d) => !done.has(d.date))];
+    index.sections = bucketDays(merged, tripDefs, index.sections);
+    await saveIndex(token, index);
+    // Keyed by the English text, so writing the running total again is a
+    // no-op for what is already there.
+    await saveNativeText(token, NATIVE_LANGUAGE, nativePairs, () => {});
+    onProgress({ message: `Checkpoint — ${result.summarized} day(s) written so far.` });
+  };
+  /** Days written between checkpoints. Each is a paid model call; a handful is a tolerable loss. */
+  const CHECKPOINT_EVERY = 5;
+  /**
+   * Consecutive failures that mean the service is down rather than one day
+   * being awkward. The provider already retries a 503 five times with backoff,
+   * so this is that many times over.
+   */
+  const GIVE_UP_AFTER = 3;
+  let consecutiveFailures = 0;
 
   onProgress({ phase: "summarizing", done: 0, total: dates.length, message: "Summarizing changed days..." });
 
@@ -431,17 +462,49 @@ export async function runOrganize(
         })),
       }));
 
-      const summarized = await provider.summarizeDay({
-        date,
-        place,
-        note,
-        alsoIn: NATIVE_LANGUAGE,
-        // Both flags describe how much the model may lean on metadata; see
-        // SummarizeDayInput. A day is time-uncertain if any of its photos is.
-        timeUncertain: dayPhotos.some((p) => p.timeSuspect),
-        placeFromMetadataOnly: place !== null && !analyzed.some((p) => p.contentType === "document"),
-        stops,
-      });
+      let summarized;
+      try {
+        summarized = await provider.summarizeDay({
+          date,
+          place,
+          note,
+          alsoIn: NATIVE_LANGUAGE,
+          // Both flags describe how much the model may lean on metadata; see
+          // SummarizeDayInput. A day is time-uncertain if any of its photos is.
+          timeUncertain: dayPhotos.some((p) => p.timeSuspect),
+          placeFromMetadataOnly: place !== null && !analyzed.some((p) => p.contentType === "document"),
+          stops,
+        });
+        consecutiveFailures = 0;
+      } catch (err) {
+        // One day the model would not write does not end the run, and does not
+        // lose the day: its old text, if it had any, is kept and it stays
+        // stale, so the next run offers it again.
+        result.failed++;
+        consecutiveFailures++;
+        onProgress({ message: `${date}: not summarized — ${(err as Error).message}` });
+        // The day as it stands, so the run's other days still write and this
+        // one stays stale for the next.
+        const keepAsItWas = () =>
+          days.push({
+            date,
+            place,
+            summary: prior?.summary ?? null,
+            photoIds,
+            segments: prior?.segments ?? [],
+            summarizedPhotoIds: prior?.summarizedPhotoIds ?? [],
+            note,
+            summarizedNote: prior?.summarizedNote ?? null,
+            edits,
+          });
+        if (consecutiveFailures >= GIVE_UP_AFTER) {
+          onProgress({ message: `Stopping: ${consecutiveFailures} days in a row failed. What is written is kept.` });
+          keepAsItWas();
+          break;
+        }
+        keepAsItWas();
+        continue;
+      }
 
       summary = summarized.summary;
       if (summarized.native) nativePairs.push(...summarized.native.pairs);
@@ -465,6 +528,7 @@ export async function runOrganize(
       segments = claimOnce(segments, photos);
 
       result.summarized++;
+      sinceCheckpoint++;
       if (withheld > 0) {
         onProgress({ message: `${date}: ${withheld} photo(s) withheld from the summary (redaction flag).` });
       }
@@ -498,6 +562,9 @@ export async function runOrganize(
       summarizedNote: outcome === "rewrite" ? note : (prior?.summarizedNote ?? null),
       edits,
     });
+    // After the day is in `days`, never before it: a checkpoint taken
+    // mid-day would write the index without the day just paid for.
+    if (sinceCheckpoint >= CHECKPOINT_EVERY) await checkpoint();
   }
 
   // A cancelled run must not write a half-built `sections` — the days it never
@@ -524,7 +591,9 @@ export async function runOrganize(
     phase: "done",
     done: days.length,
     total: dates.length,
-    message: `${result.summarized} day(s) summarized, ${result.reused} unchanged, ${result.small} too small to summarize (${SUMMARY_MIN_PHOTOS} photos or fewer, not in a trip), across ${result.trips} trip(s) and ${result.months} month bucket(s).`,
+    message:
+      `${result.summarized} day(s) summarized, ${result.reused} unchanged, ${result.small} too small to summarize (${SUMMARY_MIN_PHOTOS} photos or fewer, not in a trip), across ${result.trips} trip(s) and ${result.months} month bucket(s).` +
+      (result.failed ? ` ${result.failed} day(s) the model would not write — run again for those.` : ""),
   });
   return result;
 }
