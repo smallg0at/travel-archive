@@ -4,8 +4,8 @@ import { el } from "./photoUi";
 import { fmtDate, num, ui } from "./i18n";
 
 /**
- * Trips the server found, above the trip form, each one click from being a
- * trip.
+ * Trips the server found, listed under the trip form, each one click from
+ * being a trip.
  *
  * The owner's complaint was the typing: every trip meant two dates and a name,
  * looked up by scrolling the album. The server now proposes ranges from where
@@ -14,7 +14,7 @@ import { fmtDate, num, ui } from "./i18n";
  *
  * - **Create** makes it a trip with no story. Free and instant, and what most
  *   weekends away want.
- * - **Write its story** puts the range and name in the form below, for a trip
+ * - **Write its story** puts the range and name in the form above, for a trip
  *   worth a narrative — which costs a model call and needs day summaries.
  * - **Not a trip** hides it for good.
  */

@@ -133,7 +133,6 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       </div>
 
       <form class="job-form" data-mode="trip">
-        <div class="trip-suggestions" hidden></div>
         <p class="job-note">${ui.generate.tripNoteHtml}</p>
         <div class="job-row"></div>
         <label class="job-field"><span>${ui.generate.notes}</span><textarea rows="3" name="notes" placeholder="${ui.generate.notesPlaceholder}"></textarea></label>
@@ -143,6 +142,9 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
           <span>${ui.generate.tripAllowMissing}</span>
         </label>
         <button type="submit">${ui.generate.writeNarrative}</button>
+        <!-- Below the controls, at the owner's request: the form is the tool,
+             the suggestions a list to work through under it. -->
+        <div class="trip-suggestions" hidden></div>
       </form>
 
       <form class="job-form" data-mode="analyze" hidden>

@@ -2763,7 +2763,9 @@ body.map-expanded::after {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 18px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
   color: var(--text-secondary);
 }
 .sug-head { display: flex; flex-direction: column; gap: 2px; }

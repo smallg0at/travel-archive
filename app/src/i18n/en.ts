@@ -277,7 +277,7 @@ export const en = {
     suggest: {
       loading: "Looking for trips…",
       title: (n: number) => (n === 1 ? "1 possible trip" : `${n} possible trips`),
-      lead: "Found from the nights spent away from home. Create one as it is, or write its story below.",
+      lead: "Found from the nights spent away from home. Create one as it is, or write its story with the form above.",
       nights: (n: number) => (n === 1 ? "1 night" : `${n} nights`),
       fromHome: (km: string, home: string) => `up to ${km} km from ${home}`,
       uncertain: "some nights uncertain",

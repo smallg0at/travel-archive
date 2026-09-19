@@ -271,7 +271,7 @@ export const zhHans: Messages = {
     suggest: {
       loading: "正在查找旅行…",
       title: (n: number) => `${n} 个可能的旅行`,
-      lead: "根据离家过夜的记录找到。可以直接创建，或在下方撰写它的故事。",
+      lead: "根据离家过夜的记录找到。可以直接创建，或用上方的表单撰写它的故事。",
       nights: (n: number) => `${n} 晚`,
       fromHome: (km: string, home: string) => `距${home}最远 ${km} 公里`,
       uncertain: "部分夜晚不确定",
