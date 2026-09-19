@@ -6,6 +6,7 @@ import { getActiveAccount } from "../msAuth";
 import { cacheStats } from "../thumbCache";
 import { ui } from "../i18n";
 import { openDate } from "./day";
+import { openViewer } from "./viewer";
 import { pageBar, screen } from "./ui";
 
 /**
@@ -20,7 +21,13 @@ export function renderSearch(): HTMLElement {
   page.appendChild(head);
   // Lazy: search.json is 6.5MB, and a reader who opens the tab and leaves
   // should not pay for it. It is fetched when the field is first focused.
-  const search = mountSearch({ lazy: true, onOpenDay: (date) => openDate(date) });
+  // As on the desktop: a thumbnail opens that photo, with its day's others to
+  // swipe through; the day's title opens the day.
+  const search = mountSearch({
+    lazy: true,
+    onOpenDay: (date) => openDate(date),
+    onOpenPhoto: (photo, siblings) => openViewer(siblings, Math.max(0, siblings.indexOf(photo))),
+  });
   search.classList.add("m-search-host");
   page.appendChild(search);
   return page;
