@@ -1,4 +1,5 @@
-import type { ArchiveIndexFile } from "@travel-archive/shared";
+import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
+import { loadMonth } from "../archiveData";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "../msAuth";
 
@@ -18,7 +19,8 @@ import { getAccessToken } from "../msAuth";
  * rebuilt under their thumb.
  *
  * Mobile-only, and deliberately outside archiveData.ts: the desktop reads the
- * local server's mirror in ~34ms and has no use for a second cache.
+ * local server's mirror in ~34ms and has no use for a second cache. Month
+ * shards are kept here too — see `loadMonthKept` below.
  */
 
 const DB_NAME = "m-archive";
@@ -94,5 +96,37 @@ export async function currentEtag(): Promise<string | null> {
     return ((await res.json()) as { eTag?: string }).eTag ?? null;
   } catch {
     return null;
+  }
+}
+
+/* --- Month shards ------------------------------------------------------- */
+
+/**
+ * A month's photos, from OneDrive when it can be reached and from the copy
+ * kept last time when it cannot — so a day or month already opened on this
+ * phone can be read again offline. The thumbnails behind it are already kept
+ * (thumbCache.ts); without this the pictures were on the phone and the page
+ * that shows them was not.
+ *
+ * Network first, unlike the index: a shard is small enough to fetch whenever
+ * it is opened, so there is no eTag to compare and nothing can go stale while
+ * online. Any failure falls back, a sign-in failure included — offline, the
+ * token cannot be renewed either, and that is not a reason to show nothing.
+ * The Chinese captions `loadMonth` fetches alongside are not kept; offline, a
+ * kept month reads in the language it was written in.
+ */
+export async function loadMonthKept(month: string): Promise<PhotoShard> {
+  const key = `photos/${month}`;
+  try {
+    const shard = await loadMonth(month);
+    // Only a real one: a month with no file comes back as an empty placeholder
+    // (no generatedAt), and keeping it would overwrite a good kept copy with
+    // nothing.
+    if (shard.generatedAt) void run("readwrite", (s) => s.put(shard, key)).catch(() => {});
+    return shard;
+  } catch (err) {
+    const kept = await run<PhotoShard | undefined>("readonly", (s) => s.get(key)).catch(() => undefined);
+    if (kept) return kept;
+    throw err;
   }
 }

@@ -429,6 +429,7 @@ export const en = {
     signInAgain: "Sign in",
     archiveUpdated: "The archive has changed since this copy.",
     refresh: "Refresh",
+    offline: "Offline — showing what this phone has kept.",
     trips: "Trips",
     seeAll: "See all",
     noTrips: "No trips yet. Trips are defined in the desktop app.",

@@ -120,6 +120,13 @@ function showBanner(text: string, action: string, onAction: () => void): void {
  * thumbnail and shard that failed while signed out.
  */
 function showSessionBanner(): void {
+  // Offline, a token cannot be renewed either, so every uncached thumbnail
+  // reports "sign in" — which would tell a reader on a plane that their
+  // session had expired. Say what is actually true, and offer a retry.
+  if (!navigator.onLine) {
+    showBanner(ui.mobile.offline, ui.mobile.refresh, () => location.reload());
+    return;
+  }
   showBanner(ui.mobile.sessionExpired, ui.mobile.signInAgain, async () => {
     try {
       await signInNow();

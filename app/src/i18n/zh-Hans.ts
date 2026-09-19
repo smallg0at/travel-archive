@@ -405,6 +405,7 @@ export const zhHans: Messages = {
     signInAgain: "登录",
     archiveUpdated: "档案已有更新。",
     refresh: "刷新",
+    offline: "当前离线，仅显示本机已保存的内容。",
     trips: "旅行",
     seeAll: "全部",
     noTrips: "还没有旅行。旅行需在桌面应用中设定。",

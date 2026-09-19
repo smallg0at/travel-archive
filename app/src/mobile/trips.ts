@@ -1,10 +1,10 @@
 import type { PhotoRecord, TripRecord } from "@travel-archive/shared";
-import { loadMonth } from "../archiveData";
 import { renderTripMap } from "../tripMap";
 import { el } from "../photoUi";
 import { loc, locDay } from "../contentLang";
 import { ui } from "../i18n";
 import { go } from "./router";
+import { loadMonthKept } from "./cache";
 import { openDate } from "./day";
 import {
   archive,
@@ -79,7 +79,7 @@ export function renderTrips(): HTMLElement {
  */
 async function fillMap(slot: HTMLElement, trip: TripRecord): Promise<void> {
   const months = [...new Set(trip.days.map((d) => d.date.slice(0, 7)))];
-  const shards = await Promise.all(months.map((m) => loadMonth(m).catch(() => null)));
+  const shards = await Promise.all(months.map((m) => loadMonthKept(m).catch(() => null)));
   const photos: Record<string, PhotoRecord> = {};
   for (const shard of shards) if (shard) Object.assign(photos, shard.photos);
   const map = await renderTripMap(trip, photos, (anchor) => {

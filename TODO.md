@@ -971,11 +971,13 @@ working practice this list was built with.
       on the app's blue — a vector adaptive icon (with a themed-icon layer) and
       PNGs for Android 6-7.1 drawn by `app/scripts/build-icons.mjs` from the same
       geometry. The launch screen shows the mark, not Capacitor's logo.
-- [ ] **Month shards are not kept on the phone.** The index is (see
-      `mobile/cache.ts`), so the app opens offline, but a day or month not
-      opened this session cannot be read without a connection. Same eTag
-      pattern would work per shard; the catch is the Chinese caption files,
-      which `loadMonth` loads alongside and would need keeping too.
+- [x] **Month shards kept on the phone.** Done 2026-09-19: network first,
+      falling back to the copy kept when a month was last opened
+      (`loadMonthKept`, mobile/cache.ts), so days and months already read open
+      offline, with their kept thumbnails. The fallback branch is not yet
+      exercised — nothing here could take the test browser offline. Offline, a
+      kept month shows its captions untranslated: the Chinese caption files are
+      not kept.
 - [ ] iOS is not added — it needs a Mac with Xcode.
 
 ### Resolved

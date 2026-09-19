@@ -1,5 +1,6 @@
 import type { DayRecord, DaySegment, Highlight, PhotoRecord, TripRecord } from "@travel-archive/shared";
-import { loadMonth, SignInRequiredError } from "../archiveData";
+import { SignInRequiredError } from "../archiveData";
+import { loadMonthKept } from "./cache";
 import { anchorFor } from "../tripMap";
 import { el, lazyImg } from "../photoUi";
 import { loc, locDay } from "../contentLang";
@@ -208,7 +209,7 @@ async function fill(page: HTMLElement, date: string, stop: string | undefined, f
   const body = page.querySelector<HTMLElement>(".m-day-body")!;
   let shard: Record<string, PhotoRecord>;
   try {
-    shard = (await loadMonth(date.slice(0, 7))).photos;
+    shard = (await loadMonthKept(date.slice(0, 7))).photos;
   } catch (err) {
     body.replaceChildren(note(err instanceof SignInRequiredError ? ui.mobile.sessionExpired : ui.app.failedToLoad((err as Error).message)));
     if (err instanceof SignInRequiredError) window.dispatchEvent(new CustomEvent("signin-required"));

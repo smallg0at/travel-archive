@@ -1,5 +1,6 @@
 import type { MonthSummary, PhotoRecord } from "@travel-archive/shared";
-import { loadMonth, SignInRequiredError } from "../archiveData";
+import { SignInRequiredError } from "../archiveData";
+import { loadMonthKept } from "./cache";
 import { el, lazyImg } from "../photoUi";
 import { loc, locDay } from "../contentLang";
 import { ui } from "../i18n";
@@ -108,7 +109,7 @@ async function fillMonth(page: HTMLElement, month: string): Promise<void> {
   const body = page.querySelector<HTMLElement>(".m-month-body")!;
   let photos: PhotoRecord[];
   try {
-    photos = Object.values((await loadMonth(month)).photos);
+    photos = Object.values((await loadMonthKept(month)).photos);
   } catch (err) {
     body.replaceChildren(note(err instanceof SignInRequiredError ? ui.mobile.sessionExpired : ui.app.failedToLoad((err as Error).message)));
     if (err instanceof SignInRequiredError) window.dispatchEvent(new CustomEvent("signin-required"));
