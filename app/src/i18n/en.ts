@@ -166,6 +166,9 @@ export const en = {
     zoomOut: "Zoom out",
     /** A cluster on the home map: its biggest place, and how many more it holds. */
     clusterMore: (biggest: string, more: number) => `${biggest} +${more}`, /* User fix. */
+    /** A cluster across borders, by its countries, most photos first. */
+    clusterCountries: (countries: string[]) =>
+      countries.length <= 2 ? countries.join(" & ") : `${countries.slice(0, 2).join(", ")} +${countries.length - 2}`,
   },
 
   theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },

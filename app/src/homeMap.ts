@@ -93,6 +93,7 @@ export function homeMapOptions(places: HomePlace[]): PlaceMapOptions {
     labelPx: 12.5,
     groupName: countries.display,
     clusterName: ui.map.clusterMore,
+    groupsName: ui.map.clusterCountries,
     inView: ui.home.inView,
   };
 }

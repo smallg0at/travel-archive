@@ -336,6 +336,12 @@ export interface PlaceMapOptions {
   groupName?: (group: string) => string;
   /** A cluster's name: its biggest place, and how many more it holds. */
   clusterName?: (biggest: string, more: number) => string;
+  /**
+   * A cluster spanning several groups: their names, most photos first. Named
+   * for its biggest place instead, one disc standing for five countries read
+   * as a claim about the capital.
+   */
+  groupsName?: (groups: string[]) => string;
   /** A line describing what is in view, kept current as the map moves. */
   inView?: (photos: number, places: number) => string;
 }
@@ -601,6 +607,8 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
    * why a zoom step went from 10ms to 31ms when clustering arrived.
    */
   let pixelHeight = 0;
+  /** The frame's width over its height, read with pixelHeight and reset with it. */
+  let frameAspect = 0;
   const setDisplay = (node: SVGElement, display: string) => {
     if (node.style.display !== display) node.style.display = display;
   };
@@ -653,6 +661,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     const next: Item[] = [];
     const frag = document.createDocumentFragment();
 
+    const clusters: { seed: number; members: number[]; count: number }[] = [];
     for (const seed of order) {
       if (grouped[seed]) continue;
       grouped[seed] = 1;
@@ -671,7 +680,34 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
           }
         }
       }
+      clusters.push({ seed, members, count: members.reduce((sum, m) => sum + cities[m].photoCount, 0) });
+    }
 
+    // Across a border only when one disc would hide the other's centre. Kept
+    // apart, Europe at phone size was five country discs stacked on one
+    // another, each count half under the next; merged only at that depth, a
+    // country beside its neighbour still reads as its own.
+    const clusterWeight = (c: (typeof clusters)[number]) =>
+      c.members.length === 1 ? cityItems[c.seed].weight : Math.max(0.95, weightOf(c.count));
+    for (let changed = true; changed; ) {
+      changed = false;
+      clusters.sort((a, b) => b.count - a.count);
+      for (let i = 0; i < clusters.length; i++) {
+        const a = clusters[i];
+        for (let j = i + 1; j < clusters.length; j++) {
+          const b = clusters[j];
+          const distance = Math.hypot(cityItems[a.seed].x - cityItems[b.seed].x, cityItems[a.seed].y - cityItems[b.seed].y);
+          if (distance >= unitR * Math.max(clusterWeight(a), clusterWeight(b))) continue;
+          a.members.push(...b.members);
+          a.count += b.count;
+          clusters.splice(j--, 1);
+          changed = true;
+        }
+      }
+    }
+
+    for (const { seed, members } of clusters) {
+      const centre = cityItems[seed];
       if (members.length === 1) {
         setDisplay(cityGroups[seed], "");
         // placeMarkers() skips hidden groups; this one may have been hidden
@@ -698,10 +734,18 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
       // one is its biggest place "and N more" — "+371" read as bookkeeping,
       // and "the capital" alone as a claim about the capital.
       const group = cities[seed].group;
+      const byGroup = new Map<string, number>();
+      for (const m of members) {
+        const g = cities[m].group;
+        if (g) byGroup.set(g, (byGroup.get(g) ?? 0) + cities[m].photoCount);
+      }
+      const groups = [...byGroup.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g);
       const name =
-        group && opts.groupName && members.length === groupSizes.get(group)
-          ? opts.groupName(group)
-          : (opts.clusterName ?? ((b: string, n: number) => `${b} +${n}`))(cities[seed].name, members.length - 1);
+        groups.length > 1 && opts.groupName && opts.groupsName
+          ? opts.groupsName(groups.map(opts.groupName))
+          : group && opts.groupName && members.length === groupSizes.get(group)
+            ? opts.groupName(group)
+            : (opts.clusterName ?? ((b: string, n: number) => `${b} +${n}`))(cities[seed].name, members.length - 1);
       const label = svgEl("text", { x: 0, y: 0, "text-anchor": "middle" });
       label.textContent = name;
       node.appendChild(label);
@@ -779,6 +823,20 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
       return keys;
     };
     const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+    // What the frame shows, which "meet" widens past the viewBox on whichever
+    // axis the frame is longer. A label crossing it is tried on another side —
+    // at the edge, "Harb…" and "Shangh…" were cut rather than flipped inward.
+    if (!frameAspect) frameAspect = (canvas.clientWidth || 1) / (canvas.clientHeight || 1);
+    const shownW = Math.max(view.w, view.h * frameAspect);
+    const shownH = Math.max(view.h, view.w / frameAspect);
+    const inset = unit * 0.3;
+    const frame: Box = {
+      x0: view.x - shownW / 2 + inset,
+      x1: view.x + shownW / 2 - inset,
+      y0: view.y - shownH / 2 + inset,
+      y1: view.y + shownH / 2 - inset,
+    };
+    const inFrame = (b: Box) => b.x0 >= frame.x0 && b.x1 <= frame.x1 && b.y0 >= frame.y0 && b.y1 <= frame.y1;
     const reserve = (b: Box) => {
       for (const key of keysOf(b)) {
         const bucket = grid.get(key);
@@ -822,7 +880,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
           const baseY = item.y + dy * unit;
           const x0 = anchor === "start" ? baseX : anchor === "end" ? baseX - width : baseX - width / 2;
           const box = { x0, x1: x0 + width, y0: baseY - size * 0.78, y1: baseY + size * 0.22 };
-          if (clashes(box)) continue;
+          if (!inFrame(box) || clashes(box)) continue;
           reserve(box);
           placed = { dx, dy, anchor, scale };
           break;
@@ -1083,7 +1141,14 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   expand.className = "trip-map-expand";
   setIcon(expand, MAP_ICONS.expand, ui.map.expand);
 
+  /** The card's view when it was expanded, put back when it closes. */
+  let beforeExpand: typeof view | null = null;
   const setExpanded = (on: boolean) => {
+    // Untouched since the last fit: expanded, it fits again to the new frame
+    // rather than containing the old view — which, in a portrait frame, was
+    // mostly empty ocean above and below.
+    const atFit = view.w === fitView.w && view.h === fitView.h && view.x === fitView.x && view.y === fitView.y;
+    if (on) beforeExpand = { ...view };
     root.classList.toggle("is-expanded", on);
     document.body.classList.toggle("map-expanded", on);
     setIcon(expand, on ? MAP_ICONS.close : MAP_ICONS.expand, on ? ui.common.close : ui.map.expand);
@@ -1111,10 +1176,16 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
         // original fit, so a wide frame fits as it always did.
         const fit = contain(extent);
         Object.assign(fitView, fit.h < fitted.h ? { w: fitted.h * shape, h: fitted.h } : fit);
-        Object.assign(view, contain(view));
+        // Closing puts the card back as it was. Containing the full-screen
+        // view instead zoomed out ~2.7x per cycle on the phone: a tall view,
+        // contained in a wide frame, has its height set the width.
+        if (!on && beforeExpand) Object.assign(view, beforeExpand);
+        else if (on && atFit) Object.assign(view, fitView);
+        else Object.assign(view, contain(view));
       }
       clusterBucket = Number.NaN;
       pixelHeight = 0;
+      frameAspect = 0;
       apply();
     });
   };
