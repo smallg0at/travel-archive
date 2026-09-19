@@ -163,7 +163,7 @@ export const zhHans: Messages = {
     zoomOut: "缩小",
     clusterMore: (biggest: string, more: number) => `${biggest}等 ${more + 1} 处`,
     clusterCountries: (countries: string[]) =>
-      countries.length <= 2 ? countries.join("和") : `${countries.slice(0, 2).join("、")}等 ${countries.length} 国`,
+      countries.length <= 2 ? countries.join(" 和 ") : `${countries.slice(0, 2).join("、")}等 ${countries.length} 国`, /* User fix. */
   },
 
   theme: { label: "主题", light: "浅色", dark: "深色", system: "跟随系统" },

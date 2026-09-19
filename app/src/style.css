@@ -2094,7 +2094,50 @@ body.resizing { cursor: col-resize; user-select: none; }
   background: var(--bg-muted);
   overflow: hidden;
 }
-.trip-map-loading { padding: 20px; font-size: 12px; color: var(--text-secondary); }
+/* The placeholder while the basemap loads: the map's own height, so the swap
+   to the real map doesn't move the page, with a spinner ahead of the words.
+   Home maps and the phone's map slots hold the bare text with no child
+   element, hence `:not(:has(*))`. */
+.trip-map-loading,
+.home-map:not(:has(*)),
+.m-map-slot:not(:has(*)) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  height: 380px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+}
+/* In the trip page's slot it stands in for the whole `.trip-map`: 380px of
+   SVG, 2px of border and the 22px margin, so nothing shifts on arrival. */
+.trip-map-slot > .trip-map-loading {
+  height: 382px;
+  margin: 0 0 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+.home-map:not(:has(*)) { height: 460px; }
+.m-map-slot:not(:has(*)) { border-radius: var(--radius-m); }
+.trip-map-loading::before,
+.home-map:not(:has(*))::before,
+.m-map-slot:not(:has(*))::before {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .trip-map-loading::before,
+  .home-map:not(:has(*))::before,
+  .m-map-slot:not(:has(*))::before { animation-duration: 2.4s; }
+}
 /* The map's space, held while the basemap import is still loading: the SVG's
    380px, its 2px of border and the 22px margin. Without it the map arrived
    after a refresh had restored the reader's scroll offset, and scroll
@@ -2753,6 +2796,7 @@ body.map-expanded::after {
 @media (max-width: 700px) {
   .home-page { padding: 12px 12px 32px; }
   .home-map .trip-map-svg { height: 320px; }
+  .home-map:not(:has(*)) { height: 320px; }
   .home-then-list { grid-template-columns: 1fr; }
 }
 

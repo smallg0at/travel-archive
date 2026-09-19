@@ -405,7 +405,8 @@ async function showTrip(trip: TripRecord): Promise<void> {
     frag.appendChild(places);
   }
 
-  const mapSlot = el<HTMLDivElement>(`<div class="trip-map-slot"></div>`);
+  const mapSlot = el<HTMLDivElement>(`<div class="trip-map-slot"><div class="trip-map-loading"></div></div>`);
+  mapSlot.firstElementChild!.textContent = ui.map.loading;
   frag.appendChild(mapSlot);
 
   const entries: ContentsEntry[] = [];
