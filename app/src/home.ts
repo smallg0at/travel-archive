@@ -6,6 +6,7 @@ import { ui } from "./i18n";
 import { openDay } from "./album";
 import { drawPlaceMap, loadBasemap, type MapPoint } from "./tripMap";
 import { mountSearch } from "./search";
+import { openPhoto } from "./viewer";
 
 /**
  * The front page: search, everywhere this library has been, and what happened
@@ -134,6 +135,7 @@ export async function showHome(): Promise<void> {
     lazy: true,
     onActive: (active) => (body.hidden = active),
     onOpenDay: (date, section) => void openDay(date, section),
+    onOpenPhoto: openPhoto,
   });
   search.classList.add("is-embedded");
   page.querySelector(".home-search")!.replaceWith(search);
@@ -271,11 +273,11 @@ async function renderThen(page: HTMLElement, index: ArchiveIndexFile): Promise<v
   for (const { date, host } of hosts) {
     const photos = await photosFor(date, photoIdsOf(index, date));
     if (!photos.length || !host.isConnected) continue;
-    const section = dayMeta(index, date).section;
     const images = photos.map((photo) => {
       const img = lazyImg(photo, "medium", "home-thumb");
       img.title = photo.caption ?? "";
-      if (section) img.addEventListener("click", () => void openDay(date, section));
+      // The photo, not the day: the heading above already opens the day.
+      img.addEventListener("click", () => openPhoto(photo, photos));
       host.appendChild(img);
       return img;
     });

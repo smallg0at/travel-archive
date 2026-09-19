@@ -108,6 +108,15 @@ export interface SearchOptions {
    * bundling the desktop one; it also ended an album ↔ search import cycle.
    */
   onOpenDay: (date: string, section: { kind: "trip" | "month"; id: string }) => void;
+  /**
+   * Opens a thumbnail in the photo viewer, with the rest of its day's results
+   * behind the arrow keys. A thumbnail used to open the day, like the heading,
+   * which made the one thing that looks like a photo the one thing that could
+   * not show it. Injected for the same reason as `onOpenDay`: the desktop
+   * viewer brings the day editor with it. Without one, a thumbnail opens its
+   * day, as it did before.
+   */
+  onOpenPhoto?: (photo: PhotoRecord, siblings: PhotoRecord[]) => void;
 }
 
 /** The search box and its results, ready to be placed wherever the caller wants them. */
@@ -210,11 +219,16 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
       if (!day.photos.length) continue;
       const photos = await photosFor(day);
       if (mine !== run) return;
-      const section = dayMeta(archive, day.date).section;
       const images = photos.map((photo) => {
         const img = lazyImg(photo, "medium", "search-thumb");
         img.title = photo.caption ?? "";
-        if (section) img.addEventListener("click", () => opts.onOpenDay(day.date, section));
+        img.addEventListener("click", () => {
+          if (opts.onOpenPhoto) opts.onOpenPhoto(photo, photos);
+          else {
+            const section = dayMeta(archive, day.date).section;
+            if (section) opts.onOpenDay(day.date, section);
+          }
+        });
         host.appendChild(img);
         return img;
       });
@@ -230,8 +244,8 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
   return page;
 }
 
-export function showSearch(onOpenDay: SearchOptions["onOpenDay"]): void {
-  const page = mountSearch({ onOpenDay });
+export function showSearch(open: Pick<SearchOptions, "onOpenDay" | "onOpenPhoto">): void {
+  const page = mountSearch(open);
   document.getElementById("content")!.replaceChildren(page);
   page.querySelector<HTMLInputElement>(".search-input")!.focus();
 }

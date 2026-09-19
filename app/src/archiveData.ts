@@ -213,7 +213,13 @@ export function dayMeta(index: ArchiveIndexFile, date: string): DayMeta {
       return {
         place: day.place,
         summary: day.summary,
-        section: { kind: section.kind === "trip" ? "trip" : "month", id: section.id },
+        // A month section's id is "month-2026-04", but the nav — which is what
+        // opening a day clicks — keys month rows by "2026-04". Passing the
+        // section id through meant every ordinary day in search, by heading or
+        // by thumbnail, clicked a row that did not exist and did nothing; only
+        // trip days, whose ids do match, ever opened.
+        section:
+          section.kind === "trip" ? { kind: "trip", id: section.id } : { kind: "month", id: date.slice(0, 7) },
       };
     }
   }
