@@ -1,0 +1,794 @@
+/**
+ * The phone app's look. Loaded after style.css, whose six colour tokens and
+ * two themes this uses as they are — so dark mode, and an explicit Light or
+ * Dark chosen on the desktop, apply here with nothing redeclared.
+ *
+ * Everything is under `body.m`, so none of it can reach the desktop page, and
+ * the few desktop rules this page does want (the map, search, the theme
+ * control) are left to style.css.
+ *
+ * Three phone rules run through it:
+ *  - **Touch targets are 44px or more** — Apple's and Google's floor. The
+ *    desktop's 28px rows are mouse targets.
+ *  - **Every picture box has a fixed aspect ratio.** Nothing moves as images
+ *    arrive, so jumping to a stop needs one scroll rather than the desktop's
+ *    three re-measuring passes, and scrolling never jerks under a thumb.
+ *  - **Safe areas are padded, not avoided.** The page draws under the notch
+ *    and home indicator (viewport-fit=cover) and insets its bars by
+ *    env(safe-area-inset-*).
+ */
+
+body.m {
+  /* Undo the desktop shell's column layout: there, body is a fixed-height
+     flex box whose panes scroll inside it. On a phone the document scrolls,
+     which is what lets the browser collapse its address bar and gives native
+     momentum and scroll-to-top on a status bar tap. */
+  display: block;
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  --bar-h: 52px;
+  --tab-h: 56px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --gutter: 16px;
+  --card-radius: 14px;
+  --surface: color-mix(in srgb, var(--text) 5%, var(--bg));
+}
+body.m.m-locked { overflow: hidden; }
+
+body.m button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
+
+/* Photos: a muted box until the image has decoded. The box is what holds
+   the layout still.
+
+   The box is the <img>'s own background, showing through the transparent
+   placeholder pixel (photoUi.ts) until the decoded photo covers it. It is not
+   faded in with opacity: style.css records why — opacity hides the background
+   along with the image, and the first version of this rule did exactly that,
+   leaving each pending picture as an invisible hole.
+
+   Entirely inside :where(), so this default weighs nothing and every
+   component's own sizing wins: as `body.m img[data-photo-id]` it rendered the
+   84px strip thumbnails 315px wide. Search's results are left to style.css,
+   which sizes them itself. */
+:where(body.m img[data-photo-id]:not(.m-search-host img)) {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  background: var(--surface-hover);
+}
+
+/* --- Screens and bars ---------------------------------------------------- */
+
+.m .m-screen {
+  min-height: 100dvh;
+  padding-bottom: calc(var(--tab-h) + var(--safe-bottom) + 24px);
+}
+
+.m .m-large-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--safe-top) + 18px) var(--gutter) 6px;
+}
+.m .m-large-head h1 { font-size: 30px; font-weight: 700; letter-spacing: -.01em; }
+
+.m .m-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: calc(var(--bar-h) + var(--safe-top));
+  padding: var(--safe-top) 8px 0 4px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border-bottom: 1px solid transparent;
+  transition: border-color .15s;
+}
+.m .m-bar.is-titled { border-bottom-color: color-mix(in srgb, var(--border) 60%, transparent); }
+.m .m-bar-titles {
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .15s, transform .15s;
+}
+.m .m-bar.is-titled .m-bar-titles { opacity: 1; transform: none; }
+.m .m-bar-title { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m .m-bar-sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.m .m-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+}
+.m .m-icon-btn:active { background: var(--surface-hover); }
+.m .m-icon-btn svg { width: 24px; height: 24px; }
+
+.m .m-page-head { padding: 6px var(--gutter) 10px; }
+.m .m-page-head h1 { font-size: 26px; font-weight: 700; line-height: 1.2; }
+.m .m-page-head p { margin-top: 4px; color: var(--text-secondary); font-size: 14px; }
+
+.m .m-section { padding: 10px var(--gutter) 14px; }
+.m .m-section-head { display: flex; align-items: baseline; justify-content: space-between; }
+.m .m-section-title { font-size: 20px; font-weight: 650; margin-bottom: 10px; }
+.m .m-year { font-size: 22px; font-weight: 700; margin: 8px 0 8px; }
+
+.m .m-link {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 4px;
+}
+.m .m-note { color: var(--text-secondary); font-size: 15px; padding: 8px var(--gutter); }
+.m .m-hint { color: var(--text-secondary); font-size: 13px; margin-top: 6px; text-align: center; }
+
+.m .m-primary {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  min-height: 48px;
+  padding: 0 28px;
+  border-radius: 999px;
+}
+.m .m-primary:disabled { opacity: .6; }
+
+/* --- Tab bar ------------------------------------------------------------- */
+
+.m .m-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: calc(var(--tab-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.m .m-tabs[hidden] { display: none; }
+.m .m-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.m .m-tab svg { width: 24px; height: 24px; }
+.m .m-tab.is-active { color: var(--accent); }
+
+/* --- Banner, loading, sign-in -------------------------------------------- */
+
+.m .m-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 8px) var(--gutter) 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+}
+.m .m-banner[hidden] { display: none; }
+.m .m-banner span { flex: 1; }
+.m .m-banner button {
+  color: var(--accent);
+  background: #fff;
+  font-weight: 600;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+}
+
+.m .m-center {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--safe-top) 32px var(--safe-bottom);
+  text-align: center;
+}
+.m .m-signin h1 { font-size: 26px; font-weight: 700; margin: 16px 0 10px; }
+.m .m-signin p { color: var(--text-secondary); max-width: 30em; margin-bottom: 28px; }
+.m .m-signin-mark svg { width: 64px; height: 64px; color: var(--accent); }
+
+.m .m-spinner { display: grid; place-items: center; padding: 48px 0; }
+.m .m-spinner span {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--surface-hover);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: m-spin .8s linear infinite;
+}
+@keyframes m-spin { to { transform: rotate(360deg); } }
+
+/* --- Map ----------------------------------------------------------------- */
+
+/* The map's own look is style.css's `.trip-map*`; only its height changes.
+   380px (460px on the desktop home) is most of a phone screen, and the map
+   is a way in, not the page. */
+.m .m-map { border-radius: var(--card-radius); overflow: hidden; }
+.m .m-map .trip-map-svg { height: 300px; }
+.m .m-home-totals { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; }
+
+/* --- Chips ---------------------------------------------------------------- */
+
+.m .m-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px var(--gutter) 10px;
+  scrollbar-width: none;
+}
+.m .m-chips::-webkit-scrollbar { display: none; }
+.m .m-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.m .m-chip.is-static { min-height: 30px; border-color: transparent; background: var(--surface); }
+.m button.m-chip:active { background: var(--surface-hover); }
+.m .m-chip.is-active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/* The day's stops ride under the bar, as its contents list. */
+.m .m-stop-chips {
+  position: sticky;
+  top: calc(var(--bar-h) + var(--safe-top));
+  z-index: 15;
+  margin: 0 calc(-1 * var(--gutter));
+  padding-top: 8px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* --- Home ----------------------------------------------------------------- */
+
+.m .m-then {
+  background: var(--surface);
+  border-radius: var(--card-radius);
+  padding: 12px 0 12px;
+  margin-bottom: 12px;
+}
+.m .m-then:active { background: var(--surface-hover); }
+.m .m-then-head { display: flex; align-items: baseline; gap: 8px; padding: 0 14px; }
+.m .m-then-head strong { font-size: 18px; }
+.m .m-then-head span { color: var(--text-secondary); font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m .m-then-summary {
+  padding: 4px 14px 0;
+  font-size: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.m .m-strip {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 10px 14px 0;
+  scrollbar-width: none;
+}
+.m .m-strip::-webkit-scrollbar { display: none; }
+.m .m-strip img { flex: none; width: 84px; height: 84px; border-radius: 8px; }
+
+.m .m-hscroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 0 var(--gutter) 4px;
+  scroll-padding: 0 var(--gutter);
+  scrollbar-width: none;
+}
+.m .m-hscroll::-webkit-scrollbar { display: none; }
+
+/* --- Trips ---------------------------------------------------------------- */
+
+.m .m-trip-list { display: grid; gap: 16px; padding: 8px var(--gutter); }
+@media (min-width: 640px) {
+  .m .m-trip-list { grid-template-columns: 1fr 1fr; }
+}
+.m .m-trip-card {
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+.m .m-trip-card:active { opacity: .85; }
+.m .m-trip-card.is-compact { flex: none; width: 240px; scroll-snap-align: start; }
+.m .m-trip-cover { aspect-ratio: 16 / 10; background: var(--surface-hover); }
+.m .m-trip-card.is-compact .m-trip-cover { aspect-ratio: 4 / 3; }
+.m .m-trip-cover img { height: 100%; }
+.m .m-trip-text { padding: 12px 14px 14px; }
+.m .m-trip-text h3 { font-size: 18px; font-weight: 650; }
+.m .m-trip-card.is-compact h3 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m .m-trip-range { color: var(--text-secondary); font-size: 14px; margin-top: 2px; }
+.m .m-trip-meta { color: var(--text-secondary); font-size: 13px; margin-top: 6px; white-space: pre-line; }
+
+.m .m-hero { aspect-ratio: 16 / 10; margin-bottom: 12px; }
+.m .m-hero img { height: 100%; }
+/* The hero sits under the bar, so the page opens on the photo. Over it the
+   bar is a scrim rather than frosted glass — blurring the top of the photo
+   drew a smeared band across it — and turns into the ordinary bar once the
+   title has scrolled under. */
+.m .m-trip .m-bar + .m-hero { margin-top: calc(-1 * (var(--bar-h) + var(--safe-top))); }
+.m .m-trip .m-bar:not(.is-titled) {
+  background: linear-gradient(rgba(0, 0, 0, .45), transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: #fff;
+}
+
+.m .m-narrative { padding: 4px var(--gutter) 8px; font-size: 16px; line-height: 1.6; }
+.m .m-narrative-text p + p { margin-top: .8em; }
+.m .m-narrative.is-clamped .m-narrative-text {
+  max-height: 10.5em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
+  mask-image: linear-gradient(to bottom, #000 60%, transparent);
+}
+
+.m .m-day-list { display: grid; gap: 2px; margin: 0 calc(-1 * var(--gutter)); }
+.m .m-day-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px var(--gutter);
+  min-height: 96px;
+}
+.m .m-day-row:active { background: var(--surface-hover); }
+.m .m-day-row-thumb { flex: none; width: 76px; height: 76px; border-radius: 10px; overflow: hidden; background: var(--surface); }
+.m .m-day-row-thumb img { height: 100%; }
+.m .m-day-row-text { min-width: 0; flex: 1; }
+.m .m-day-row-head { display: flex; gap: 8px; align-items: baseline; }
+.m .m-day-row-head strong { font-size: 16px; }
+.m .m-day-row-head span, .m .m-day-row-place { color: var(--text-secondary); font-size: 13px; }
+.m .m-day-row p {
+  font-size: 14px;
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* --- A day ---------------------------------------------------------------- */
+
+.m .m-day-summary { padding: 0 var(--gutter) 12px; font-size: 16px; line-height: 1.55; }
+.m .m-day-body { padding: 0 var(--gutter); }
+
+/* Clear of the bar and the sticky chip row (8 + 36 + 10px) when jumped to.
+   The stop's own top padding is the gap under the chips. */
+.m .m-stop, .m .m-transit { scroll-margin-top: calc(var(--bar-h) + var(--safe-top) + 54px); }
+.m .m-stop { padding: 18px 0 8px; }
+.m .m-stop + .m-stop, .m .m-transit + .m-stop { border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.m .m-stop-head h3 { font-size: 20px; font-weight: 650; line-height: 1.25; }
+.m .m-stop-head span { display: block; color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+.m .m-stop-summary { margin-top: 8px; font-size: 15px; }
+
+.m .m-cards { display: grid; gap: 14px; margin-top: 14px; }
+
+/* full: the picture that defined the place, edge to edge. */
+.m .m-hl-full { margin: 0 calc(-1 * var(--gutter)); }
+.m .m-hl-full .m-card-img { aspect-ratio: 4 / 3; }
+.m .m-hl-full .m-hl-body { padding: 10px var(--gutter) 4px; }
+/* half: nearly as important — inset and shorter. */
+.m .m-hl-half .m-card-img { aspect-ratio: 3 / 2; border-radius: 12px; }
+.m .m-hl-half .m-carousel { border-radius: 12px; overflow: hidden; }
+.m .m-hl-half .m-carousel .m-card-img { border-radius: 0; }
+.m .m-hl-half .m-hl-body { padding: 8px 2px 0; }
+
+.m .m-hl-body h4 { font-size: 17px; font-weight: 650; }
+.m .m-hl-body p { margin-top: 4px; font-size: 15px; }
+.m .m-hl-body blockquote, .m .m-viewer-card blockquote {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  white-space: pre-line;
+}
+
+.m .m-carousel { position: relative; }
+.m .m-carousel-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.m .m-carousel-track::-webkit-scrollbar { display: none; }
+.m .m-carousel-track .m-card-img { flex: 0 0 100%; scroll-snap-align: start; }
+.m .m-carousel-count {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .55);
+  color: #fff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* normal: a list row — up to 30 at one stop, so they must be short. */
+.m .m-row-card { display: flex; gap: 12px; align-items: flex-start; min-height: 84px; }
+.m .m-row-card:active { opacity: .7; }
+.m .m-row-thumb { position: relative; flex: none; width: 84px; height: 84px; border-radius: 10px; overflow: hidden; }
+.m .m-row-thumb img { height: 100%; }
+.m .m-row-more {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .6);
+  color: #fff;
+  font-size: 12px;
+}
+.m .m-row-text { min-width: 0; flex: 1; padding-top: 2px; }
+.m .m-row-text h4 { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.m .m-row-text p {
+  margin-top: 3px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.m .m-more { margin-top: 14px; }
+.m .m-more > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.m .m-more > summary::-webkit-details-marker { display: none; }
+.m .m-more > summary::after { content: "›"; margin-left: 6px; transition: transform .15s; }
+.m .m-more[open] > summary::after { transform: rotate(90deg); }
+
+.m .m-transit { margin: 6px 0; padding: 0; border-radius: 12px; background: var(--surface); }
+.m .m-transit > summary { color: var(--text); padding: 0 12px; font-weight: 400; }
+.m .m-transit > summary::after { margin-left: auto; color: var(--text-secondary); }
+.m .m-transit[open] { padding-bottom: 12px; }
+.m .m-transit .m-grid { padding: 0 12px; }
+.m .m-transit-label { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 14px; }
+.m .m-transit-label svg { flex: none; width: 20px; height: 20px; color: var(--text-secondary); }
+.m .m-transit-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m .m-transit-meta { color: var(--text-secondary); white-space: nowrap; }
+
+.m .m-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.m .m-grid img { aspect-ratio: 1; }
+@media (min-width: 600px) { .m .m-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 900px) { .m .m-grid { grid-template-columns: repeat(6, 1fr); } }
+.m .m-day-body > .m-grid, .m .m-album-day .m-grid { margin: 0 calc(-1 * var(--gutter)); }
+
+.m .m-day-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 28px 0 8px;
+}
+.m .m-day-nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px 14px;
+  min-height: 64px;
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+}
+.m .m-day-nav-btn.is-next { align-items: flex-end; text-align: right; }
+.m .m-day-nav-btn small { color: var(--text-secondary); font-size: 12px; }
+.m .m-day-nav-btn span { font-weight: 600; }
+.m .m-day-nav-btn:disabled { visibility: hidden; }
+
+/* --- Library ------------------------------------------------------------- */
+
+.m .m-group {
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.m .m-month-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 68px;
+  padding: 6px 10px 6px 8px;
+  text-align: left;
+}
+.m .m-month-row + .m-month-row { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
+.m .m-month-row:active { background: var(--surface-hover); }
+.m .m-month-row > svg, .m .m-list-row > svg { flex: none; width: 18px; height: 18px; color: var(--text-secondary); }
+.m .m-month-thumb { flex: none; width: 54px; height: 54px; border-radius: 8px; overflow: hidden; background: var(--surface-hover); }
+.m .m-month-thumb img { height: 100%; }
+.m .m-month-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.m .m-month-text strong { font-size: 16px; font-weight: 600; }
+.m .m-month-text small { color: var(--text-secondary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.m .m-month-body { padding: 0 var(--gutter); }
+.m .m-album-day { padding-bottom: 18px; }
+.m .m-album-day-head {
+  position: sticky;
+  top: calc(var(--bar-h) + var(--safe-top));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 8px var(--gutter);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.m .m-album-day-head div { min-width: 0; display: flex; flex-direction: column; }
+.m .m-album-day-head strong { font-size: 15px; }
+.m .m-album-day-head small { color: var(--text-secondary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m .m-album-summary {
+  font-size: 14px;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.m .m-sentinel { height: 1px; }
+
+/* --- Search and settings --------------------------------------------------- */
+
+.m .m-search-host { padding: 0 var(--gutter); }
+.m .m-search-host input[type="search"], .m .m-search-host input[type="text"] {
+  font-size: 16px; /* under 16px, iOS zooms the page when the field is focused */
+  min-height: 44px;
+}
+
+.m .m-settings-group { padding: 4px 14px; }
+.m .m-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+}
+.m .m-setting + .m-setting { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
+.m .m-setting-value { color: var(--text-secondary); text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.m .m-settings-group > .density-control, .m .m-settings-group > select { margin: 10px 0; }
+.m .m-settings-group > select { width: 100%; min-height: 44px; font-size: 16px; }
+.m .m-settings-group .density-control { display: flex; }
+.m .m-settings-group .density-control button { flex: 1; min-height: 40px; }
+.m .m-settings-group .m-note { padding: 0 0 12px; font-size: 13px; }
+
+/* --- Sheets ------------------------------------------------------------- */
+
+.m .m-sheet-wrap { position: fixed; inset: 0; z-index: 50; }
+.m .m-sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .4); animation: m-fade .2s; }
+.m .m-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 75dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--gutter) calc(var(--safe-bottom) + 16px);
+  background: var(--bg);
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow-64);
+  animation: m-rise .22s ease-out;
+}
+.m .m-sheet h2 { font-size: 20px; font-weight: 650; }
+.m .m-sheet-meta { color: var(--text-secondary); font-size: 14px; margin: 2px 0 10px; }
+.m .m-sheet-handle {
+  position: sticky;
+  top: 0;
+  height: 24px;
+  margin: 0 calc(-1 * var(--gutter));
+  background: inherit;
+}
+.m .m-sheet-handle::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  margin-left: -18px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.m .m-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  text-align: left;
+}
+.m .m-list-row + .m-list-row { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
+.m .m-list-row > span { display: flex; flex-direction: column; }
+.m .m-list-row small { color: var(--text-secondary); font-size: 13px; }
+@keyframes m-fade { from { opacity: 0; } }
+@keyframes m-rise { from { transform: translateY(40%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .m .m-sheet, .m .m-sheet-backdrop { animation: none; }
+}
+
+/* --- The viewer ---------------------------------------------------------- */
+
+/* Always dark, whatever the theme: photographs read against black, and a
+   white surround around a night shot is glare. */
+.m .m-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #000;
+  color: #fff;
+  animation: m-fade .15s;
+}
+.m .m-viewer-track {
+  display: flex;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* Swipes and pans are the browser's; the pinch is ours (viewer.ts). */
+  touch-action: pan-x pan-y;
+}
+.m .m-viewer-track::-webkit-scrollbar { display: none; }
+.m .m-viewer.is-zoomed .m-viewer-track { overflow-x: hidden; }
+.m .m-slide {
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.m .m-slide.is-zoomed {
+  overflow: auto;
+  align-items: safe center;
+  justify-content: safe center;
+  scrollbar-width: none;
+}
+.m .m-slide img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.m .m-slide.is-zoomed img { max-width: none; max-height: none; flex: none; }
+
+.m .m-viewer-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: calc(var(--safe-top) + 4px) 6px 20px;
+  background: linear-gradient(rgba(0, 0, 0, .55), transparent);
+  transition: opacity .2s;
+}
+.m .m-viewer-count { flex: 1; font-size: 15px; font-variant-numeric: tabular-nums; text-align: center; }
+.m .m-viewer-hd {
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .5) !important;
+  border-radius: 999px;
+}
+.m .m-viewer-hd[hidden] { display: none; }
+.m .m-viewer .m-icon-btn:active { background: rgba(255, 255, 255, .15); }
+
+.m .m-viewer-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 36px var(--gutter) calc(var(--safe-bottom) + 16px);
+  background: linear-gradient(transparent, rgba(0, 0, 0, .7));
+  pointer-events: none;
+  transition: opacity .2s;
+}
+.m .m-viewer-caption p {
+  font-size: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.m .m-viewer.is-bare .m-viewer-top,
+.m .m-viewer.is-bare .m-viewer-caption { opacity: 0; pointer-events: none; }
+
+.m .m-viewer-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 65dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--gutter) calc(var(--safe-bottom) + 20px);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 18px 18px 0 0;
+  animation: m-rise .22s ease-out;
+}
+.m .m-viewer-sheet[hidden] { display: none; }
+.m .m-viewer-card { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.m .m-viewer-card h2 { font-size: 19px; font-weight: 650; }
+.m .m-viewer-card p, .m .m-viewer-photo p { margin-top: 6px; font-size: 15px; }
+.m .m-viewer-photo h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+.m .m-viewer-photo dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0 0; font-size: 14px; }
+.m .m-viewer-photo dt { color: var(--text-secondary); }
+.m .m-viewer-photo dd { margin: 0; }
+.m .m-viewer-sheet details { margin-top: 12px; }
+.m .m-viewer-sheet summary { min-height: 40px; display: flex; align-items: center; color: var(--accent); font-weight: 600; }
+.m .m-viewer-sheet pre {
+  white-space: pre-wrap;
+  font: 13px/1.5 ui-monospace, "Cascadia Mono", monospace;
+  background: var(--surface);
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin: 4px 0 0;
+}

@@ -95,3 +95,29 @@ export async function getAccessToken(): Promise<string> {
     throw new Error("SIGN_IN_REQUIRED");
   }
 }
+
+/**
+ * Sign-in for the native app, where a popup can never work: Capacitor's
+ * WebView has no second window to open, so `window.open` either fails or
+ * replaces the app itself, and MSAL's popup handoff has nothing to hand back
+ * to. The whole WebView goes to Microsoft instead and returns through the
+ * /auth/ bridge. Never resolves — the page navigates away.
+ */
+export async function signInRedirect(): Promise<void> {
+  await ensureInitialized();
+  await msalInstance.loginRedirect({ scopes: SCOPES });
+}
+
+/**
+ * Finishes a redirect sign-in, if this page load is the return from one.
+ *
+ * The bridge page (auth/main.ts) handles the response itself, but MSAL may
+ * instead carry it on to the page that started the login — by default it
+ * navigates back there — and then it is this page that must process it, or
+ * the sign-in is silently dropped. Calling this on a page with nothing to
+ * finish does nothing.
+ */
+export async function completeRedirect(): Promise<void> {
+  await ensureInitialized();
+  await msalInstance.handleRedirectPromise();
+}

@@ -1,6 +1,9 @@
 # Dependencies and build output
 node_modules/
 dist/
+# The phone build (app/vite.mobile.config.ts). Like dist/, it carries the Azure
+# client id from app/.env baked into its JavaScript.
+dist-mobile/
 
 # --- Anything that identifies the owner or their library -------------------
 #

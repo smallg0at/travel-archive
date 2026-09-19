@@ -8,12 +8,16 @@
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
-    "cap:sync": "npm run build && npx cap sync",
+    "cap:sync": "npm run build:mobile && npx cap sync",
     "cap:add:android": "npx cap add android",
-    "cap:add:ios": "npx cap add ios"
+    "cap:add:ios": "npx cap add ios",
+    "build:mobile": "vite build -c vite.mobile.config.ts",
+    "android:apk": "npm run cap:sync && cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.21.0",
+    "@capacitor/android": "^7.6.8",
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.4.4",
     "@travel-archive/shared": "*"
   },

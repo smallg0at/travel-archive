@@ -412,6 +412,51 @@ export const en = {
     },
     noServer: "Activity needs the local server, which the desktop app runs.",
   },
+
+  /**
+   * The phone app (src/mobile/). A separate block rather than reusing the
+   * desktop's words, because the phone's screens are its own: tabs where the
+   * desktop has a sidebar, a day as its own page where the desktop scrolls a
+   * whole trip, and no generation at all.
+   */
+  mobile: {
+    tabs: { home: "Home", trips: "Trips", library: "Library", search: "Search" },
+    back: "Back",
+    signInTitle: "Your photo archive",
+    signInLead:
+      "Sign in with the Microsoft account whose OneDrive holds the archive. The photos stay in OneDrive — this app only reads them.",
+    sessionExpired: "Your Microsoft session has expired.",
+    signInAgain: "Sign in",
+    archiveUpdated: "The archive has changed since this copy.",
+    refresh: "Refresh",
+    trips: "Trips",
+    seeAll: "See all",
+    noTrips: "No trips yet. Trips are defined in the desktop app.",
+    tripMeta: (days: number, photos: number) => `${count(days, "day", "days")} · ${count(photos, "photo", "photos")}`,
+    dayN: (n: number) => `Day ${num(n)}`,
+    dayOf: (n: number, total: number) => `Day ${num(n)} of ${num(total)}`,
+    readMore: "Read more",
+    readLess: "Show less",
+    places: "Places",
+    days: "Days",
+    route: "Route",
+    previousDay: "Previous day",
+    nextDay: "Next day",
+    noPhotos: "No photos on this day.",
+    stops: "Stops",
+    moreInCard: (n: number) => `+${num(n)}`,
+    info: "Details",
+    fullResolution: "Full resolution",
+    counter: (i: number, n: number) => `${num(i)} / ${num(n)}`,
+    account: "Account",
+    microsoftAccount: "Microsoft account",
+    thumbnails: "Thumbnails",
+    signedInAs: (name: string) => `Signed in as ${name}`,
+    cache: "Stored on this phone",
+    cacheSize: (photos: number, mb: string) => `${count(photos, "thumbnail", "thumbnails")} · ${mb} MB`,
+    source: "Reading directly from OneDrive. Generating captions and summaries needs the desktop app.",
+    tapPlace: "Pinch to zoom · tap a place to see its days",
+  },
 };
 
 export type Messages = typeof en;
