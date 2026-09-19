@@ -13,7 +13,7 @@ metadata and photo bytes client-side.
   - `scan.ts` — indexes OneDrive into per-month shards. Graph listing calls only.
   - `analyze.ts` — the AI pass: captions/tags/OCR for photos scan indexed but never looked at.
   - `organize.ts` — groups analyzed photos into day pages with summaries and layouts.
-- `app/` — Capacitor-wrapped web app. Reads `index.json` and month shards from OneDrive at runtime and renders the album.
+- `app/` — the web app. Reads `index.json` and month shards from OneDrive at runtime and renders the album. `app/src/mobile/` is the phone app built from the same data layer, packaged for Android with Capacitor (`app/android/`) — see "The phone app".
 
 ## Storage layout — sharded, not one big file
 
@@ -156,14 +156,49 @@ OneDrive at runtime using the token it already holds for photo bytes, so a
 pipeline run shows up immediately with no rebuild and no `cap sync`, and the
 bundle stays flat no matter how large the library gets.
 
-To ship to a device:
+## The phone app
+
+A separate page from the desktop's — `app/mobile/index.html` and
+`app/src/mobile/` — sharing the data layer (`archiveData`, `graphPhoto`,
+`msAuth`, i18n) and none of the layout. The desktop is a sidebar and one long
+document; the phone is four tabs (Home, Trips, Library, Search) and a stack of
+pages, with a trip as an overview and **each day its own page**, because a
+whole trip on one page is 4,000-odd photos of DOM. View-only by design: it
+reads OneDrive and generates nothing.
 
 ```
-npm run --workspace app cap:add:android   # or cap:add:ios, once
-npm run --workspace app cap:sync          # after every rebuild
+npm run --workspace app build          # also builds the phone page at /mobile/
+npm run --workspace app build:mobile   # the phone page alone, at the root -> app/dist-mobile
+npm run --workspace app cap:sync       # build:mobile, then copy into android/
+npm run --workspace app android:apk    # ...then a debug APK -> app/android/app/build/outputs/apk/debug/
 ```
 
-Requires Android Studio / Xcode installed for the respective platform.
+The quickest way to work on it is the desktop build at
+`http://localhost:17923/mobile/` with the browser's phone viewport: the local
+server is used when it answers, so it loads in milliseconds. The APK needs
+`ANDROID_HOME` pointing at the SDK Android Studio installed
+(`%LOCALAPPDATA%\Android\Sdk`) and a JDK in `JAVA_HOME`; install it with
+`adb install -r app/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+What it does differently from the desktop, and why:
+
+- **It opens on the index it kept last time** (IndexedDB, `mobile/cache.ts`),
+  then asks OneDrive for just that file's eTag and fetches the 3.7MB index
+  only when it changed — offering a refresh rather than rebuilding the page
+  under the reader. Nothing else on the Graph path persisted between launches.
+- **Sign-in is a full-page redirect inside the app's WebView**, never a popup,
+  and Microsoft's login hosts are in Capacitor's `allowNavigation`. The system
+  browser cannot be used: a sign-in finished there lands on
+  `https://localhost/auth/` in the browser, not in the app, and the SPA
+  platform in Azure accepts no custom-scheme redirect to return by. See
+  `capacitor.config.ts` for the trade-off.
+- **Android's back button** closes the viewer or a sheet, then pops a page,
+  then goes to Home, then leaves — not WebView history, which after a
+  redirect sign-in holds Microsoft's login pages.
+
+**Before sign-in can work on a device**, add `https://localhost/auth/` as a
+redirect URI under the *Single-page application* platform of the Azure app
+registration (iOS, once added, will need `capacitor://localhost/auth/`).
 
 ## The desktop shell
 
@@ -224,7 +259,7 @@ app is configured.
 
 - `app/src/msAuth.ts` — `loginPopup()` **requires a genuine user click**; popups opened from anywhere else (e.g. from an IntersectionObserver callback during lazy-loading) get silently blocked, confirmed live as `BrowserAuthError: popup_window_error`. That's *why* sign-in is a visible banner button rather than something that fires on its own. It also auto-clears MSAL's stale `interaction_in_progress` lock, which otherwise sticks on forever after an abandoned popup and blocks every future attempt.
 - `app/auth/` — a **dedicated redirect bridge page**, separate from the main app. `loginPopup()`'s popup has to land on a page that hands the response back to the opener via `BroadcastChannel` and closes itself; pointing `redirectUri` at the main app means the popup loads the whole UI and nothing does the handoff. `auth/main.ts` doesn't even construct a `PublicClientApplication` — an earlier fix attempt did, and still didn't work (popup landed on the right URL with a valid code and just sat there). Reading the installed package source (`node_modules/@azure/msal-browser/dist/redirect_bridge/index.mjs`) turned up the actual answer: `broadcastResponseToMainFrame` from the `@azure/msal-browser/redirect-bridge` subpath, which is the entire job of that page. `vite.config.ts` builds it as a second Rollup entry.
-- Redirect URIs are `http://localhost:5173/auth/` and `http://localhost:4173/auth/` — **the trailing slash matters**, confirmed live: Vite only resolves `auth/index.html` for the exact path `/auth/`; `/auth` falls through to the SPA fallback and serves the main app. Add the Capacitor app's own origin + `/auth/` once packaged (`https://localhost` is Capacitor's Android default; iOS commonly uses `capacitor://localhost`). The desktop shell needs `http://localhost:17923/auth/` registered too — it serves the same built app on its own port, so without that entry the window opens and sign-in fails there alone.
+- Redirect URIs are `http://localhost:5173/auth/` and `http://localhost:4173/auth/` — **the trailing slash matters**, confirmed live: Vite only resolves `auth/index.html` for the exact path `/auth/`; `/auth` falls through to the SPA fallback and serves the main app. The Android app needs `https://localhost/auth/` (see "The phone app"); iOS, once added, `capacitor://localhost/auth/`. The desktop shell needs `http://localhost:17923/auth/` registered too — it serves the same built app on its own port, so without that entry the window opens and sign-in fails there alone.
 
 The browser half is verified end-to-end, including a completed real sign-in:
 tokens land in `localStorage`, the banner disappears, and the app renders signed

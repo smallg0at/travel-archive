@@ -45,6 +45,9 @@ Three workspaces plus a shell:
 - **`app/`** — a reader. It never writes the archive; it asks the server to.
 - **`desktop/`** — Electron. Serves `app/dist` on **17923** and spawns the job
   server.
+- **`app/src/mobile/`** + **`app/android/`** — the phone app: its own page and
+  layout over the same data layer, packaged with Capacitor. README "The phone
+  app". Work on it at `http://localhost:17923/mobile/` with a phone viewport.
 
 The archive itself lives in OneDrive as `index.json` plus `photos/<yyyy-mm>.json`
 shards, mirrored locally under `pipeline/data/`.
@@ -105,7 +108,9 @@ app there instead and sign-in breaks in a way that looks like an MSAL problem.
 
 **No backend is a supported state, not a failure.** It is the phone. A failed
 health check means: no Generate page, no pins, thumbnails via Graph + IndexedDB.
-Every feature needs that path to degrade rather than error.
+Every feature needs that path to degrade rather than error. The installed phone
+app does not even ask: its WebView is `https://localhost`, and a request to
+`http://127.0.0.1:4319` is mixed content.
 
 **`Vary: Origin` must be sent whether or not the request had an Origin.**
 Thumbnails are cached `immutable` for a year. Send it only when an `Origin` is
@@ -162,6 +167,8 @@ and the form warns.
 | Generate page | `app/src/tripMode.ts` |
 | PDF export rules | `app/src/print.ts` + the `@media print` block |
 | trip map | `app/src/tripMap.ts` |
+| phone app: screens, stack, viewer | `app/src/mobile/` (`main.ts` routes, `router.ts`, `day.ts`) |
+| phone app: native shell | `app/capacitor.config.ts`, `app/vite.mobile.config.ts`, `app/android/` |
 | thumbnails / disk cache | `pipeline/src/thumbStore.ts`, `serve.ts` |
 | sync | `pipeline/src/jobs/sync.ts`, `syncStore.ts` |
 | place names (offline) | `pipeline/src/geocodeOffline.ts` + `scripts/build-geo.mjs` |

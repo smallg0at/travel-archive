@@ -949,10 +949,31 @@ working practice this list was built with.
       "City of Westminster, United Kingdom". Fixed by the next organize, which
       is a paid run (305 stale days as of 2026-09-18) — so it waits for a
       decision rather than being triggered quietly.
-- [ ] Mobile view: design needs rethinking; a Figma would help. Handed to a
-      separate agent 2026-09-18 with `MOBILE-BRIEF.md`; the two blockers are
-      that no phone can reach the app (the job server binds 127.0.0.1 on
-      purpose) and that any new origin needs an Azure redirect URI.
+- [x] **Mobile view: design needs rethinking.** Done 2026-09-19 as a phone app
+      of its own rather than the desktop squeezed: `app/src/mobile/`, packaged
+      for Android with Capacitor in `app/android/`. Reach is solved by
+      installing it — no hosting, and the job server stays on 127.0.0.1. See
+      README "The phone app". Checked at a 375px viewport against the real
+      archive in both languages: home map, on-this-day, trips, the trip route
+      map, day pages with cards, the viewer, a 4,440-photo month, search and
+      settings; Back restores each page's scroll. **Not yet run on a device.**
+- [ ] **[Owner] Register `https://localhost/auth/`** as a Single-page
+      application redirect URI in Azure. Until then the Android app cannot
+      sign in — Microsoft will answer AADSTS50011.
+- [ ] **First run on a real phone.** Unverified: sign-in in the WebView end to
+      end; the status-bar area on Android 15 (`adjustMarginsForEdgeToEdge:
+      "auto"`) in both themes; pinch zoom in the viewer (built with touch
+      events, exercised only as far as desktop emulation allows); the back
+      button.
+- [ ] **Confirm `appId` `com.travelarchive.photos`** before installing it
+      anywhere that matters — changing it later makes it a different app.
+- [ ] **Launcher icon and splash are Capacitor's defaults.**
+- [ ] **Month shards are not kept on the phone.** The index is (see
+      `mobile/cache.ts`), so the app opens offline, but a day or month not
+      opened this session cannot be read without a connection. Same eTag
+      pattern would work per shard; the catch is the Chinese caption files,
+      which `loadMonth` loads alongside and would need keeping too.
+- [ ] iOS is not added — it needs a Mac with Xcode.
 
 ### Resolved
 

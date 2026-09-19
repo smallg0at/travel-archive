@@ -12,7 +12,7 @@
     "cap:add:android": "npx cap add android",
     "cap:add:ios": "npx cap add ios",
     "build:mobile": "vite build -c vite.mobile.config.ts",
-    "android:apk": "npm run cap:sync && cd android && gradlew.bat assembleDebug"
+    "android:apk": "npm run cap:sync && cd android && .\\gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.21.0",

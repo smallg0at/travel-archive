@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Photo Archive</string>
+    <string name="title_activity_main">Photo Archive</string>
+    <string name="package_name">com.travelarchive.photos</string>
+    <string name="custom_url_scheme">com.travelarchive.photos</string>
+</resources>

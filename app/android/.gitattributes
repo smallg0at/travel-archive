@@ -1,0 +1,5 @@
+# gradlew.bat must keep CRLF line endings on every checkout: cmd.exe misreads
+# labels in a batch file saved with LF, and a clone without core.autocrlf would
+# otherwise get LF. The same rule Gradle ships in its own projects.
+*.bat text eol=crlf
+gradlew text eol=lf
