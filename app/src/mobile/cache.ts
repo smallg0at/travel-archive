@@ -2,6 +2,7 @@ import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
 import { loadMonth } from "../archiveData";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "../msAuth";
+import { rememberPhotos } from "./devicePhotos";
 
 /**
  * The index, kept on the phone between launches.
@@ -123,10 +124,14 @@ export async function loadMonthKept(month: string): Promise<PhotoShard> {
     // (no generatedAt), and keeping it would overwrite a good kept copy with
     // nothing.
     if (shard.generatedAt) void run("readwrite", (s) => s.put(shard, key)).catch(() => {});
+    rememberPhotos(Object.values(shard.photos));
     return shard;
   } catch (err) {
     const kept = await run<PhotoShard | undefined>("readonly", (s) => s.get(key)).catch(() => undefined);
-    if (kept) return kept;
+    if (kept) {
+      rememberPhotos(Object.values(kept.photos));
+      return kept;
+    }
     throw err;
   }
 }

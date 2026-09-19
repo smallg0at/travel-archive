@@ -261,6 +261,7 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
    is a way in, not the page. */
 .m .m-map { position: relative; border-radius: var(--card-radius); overflow: hidden; }
 .m .m-map .trip-map-svg { height: 300px; display: block; }
+.m :is(.m-map, .m-map-slot):not(:has(*)) { height: 300px; border-radius: var(--card-radius); }
 
 /* The map's own word buttons give way to round icon ones (phoneMapControls,
    ui.ts). They were being drawn at body text size with no background, since
@@ -696,6 +697,8 @@ body.m .m-map.is-expanded .m-map-expand { display: none; }
 .m .m-settings-group > select { width: 100%; min-height: 44px; font-size: 16px; }
 .m .m-settings-group .density-control { display: flex; }
 .m .m-settings-group .density-control button { flex: 1; min-height: 40px; }
+.m .m-device-photos .m-primary { width: 100%; margin-top: 10px; }
+.m .m-device-photos .m-note { margin-top: 10px; }
 .m .m-settings-group .m-note { padding: 0 0 12px; font-size: 13px; }
 
 /* --- Sheets ------------------------------------------------------------- */

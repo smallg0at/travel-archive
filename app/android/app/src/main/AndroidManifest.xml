@@ -38,4 +38,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- To show photographs the phone already has instead of fetching them
+         back out of OneDrive (LocalPhotosPlugin). Asked for only when the
+         reader turns it on in Settings, and used to read, never to write. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 </manifest>

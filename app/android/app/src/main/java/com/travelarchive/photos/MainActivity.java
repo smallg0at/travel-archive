@@ -4,6 +4,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
@@ -15,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // The app's own plugins register before the bridge is built.
         registerPlugin(SystemBarsPlugin.class);
+        registerPlugin(LocalPhotosPlugin.class);
         super.onCreate(savedInstanceState);
         bridge.setWebViewClient(new ReturnFromMicrosoft(bridge));
         // A single-page app's refresh token lasts 24 hours. After that MSAL
@@ -59,6 +61,20 @@ public class MainActivity extends BridgeActivity {
 
         ReturnFromMicrosoft(Bridge bridge) {
             super(bridge);
+        }
+
+        /**
+         * Photos this phone already holds, under /_device/ — see
+         * LocalPhotosPlugin. Capacitor's own local server has nothing to serve
+         * there, so the request is answered here instead, from MediaStore.
+         */
+        @Override
+        public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            Uri url = request.getUrl();
+            if ("localhost".equals(url.getHost()) && url.getPath() != null && url.getPath().startsWith("/_device/")) {
+                return LocalPhotosPlugin.serve(view.getContext(), url);
+            }
+            return super.shouldInterceptRequest(view, request);
         }
 
         @Override

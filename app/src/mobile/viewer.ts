@@ -6,6 +6,7 @@ import { fmtDateTime, ui } from "../i18n";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
 import { ICONS, leave } from "./ui";
 import { overrideSystemBars } from "./native";
+import { deviceFullUrl } from "./devicePhotos";
 
 /**
  * The full-screen photo viewer.
@@ -86,6 +87,25 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   });
   const fullUrls = new Map<number, string>();
   let current = -1;
+
+  /**
+   * The phone's own copy of the photo being looked at, at its real size.
+   *
+   * Only the current slide: a 12MP JPEG decodes to about 48MB as a bitmap, and
+   * doing that for both neighbours as well is how a WebView gets killed. They
+   * keep the `large` copy, which is what a swipe shows for its first moment
+   * anyway — and since the bytes are on disk, this upgrade costs no data and
+   * no wait worth showing a spinner for.
+   */
+  function showDeviceOriginal(i: number): void {
+    const img = slides[i]?.querySelector("img");
+    if (!img || img.dataset.state === "full") return;
+    const url = deviceFullUrl(photos[i].id);
+    if (!url) return;
+    img.src = url;
+    img.dataset.state = "full";
+    if (i === current) hd.hidden = true;
+  }
 
   function ensure(i: number): void {
     const img = slides[i]?.querySelector("img");
@@ -194,7 +214,8 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     count.textContent = photos.length > 1 ? ui.mobile.counter(i + 1, photos.length) : "";
     caption.textContent = context?.title ?? loc(photo.caption) ?? "";
     caption.parentElement!.hidden = !caption.textContent;
-    hd.hidden = fullUrls.has(i);
+    // Nothing to offer when the original is already on screen from this phone.
+    hd.hidden = fullUrls.has(i) || deviceFullUrl(photos[i].id) !== null;
 
     sheetBody.replaceChildren();
     if (context) {
@@ -255,6 +276,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     ensure(i + 1);
     ensure(i - 1);
     describe(i);
+    showDeviceOriginal(i);
   }
   track.addEventListener("scroll", () => requestAnimationFrame(settle), { passive: true });
 
@@ -262,7 +284,10 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     const i = current;
     hd.disabled = true;
     hd.textContent = ui.viewer.loadingFull;
-    const url = await loadFullPhoto(photos[i].id);
+    // The phone's own copy when it has one — the original bytes, with no
+    // download. loadFullPhoto trusts a source's fullUrl without a fallback,
+    // so the choice is made here rather than in photoSource.
+    const url = deviceFullUrl(photos[i].id) ?? (await loadFullPhoto(photos[i].id));
     hd.disabled = false;
     hd.textContent = ui.mobile.fullResolution;
     if (!url) return;
@@ -354,5 +379,6 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   ensure(start + 1);
   ensure(start - 1);
   describe(start);
+  showDeviceOriginal(start);
   track.scrollLeft = start * track.clientWidth;
 }

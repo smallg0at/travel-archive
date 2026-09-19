@@ -15,6 +15,7 @@ import { renderSearch, renderSettings } from "./more";
 import { ICONS, setArchive, spinner } from "./ui";
 import { currentEtag, keepIndex, keptIndex } from "./cache";
 import { followThemeInSystemBars, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
+import { initDevicePhotos } from "./devicePhotos";
 
 /** A popup where there can be one; the installed app always redirects — see signInRedirect. */
 const signInNow = (): Promise<unknown> => (isNative ? signInRedirect() : signIn());
@@ -209,6 +210,9 @@ async function main(): Promise<void> {
   // cancelled sign-in lands on the sign-in screen, not on a leftover path.
   if (location.pathname.startsWith("/auth")) history.replaceState(null, "", "/");
   keepSignInAcrossLaunches();
+  // Photographs this phone already holds are served from it. Only when the
+  // reader has allowed it in Settings; nothing is asked for here.
+  void initDevicePhotos();
   initBackButton();
   followThemeInSystemBars();
   window.addEventListener("signin-required", showSessionBanner);
