@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { GeoPoint } from "@travel-archive/shared";
 import { dataFile } from "./paths.js";
+import { countryAt, sameCountry } from "./countryPolygons.js";
 
 /**
  * Reverse geocoding without asking anyone.
@@ -143,19 +144,34 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
  */
 export async function offlinePlace(gps: GeoPoint): Promise<OfflinePlace | null> {
   const p = await places();
-  const near: { i: number; d: number }[] = [];
-  const baseLat = Math.floor(gps.lat);
-  const baseLon = Math.floor(gps.lon);
-  for (let dLat = -1; dLat <= 1; dLat++) {
-    for (let dLon = -1; dLon <= 1; dLon++) {
-      const bucket = p.grid.get(cellOf(baseLat + dLat, baseLon + dLon));
-      if (!bucket) continue;
-      for (const i of bucket) {
-        const d = haversineKm(gps.lat, gps.lon, p.lat[i], p.lon[i]);
-        if (d <= FAR_RADIUS_KM) near.push({ i, d });
+  // A settlement across a border is not where the photo was taken: the
+  // Chinese side of Changbai Mountain was named after Samjiyon, North Korea.
+  // Null (open sea, or no polygon file) leaves every candidate eligible.
+  const cc = await countryAt(gps.lat, gps.lon);
+  const eligible = (i: number) => !cc || sameCountry(p.cc[i], cc);
+
+  const collect = (cells: number, maxKm: number) => {
+    const found: { i: number; d: number }[] = [];
+    const baseLat = Math.floor(gps.lat);
+    const baseLon = Math.floor(gps.lon);
+    for (let dLat = -cells; dLat <= cells; dLat++) {
+      for (let dLon = -cells; dLon <= cells; dLon++) {
+        const bucket = p.grid.get(cellOf(baseLat + dLat, baseLon + dLon));
+        if (!bucket) continue;
+        for (const i of bucket) {
+          if (!eligible(i)) continue;
+          const d = haversineKm(gps.lat, gps.lon, p.lat[i], p.lon[i]);
+          if (d <= maxKm) found.push({ i, d });
+        }
       }
     }
-  }
+    return found;
+  };
+
+  let near = collect(1, FAR_RADIUS_KM);
+  // Beyond the usual radius, the nearest settlement in the same country still
+  // beats a name from a neighbour — widen the search until one turns up.
+  for (let cells = 3; !near.length && cc && cells <= 24; cells *= 2) near = collect(cells, Infinity);
   if (!near.length) return null;
 
   // The largest place whose reach covers the point — so a photo inside Beijing
