@@ -1,6 +1,7 @@
 import type { DayRecord, HomePlace } from "@travel-archive/shared";
 import { loadHomeIndex } from "../archiveData";
-import { drawPlaceMap, loadBasemap, type MapPoint } from "../tripMap";
+import { drawPlaceMap, loadBasemap } from "../tripMap";
+import { homeMapOptions, homeMapPoints } from "../homeMap";
 import { el } from "../photoUi";
 import { contentLanguage, loc, locDay } from "../contentLang";
 import { ui } from "../i18n";
@@ -118,22 +119,14 @@ async function fillMap(section: HTMLElement): Promise<void> {
   }
   totals.textContent = ui.home.totals(home.totals.placed, home.places.length, home.totals.countries);
 
-  // Smallest first, biggest last: discs keep one size on screen and later ones
-  // draw on top, so a big city must come after its suburbs to stay tappable.
-  const ordered = [...home.places].sort((a, b) => a.photoCount - b.photoCount);
-  const points: MapPoint[] = ordered.map((place) => {
-    const label = placeLabel(place);
-    const comma = label.indexOf(",");
-    return { key: place.name, name: comma === -1 ? label : label.slice(0, comma), lat: place.lat, lon: place.lon, photoCount: place.photoCount };
-  });
+  // The desktop's home map exactly — points, clustering, labels and options
+  // all come from homeMap.ts, which owns them for both. Only the controls,
+  // the full-screen layer and the sheet a place opens are the phone's.
+  const { ordered, points } = homeMapPoints(home.places);
   const basemap = await loadBasemap();
   if (!slot.isConnected) return;
   slot.replaceChildren();
-  drawPlaceMap(slot, basemap, points, {
-    label: ui.home.mapLabel,
-    zoomOut: "world",
-    onPick: (i) => placeSheet(ordered[i]),
-  });
+  drawPlaceMap(slot, basemap, points, { ...homeMapOptions(home.places), onPick: (i) => placeSheet(ordered[i]) });
   phoneMapControls(slot);
 }
 

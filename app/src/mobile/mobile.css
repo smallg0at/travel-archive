@@ -266,6 +266,12 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
    ui.ts). They were being drawn at body text size with no background, since
    `body.m button` outranks style.css's `.trip-map-expand`. */
 .m .m-map .trip-map-controls { display: none; }
+/* The map's "N photos in view" line (tripMap.ts, bottom left on the desktop)
+   ran under the phone's four buttons on a 380px map. Top left inline; bottom
+   left full screen, where the buttons are a column on the right and the
+   close button holds the top left. */
+body.m .m-map:not(.is-expanded) .trip-map-status { top: 10px; bottom: auto; }
+body.m .m-map.is-expanded .trip-map-status { left: 16px; bottom: calc(var(--safe-bottom) + 16px); }
 .m .m-map-controls {
   position: absolute;
   right: 10px;
