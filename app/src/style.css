@@ -1639,6 +1639,11 @@ body.resizing { cursor: col-resize; user-select: none; }
    fetched when needed. Borrowed model, borrowed symbols. */
 
 /* Pinned to the bottom of the sidebar rather than the end of the list. */
+#nav-top {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
 #nav-tools {
   flex-shrink: 0;
   padding: 6px 8px;
@@ -2110,11 +2115,14 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .trip-map-svg:active { cursor: grabbing; }
 
-/* Every size below is `base * --map-k`, where the base is a fraction of the
-   fitted view (set in tripMap.ts) and --map-k is how far you have zoomed. A
-   literal viewBox length cannot work for both a continent-wide trip and a
-   two-city one: the first version used one, and a single city disc covered the
-   entire map. */
+/* Markers and labels are drawn at the origin of a group that tripMap.ts
+   translates and scales per zoom, so their sizes here are fractions of the
+   fitted view and hold on screen. Lines use `vector-effect:
+   non-scaling-stroke` and pixel widths. Both replaced a --map-k variable that
+   every size multiplied by: changing it restyled every node on the map, 26ms a
+   zoom step at the home page's size. A literal viewBox length cannot work for
+   both a continent-wide trip and a two-city one: the first version used one,
+   and a single city disc covered the entire map. */
 .trip-map-land {
   fill: color-mix(in srgb, var(--text) 7%, var(--bg-muted));
   stroke: none;
@@ -2122,8 +2130,9 @@ body.resizing { cursor: col-resize; user-select: none; }
 .trip-map-border {
   fill: none;
   stroke: color-mix(in srgb, var(--text) 26%, transparent);
-  stroke-width: calc(var(--map-s, 1px) * var(--map-k, 1));
-  stroke-dasharray: calc(var(--map-s, 1px) * 3 * var(--map-k, 1)) calc(var(--map-s, 1px) * 2.5 * var(--map-k, 1));
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.2px;
+  stroke-dasharray: 3.6px 3px;
 }
 
 /* Cities the trip did not visit: present for orientation, and styled so they
@@ -2131,15 +2140,15 @@ body.resizing { cursor: col-resize; user-select: none; }
    on a rail-network map. */
 .trip-map-place {
   fill: var(--text-secondary);
-  font-size: calc(var(--map-f, 12px) * 0.62 * var(--map-k, 1));
+  font-size: calc(var(--map-f, 12px) * 0.62);
   paint-order: stroke;
   stroke: var(--bg);
-  stroke-width: calc(var(--map-s, 1px) * 1.6 * var(--map-k, 1));
+  stroke-width: calc(var(--map-s, 1px) * 1.6);
   pointer-events: none;
-  transform: translate(calc(var(--map-f, 12px) * 0.34 * var(--map-k, 1)), calc(var(--map-f, 12px) * 0.22 * var(--map-k, 1)));
+  transform: translate(calc(var(--map-f, 12px) * 0.34), calc(var(--map-f, 12px) * 0.22));
 }
 .trip-map-place-dot {
-  r: calc(var(--map-s, 1px) * 1.5 * var(--map-k, 1));
+  r: calc(var(--map-s, 1px) * 1.5);
   fill: var(--text-secondary);
   opacity: 0.65;
 }
@@ -2152,7 +2161,8 @@ body.resizing { cursor: col-resize; user-select: none; }
 .trip-map-river {
   fill: none;
   stroke: color-mix(in srgb, #4b7fb5 52%, var(--bg));
-  stroke-width: calc(var(--map-s, 1px) * 1.5 * var(--map-k, 1));
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.8px;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -2160,18 +2170,19 @@ body.resizing { cursor: col-resize; user-select: none; }
 .trip-map-route {
   fill: none;
   stroke: var(--text-secondary);
-  stroke-width: calc(var(--map-s, 1px) * 2.4 * var(--map-k, 1));
+  vector-effect: non-scaling-stroke;
+  stroke-width: 3px;
   stroke-linejoin: round;
   stroke-linecap: round;
   opacity: 0.8;
 }
 .trip-map-city { cursor: pointer; }
 .trip-map-city circle {
-  r: calc(var(--map-r, 6px) * var(--city-weight, 1) * var(--map-k, 1));
+  r: calc(var(--map-r, 6px) * var(--city-weight, 1));
   fill: var(--accent);
   fill-opacity: 0.92;
   stroke: var(--bg);
-  stroke-width: calc(var(--map-s, 1px) * 1.6 * var(--map-k, 1));
+  stroke-width: calc(var(--map-s, 1px) * 1.6);
 }
 .trip-map-city:hover circle,
 .trip-map-city:focus circle { fill-opacity: 1; stroke: var(--text); }
@@ -2180,15 +2191,15 @@ body.resizing { cursor: col-resize; user-select: none; }
    the base font size, so they hold their place through a zoom. */
 .trip-map-city text {
   fill: var(--text);
-  font-size: calc(var(--map-f, 12px) * var(--label-scale, 1) * var(--map-k, 1));
+  font-size: calc(var(--map-f, 12px) * var(--label-scale, 1));
   font-weight: 600;
   paint-order: stroke;
   stroke: var(--bg);
-  stroke-width: calc(var(--map-s, 1px) * 2.2 * var(--map-k, 1));
+  stroke-width: calc(var(--map-s, 1px) * 2.2);
   pointer-events: none;
   transform: translate(
-    calc(var(--label-dx, 0) * var(--map-f, 12px) * var(--map-k, 1)),
-    calc(var(--label-dy, -1) * var(--map-f, 12px) * var(--map-k, 1))
+    calc(var(--label-dx, 0) * var(--map-f, 12px)),
+    calc(var(--label-dy, -1) * var(--map-f, 12px))
   );
 }
 .trip-map-city:focus { outline: none; }
@@ -2212,32 +2223,64 @@ body.map-expanded::after {
   background: rgb(0 0 0 / 0.55);
 }
 
-.trip-map-expand {
-  position: absolute;
-  right: 62px;
-  bottom: 10px;
-  font: inherit;
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--radius-l);
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.trip-map-reset {
+/* One stack of round icon buttons: zoom in, zoom out, fit, expand. The
+   phone app's map controls (mobile/mobile.css .m-map-btn), so the two read as
+   one design; it replaced "Expand" and "Fit" in words, with no zoom at all. */
+.trip-map-controls {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  font: inherit;
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--radius-l);
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.trip-map-controls button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
   color: var(--text);
   cursor: pointer;
+}
+.trip-map-controls button:hover { background: var(--bg); }
+.trip-map-controls svg { width: 18px; height: 18px; }
+/* Zoom and fit belong together; expand is a different kind of act. */
+.trip-map-controls .trip-map-reset { margin-bottom: 6px; }
+
+/* What is in view, bottom left — the counterpart to the controls. */
+.trip-map-status {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* A cluster: the same disc as a place, carrying its photo count. */
+.trip-map-city.is-cluster circle { fill-opacity: 0.8; }
+.trip-map-city .trip-map-count {
+  fill: #fff;
+  font-weight: 700;
+  font-size: calc(var(--map-r, 6px) * var(--city-weight, 1) * 0.78);
+  dominant-baseline: central;
+  pointer-events: none;
+  /* Not a label: never moved by placeLabels(), always centred in its disc. */
+  transform: none;
+  stroke: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2334,8 +2377,8 @@ body.map-expanded::after {
   #signin-banner,
   #print-progress,
   .density-control,
-  .trip-map-expand,
-  .trip-map-reset,
+  .trip-map-controls,
+  .trip-map-status,
   /* Page-level controls live in the heading now. `#menu`, `#job-drawer` and
      `#settings-panel` used to be listed here and are gone — Generate and
      Settings became pages, and neither is printable (`canPrint()` is false
@@ -2602,43 +2645,44 @@ body.map-expanded::after {
 .home-place-day:hover:not(:disabled) { border-color: var(--accent); }
 .home-place-day:disabled { opacity: 0.5; cursor: default; }
 
-.home-then { margin-top: 26px; }
+.home-then { margin-top: 30px; }
 .home-then-title {
-  margin: 0 0 12px;
-  font-size: 15px;
+  margin: 0 0 14px;
+  font-size: 17px;
   font-weight: 600;
 }
-.home-then-year {
-  margin: 0 0 18px;
-  padding-left: 14px;
-  border-left: 2px solid var(--accent);
+/* Cards, not a list: a memory is a picture first. As many columns as fit at
+   about 280px, so a wide window shows a row of years side by side. */
+.home-then-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
 }
-/* The year is what tells these apart — every entry shares the day — so it
-   leads, large, with "n years ago" set quietly beside it. */
-.home-then-year-title {
+.then-card {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 0 0 8px;
-  font-weight: 600;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-muted);
+  overflow: hidden;
 }
-.home-then-year-number {
-  font-size: 22px;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+.then-cover {
+  aspect-ratio: 4 / 3;
+  background: var(--bg);
 }
-.home-then-ago {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--text-secondary);
+.then-card.is-textonly .then-cover { display: none; }
+.then-cover-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
 }
-.home-then-day { margin: 0 0 12px; }
-.home-then-head {
+.then-text {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px 10px;
   border: 0;
   background: none;
   font: inherit;
@@ -2646,34 +2690,68 @@ body.map-expanded::after {
   text-align: left;
   cursor: pointer;
 }
-.home-then-head:hover .home-then-place { color: var(--accent); }
-.home-then-date {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-}
-.home-then-place { font-size: 13px; font-weight: 600; }
-.home-then-summary {
-  margin: 4px 0 6px;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--text-secondary);
-}
-.home-then-photos {
+.then-text:disabled { cursor: default; }
+.then-when {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  align-items: baseline;
+  gap: 8px;
 }
-.home-thumb {
-  width: 108px;
-  height: 108px;
+.then-year {
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.then-ago { font-size: 12px; color: var(--text-secondary); }
+.then-place { font-size: 13px; font-weight: 600; }
+.then-text:hover:not(:disabled) .then-place { color: var(--accent); }
+.then-summary {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.then-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 0 14px 14px;
+  margin-top: auto;
+}
+.then-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
   object-fit: cover;
   border-radius: var(--radius-s, 6px);
-  background: var(--bg-muted);
-  cursor: pointer;
+  background: var(--bg);
+  cursor: zoom-in;
+}
+.then-more {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.then-more-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-s, 6px);
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
 }
 @media (max-width: 700px) {
   .home-page { padding: 12px 12px 32px; }
   .home-map .trip-map-svg { height: 320px; }
-  .home-thumb { width: 84px; height: 84px; }
+  .home-then-list { grid-template-columns: 1fr; }
 }

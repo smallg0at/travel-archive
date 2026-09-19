@@ -142,6 +142,7 @@ export const en = {
   },
 
   home: {
+    inView: (photos: number, places: number) => `${count(photos, "photo", "photos")} in ${count(places, "place", "places")} in view`,
     openDay: "Open this day",
     title: "Everywhere",
     mapLabel: "A world map of every place in this archive",
@@ -161,6 +162,8 @@ export const en = {
     label: (trip: string) => `Cities visited on ${trip}`,
     unnamed: "Unnamed stop",
     expand: "Expand",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
   },
 
   theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },

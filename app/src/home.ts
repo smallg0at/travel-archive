@@ -31,8 +31,8 @@ import { openPhoto } from "./viewer";
 
 /** Days shown under "on this day" before the list becomes a scroll. */
 const MAX_DAYS = 8;
-/** Thumbnails per day there. */
-const MAX_PHOTOS = 6;
+/** Small photos under a card's cover. The rest are a count, and one click away in the viewer. */
+const STRIP_PHOTOS = 4;
 /**
  * When today's date has nothing, the window widens by this many days either
  * side rather than showing an empty page — on a library with 789 days, roughly
@@ -96,13 +96,28 @@ function photoIdsOf(index: ArchiveIndexFile, date: string): string[] {
   return [];
 }
 
+/**
+ * A day's photos, the best cover first.
+ *
+ * The first photo of a day is usually its least interesting — the platform,
+ * the queue, a screenshot of the ticket. The captioner already marks the
+ * photos worth featuring (`visibility: "feature"`, `notable`), so the cover is
+ * chosen from those, and screenshots, poor frames and duplicate copies go to
+ * the back rather than out: the viewer still walks every photo.
+ */
 async function photosFor(date: string, ids: string[]): Promise<PhotoRecord[]> {
   const shard = await loadMonth(date.slice(0, 7)).catch(() => null);
   if (!shard) return [];
-  return ids
-    .slice(0, MAX_PHOTOS)
-    .map((id) => shard.photos[id])
-    .filter(Boolean);
+  const photos = ids.map((id) => shard.photos[id]).filter(Boolean);
+  const score = (p: PhotoRecord) =>
+    (p.visibility === "feature" ? 4 : 0) +
+    (p.notable ? 2 : 0) +
+    (p.screenshot || p.contentType === "screenshot" ? -8 : 0) +
+    (p.quality === "poor" ? -4 : 0) +
+    (p.duplicateGroupId && !p.isDuplicateRepresentative ? -6 : 0) +
+    (p.visibility === "hidden" ? -3 : 0);
+  // Stable: equal scores keep the day's own order.
+  return photos.map((p, i) => ({ p, i, s: score(p) })).sort((a, b) => b.s - a.s || a.i - b.i).map(({ p }) => p);
 }
 
 /* --- The page ----------------------------------------------------------- */
@@ -171,6 +186,10 @@ export async function showHome(): Promise<void> {
     drawPlaceMap(root, basemap, points, {
       label: ui.home.mapLabel,
       zoomOut: "world",
+      // 516 places at world zoom: grouped, weighted by photos, smaller type.
+      cluster: true,
+      fontScale: 0.62,
+      inView: ui.home.inView,
       onPick: (i) => showPlace(panel, index, ordered[i]),
     });
   } else {
@@ -205,13 +224,18 @@ function showPlace(panel: HTMLElement, index: ArchiveIndexFile, place: HomePlace
 }
 
 /**
- * "On this day", one heading per year.
+ * "On this day", as cards: one per day, led by a photograph.
  *
- * Every entry shares the month and day, so the thing that tells them apart is
- * the year — which the first version buried at the start of a line of plain
- * button text ("2025-09-18 · a year ago") in the browser's default button
- * font. The year is the heading now, and the date under it only appears when
- * the window had to widen and the day is no longer the same one.
+ * The first version was a list — a rule down the side, a year heading, the
+ * place as body text and a row of 108px squares — and read as a log file. A
+ * memory is a picture first, so each card leads with one large cover (the
+ * captioner's pick, see photosFor), then the year, how long ago, the place and
+ * the start of what the day summary says; a few more photos and a count sit
+ * underneath.
+ *
+ * The owner's rule for the whole page: a photo opens the photo viewer, with
+ * the rest of that day behind the arrow keys; only the words open the day in
+ * the album.
  */
 async function renderThen(page: HTMLElement, index: ArchiveIndexFile): Promise<void> {
   const title = page.querySelector<HTMLElement>(".home-then-title")!;
@@ -225,62 +249,76 @@ async function renderThen(page: HTMLElement, index: ArchiveIndexFile): Promise<v
     return;
   }
 
-  const hosts: { date: string; host: HTMLElement }[] = [];
+  const cards: { date: string; card: HTMLElement }[] = [];
   const frag = document.createDocumentFragment();
-  let year = "";
-  let group: HTMLElement | null = null;
-
   for (const date of dates.slice(0, MAX_DAYS)) {
-    if (date.slice(0, 4) !== year) {
-      year = date.slice(0, 4);
-      group = el<HTMLElement>(`
-        <section class="home-then-year">
-          <h3 class="home-then-year-title"><span class="home-then-year-number"></span><span class="home-then-ago"></span></h3>
-        </section>
-      `);
-      group.querySelector(".home-then-year-number")!.textContent = year;
-      group.querySelector(".home-then-ago")!.textContent = ui.home.yearsAgo(today.getFullYear() - Number(year));
-      frag.appendChild(group);
-    }
-
     const meta = dayMeta(index, date);
-    const block = el<HTMLElement>(`
-      <article class="home-then-day">
-        <button type="button" class="home-then-head">
-          <span class="home-then-date"></span>
-          <span class="home-then-place"></span>
+    const card = el<HTMLElement>(`
+      <article class="then-card">
+        <div class="then-cover"></div>
+        <button type="button" class="then-text">
+          <span class="then-when"><span class="then-year"></span><span class="then-ago"></span></span>
+          <span class="then-place"></span>
+          <span class="then-summary"></span>
         </button>
-        <p class="home-then-summary"></p>
-        <div class="home-then-photos"></div>
+        <div class="then-strip"></div>
       </article>
     `);
-    const dateNode = block.querySelector<HTMLElement>(".home-then-date")!;
-    if (exact) dateNode.remove();
-    else dateNode.textContent = date.slice(5);
-    const place = block.querySelector<HTMLElement>(".home-then-place")!;
-    place.textContent = meta.place ?? ui.home.openDay;
-    const summary = block.querySelector<HTMLElement>(".home-then-summary")!;
+    card.querySelector(".then-year")!.textContent = exact ? date.slice(0, 4) : date;
+    card.querySelector(".then-ago")!.textContent = ui.home.yearsAgo(today.getFullYear() - Number(date.slice(0, 4)));
+    // The country is dropped: every card on a date in the capital saying "United
+    // Kingdom" is noise, and the day itself shows it.
+    const place = card.querySelector<HTMLElement>(".then-place")!;
+    if (meta.place) place.textContent = meta.place.split(",")[0];
+    else place.remove();
+    const summary = card.querySelector<HTMLElement>(".then-summary")!;
     if (meta.summary) summary.textContent = meta.summary;
     else summary.remove();
-    if (meta.section) block.querySelector(".home-then-head")!.addEventListener("click", () => void openDay(date, meta.section!));
-    hosts.push({ date, host: block.querySelector<HTMLElement>(".home-then-photos")! });
-    group!.appendChild(block);
+    const text = card.querySelector<HTMLButtonElement>(".then-text")!;
+    if (meta.section) text.addEventListener("click", () => void openDay(date, meta.section!));
+    else text.disabled = true;
+    cards.push({ date, card });
+    frag.appendChild(card);
   }
   list.replaceChildren(frag);
 
-  // Shards after the text, exactly as search does it: the reader can read what
-  // happened while the pictures of it arrive.
-  for (const { date, host } of hosts) {
+  // Pictures after the words, as search does it: a month shard is a few
+  // hundred KB, and the cards are readable while they arrive.
+  for (const { date, card } of cards) {
     const photos = await photosFor(date, photoIdsOf(index, date));
-    if (!photos.length || !host.isConnected) continue;
-    const images = photos.map((photo) => {
-      const img = lazyImg(photo, "medium", "home-thumb");
+    if (!card.isConnected) return;
+    if (!photos.length) {
+      card.classList.add("is-textonly");
+      continue;
+    }
+    const open = (photo: PhotoRecord) => () => openPhoto(photo, photos);
+
+    const cover = lazyImg(photos[0], "large", "then-cover-img");
+    cover.title = photos[0].caption ?? "";
+    cover.addEventListener("click", open(photos[0]));
+    card.querySelector(".then-cover")!.appendChild(cover);
+
+    const strip = card.querySelector<HTMLElement>(".then-strip")!;
+    const rest = photos.slice(1, 1 + STRIP_PHOTOS);
+    const images = [cover];
+    const remaining = photos.length - 1 - rest.length;
+    for (const [i, photo] of rest.entries()) {
+      const img = lazyImg(photo, "medium", "then-thumb");
       img.title = photo.caption ?? "";
-      // The photo, not the day: the heading above already opens the day.
-      img.addEventListener("click", () => openPhoto(photo, photos));
-      host.appendChild(img);
-      return img;
-    });
+      images.push(img);
+      // The last small photo carries the count of what is not shown, and
+      // opens the viewer there — the rest are one arrow key away.
+      if (i === rest.length - 1 && remaining > 0) {
+        const more = el<HTMLButtonElement>(`<button type="button" class="then-more"></button>`);
+        more.append(img, el(`<span class="then-more-count">+${remaining}</span>`));
+        more.addEventListener("click", open(photo));
+        strip.appendChild(more);
+      } else {
+        img.addEventListener("click", open(photo));
+        strip.appendChild(img);
+      }
+    }
+    if (!rest.length) strip.remove();
     void hydrateAll(images);
   }
 }

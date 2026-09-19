@@ -15,7 +15,6 @@ import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
 import { fmtDate, num, ui } from "./i18n";
 import { releaseActivity, showActivity, startActivityIndicator } from "./activity";
-import { showSearch } from "./search";
 import { showHome } from "./home";
 import { addTripControls } from "./dayEdit";
 import { jumpTo, withContents, type ContentsEntry } from "./contents";
@@ -746,27 +745,11 @@ function renderNavTools(index: ArchiveIndexFile): void {
     setTitle(ui.nav.home);
     void showHome();
   });
-  tools.appendChild(home);
+  // Its own slot above the nav rather than among the tools at the bottom: it
+  // is where the app starts. Search, which had its own entry here, is on the
+  // home page itself now.
+  document.getElementById("nav-top")!.replaceChildren(home);
 
-  const searchButton = el<HTMLButtonElement>(
-    `<button class="month-link nav-tool" id="nav-search" type="button">
-       <svg class="nav-tool-icon" viewBox="0 0 20 20" aria-hidden="true">
-         <path d="M8.5 3a5.5 5.5 0 1 0 3.36 9.86l3.64 3.64a.75.75 0 1 0 1.06-1.06l-3.64-3.64A5.5 5.5 0 0 0 8.5 3Zm-4 5.5a4 4 0 1 1 8 0a4 4 0 0 1-8 0Z" />
-       </svg>
-       <span class="nav-label">${ui.nav.search}</span>
-     </button>`,
-  );
-  searchButton.addEventListener("click", () => {
-    cancelLookAhead();
-    releaseSettings();
-    releaseActivity();
-    clearActive();
-    searchButton.classList.add("active");
-    enter("#search");
-    setTitle(ui.nav.search);
-    showSearch({ onOpenDay: (date, section) => void openDay(date, section), onOpenPhoto: openPhoto });
-  });
-  tools.appendChild(searchButton);
 
   // Hidden until a backend answers, like Generate — see activity.ts.
   const activity = el<HTMLButtonElement>(
@@ -972,14 +955,14 @@ type View =
   | { kind: "settings" }
   | { kind: "generate" }
   | { kind: "activity" }
-  | { kind: "search" }
   | { kind: "home" };
 
 function viewFromHash(): View | null {
   if (location.hash === "#settings") return { kind: "settings" };
   if (location.hash === "#generate") return { kind: "generate" };
   if (location.hash === "#activity") return { kind: "activity" };
-  if (location.hash === "#search") return { kind: "search" };
+  // Search moved onto the home page; an old #search link lands there.
+  if (location.hash === "#search") return { kind: "home" };
   if (location.hash === "#home") return { kind: "home" };
   const match = /^#(trip|month)\/(.+)$/.exec(location.hash);
   return match ? { kind: match[1] as "trip" | "month", id: decodeURIComponent(match[2]) } : null;
@@ -991,7 +974,6 @@ function rowFor(view: View | null): HTMLElement | null {
   if (view.kind === "settings") return document.getElementById("nav-settings");
   if (view.kind === "generate") return document.getElementById("nav-generate");
   if (view.kind === "activity") return document.getElementById("nav-activity");
-  if (view.kind === "search") return document.getElementById("nav-search");
   if (view.kind === "home") return document.getElementById("nav-home");
   return document.querySelector<HTMLElement>(
     `#month-nav .month-link[data-pin-kind="${view.kind}"][data-pin-id="${CSS.escape(view.id)}"]`,

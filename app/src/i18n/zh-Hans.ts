@@ -139,6 +139,7 @@ export const zhHans: Messages = {
   },
 
   home: {
+    inView: (photos: number, places: number) => `视野内 ${num(places)} 个地点，共 ${num(photos)} 张照片`,
     openDay: "查看当天",
     title: "足迹",
     mapLabel: "档案中所有地点的世界地图",
@@ -158,6 +159,8 @@ export const zhHans: Messages = {
     label: (trip) => `“${trip}”途经城市`,
     unnamed: "未命名地点",
     expand: "展开",
+    zoomIn: "放大",
+    zoomOut: "缩小",
   },
 
   theme: { label: "主题", light: "浅色", dark: "深色", system: "跟随系统" },

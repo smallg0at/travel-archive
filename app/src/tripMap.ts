@@ -38,6 +38,37 @@ const WORLD_H = 1e5;
 const MAX_SCALE = 400;
 /** Widest view, in degrees of longitude, that still draws rivers — see paint(). */
 const RIVERS_MAX_SPAN_DEG = 60;
+/**
+ * Places closer than this on screen are drawn as one cluster. A little over
+ * two of the largest discs: close enough that neighbours merge before their
+ * labels fight, not so far that a whole country becomes one dot.
+ */
+const CLUSTER_PX = 44;
+
+/**
+ * The map's control icons — the phone app's (mobile/ui.ts), so the two read
+ * as one design, with plus and minus added.
+ */
+const MAP_ICONS = {
+  plus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  minus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  expand: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  fit: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`,
+};
+
+function setIcon(button: HTMLButtonElement, icon: string, label: string): void {
+  button.innerHTML = icon;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+}
+
+/** "3.8k" for a badge that has to fit inside a disc. */
+function shortCount(n: number): string {
+  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
 
 /**
  * Cities are grouped by their reverse-geocoded name, not by distance.
@@ -276,6 +307,16 @@ export interface PlaceMapOptions {
    * subject is the world.
    */
   zoomOut?: "continent" | "world";
+  /**
+   * Merge places that crowd each other into one disc with a count, re-grouped
+   * as the zoom changes. For the home page's 515 places; a trip has few enough
+   * cities that every one should be seen.
+   */
+  cluster?: boolean;
+  /** Label size relative to the trip map's. The home page's view is a world, not a trip, and wants smaller type. */
+  fontScale?: number;
+  /** A line describing what is in view, kept current as the map moves. */
+  inView?: (photos: number, places: number) => string;
 }
 
 let basemapPromise: Promise<Basemap> | null = null;
@@ -387,18 +428,28 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     if (rivers) for (const b of layers.rivers) if (hits(b)) draw(b, "trip-map-river", false);
     for (const b of layers.borders) if (hits(b)) draw(b, "trip-map-border", false);
 
-    const maxRank = labelRankFor(east - west);
+    // One tier later on a clustered map. Its subject is where the library has
+    // been, and at world zoom the capitals it would otherwise name — Los
+    // Angeles, Mumbai, Sydney — are nearly all places it has not.
+    const maxRank = labelRankFor(east - west) - (opts.cluster ? 1 : 0);
     for (const [index, [name, lon, lat, placeRank]] of basemap.places.entries()) {
       if (placeRank > maxRank) continue;
       if (lon < west || lon > east || lat < south || lat > north) continue;
       if (suppressed.has(index)) continue;
       const [x, y] = project(lat, lon);
-      frag.appendChild(svgEl("circle", { class: "trip-map-place-dot", cx: x * 1e5, cy: y * 1e5 }));
-      const label = svgEl("text", { class: "trip-map-place", x: x * 1e5, y: y * 1e5 });
+      // Drawn at the origin of a group placed by transform — see placeMarkers.
+      const group = svgEl("g", { class: "trip-map-ref" });
+      group.dataset.x = String(x * 1e5);
+      group.dataset.y = String(y * 1e5);
+      group.appendChild(svgEl("circle", { class: "trip-map-place-dot", cx: 0, cy: 0 }));
+      const label = svgEl("text", { class: "trip-map-place", x: 0, y: 0 });
       label.textContent = name;
-      frag.appendChild(label);
+      group.appendChild(label);
+      frag.appendChild(group);
     }
     basemapGroup.replaceChildren(frag);
+    refGroups = [...basemapGroup.querySelectorAll<SVGElement>(".trip-map-ref")];
+    placeMarkers();
   };
 
   const points = cities.map((c) => project(c.lat, c.lon));
@@ -423,18 +474,243 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   }
 
   const markers = svgEl("g", { class: "trip-map-cities" });
+  const clusterLayer = svgEl("g", { class: "trip-map-cities trip-map-clusters" });
   const biggest = Math.max(...cities.map((c) => c.photoCount), 1);
+  const totalPhotos = Math.max(cities.reduce((sum, c) => sum + c.photoCount, 0), 1);
 
   /**
-   * Which labels can be shown without overlapping, busiest city first.
+   * A disc's size as a multiple of the base radius.
+   *
+   * The trip map's square root against the busiest city works for a trip —
+   * ten cities within one order of magnitude. Against the home page's the capital
+   * (3,844 photos) it put nearly all 515 places within a few percent of the
+   * floor, so a hub and a one-photo stopover looked the same. Clustered, the
+   * scale is logarithmic against the whole library, which is what spans one
+   * photo to fifteen thousand in a cluster over Europe.
+   */
+  const weightOf = opts.cluster
+    ? (count: number) => 0.5 + 1.1 * (Math.log10(1 + count) / Math.log10(1 + totalPhotos))
+    : (count: number) => 0.55 + 0.75 * Math.sqrt(count / biggest);
+
+  /** Something drawn and labelled: a single place, or a cluster standing for several. */
+  interface Item {
+    x: number;
+    y: number;
+    count: number;
+    weight: number;
+    name: string;
+    label: SVGElement;
+  }
+
+  /** Set once a press has travelled far enough to be a pan; the click that ends it is ignored. */
+  let moved = false;
+
+  const cityGroups: SVGElement[] = [];
+  const cityItems: Item[] = [];
+  for (const [i, city] of cities.entries()) {
+    const [x, y] = points[i];
+    const group = svgEl("g", { class: "trip-map-city", tabindex: "0", role: "button" });
+    // Sizes are set in CSS, as fractions of the fitted view — see fontBase —
+    // and drawn at the group's origin; placeMarkers() moves and scales the
+    // group. A fixed radius in viewBox units is meaningless here: the same
+    // number is a dot across Europe and a disc that fills the frame across one
+    // city.
+    const weight = weightOf(city.photoCount);
+    const circle = svgEl("circle", { cx: 0, cy: 0 });
+    circle.style.setProperty("--city-weight", weight.toFixed(3));
+    group.appendChild(circle);
+
+    const label = svgEl("text", { x: 0, y: 0, "text-anchor": "middle" });
+    label.textContent = city.name || ui.common.photos(city.photoCount);
+    group.appendChild(label);
+
+    const title = svgEl("title");
+    title.textContent = `${city.name || ui.map.unnamed} — ${ui.common.photos(city.photoCount)}`;
+    group.appendChild(title);
+
+    if (opts.onPick) {
+      const go = () => opts.onPick!(i);
+      group.addEventListener("click", () => {
+        // A drag that happened to end on a city is a pan, not a choice.
+        if (!moved) go();
+      });
+      group.addEventListener("keydown", (e) => {
+        if ((e as KeyboardEvent).key === "Enter") go();
+      });
+    }
+    markers.appendChild(group);
+    group.dataset.x = String(x * 1e5);
+    group.dataset.y = String(y * 1e5);
+    cityGroups.push(group);
+    cityItems.push({ x: x * 1e5, y: y * 1e5, count: city.photoCount, weight, name: city.name, label });
+  }
+
+  let clusterGroups: SVGElement[] = [];
+  let refGroups: SVGElement[] = [];
+  /** How far in the view is zoomed against the fit; every marker is drawn at this scale. */
+  let zoomScale = 1;
+
+  /**
+   * Places every marker for the current zoom: a translate to its point and a
+   * scale that keeps it the same size on screen.
+   *
+   * This used to be one CSS variable, --map-k, that every size in the
+   * stylesheet multiplied by. Changing an inherited custom property makes
+   * the browser recompute style for every node beneath it — 4,500 on the home
+   * page — and that alone cost 26ms a zoom step, measured with nothing else
+   * changing. A transform attribute per marker is a few hundred cheap writes;
+   * lines keep their width with `vector-effect: non-scaling-stroke` instead.
+   */
+  const placeMarkers = () => {
+    const k = zoomScale.toFixed(5);
+    for (const group of [...cityGroups, ...clusterGroups, ...refGroups]) {
+      if (group.style.display === "none") continue;
+      group.setAttribute("transform", `translate(${group.dataset.x} ${group.dataset.y}) scale(${k})`);
+    }
+  };
+
+  /** What is drawn right now: every city, or — clustered — singles and clusters for this zoom. */
+  let items: Item[] = cityItems;
+  /** The zoom the clusters were built for, quantised, so a pan never regroups them. */
+  let clusterBucket = Number.NaN;
+  /**
+   * The canvas's height in pixels, which is what CLUSTER_PX is measured in.
+   * Read once and again when the frame changes shape (expand), never per
+   * regroup: reading it mid-zoom forced a synchronous layout, and was most of
+   * why a zoom step went from 10ms to 31ms when clustering arrived.
+   */
+  let pixelHeight = 0;
+  const setDisplay = (node: SVGElement, display: string) => {
+    if (node.style.display !== display) node.style.display = display;
+  };
+
+  /**
+   * Groups crowding places into clusters, biggest place first.
+   *
+   * Greedy and in screen space: the busiest ungrouped place takes every
+   * ungrouped neighbour within CLUSTER_PX, and the cluster sits on that place
+   * and is named after it — "the capital +37" — because a centroid lands in the
+   * sea as often as not and names nothing. Regrouped only when the zoom moves
+   * a quarter of a doubling, so panning never reshuffles what you are looking
+   * at.
+   */
+  const recluster = () => {
+    if (!opts.cluster) return;
+    // Per half-doubling of zoom: finer regrouped on nearly every wheel step.
+    const bucket = Math.round(Math.log2(view.h) * 2);
+    if (bucket === clusterBucket) return;
+    clusterBucket = bucket;
+
+    if (!pixelHeight) pixelHeight = canvas.getBoundingClientRect().height || HEIGHT;
+    const radius = CLUSTER_PX * (view.h / pixelHeight);
+    const cellKey = (x: number, y: number) => Math.floor(x / radius) * 1_000_003 + Math.floor(y / radius);
+    const grid = new Map<number, number[]>();
+    for (const [i, item] of cityItems.entries()) {
+      const key = cellKey(item.x, item.y);
+      const bucketList = grid.get(key);
+      if (bucketList) bucketList.push(i);
+      else grid.set(key, [i]);
+    }
+
+    const grouped = new Uint8Array(cities.length);
+    const order = cities.map((_, i) => i).sort((a, b) => cities[b].photoCount - cities[a].photoCount);
+    const next: Item[] = [];
+    const frag = document.createDocumentFragment();
+
+    for (const seed of order) {
+      if (grouped[seed]) continue;
+      grouped[seed] = 1;
+      const centre = cityItems[seed];
+      const members = [seed];
+      const cx = Math.floor(centre.x / radius);
+      const cy = Math.floor(centre.y / radius);
+      for (let gx = cx - 1; gx <= cx + 1; gx++) {
+        for (let gy = cy - 1; gy <= cy + 1; gy++) {
+          for (const j of grid.get(gx * 1_000_003 + gy) ?? []) {
+            if (grouped[j]) continue;
+            if (Math.hypot(cityItems[j].x - centre.x, cityItems[j].y - centre.y) > radius) continue;
+            grouped[j] = 1;
+            members.push(j);
+          }
+        }
+      }
+
+      if (members.length === 1) {
+        setDisplay(cityGroups[seed], "");
+        // placeMarkers() skips hidden groups; this one may have been hidden
+        // at the zoom its transform was last written for.
+        next.push(centre);
+        continue;
+      }
+      for (const m of members) setDisplay(cityGroups[m], "none");
+
+      const count = members.reduce((sum, m) => sum + cities[m].photoCount, 0);
+      // Never smaller than a disc a two-digit badge fits in.
+      const weight = Math.max(0.95, weightOf(count));
+      const group = svgEl("g", { class: "trip-map-city is-cluster", tabindex: "0", role: "button" });
+      group.dataset.x = String(centre.x);
+      group.dataset.y = String(centre.y);
+      const circle = svgEl("circle", { cx: 0, cy: 0 });
+      circle.style.setProperty("--city-weight", weight.toFixed(3));
+      group.appendChild(circle);
+      const badge = svgEl("text", { x: 0, y: 0, class: "trip-map-count", "text-anchor": "middle" });
+      badge.style.setProperty("--city-weight", weight.toFixed(3));
+      badge.textContent = shortCount(count);
+      group.appendChild(badge);
+      const name = `${cities[seed].name} +${members.length - 1}`;
+      const label = svgEl("text", { x: 0, y: 0, "text-anchor": "middle" });
+      label.textContent = name;
+      group.appendChild(label);
+      const title = svgEl("title");
+      title.textContent = `${name} — ${ui.common.photos(count)}`;
+      group.appendChild(title);
+
+      const open = () => zoomTo(members);
+      group.addEventListener("click", () => {
+        if (!moved) open();
+      });
+      group.addEventListener("keydown", (e) => {
+        if ((e as KeyboardEvent).key === "Enter") open();
+      });
+      frag.appendChild(group);
+      next.push({ x: centre.x, y: centre.y, count, weight, name, label });
+    }
+    clusterLayer.replaceChildren(frag);
+    clusterGroups = [...clusterLayer.children] as SVGElement[];
+    items = next;
+    placeMarkers();
+  };
+
+  /** Opens a cluster: fits its members, and always at least halves the view so it actually splits. */
+  const zoomTo = (members: number[]) => {
+    const xs = members.map((m) => cityItems[m].x);
+    const ys = members.map((m) => cityItems[m].y);
+    const aspectNow = view.w / view.h;
+    const spanX = Math.max(...xs) - Math.min(...xs);
+    const spanY = Math.max(...ys) - Math.min(...ys);
+    const fit = Math.max(spanY, spanX / aspectNow) * 1.5;
+    view.h = Math.max(home.h / MAX_SCALE, Math.min(view.h / 2, fit));
+    view.w = view.h * aspectNow;
+    view.x = (Math.min(...xs) + Math.max(...xs)) / 2;
+    view.y = (Math.min(...ys) + Math.max(...ys)) / 2;
+    apply();
+  };
+
+  /**
+   * Which labels can be shown without overlapping, busiest first.
    *
    * Ten cities inside the Randstad produced one illegible stack — "United
    * Kingdom Hoek van Holland a city a city" written over each other. A
    * label is dropped when its box would collide with one already placed; the
    * marker and its tooltip stay, so nothing is lost, it just stops shouting.
-   * Recomputed per repaint, so zooming in reveals the labels that were hidden.
+   * Recomputed per frame, so zooming in reveals the labels that were hidden.
+   *
+   * The basemap's reference towns go through the same test, last: Moscow or
+   * Rome written across a place the library was actually photographed is the
+   * wrong way round, so a reference label only shows where it clears
+   * everything the map is about.
    */
-  const labelled = new Set<number>();
+  const labelled = new Set<SVGElement>();
   /** Where a label may sit relative to its dot, in order of preference. */
   const SIDES = ["above", "below", "right", "left"] as const;
   /** Sizes tried before a label is given up on, as fractions of the base. */
@@ -446,7 +722,10 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     // at the home page's 515 cities, several million comparisons a frame, and
     // a pan cost 18ms before anything was drawn.
     type Box = { x0: number; y0: number; x1: number; y1: number };
-    const cell = Math.max(fontBase * (view.h / home.h) * 4, 1e-6);
+    const k = view.h / home.h;
+    /** The base font in view units; offsets are multiples of it, so they hold through a zoom. */
+    const unit = fontBase * k;
+    const cell = Math.max(unit * 4, 1e-6);
     const grid = new Map<number, Box[]>();
     const keysOf = (b: Box) => {
       const keys: number[] = [];
@@ -455,44 +734,35 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
       }
       return keys;
     };
-    const taken = {
-      push(b: Box) {
-        for (const key of keysOf(b)) {
-          const bucket = grid.get(key);
-          if (bucket) bucket.push(b);
-          else grid.set(key, [b]);
-        }
-      },
-      some(test: (t: Box) => boolean, near: Box) {
-        for (const key of keysOf(near)) if (grid.get(key)?.some(test)) return true;
-        return false;
-      },
+    const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+    const reserve = (b: Box) => {
+      for (const key of keysOf(b)) {
+        const bucket = grid.get(key);
+        if (bucket) bucket.push(b);
+        else grid.set(key, [b]);
+      }
     };
-    const k = view.h / home.h;
-    /** The base font in view units; offsets are multiples of it, so they hold through a zoom. */
-    const unit = fontBase * k;
+    const clashes = (b: Box) => {
+      for (const key of keysOf(b)) if (grid.get(key)?.some((t) => overlaps(t, b))) return true;
+      return false;
+    };
 
-    /** A city's disc in view units, from the same expression the CSS sizes it with. */
-    const discRadius = (i: number) => home.h * 0.028 * (0.55 + 0.75 * Math.sqrt(cities[i].photoCount / biggest)) * k;
+    /** A disc's radius in view units, from the same expression the CSS sizes it with. */
+    const discRadius = (item: Item) => discBase * item.weight * k;
     // The discs are reserved before any label is placed: a name written across
     // a neighbouring city's dot hides the very thing the map is drawing.
-    for (const [i] of cities.entries()) {
-      const r = discRadius(i);
-      const [x, y] = points[i];
-      taken.push({ x0: x * 1e5 - r, x1: x * 1e5 + r, y0: y * 1e5 - r, y1: y * 1e5 + r });
+    for (const item of items) {
+      const r = discRadius(item);
+      reserve({ x0: item.x - r, x1: item.x + r, y0: item.y - r, y1: item.y + r });
     }
 
-    const order = cities.map((c, i) => i).sort((a, b) => cities[b].photoCount - cities[a].photoCount);
-    for (const i of order) {
-      const name = cities[i].name;
-      const node = labelNodes.get(i);
-      if (!name || !node) continue;
-      const [x, y] = points[i];
-      const cx = x * 1e5;
-      const cy = y * 1e5;
-      // Clearance from the centre: the dot's own radius plus a gap. Both are
-      // expressed in font units, which is what the CSS transform multiplies.
-      const radius = ((home.h * 0.028 * (0.55 + 0.75 * Math.sqrt(cities[i].photoCount / biggest))) / fontBase) * 1.15;
+    const order = [...items].sort((a, b) => b.count - a.count);
+    for (const item of order) {
+      const { name, label: node } = item;
+      if (!name) continue;
+      // Clearance from the centre: the dot's own radius plus a gap, in font
+      // units, which is what the CSS transform multiplies.
+      const radius = ((discBase * item.weight) / fontBase) * 1.15;
 
       let placed: { dx: number; dy: number; anchor: string; scale: number } | null = null;
       // Size is the outer loop: a label at full size on its second-choice side
@@ -504,12 +774,12 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
           const dx = side === "right" ? radius + 0.35 : side === "left" ? -(radius + 0.35) : 0;
           const dy = side === "above" ? -(radius + 0.55) : side === "below" ? radius + 0.95 : 0.32;
           const anchor = side === "right" ? "start" : side === "left" ? "end" : "middle";
-          const baseX = cx + dx * unit;
-          const baseY = cy + dy * unit;
+          const baseX = item.x + dx * unit;
+          const baseY = item.y + dy * unit;
           const x0 = anchor === "start" ? baseX : anchor === "end" ? baseX - width : baseX - width / 2;
           const box = { x0, x1: x0 + width, y0: baseY - size * 0.78, y1: baseY + size * 0.22 };
-          if (taken.some((t) => box.x0 < t.x1 && box.x1 > t.x0 && box.y0 < t.y1 && box.y1 > t.y0, box)) continue;
-          taken.push(box);
+          if (clashes(box)) continue;
+          reserve(box);
           placed = { dx, dy, anchor, scale };
           break;
         }
@@ -527,49 +797,28 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
         node.style.setProperty("--label-scale", String(placed.scale));
         node.setAttribute("text-anchor", placed.anchor);
       }
-      labelled.add(i);
+      labelled.add(node);
     }
-    for (const [i, node] of labelNodes) {
-      const display = labelled.has(i) ? "" : "none";
-      if (node.style.display !== display) node.style.display = display;
+    for (const item of items) {
+      const display = labelled.has(item.label) ? "" : "none";
+      if (item.label.style.display !== display) item.label.style.display = display;
+    }
+
+    // Reference towns last. Their geometry mirrors `.trip-map-place` in the
+    // stylesheet: 0.62 of the base size, nudged right and down of the dot.
+    for (const group of refGroups) {
+      const size = unit * 0.62;
+      const x0 = Number(group.dataset.x) + unit * 0.34;
+      const baseY = Number(group.dataset.y) + unit * 0.22;
+      const box = { x0, x1: x0 + (group.textContent ?? "").length * 0.55 * size, y0: baseY - size * 0.78, y1: baseY + size * 0.22 };
+      const hidden = clashes(box);
+      if (!hidden) reserve(box);
+      setDisplay(group, hidden ? "none" : "");
     }
   };
-  const labelNodes = new Map<number, SVGElement>();
-  /** Set once a press has travelled far enough to be a pan; the click that ends it is ignored. */
-  let moved = false;
 
-  for (const [i, city] of cities.entries()) {
-    const [x, y] = points[i];
-    const group = svgEl("g", { class: "trip-map-city", tabindex: "0", role: "button" });
-    // Sizes are set later, as fractions of the fitted view — see sizeFor(). A
-    // fixed radius in viewBox units is meaningless here: the same number is a
-    // dot across Europe and a disc that fills the frame across one city.
-    const circle = svgEl("circle", { cx: x * 1e5, cy: y * 1e5 });
-    circle.style.setProperty("--city-weight", (0.55 + 0.75 * Math.sqrt(city.photoCount / biggest)).toFixed(3));
-    group.appendChild(circle);
-
-    const label = svgEl("text", { x: x * 1e5, y: y * 1e5, "text-anchor": "middle" });
-    label.textContent = city.name || ui.common.photos(city.photoCount);
-    group.appendChild(label);
-    labelNodes.set(i, label);
-
-    const title = svgEl("title");
-    title.textContent = `${city.name || ui.map.unnamed} — ${ui.common.photos(city.photoCount)}`;
-    group.appendChild(title);
-
-    if (opts.onPick) {
-      const go = () => opts.onPick!(i);
-      group.addEventListener("click", () => {
-        // A drag that happened to end on a city is a pan, not a choice.
-        if (!moved) go();
-      });
-      group.addEventListener("keydown", (e) => {
-        if ((e as KeyboardEvent).key === "Enter") go();
-      });
-    }
-    markers.appendChild(group);
-  }
   world.appendChild(markers);
+  world.appendChild(clusterLayer);
   canvas.appendChild(world);
   root.appendChild(canvas);
 
@@ -607,8 +856,9 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   // sized as a fraction of the *fitted* view, then multiplied by how far you
   // have zoomed. That keeps them a constant size on screen whatever the trip's
   // extent, whether it spans a continent or two neighbouring cities.
-  const fontBase = home.h * 0.05;
-  canvas.style.setProperty("--map-r", `${home.h * 0.028}px`);
+  const fontBase = home.h * 0.05 * (opts.fontScale ?? 1);
+  const discBase = home.h * 0.028;
+  canvas.style.setProperty("--map-r", `${discBase}px`);
   canvas.style.setProperty("--map-f", `${fontBase}px`);
   canvas.style.setProperty("--map-s", `${home.h * 0.0035}px`);
 
@@ -640,11 +890,37 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     paint(painted.west, painted.south, painted.east, painted.north, rivers);
   };
 
+  const status = opts.inView ? document.createElement("div") : null;
+  if (status) status.className = "trip-map-status";
+
+  /** Photos and places inside the view, for the status line. A pass over 515 points, cheap enough per frame. */
+  const updateStatus = () => {
+    if (!status || !opts.inView) return;
+    const x0 = view.x - view.w / 2;
+    const x1 = view.x + view.w / 2;
+    const y0 = view.y - view.h / 2;
+    const y1 = view.y + view.h / 2;
+    let photos = 0;
+    let places = 0;
+    for (const [i, item] of cityItems.entries()) {
+      if (item.x < x0 || item.x > x1 || item.y < y0 || item.y > y1) continue;
+      photos += cities[i].photoCount;
+      places++;
+    }
+    const text = opts.inView(photos, places);
+    if (status.textContent !== text) status.textContent = text;
+  };
+
   const apply = () => {
     canvas.setAttribute("viewBox", `${view.x - view.w / 2} ${view.y - view.h / 2} ${view.w} ${view.h}`);
-    canvas.style.setProperty("--map-k", String(view.h / home.h));
+    zoomScale = view.h / home.h;
     repaintIfNeeded();
+    recluster();
     placeLabels();
+    // After the labels: they decide which groups are hidden, and only shown
+    // ones are written.
+    placeMarkers();
+    updateStatus();
   };
   canvas.setAttribute("viewBox", "0 0 1 1");
   canvas.setAttribute("preserveAspectRatio", "xMidYMid meet");
@@ -752,12 +1028,12 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   const expand = document.createElement("button");
   expand.type = "button";
   expand.className = "trip-map-expand";
-  expand.textContent = ui.map.expand;
+  setIcon(expand, MAP_ICONS.expand, ui.map.expand);
 
   const setExpanded = (on: boolean) => {
     root.classList.toggle("is-expanded", on);
     document.body.classList.toggle("map-expanded", on);
-    expand.textContent = on ? ui.common.close : ui.map.expand;
+    setIcon(expand, on ? MAP_ICONS.close : MAP_ICONS.expand, on ? ui.common.close : ui.map.expand);
     // The container changes shape, so the fitted view has to be recomputed or
     // the map sits letterboxed inside its old aspect ratio.
     //
@@ -784,6 +1060,8 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
         Object.assign(fitView, fit.h < fitted.h ? { w: fitted.h * shape, h: fitted.h } : fit);
         Object.assign(view, contain(view));
       }
+      clusterBucket = Number.NaN;
+      pixelHeight = 0;
       apply();
     });
   };
@@ -796,17 +1074,40 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     if (event.key === "Escape" && root.classList.contains("is-expanded")) setExpanded(false);
   };
   document.addEventListener("keydown", onEscape);
-  root.appendChild(expand);
 
   const reset = document.createElement("button");
   reset.type = "button";
   reset.className = "trip-map-reset";
-  reset.textContent = ui.common.fit;
+  setIcon(reset, MAP_ICONS.fit, ui.common.fit);
   reset.addEventListener("click", () => {
     Object.assign(view, fitView);
     apply();
   });
-  root.appendChild(reset);
+
+  // One stack of round icon buttons, the phone's style, with zoom added: the
+  // desktop had "Expand" and "Fit" in words and no way to zoom but the wheel,
+  // which a trackpad without a scroll gesture does not have. The classes of
+  // Fit and Expand are kept — the phone app hides these and clicks them from
+  // its own controls (mobile/ui.ts phoneMapControls).
+  const controls = document.createElement("div");
+  controls.className = "trip-map-controls";
+  for (const [cls, icon, label, factor] of [
+    ["trip-map-zoom-in", MAP_ICONS.plus, ui.map.zoomIn, 1 / 1.8],
+    ["trip-map-zoom-out", MAP_ICONS.minus, ui.map.zoomOut, 1.8],
+  ] as const) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = cls;
+    setIcon(button, icon, label);
+    button.addEventListener("click", () => zoomBy(factor));
+    controls.appendChild(button);
+  }
+  controls.append(reset, expand);
+  root.appendChild(controls);
+  if (status) {
+    root.appendChild(status);
+    updateStatus();
+  }
 
 }
 
