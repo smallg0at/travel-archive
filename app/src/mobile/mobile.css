@@ -42,6 +42,20 @@ body.m {
 }
 body.m.m-locked { overflow: hidden; }
 
+/* Chrome is not text. A long press on a tab, a button or a heading row
+   selected its label, like a web page; an app's does nothing. What a reader
+   might want to copy — the words written about a day, a card, a photo — opts
+   back in below. */
+body.m {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+body.m :is(p:not(.m-note, .m-hint, .m-home-totals), blockquote, pre, dd, input, textarea) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 body.m button {
   font: inherit;
   color: inherit;
@@ -186,19 +200,24 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
 
 /* --- Banner, loading, sign-in -------------------------------------------- */
 
+/* A card floating just above the tabs, not a bar across the top: there it
+   covered each screen's title and the Home settings button, which are
+   exactly what the top of a phone screen is for. */
 .m .m-banner {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--tab-h) + var(--safe-bottom) + 10px);
   z-index: 40;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: calc(var(--safe-top) + 8px) var(--gutter) 8px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 14px;
   background: var(--accent);
   color: #fff;
   font-size: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .3);
 }
 .m .m-banner[hidden] { display: none; }
 .m .m-banner span { flex: 1; }
@@ -240,8 +259,62 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
 /* The map's own look is style.css's `.trip-map*`; only its height changes.
    380px (460px on the desktop home) is most of a phone screen, and the map
    is a way in, not the page. */
-.m .m-map { border-radius: var(--card-radius); overflow: hidden; }
-.m .m-map .trip-map-svg { height: 300px; }
+.m .m-map { position: relative; border-radius: var(--card-radius); overflow: hidden; }
+.m .m-map .trip-map-svg { height: 300px; display: block; }
+
+/* The map's own word buttons give way to round icon ones (phoneMapControls,
+   ui.ts). They were being drawn at body text size with no background, since
+   `body.m button` outranks style.css's `.trip-map-expand`. */
+.m .m-map .trip-map-expand, .m .m-map .trip-map-reset { display: none; }
+.m .m-map-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 8px;
+}
+body.m .m-map-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+  color: var(--text);
+}
+.m .m-map-btn svg { width: 20px; height: 20px; }
+.m .m-map-btn:active { background: var(--surface-hover); }
+body.m .m-map:not(.is-expanded) .m-map-close { display: none; }
+
+/* Expanded: the whole screen, edge to edge, over the tabs — not the
+   desktop's inset panel over a dimmed page. The controls move to where a
+   thumb and the safe areas want them: close top left, fit bottom right. */
+body.m .trip-map.m-map.is-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+body.m .trip-map.m-map.is-expanded .trip-map-svg { height: 100dvh; }
+body.m.map-expanded::after { display: none; }
+.m .m-map.is-expanded .m-map-controls {
+  bottom: calc(var(--safe-bottom) + 16px);
+  right: 16px;
+}
+body.m .m-map.is-expanded .m-map-expand { display: none; }
+.m .m-map.is-expanded .m-map-close {
+  display: grid;
+  position: fixed;
+  top: calc(var(--safe-top) + 10px);
+  left: 12px;
+}
+.m .m-map.is-expanded .m-map-btn { width: 44px; height: 44px; }
 .m .m-home-totals { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; }
 
 /* --- Chips ---------------------------------------------------------------- */
@@ -497,6 +570,10 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
 .m .m-transit > summary::after { margin-left: auto; color: var(--text-secondary); }
 .m .m-transit[open] { padding-bottom: 12px; }
 .m .m-transit .m-grid { padding: 0 12px; }
+/* Inside a rounded card, square photos read as unfinished. The day's own
+   grids stay square: they run edge to edge, where corners have nothing to
+   echo. */
+.m .m-transit .m-grid img { border-radius: 6px; }
 .m .m-transit-label { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 14px; }
 .m .m-transit-label svg { flex: none; width: 20px; height: 20px; color: var(--text-secondary); }
 .m .m-transit-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -773,6 +850,7 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
   color: var(--text);
   border-radius: 18px 18px 0 0;
   animation: m-rise .22s ease-out;
+  transition: transform .2s ease-out;
 }
 .m .m-viewer-sheet[hidden] { display: none; }
 .m .m-viewer-card { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }

@@ -3,8 +3,9 @@ import { loadFullPhoto, loadLarge, releaseFullPhoto } from "../graphPhoto";
 import { el } from "../photoUi";
 import { contentLanguage, loc } from "../contentLang";
 import { fmtDateTime, ui } from "../i18n";
-import { dismiss, openLayer } from "./overlay";
+import { dismiss, isTopLayer, openLayer } from "./overlay";
 import { ICONS } from "./ui";
+import { overrideSystemBars } from "./native";
 
 /**
  * The full-screen photo viewer.
@@ -165,6 +166,12 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   let lastTap = 0;
   let tapTimer: ReturnType<typeof setTimeout> | null = null;
   track.addEventListener("click", (event) => {
+    // With the info sheet up, the photo above it is the way out of it — the
+    // tap closes the sheet and does nothing else.
+    if (!sheet.hidden) {
+      void closeSheet();
+      return;
+    }
     const now = Date.now();
     if (now - lastTap < DOUBLE_TAP_MS) {
       if (tapTimer) clearTimeout(tapTimer);
@@ -266,19 +273,75 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     if (i === current) hd.hidden = true;
   });
 
-  root.querySelector(".m-viewer-info-btn")!.addEventListener("click", () => {
-    sheet.hidden = !sheet.hidden;
+  /* --- Info sheet ------------------------------------------------------ */
+
+  // A layer of its own over the viewer's, so Back takes the sheet off and
+  // leaves the photo. Four ways out: Back, a tap on the photo, a tap on the
+  // handle, or dragging it down.
+  const hideSheet = () => {
+    sheet.hidden = true;
+    sheet.style.transform = "";
+  };
+  const openSheet = () => {
+    sheet.hidden = false;
+    sheet.scrollTop = 0;
+    openLayer(hideSheet, { nested: true });
+  };
+  const closeSheet = () => (isTopLayer(hideSheet) ? dismiss() : Promise.resolve(hideSheet()));
+
+  root.querySelector(".m-viewer-info-btn")!.addEventListener("click", () => (sheet.hidden ? openSheet() : void closeSheet()));
+  sheet.querySelector(".m-sheet-handle")!.addEventListener("click", () => void closeSheet());
+
+  // Drag down to close — only from the top of the sheet's own scroll, so a
+  // long transcription still scrolls back up rather than closing.
+  let drag: { y: number; dy: number } | null = null;
+  sheet.addEventListener(
+    "touchstart",
+    (event) => {
+      drag = sheet.scrollTop <= 0 && event.touches.length === 1 ? { y: event.touches[0].clientY, dy: 0 } : null;
+    },
+    { passive: true },
+  );
+  sheet.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!drag) return;
+      drag.dy = event.touches[0].clientY - drag.y;
+      if (drag.dy <= 0) {
+        // Upward: the sheet's own scroll, not a drag.
+        sheet.style.transform = "";
+        drag = null;
+        return;
+      }
+      event.preventDefault();
+      sheet.style.transition = "none";
+      sheet.style.transform = `translateY(${drag.dy}px)`;
+    },
+    { passive: false },
+  );
+  sheet.addEventListener("touchend", () => {
+    if (!drag) return;
+    const far = drag.dy > Math.min(120, sheet.offsetHeight / 4);
+    drag = null;
+    sheet.style.transition = "";
+    if (far) void closeSheet();
+    else sheet.style.transform = "";
   });
-  sheet.querySelector(".m-sheet-handle")!.addEventListener("click", () => (sheet.hidden = true));
-  root.querySelector(".m-viewer-close")!.addEventListener("click", () => void dismiss());
+
+  root.querySelector(".m-viewer-close")!.addEventListener("click", async () => {
+    await closeSheet();
+    await dismiss();
+  });
 
   function close(): void {
     root.remove();
+    overrideSystemBars(null);
     document.body.classList.remove("m-locked");
     for (const url of fullUrls.values()) releaseFullPhoto(url);
   }
 
   document.body.appendChild(root);
+  overrideSystemBars("#000000");
   document.body.classList.add("m-locked");
   openLayer(close);
 

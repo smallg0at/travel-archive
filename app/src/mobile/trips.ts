@@ -6,10 +6,12 @@ import { ui } from "../i18n";
 import { go } from "./router";
 import { loadMonthKept } from "./cache";
 import { openDate } from "./day";
+import { dismiss } from "./overlay";
 import {
   archive,
   coverIds,
   note,
+  phoneMapControls,
   pageBar,
   paragraphs,
   photoCount,
@@ -84,8 +86,10 @@ async function fillMap(slot: HTMLElement, trip: TripRecord): Promise<void> {
   for (const shard of shards) if (shard) Object.assign(photos, shard.photos);
   const map = await renderTripMap(trip, photos, (anchor) => {
     // "stop-2026-08-19-s3": the day, then the stop.
+    // Picked from the full-screen map: close it first, so the day opens on a
+    // settled history rather than having the map's step popped under it.
     const match = /^stop-(\d{4}-\d{2}-\d{2})-(.+)$/.exec(anchor);
-    if (match) openDate(match[1], match[2]);
+    if (match) void dismiss().then(() => openDate(match[1], match[2]));
   });
   if (!slot.isConnected) return;
   if (!map) {
@@ -93,6 +97,7 @@ async function fillMap(slot: HTMLElement, trip: TripRecord): Promise<void> {
     return;
   }
   map.classList.add("m-map");
+  phoneMapControls(map);
   slot.replaceWith(map);
 }
 

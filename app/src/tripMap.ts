@@ -592,6 +592,16 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     y: ((Math.min(...ysAll) + Math.max(...ysAll)) / 2) * 1e5,
   };
   const home = { ...view };
+  /** The fit as first computed, before any container reshaped `home` (setExpanded). */
+  const fitted = { w: home.w, h: home.h };
+  /**
+   * Where Fit goes. The same as `home` until the container changes shape; then
+   * they part, since `home` is also the size reference for discs and labels
+   * and has to follow the container's height, while Fit follows the places.
+   */
+  const fitView = { ...view };
+  /** The places' own extent, padded the same way — what a refit must keep in view. */
+  const extent = { w: Math.max(spanX, 0.004) * (1 + pad * 2) * 1e5, h: Math.max(spanY, 0.004) * (1 + pad * 2) * 1e5 };
 
   // Everything drawn on top of the basemap — strokes, city discs, labels — is
   // sized as a fraction of the *fitted* view, then multiplied by how far you
@@ -750,11 +760,29 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     expand.textContent = on ? ui.common.close : ui.map.expand;
     // The container changes shape, so the fitted view has to be recomputed or
     // the map sits letterboxed inside its old aspect ratio.
+    //
+    // Recomputed to *contain* what was in view, not to keep its height. For a
+    // container wider than the view they are the same thing. For a narrower
+    // one — the phone's full-screen map, portrait, 0.47:1 against the fitted
+    // 1.9:1 — keeping the height cut the width to a quarter, so expanding, and
+    // Fit after it, showed a sliver of the middle of the map.
     requestAnimationFrame(() => {
       const box = canvas.getBoundingClientRect();
       if (box.height > 0) {
-        view.w = view.h * (box.width / box.height);
-        home.w = home.h * (box.width / box.height);
+        const shape = box.width / box.height;
+        const contain = (b: { w: number; h: number }) =>
+          shape >= b.w / b.h ? { w: b.h * shape, h: b.h } : { w: b.w, h: b.w / shape };
+        // The size reference: the original fit contained. Discs and labels
+        // scale by view.h / home.h, which this keeps at the size they were
+        // drawn in the smaller frame; MAX_SCALE counts from it too.
+        Object.assign(home, contain(fitted));
+        // Fit contains the places themselves rather than the 1.9:1 box drawn
+        // round them, which is padded for a landscape frame — in a portrait
+        // one it left them across 40% of the width. Never closer than the
+        // original fit, so a wide frame fits as it always did.
+        const fit = contain(extent);
+        Object.assign(fitView, fit.h < fitted.h ? { w: fitted.h * shape, h: fitted.h } : fit);
+        Object.assign(view, contain(view));
       }
       apply();
     });
@@ -775,7 +803,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   reset.className = "trip-map-reset";
   reset.textContent = ui.common.fit;
   reset.addEventListener("click", () => {
-    Object.assign(view, home);
+    Object.assign(view, fitView);
     apply();
   });
   root.appendChild(reset);

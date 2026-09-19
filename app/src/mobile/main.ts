@@ -1,5 +1,5 @@
 import { loadContentTranslations, loadIndex, SignInRequiredError } from "../archiveData";
-import { completeRedirect, signIn, signInRedirect } from "../msAuth";
+import { completeRedirect, getActiveAccount, signIn, signInRedirect } from "../msAuth";
 import { checkHealth } from "../backend";
 import { localServerSource, setThumbnailSource } from "../photoSource";
 import { restorePrefs } from "../prefs";
@@ -14,7 +14,7 @@ import { renderLibrary, renderMonth } from "./library";
 import { renderSearch, renderSettings } from "./more";
 import { ICONS, setArchive, spinner } from "./ui";
 import { currentEtag, keepIndex, keptIndex } from "./cache";
-import { initBackButton, isNative } from "./native";
+import { followThemeInSystemBars, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
 
 /** A popup where there can be one; the installed app always redirects — see signInRedirect. */
 const signInNow = (): Promise<unknown> => (isNative ? signInRedirect() : signIn());
@@ -168,6 +168,12 @@ async function start(): Promise<void> {
     await loadContentTranslations().catch(() => {});
     setArchive(kept.index);
     void revalidate(kept.etag);
+    // The kept copy opens without asking Microsoft anything, so a lost sign-in
+    // would otherwise show only as pictures that never arrive and a map that
+    // says there are no places. Say so up front.
+    void getActiveAccount().then((account) => {
+      if (!account) showSessionBanner();
+    });
   } else {
     screens.replaceChildren(el(`<div class="m-center"></div>`));
     screens.firstElementChild!.appendChild(spinner());
@@ -202,7 +208,9 @@ async function main(): Promise<void> {
   // index.html). Once the response is handled, be at the root again — a
   // cancelled sign-in lands on the sign-in screen, not on a leftover path.
   if (location.pathname.startsWith("/auth")) history.replaceState(null, "", "/");
+  keepSignInAcrossLaunches();
   initBackButton();
+  followThemeInSystemBars();
   window.addEventListener("signin-required", showSessionBanner);
 
   // In a browser, the same two questions the desktop asks first, together: is

@@ -2,6 +2,7 @@ package com.travelarchive.photos;
 
 import android.net.Uri;
 import android.os.Bundle;
+import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import com.getcapacitor.Bridge;
@@ -12,8 +13,28 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // The app's own plugins register before the bridge is built.
+        registerPlugin(SystemBarsPlugin.class);
         super.onCreate(savedInstanceState);
         bridge.setWebViewClient(new ReturnFromMicrosoft(bridge));
+        // A single-page app's refresh token lasts 24 hours. After that MSAL
+        // renews silently from a hidden iframe on login.microsoftonline.com,
+        // which only works if that frame can read Microsoft's own sign-in
+        // cookies — third-party ones here, under https://localhost, and
+        // Android's WebView refuses those by default. Without this the app
+        // would ask for a sign-in every day.
+        CookieManager.getInstance().setAcceptThirdPartyCookies(bridge.getWebView(), true);
+    }
+
+    /**
+     * Writes cookies to disk while the app can still be killed cleanly. The
+     * WebView otherwise flushes on a timer, and the key that unlocks the kept
+     * sign-in lives in one (keepSignInAcrossLaunches, src/mobile/native.ts).
+     */
+    @Override
+    public void onPause() {
+        super.onPause();
+        CookieManager.getInstance().flush();
     }
 
     /**

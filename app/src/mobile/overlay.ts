@@ -9,6 +9,10 @@
  *
  * Closing from a button goes through history too, via `dismiss`, so the entry
  * is consumed rather than left behind for the next Back to find.
+ *
+ * Layers stack only when asked to (`nested`): the viewer's info sheet sits on
+ * the viewer, and Back should take off the sheet and leave the photo. Any
+ * other layer replaces what is open, without a history step.
  */
 
 interface Layer {
@@ -16,26 +20,27 @@ interface Layer {
   closed?: () => void;
 }
 
-let active: Layer | null = null;
+const stack: Layer[] = [];
 
 window.addEventListener("popstate", () => {
-  if (!active) return;
-  const layer = active;
-  active = null;
+  const layer = stack.pop();
+  if (!layer) return;
   layer.close();
   layer.closed?.();
 });
 
-/** Registers an open layer. One at a time: opening a second closes the first without a history step. */
-export function openLayer(close: () => void): void {
-  if (active) {
-    active.close();
-    active = null;
+/** Registers an open layer, on top of the open one when `nested`, else in its place. */
+export function openLayer(close: () => void, opts: { nested?: boolean } = {}): void {
+  if (stack.length && !opts.nested) {
+    // Replacing: close everything open and reuse the top entry. (Nothing opens
+    // a layer over a nested one today; if something did, the entry under it
+    // would cost one Back that visibly does nothing.)
+    for (const layer of stack.splice(0).reverse()) layer.close();
     history.replaceState({ mLayer: true }, "");
   } else {
     history.pushState({ mLayer: true }, "");
   }
-  active = { close };
+  stack.push({ close });
 }
 
 /**
@@ -44,14 +49,19 @@ export function openLayer(close: () => void): void {
  * the pop and have its own navigation undone.
  */
 export function dismiss(): Promise<void> {
-  if (!active) return Promise.resolve();
-  const layer = active;
+  const layer = stack.at(-1);
+  if (!layer) return Promise.resolve();
   return new Promise((resolve) => {
     layer.closed = resolve;
     history.back();
   });
 }
 
+/** Whether `close` belongs to the layer on top — for a layer that can also be closed from outside. */
+export function isTopLayer(close: () => void): boolean {
+  return stack.at(-1)?.close === close;
+}
+
 export function layerOpen(): boolean {
-  return active !== null;
+  return stack.length > 0;
 }

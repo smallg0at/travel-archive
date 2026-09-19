@@ -8,7 +8,7 @@ import { dismiss, openLayer } from "./overlay";
 import { go, switchTab } from "./router";
 import { openDate } from "./day";
 import { tripCard } from "./trips";
-import { archive, coverIds, ICONS, note, screen, sectionFor, shortDate, thumb, trips } from "./ui";
+import { archive, coverIds, ICONS, note, phoneMapControls, screen, sectionFor, shortDate, thumb, trips } from "./ui";
 
 /**
  * The phone's front page. The desktop's home (src/home.ts) asks the same two
@@ -110,8 +110,10 @@ async function fillMap(section: HTMLElement): Promise<void> {
   const totals = section.querySelector<HTMLElement>(".m-home-totals")!;
   const slot = section.querySelector<HTMLElement>(".m-home-map")!;
   if (!home?.places.length) {
-    totals.textContent = ui.home.noMap;
-    slot.remove();
+    // Not the desktop's "run a scan" (ui.home.noMap): nothing on a phone can
+    // run one, and null here is as often "could not load" — signed out,
+    // offline — as "nothing placed". The rest of the page stands on its own.
+    section.remove();
     return;
   }
   totals.textContent = ui.home.totals(home.totals.placed, home.places.length, home.totals.countries);
@@ -132,6 +134,7 @@ async function fillMap(section: HTMLElement): Promise<void> {
     zoomOut: "world",
     onPick: (i) => placeSheet(ordered[i]),
   });
+  phoneMapControls(slot);
 }
 
 export function renderHome(): HTMLElement {
