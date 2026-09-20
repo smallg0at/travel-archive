@@ -242,11 +242,13 @@ html.desktop-shell .sidebar-header {
   height: 16px;
   flex-shrink: 0;
   border-radius: 3.5px;
+  pointer-events: none;
 }
 .sidebar-header-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 /* Main column top header (visible when sidebar is collapsed or narrow) */
@@ -272,6 +274,7 @@ html.desktop-shell .main-header {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 html.desktop-shell #sidebar {
@@ -289,8 +292,14 @@ html.desktop-shell a,
 html.desktop-shell input {
   -webkit-app-region: no-drag;
 }
-html.desktop-shell .sidebar-header {
+html.desktop-shell .sidebar-header,
+html.desktop-shell .sidebar-header-title,
+html.desktop-shell .main-header,
+html.desktop-shell .main-header-title {
   -webkit-app-region: drag;
+}
+html.desktop-shell .nav-toggle-btn {
+  -webkit-app-region: no-drag;
 }
 
 /* A grab strip rather than a 1px border: a hairline target is unhittable, so
