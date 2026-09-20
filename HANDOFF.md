@@ -133,6 +133,18 @@ introduce and the reason it cannot. Every URL carries the expected size and the
 plugin re-checks it before serving, so an edit made after the library was
 listed is refused; a refusal falls back to OneDrive rather than showing a gap.
 
+**Building the phone app: `dist`, then `dist-mobile`, are two different
+builds.** The Android `webDir` is `dist-mobile`, filled only by
+`build:mobile`. `npm run --workspace app build` fills `dist`, including a phone
+page at `/mobile/` — that one is what the desktop shell serves and what a
+browser preview shows, and it never reaches the APK. Build `dist`, run `cap
+copy`, and the APK silently ships whatever `dist-mobile` held last: it
+installs, launches and looks fine while running old code. Verified against
+this on 2026-09-20 by comparing `mobile-*.css` between `app/dist-mobile/assets`
+and `app/android/app/src/main/assets/public/assets`, and against the
+stylesheet the running app reports. Prefer `npm run --workspace app
+android:apk`, which starts from `build:mobile`.
+
 **The phone keeps its own sign-in.** msal-browser encrypts the tokens it keeps
 in `localStorage` with a key held in a *session* cookie, and an Android WebView
 ends that session whenever the process dies — an update, a swipe away, Android
@@ -147,8 +159,16 @@ it, so a process that ends without pausing — a crash, a "force stop", an
 install over the top — takes the key with it. Measured on the emulator: a probe
 cookie written exactly the way the key is written was gone after `am
 force-stop`, and the app came back with the key regenerated and `localStorage`
-down to `msal.version`, showing "Your Microsoft session has expired". With the
-flush, the same kill leaves the key unchanged. Third-party cookies are enabled in `MainActivity` for the same
+down to `msal.version`, showing "Your Microsoft session has expired".
+
+**The flush itself is not yet verified on a device.** The emulator run that
+appeared to confirm it was worthless: the APK under test carried a stale web
+bundle (see "Building the phone app" below), so the flush code was not in it,
+and the key most likely survived that kill because the WebView's own timer had
+already written it during the seconds the app sat idle. The test that would
+settle it is a cookie written and flushed through the plugin and then a kill
+within a second or so, which is shorter than any timer. Until someone runs it,
+treat the fix as reasoned and shipped, not as measured. Third-party cookies are enabled in `MainActivity` for the same
 reason: MSAL renews silently through a hidden Microsoft iframe once the SPA
 refresh token's 24 hours are up.
 

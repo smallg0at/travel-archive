@@ -776,11 +776,19 @@ body.m .m-map.is-expanded .m-map-expand { display: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   width: 100%;
   min-height: 52px;
+  /* Its own inset, like .m-month-row: .m-group is a plain rounded surface
+     with no padding of its own, so without this the text and the chevron sat
+     hard against the card's edges. */
+  padding: 9px 12px 9px 14px;
   text-align: left;
 }
-.m .m-list-row + .m-list-row { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
+/* Starting the rule where the text does, rather than at the card's edge, so a
+   run of rows reads as one list instead of a stack of slabs. */
+.m .m-list-row + .m-list-row { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); border-image: linear-gradient(90deg, transparent 14px, color-mix(in srgb, var(--border) 45%, transparent) 14px) 1; }
+.m .m-list-row:active { background: var(--surface-hover); }
 .m .m-list-row > span { display: flex; flex-direction: column; }
 .m .m-list-row small { color: var(--text-secondary); font-size: 13px; }
 @keyframes m-fade { from { opacity: 0; } }

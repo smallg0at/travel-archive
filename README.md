@@ -244,6 +244,26 @@ npm run --workspace app cap:sync       # build:mobile, then copy into android/
 npm run --workspace app android:apk    # ...then a debug APK -> app/android/app/build/outputs/apk/debug/
 ```
 
+**The APK is built from `dist-mobile`, and only `build:mobile` fills it.**
+`npm run --workspace app build` also builds a phone page — at `/mobile/` inside
+`dist`, which is what the desktop shell serves and what the browser preview
+shows — but the Android project's `webDir` is `dist-mobile`
+(`app/capacitor.config.ts`). Build the wrong one and `cap copy` cheerfully
+copies the last `dist-mobile` there was: the APK installs, runs, and shows the
+old app, with no error anywhere. It cost an afternoon here — a CSS fix that
+"did not work" and a sign-in fix that was never in the build being tested. The
+way to catch it is to compare the hashed file names, which are visible from
+both ends:
+
+```
+ls app/dist-mobile/assets | grep mobile-                  # what was just built
+ls app/android/app/src/main/assets/public/assets | grep mobile-   # what the APK will carry
+```
+
+They must match, and must match the `<link>` the running app reports. Using
+`cap:sync` or `android:apk` avoids the trap entirely, since both start with
+`build:mobile`.
+
 The quickest way to work on it is the desktop build at
 `http://localhost:17923/mobile/` with the browser's phone viewport: the local
 server is used when it answers, so it loads in milliseconds. The APK needs

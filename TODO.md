@@ -26,6 +26,20 @@ working practice this list was built with.
 
 ## Open issues
 
+- [ ] **Confirm the phone's sign-in now survives a hard kill.** Raised
+      2026-09-20 by the phone session. The key that unlocks MSAL's kept
+      tokens is a cookie, and a cookie written from the page lives in memory
+      until the WebView flushes it — measured: a probe cookie written exactly
+      that way was gone after `am force-stop`, which is why the app kept
+      coming back signed out. `CookiesPlugin` now flushes it the moment it is
+      written (ae5fbc6), but that build has not been tested: the emulator run
+      that appeared to confirm it was carrying a stale web bundle, so the
+      flush code was not in it, and the key probably survived on the
+      WebView's own timer. The test: write a cookie, flush it through
+      `Capacitor.Plugins.Cookies.flush()`, force-stop within a second or so,
+      relaunch and look for it. The owner's emulator went down before it ran.
+      Real proof is a sign-in on the phone that outlives an update.
+
 - [x] **长时间进行AI总结每日摘要时可能出现同步误报冲突问题 (False-positive sync conflict during long-running AI daily summary generation).**
       Raised 2026-09-20. When running batch AI summarization / organize jobs
       over extended periods (e.g. summarizing months of photo days), the client
