@@ -39,8 +39,8 @@ void ipcRenderer.invoke("get-system-accent").then((accent: string | null) => {
 });
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  printToPDF: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
-    ipcRenderer.invoke("print-to-pdf"),
+  printToPDF: (name?: string): Promise<{ ok: boolean; path?: string; error?: string }> =>
+    ipcRenderer.invoke("print-to-pdf", name),
   setTheme: (theme: "light" | "dark"): void =>
     ipcRenderer.send("set-theme", theme),
   getSystemAccent: (): Promise<string | null> =>

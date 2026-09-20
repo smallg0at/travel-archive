@@ -93,17 +93,32 @@ async function save(action: HTMLButtonElement, patch: () => Promise<void>): Prom
  * `name` is the trip's own name, not the translation on screen, since that is
  * what gets renamed.
  */
-export function addTripControls(header: HTMLElement, trip: TripRecord, name: string): void {
+export function addTripControls(header: HTMLElement, actions: HTMLElement, trip: TripRecord, name: string): void {
   if (!available) return;
 
-  const bar = el<HTMLDivElement>(`<div class="day-tools"></div>`);
-  const rename = button(ui.edit.renameTrip, "day-edit-open");
-  const remove = button(ui.edit.deleteTrip, "day-edit-open");
-  bar.append(rename, remove);
-  header.appendChild(bar);
+  const rename = el<HTMLButtonElement>(`
+    <button class="btn-action trip-rename-btn" type="button" title="${ui.edit.renameTrip}">
+      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+        <path fill="currentColor" d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793 3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+      </svg>
+      <span>${ui.edit.rename}</span>
+    </button>
+  `);
+
+  const remove = el<HTMLButtonElement>(`
+    <button class="btn-action btn-danger trip-delete-btn" type="button" title="${ui.edit.deleteTrip}">
+      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+        <path fill="currentColor" fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 0 0-1.5.12l.5 7.5a.75.75 0 0 0 1.5-.12l-.5-7.5zm4.34.12a.75.75 0 1 0-1.5-.12l-.5 7.5a.75.75 0 0 0 1.5-.12l.5-7.5z" clip-rule="evenodd"/>
+      </svg>
+      <span>${ui.edit.deleteTrip ?? "删除"}</span>
+    </button>
+  `);
+
+  actions.appendChild(rename);
+  actions.appendChild(remove);
 
   const panel = el<HTMLDivElement>(`
-    <div class="day-editor" hidden>
+    <div class="day-editor trip-editor" hidden>
       <label class="day-field">
         <span>${ui.edit.tripNameLabel}</span>
         <input type="text" class="trip-name-edit" />
@@ -133,10 +148,12 @@ export function addTripControls(header: HTMLElement, trip: TripRecord, name: str
   let armed: ReturnType<typeof setTimeout> | null = null;
   remove.addEventListener("click", async () => {
     if (!armed) {
-      remove.textContent = ui.edit.confirmDeleteTrip;
+      remove.classList.add("armed");
+      remove.querySelector("span")!.textContent = ui.edit.confirmDeleteTrip;
       armed = setTimeout(() => {
         armed = null;
-        remove.textContent = ui.edit.deleteTrip;
+        remove.classList.remove("armed");
+        remove.querySelector("span")!.textContent = ui.edit.deleteTrip ?? "删除";
       }, 5000);
       return;
     }

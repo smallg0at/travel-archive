@@ -78,13 +78,13 @@ const PX_PER_MM = PRINT_DPI / 25.4;
  * The printed size of one image, in mm, from the card it belongs to.
  *
  * These mirror the `@media print` block: content width 186mm, a two-track grid
- * with a 6mm gutter, and `.card-images` splitting its card's width evenly
+ * (six tracks: full 6, half 3, normal 2) with a 6mm gutter, and `.card-images` splitting its card's width evenly
  * between however many photos the card holds.
  */
 const CARD_SLOT_MM: Record<string, { w: number; h: number }> = {
   "card-full": { w: 186, h: 85 },
   "card-half": { w: 90, h: 52 },
-  "card-normal": { w: 90, h: 52 },
+  "card-normal": { w: 58, h: 34 },
 };
 
 function slotPxFor(img: HTMLImageElement): { w: number; h: number } | null {
@@ -253,7 +253,7 @@ function restore(swapped: Swapped[]): void {
   for (const { img, original } of swapped) img.src = original;
 }
 
-export async function printView(): Promise<void> {
+export async function printView(name?: string): Promise<void> {
   const images = exportableImages();
   const box = overlay();
 
@@ -282,7 +282,7 @@ export async function printView(): Promise<void> {
       // a PDF file, with no dialog and no header/footer band. Awaited, same
       // as window.print() below, so restore() below only runs once the page
       // has actually been captured.
-      const result = await window.electronAPI.printToPDF();
+      const result = await window.electronAPI.printToPDF(name);
       if (!result.ok && result.error !== "cancelled") {
         box.hidden = false;
         box.textContent = ui.print.exportFailed(result.error ?? ui.edit.unknownError);

@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ElectronAPI {
-  printToPDF?(): Promise<{ ok: boolean; path?: string; error?: string }>;
+  printToPDF?(name?: string): Promise<{ ok: boolean; path?: string; error?: string }>;
   setTheme?(theme: "light" | "dark"): void;
   getSystemAccent?(): Promise<string | null>;
   onSystemAccentChanged?(cb: (color: string) => void): void;

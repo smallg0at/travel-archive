@@ -147,11 +147,18 @@ export function renderDensityControl(): HTMLElement {
  * rendered. Living in the heading, it cannot exist before the content it
  * exports does, because this is called after the page is built.
  */
-function addExportButton(heading: HTMLElement): void {
+function addExportButton(container: HTMLElement): void {
   if (!canPrint()) return;
-  const button = el<HTMLButtonElement>(`<button class="page-export" type="button">${ui.nav.savePdf}</button>`);
+  const button = el<HTMLButtonElement>(`
+    <button class="btn-action btn-export page-export" type="button" title="${ui.nav.savePdf}">
+      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+        <path fill="currentColor" fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 0 0 3 3.5v13A1.5 1.5 0 0 0 4.5 18h11a1.5 1.5 0 0 0 1.5-1.5V7.621a1.5 1.5 0 0 0-.44-1.06l-4.12-4.122A1.5 1.5 0 0 0 11.378 2H4.5zm4.75 6.75a.75.75 0 0 1 1.5 0v4.19l1.22-1.22a.75.75 0 1 1 1.06 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.22 1.22V8.75z" clip-rule="evenodd"/>
+      </svg>
+      <span>${ui.nav.savePdf}</span>
+    </button>
+  `);
   button.addEventListener("click", () => void printView(pageTitle));
-  heading.appendChild(button);
+  container.appendChild(button);
 }
 
 /** A placeholder line. Text, not markup: it can carry a trip's model-written name. */
@@ -486,16 +493,22 @@ async function showTrip(trip: TripRecord): Promise<void> {
   const frag = document.createDocumentFragment();
   const header = el<HTMLDivElement>(`
     <div class="month-heading trip-heading">
-      <h1></h1>
-      <span></span>
+      <div class="heading-title-group">
+        <h1></h1>
+        <span class="heading-meta"></span>
+      </div>
+      <div class="heading-actions"></div>
     </div>
   `);
   header.querySelector("h1")!.textContent = loc(trip.name);
   const photoCount = trip.days.reduce((n, d) => n + d.photoIds.length, 0);
-  header.querySelector("span")!.textContent =
+  header.querySelector(".heading-meta")!.textContent =
     `${formatDayHeading(trip.startDate)} – ${formatDayHeading(trip.endDate)} · ${ui.common.days(trip.days.length)} · ${ui.common.photos(photoCount)}`;
   frag.appendChild(header);
-  addTripControls(header, trip, trip.name);
+  const actions = header.querySelector<HTMLDivElement>(".heading-actions")!;
+  addTripControls(header, actions, trip, trip.name);
+  addPinControl(actions, "trip", trip.id);
+  addExportButton(actions);
 
   if (trip.narrative) {
     const narrative = el<HTMLDivElement>(`<div class="trip-narrative"></div>`);
@@ -532,8 +545,6 @@ async function showTrip(trip: TripRecord): Promise<void> {
   }
 
   content.replaceChildren(withContents(frag, entries));
-  addPinControl(header, "trip", trip.id);
-  addExportButton(header);
   // Back where the reader was, when this render is a refresh of the same view.
   // After the heading's controls, not before: they can wrap the heading onto a
   // second line, and anything that grows above a restored offset is paid for
@@ -599,11 +610,22 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   );
 
   const frag = document.createDocumentFragment();
-  const heading = el<HTMLDivElement>(`<div class="month-heading"><h1></h1><span></span></div>`);
+  const heading = el<HTMLDivElement>(`
+    <div class="month-heading">
+      <div class="heading-title-group">
+        <h1></h1>
+        <span class="heading-meta"></span>
+      </div>
+      <div class="heading-actions"></div>
+    </div>
+  `);
   heading.querySelector("h1")!.textContent = label;
-  heading.querySelector("span")!.textContent =
+  heading.querySelector(".heading-meta")!.textContent =
     `${ui.common.photos(summary.photoCount)} · ${ui.common.days(ordered.length)}`;
   frag.appendChild(heading);
+  const actions = heading.querySelector<HTMLDivElement>(".heading-actions")!;
+  addPinControl(actions, "month", summary.month);
+  addExportButton(actions);
 
   const entries: ContentsEntry[] = [];
   for (const date of ordered) {
@@ -613,8 +635,6 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   }
 
   content.replaceChildren(withContents(frag, entries));
-  addPinControl(heading, "month", summary.month);
-  addExportButton(heading);
   // After the heading's controls — see showTrip.
   content.scrollTop = restoreScrollTop ?? 0;
   restoreScrollTop = null;
@@ -976,12 +996,12 @@ function navRow(
  * the phone reads the archive from OneDrive and caches in the browser, which is
  * a supported state rather than a failure.
  */
-function addPinControl(heading: HTMLElement, kind: "trip" | "month", id: string): void {
+function addPinControl(container: HTMLElement, kind: "trip" | "month", id: string): void {
   // An empty slot, placed synchronously so it holds its position in the flex
   // row while the server is asked. Without it the button would arrive after
   // "Save as PDF" and land on the wrong side of it.
   const slot = el<HTMLSpanElement>(`<span class="page-pin-slot"></span>`);
-  heading.appendChild(slot);
+  container.appendChild(slot);
 
   // `cached`, deliberately. Pins are local state — they live in sync.json — so
   // the eTag comparison the checked call makes is irrelevant to them, and it
@@ -989,11 +1009,21 @@ function addPinControl(heading: HTMLElement, kind: "trip" | "month", id: string)
   // and trip you open. Settings learned the same lesson the same way.
   void syncStatus({ cached: true }).then((status) => {
     if (!status) return;
-    const button = el<HTMLButtonElement>(`<button class="page-pin" type="button"></button>`);
+    const button = el<HTMLButtonElement>(`
+      <button class="btn-action btn-pin page-pin" type="button">
+        <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true" class="pin-icon"></svg>
+        <span class="pin-label"></span>
+      </button>
+    `);
     let pinned = status.pins.some((p) => p.kind === kind && p.id === id);
 
+    const cloudIcon = `<path fill="currentColor" fill-rule="evenodd" d="M5.5 17a4.5 4.5 0 0 1-1.44-8.765 4.5 4.5 0 0 1 8.302-3.046 3.5 3.5 0 0 1 4.504 4.272A4 4 0 0 1 15 17H5.5zm4.75-7.75a.75.75 0 0 0-1.5 0v3.19l-.72-.72a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l2-2a.75.75 0 1 0-1.06-1.06l-.72.72V9.25z" clip-rule="evenodd"/>`;
+    const checkIcon = `<path fill="currentColor" fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5z" clip-rule="evenodd"/>`;
+
     const paint = () => {
-      button.textContent = pinned ? ui.nav.kept : ui.nav.keep;
+      const labelText = (pinned ? ui.nav.kept : ui.nav.keep).replace(/^[☁▣]\s*/, "");
+      button.querySelector(".pin-label")!.textContent = labelText;
+      button.querySelector(".pin-icon")!.innerHTML = pinned ? checkIcon : cloudIcon;
       button.classList.toggle("pinned", pinned);
       button.title = pinned ? ui.nav.keptTitle : ui.nav.keepTitle;
     };

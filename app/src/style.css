@@ -657,55 +657,131 @@ html.desktop-shell .nav-year:hover {
 
 .month-heading {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 18px;
-  /* Wraps rather than overflowing once the title, the meta line and two
-     controls stop fitting — a narrow window drops the controls to their own
-     row instead of pushing them off the edge. */
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+  /* Wraps gracefully if title/meta and action toolbar need separate rows on narrow screens */
   flex-wrap: wrap;
 }
-/* Pushes the density control to the right of the month title/count. */
-.month-heading .density-control { margin-left: auto; }
 
-.density-control {
+.heading-title-group {
   display: flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  align-self: center;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.density-control button {
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 10px;
-  border: none;
-  border-radius: var(--radius-l);
-  background: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.density-control button:hover { background: var(--bg-muted); }
-.density-control button.active {
-  background: var(--bg-muted);
-  color: var(--text);
-  font-weight: 500;
-}
+
 .month-heading h1 {
   font-size: 20px;
   font-weight: 600;
+  line-height: 1.3;
   margin: 0;
-  /* The page title is the last thing that should be squeezed. Adding the pin
-     control beside "Save as PDF" left a long trip name wrapping mid-word while
-     the meta text beside it kept its width; the meta line is the one that can
-     afford to wrap. */
-  flex-shrink: 0;
+  color: var(--text);
+  word-break: break-word;
 }
+
+.heading-meta,
 .month-heading span {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* Common toolbar action button */
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-action svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.btn-action:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--border-hover, var(--border));
+}
+
+.btn-action:hover:not(:disabled) svg {
+  opacity: 1;
+}
+
+.btn-action:active:not(:disabled) {
+  background: var(--surface-active, var(--surface-hover));
+}
+
+.btn-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Pinned action state */
+.btn-action.btn-pin.pinned {
+  color: var(--accent);
+  background: var(--accent-subtle, rgba(0, 120, 212, 0.08));
+  border-color: var(--accent);
+}
+.btn-action.btn-pin.pinned svg {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* Danger action state (delete trip) */
+.btn-action.btn-danger:hover:not(:disabled) {
+  color: #d13438;
+  border-color: rgba(209, 52, 56, 0.4);
+  background: rgba(209, 52, 56, 0.08);
+}
+.btn-action.btn-danger:hover:not(:disabled) svg {
+  color: #d13438;
+}
+.btn-action.btn-danger.armed {
+  color: #ffffff !important;
+  background: #d13438 !important;
+  border-color: #d13438 !important;
+  animation: pulse-danger 0.3s ease;
+}
+.btn-action.btn-danger.armed svg {
+  color: #ffffff !important;
+  opacity: 1;
+}
+
+@keyframes pulse-danger {
+  0% { transform: scale(0.97); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.trip-editor {
+  margin-top: -10px;
+  margin-bottom: 20px;
 }
 
 .day-page {
@@ -2339,35 +2415,11 @@ html.desktop-shell #nav-tools {
 }
 .job-plan-row { margin: 0; }
 
-/* The pin control, moved out of the sidebar row into the page heading.
-
-   The empty slot is placed synchronously and carries the auto margin, so the
-   heading's right-hand group holds its position while the server is asked
-   whether this page is pinned. When a pin control is present it takes the auto
-   margin and the export button sits beside it rather than claiming its own. */
-.month-heading .page-pin-slot {
-  margin-left: auto;
-  display: flex;
+/* The pin control slot inside heading-actions holds its spot while sync status loads */
+.page-pin-slot {
+  display: inline-flex;
   align-items: center;
-  flex-shrink: 0;
 }
-.month-heading .page-pin-slot ~ .page-export { margin-left: 8px; }
-
-.page-pin {
-  font: inherit;
-  font-size: 11.5px;
-  padding: 4px 11px;
-  border-radius: var(--radius-l);
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
-  color: var(--text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-.page-pin:hover { border-color: var(--accent); color: var(--text); }
-.page-pin.pinned { color: var(--accent); border-color: var(--accent); }
-.page-pin:disabled { opacity: 0.6; cursor: default; }
 
 /* Generate is a page now, not a drawer across the bottom. A form is easier to
    read in a column than stretched over a 1,500px window. */
@@ -2809,6 +2861,8 @@ body.map-expanded::after {
   .edit-btn,
   .card-edit-btn,
   .edit-field-btn,
+  .heading-actions,
+  .btn-action,
   .page-export,
   .page-pin,
   .page-pin-slot {
