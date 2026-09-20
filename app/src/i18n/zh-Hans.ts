@@ -430,6 +430,7 @@ export const zhHans: Messages = {
     refresh: "刷新",
     offline: "处于离线状态——仅显示手机已保留的内容。",
     trips: "旅行",
+    daysOut: "当日往返",
     seeAll: "查看全部",
     noTrips: "暂无旅行记录。旅行行程需在桌面端应用中创建与设定。",
     tripMeta: (days: number, photos: number) => `${num(days)} 天 · ${num(photos)} 张照片`,

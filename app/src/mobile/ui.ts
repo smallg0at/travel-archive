@@ -1,5 +1,7 @@
-import type { ArchiveIndexFile, DayRecord, DaySegment, PhotoRecord, TripRecord } from "@travel-archive/shared";
+import type { ArchiveIndexFile, DayExcursion, DayRecord, DaySegment, PhotoRecord, TripRecord } from "@travel-archive/shared";
 import { el, lazyImg } from "../photoUi";
+import { loadHomeIndex } from "../archiveData";
+import { contentLanguage } from "../contentLang";
 import { fmtDate, ui } from "../i18n";
 import { back } from "./router";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
@@ -84,6 +86,34 @@ export function coverIds(day: DayRecord, n: number): string[] {
   }
   for (const id of day.photoIds) add(id);
   return out;
+}
+
+/* --- Days out ----------------------------------------------------------- */
+
+/**
+ * The days that left home and came back the same night (`home.json`,
+ * `excursions`). The counterpart to a trip: no nights away, no page of its
+ * own, but not an ordinary day in a month either.
+ *
+ * Three states, and the third matters. A file written by a server older than
+ * the field has no `excursions` at all, and that is **unknown**, not "there
+ * were none" — the desktop lost its days out that way when an older job server
+ * rewrote home.json. Unknown leaves every day looking ordinary, which is the
+ * safe way to be wrong; claiming a day out that no longer exists is not.
+ */
+let excursions: Map<string, DayExcursion> | null | undefined;
+
+export async function daysOut(): Promise<Map<string, DayExcursion> | null> {
+  if (excursions !== undefined) return excursions;
+  const home = await loadHomeIndex().catch(() => null);
+  // No file (offline, signed out) or an older one without the field: unknown.
+  excursions = home?.excursions ? new Map(home.excursions.map((e) => [e.date, e] as const)) : null;
+  return excursions;
+}
+
+/** Where a day out went, in the reader's language. */
+export function dayOutPlace(excursion: DayExcursion): string {
+  return (contentLanguage() === "zh-Hans" ? excursion.nameZh : excursion.nameEn) ?? excursion.name;
 }
 
 export function tripCoverId(trip: TripRecord): string | null {

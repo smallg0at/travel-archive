@@ -4,10 +4,10 @@ import { loadMonthKept } from "./cache";
 import { anchorFor } from "../tripMap";
 import { el, lazyImg } from "../photoUi";
 import { loc, locDay } from "../contentLang";
-import { ui } from "../i18n";
+import { num, ui } from "../i18n";
 import { go, replace } from "./router";
 import { cardContext, openViewer } from "./viewer";
-import { dateOf, ICONS, longDate, note, pageBar, screen, sectionFor, shortDate, spinner, timeRange, titleWhenPast } from "./ui";
+import { dateOf, dayOutPlace, daysOut, ICONS, longDate, note, pageBar, screen, sectionFor, shortDate, spinner, timeRange, titleWhenPast } from "./ui";
 
 /**
  * One day as a page: the phone's unit of reading.
@@ -229,9 +229,73 @@ async function fill(page: HTMLElement, date: string, stop: string | undefined, f
   const meta = page.querySelector<HTMLElement>(".m-day-meta")!;
   meta.textContent = [ui.common.photos(photos.length), day?.place ? loc(day.place) : null].filter(Boolean).join(" · ");
 
+  // A day out is headed like a trip rather than like a day in a month: where
+  // it went, in place of the date, with the date demoted to the line below.
+  // The desktop settled on this (album.ts) after a version with a cover photo
+  // repeated the date and the count that were already in the header.
+  const excursion = (await daysOut())?.get(date);
+  if (excursion) {
+    page.classList.add("is-day-out");
+    const kicker = el<HTMLElement>(`<p class="m-kicker"></p>`);
+    kicker.textContent = ui.album.dayOut;
+    const heading = page.querySelector<HTMLElement>(".m-page-head h1")!;
+    heading.before(kicker);
+    heading.textContent = dayOutPlace(excursion);
+    meta.textContent = [longDate(date), ui.album.dayOutFar(num(excursion.awayKm)), ui.common.photos(photos.length)].join(" · ");
+    page.querySelector(".m-bar-sub")?.replaceChildren(document.createTextNode(dayOutPlace(excursion)));
+  }
+
+  /**
+   * How a written day out is shown: as a day with its stops and cards, or as
+   * the plain grid. A reading habit rather than a property of the day, so it
+   * is remembered across days and across the two apps — the desktop stores the
+   * same choice under the same key.
+   */
+  const MODE_KEY = "day-out-mode";
+  const written = Boolean(day?.segments?.length);
+  const readMode = (): "trip" | "gallery" => {
+    try {
+      return localStorage.getItem(MODE_KEY) === "gallery" ? "gallery" : "trip";
+    } catch {
+      return "trip";
+    }
+  };
+  let mode: "trip" | "gallery" = excursion && written ? readMode() : "trip";
+
+  if (excursion && written) {
+    const modes = el<HTMLElement>(`<nav class="m-seg"></nav>`);
+    modes.setAttribute("aria-label", ui.album.dayMode.label);
+    for (const value of ["trip", "gallery"] as const) {
+      const button = el<HTMLButtonElement>(`<button type="button" class="m-seg-btn"></button>`);
+      button.textContent = ui.album.dayMode[value];
+      button.classList.toggle("is-active", value === mode);
+      button.addEventListener("click", () => {
+        if (mode === value) return;
+        mode = value;
+        try {
+          localStorage.setItem(MODE_KEY, value);
+        } catch {
+          // Storage blocked: the choice still holds for this page.
+        }
+        for (const other of modes.querySelectorAll(".m-seg-btn")) other.classList.toggle("is-active", other === button);
+        drawBody();
+      });
+      modes.appendChild(button);
+    }
+    page.querySelector(".m-page-head")!.appendChild(modes);
+  }
+
+  function drawBody(): void {
+    body.replaceChildren();
+    fillBody();
+    const [prev, next] = neighbours(date, found?.section ?? null, shard);
+    body.appendChild(dayNav(prev, next));
+  }
+
+  function fillBody(): void {
   if (!photos.length) {
     body.appendChild(note(ui.mobile.noPhotos));
-  } else if (day?.segments?.length) {
+  } else if (day?.segments?.length && mode === "trip") {
     // The stops as a row of chips under the heading: a day of eight places is
     // long on a phone, and this is the contents list the desktop keeps beside it.
     const places = day.segments.filter((s) => s.kind === "place");
@@ -260,9 +324,9 @@ async function fill(page: HTMLElement, date: string, stop: string | undefined, f
   } else {
     body.appendChild(lazyGrid(photos));
   }
+  }
 
-  const [prev, next] = neighbours(date, found?.section ?? null, shard);
-  body.appendChild(dayNav(prev, next));
+  drawBody();
 
   if (trip) {
     const position = trip.days.findIndex((d) => d.date === date);

@@ -2,7 +2,7 @@ import type { PhotoRecord, TripRecord } from "@travel-archive/shared";
 import { renderTripMap } from "../tripMap";
 import { el } from "../photoUi";
 import { loc, locDay } from "../contentLang";
-import { ui } from "../i18n";
+import { num, ui } from "../i18n";
 import { go } from "./router";
 import { loadMonthKept } from "./cache";
 import { openDate } from "./day";
@@ -10,6 +10,9 @@ import { dismiss } from "./overlay";
 import {
   archive,
   coverIds,
+  dayOutPlace,
+  daysOut,
+  ICONS,
   note,
   phoneMapControls,
   pageBar,
@@ -71,7 +74,40 @@ export function renderTrips(): HTMLElement {
   const grid = el<HTMLElement>(`<div class="m-trip-list"></div>`);
   for (const trip of list) grid.appendChild(tripCard(trip));
   page.appendChild(grid);
+  void fillDaysOut(page);
   return page;
+}
+
+/**
+ * Days out, under the trips: a day that left home and came back the same
+ * night is the counterpart to a trip, so this is where a reader looking for
+ * "where have we been" will find them. Rows rather than cards — there are 17
+ * of them, each is one day, and a card each would outweigh the trips above.
+ *
+ * Appended after the fact, because the list is in home.json rather than the
+ * index every screen already holds, and a tab must not wait on a fetch.
+ */
+async function fillDaysOut(page: HTMLElement): Promise<void> {
+  const out = await daysOut();
+  if (!out?.size || !page.isConnected) return;
+  const section = el<HTMLElement>(`<section class="m-section"><h2 class="m-section-title"></h2><div class="m-group"></div></section>`);
+  section.querySelector("h2")!.textContent = ui.mobile.daysOut;
+  const body = section.querySelector<HTMLElement>(".m-group")!;
+  for (const excursion of [...out.values()].sort((a, b) => b.date.localeCompare(a.date))) {
+    const row = el<HTMLButtonElement>(`
+      <button type="button" class="m-list-row">
+        <span><strong></strong><small></small></span>${ICONS.chevron}
+      </button>
+    `);
+    row.querySelector("strong")!.textContent = dayOutPlace(excursion);
+    // Date and distance only. `photoCount` counts the photos taken *away from
+    // home*, while the day's own page counts the day — 41 against 227 for the
+    // same York day — and two different numbers for one day read as a mistake.
+    row.querySelector("small")!.textContent = [`${shortDate(excursion.date)} ${excursion.date.slice(0, 4)}`, ui.album.dayOutFar(num(excursion.awayKm))].join(" · ");
+    row.addEventListener("click", () => openDate(excursion.date));
+    body.appendChild(row);
+  }
+  page.appendChild(section);
 }
 
 /**

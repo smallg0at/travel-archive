@@ -138,6 +138,38 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
 .m .m-icon-btn:active { background: var(--surface-hover); }
 .m .m-icon-btn svg { width: 24px; height: 24px; }
 
+/* A day out is headed like a trip: where it went, over the date. The kicker
+   is what says which kind of page this is, since the heading is a place and
+   a place alone could be a month or a trip (day.ts). */
+.m .m-kicker {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* Trip or gallery, for a day out that was written about. Two words, so a
+   segmented control rather than a switch — it has to say what it switches
+   between. */
+.m .m-seg {
+  display: inline-flex;
+  margin-top: 12px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+}
+.m .m-seg-btn {
+  min-height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: background-color .15s, color .15s;
+}
+.m .m-seg-btn.is-active { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
+
 .m .m-page-head { padding: 6px var(--gutter) 10px; }
 .m .m-page-head h1 { font-size: 26px; font-weight: 700; line-height: 1.2; }
 .m .m-page-head p { margin-top: 4px; color: var(--text-secondary); font-size: 14px; }
