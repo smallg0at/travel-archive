@@ -6,7 +6,7 @@ written summary. The **the train 1** trip (2026-08-16 → 09-02, 18 days) is
 fully analyzed and cost **under £8**. Eight trips are now defined, most of them
 accepted from the suggestions the pipeline proposes.
 
-**21 open, 68 done.** The list grows because each session surfaces defects that
+**18 open, 71 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the phone
 app, the basemap's China worldview, and an editor agent on the desktop shell),
@@ -23,7 +23,7 @@ working practice this list was built with.
 
 ## Open issues
 
-- [ ] **长时间进行AI总结每日摘要时可能出现同步误报冲突问题 (False-positive sync conflict during long-running AI daily summary generation).**
+- [x] **长时间进行AI总结每日摘要时可能出现同步误报冲突问题 (False-positive sync conflict during long-running AI daily summary generation).**
       Raised 2026-09-20. When running batch AI summarization / organize jobs
       over extended periods (e.g. summarizing months of photo days), the client
       or sync check can trigger false-positive archive change / conflict notifications
@@ -38,6 +38,22 @@ working practice this list was built with.
         spurious refresh prompts are suppressed until the batch run completes cleanly.
       - Ensure mirror timestamps and ETag state stay consistent across prolonged
         Graph write sequences.
+
+      *Fixed 2026-09-20 (`a2fb78b`). The cause was the check judging this
+      server's own writes. Every `saveIndex` moves the remote eTag, and a long
+      organize now checkpoints every five written days, so a check landing
+      mid-run compares the replica against a remote it has just changed itself
+      — and inside the window between `markDirty` and `markSynced` it reports a
+      conflict against its own upload. The scheduled checks had always skipped a
+      running job; "Check now" and the page's own uncached request did not.
+      `checkSync` now returns the last measured answer while a job holds the
+      archive, with `checkedAt` saying how old it is.*
+
+      *What remains is not this: the phone's "archive has changed" banner
+      (`mobile/main.ts`) is its own mechanism — it revalidates its kept
+      index.json by eTag on launch — and a checkpointing run does legitimately
+      change that file several times. The phone session has been told; whether
+      to suppress it while `/health` reports a running job is its call.*
 
 - [x] **Day summaries only where they earn their cost.** Owner's rule,
       2026-09-11: a day outside any trip is summarized only when it holds
@@ -1536,13 +1552,32 @@ started from the app is refused while a CLI writer holds the archive lock —
       written with zlib and no image dependency.
 - [ ] No code signing and no auto-update. Windows will show a SmartScreen
       warning on first run of an unsigned installer.
-- [ ] The static server reuses whatever already owns its port, but that path
+- [x] The static server reuses whatever already owns its port, but that path
       was only reasoned about, not exercised. Much less likely to matter now
       that the shell has a dedicated port; the single-instance lock covers the
-      realistic case.
-- [ ] Renderer shows Electron's "insecure resources / no CSP" warnings. Benign
+      realistic case. *Exercised and tightened 2026-09-20 (`a2fb78b`). It was
+      adopted on trust, so an unrelated service on that port would have been
+      shown to the owner as their archive. `serveApp` now asks the port for the
+      page and adopts it only when this app answers; anything else raises a
+      dialog naming what is there and the shell stops. Four paths tested
+      against a scratch build: a free port (serves), this app (adopts), a
+      stranger's HTTP server (reports "HTTP 200 text/plain"), and a socket that
+      accepts and never answers (reports the timeout).*
+- [x] Renderer shows Electron's "insecure resources / no CSP" warnings. Benign
       over loopback HTTP, and they disappear once packaged, but a CSP would be
-      better than living with them.
+      better than living with them. *Done 2026-09-20 (`a2fb78b`): the static
+      server sends one with every response. Inline script is allowed, because
+      both pages bootstrap the theme from an inline block before the
+      stylesheets paint, but `unsafe-eval` is not — which is the part Electron
+      actually warns about. `img-src` allows `https:` for whichever OneDrive
+      CDN host Graph hands out, `connect-src` is Graph, the sign-in host and
+      loopback, and `frame-src` is the sign-in host alone so MSAL can still
+      renew tokens in its hidden iframe. Verified against a scratch server on
+      another port: the app's own scripts and styles load with no violation,
+      a Graph fetch reaches 401 rather than being blocked, the MSAL iframe and
+      https/blob images load, and a fetch to an unlisted host is blocked —
+      which is also the proof the policy is being enforced. **Not exercised:
+      signing in end to end, which needs credentials.**
 
 ### Packaging (2026-09-06)
 
