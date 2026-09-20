@@ -1,13 +1,20 @@
 # TODO
 
-State as of **2026-09-09**. The **the train 1** trip (2026-08-16 → 09-02, 18
-days) is fully analyzed: 4,181 photos captioned, 28 days summarized, trip
-narrative written, map rendering. That run cost **under £8**.
+State as of **2026-09-20**. The library is 31,741 photos over 123 months;
+28,883 are captioned after the whole-library batch, and **30 days** have a
+written summary. The **the train 1** trip (2026-08-16 → 09-02, 18 days) is
+fully analyzed and cost **under £8**. Eight trips are now defined, most of them
+accepted from the suggestions the pipeline proposes.
 
-**14 open, 58 done.** The list grows because each session surfaces defects that
+**21 open, 68 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
-rather than by planning. The cluster with real user-visible value still in it is
-captions and summarizers, and it has now been deferred three times.
+rather than by planning. Four sessions work on this at once (this one, the phone
+app, the basemap's China worldview, and an editor agent on the desktop shell),
+so entries name the commit that closed them.
+
+The cluster with real user-visible value still in it is day summaries: 289 days
+are captioned and unwritten, at roughly $13 for all of them or $7 for the trip
+days alone.
 
 Open items are listed first in each section; fixes are kept below them
 (collapsed under "Resolved") for the measurement detail they record — see
@@ -959,12 +966,19 @@ working practice this list was built with.
       51ms → 10ms (path elements built once and re-attached; rivers only below
       a 60° view). On a 375px screen discs hold ~12px and a pinch reveals the
       rest; whether that is a good enough touch target is the mobile work's call.
-- [ ] Day places are still the old Nominatim strings. `npm run places` rewrote
+- [x] Day places are still the old Nominatim strings. `npm run places` rewrote
       the photo shards, but `DayRecord.place` in `index.json` is written by
       organize, so the home page's "on this day" still shows "城区, 中国" and
       "City of Westminster, United Kingdom". Fixed by the next organize, which
       is a paid run (305 stale days as of 2026-09-18) — so it waits for a
       decision rather than being triggered quietly.
+      *Closed 2026-09-20 without paying for one (`ae9b587`). `npm run
+      --workspace pipeline dayplaces` copies each day's current dominant place
+      onto the day record: 939 days, 海淀区 → 城市, 招远市 → 玲珑, 沈河区 →
+      沈阳, none left without a place. It writes no summary and calls no model,
+      so a day whose prose names the old place still names it — that half is a
+      rewrite, at the owner's choosing. The same pass also stopped organize
+      offering those 939 days as stale.*
 - [x] **Mobile view: design needs rethinking.** Done 2026-09-19 as a phone app
       of its own rather than the desktop squeezed: `app/src/mobile/`, packaged
       for Android with Capacitor in `app/android/`. Reach is solved by
@@ -976,11 +990,12 @@ working practice this list was built with.
 - [ ] **[Owner] Register `https://localhost/auth/`** as a Single-page
       application redirect URI in Azure. Until then the Android app cannot
       sign in — Microsoft will answer AADSTS50011.
-- [ ] **First run on a real phone.** Unverified: sign-in in the WebView end to
-      end; the status-bar area on Android 15 (`adjustMarginsForEdgeToEdge:
-      "auto"`) in both themes; pinch zoom in the viewer (built with touch
-      events, exercised only as far as desktop emulation allows); the back
-      button.
+- [x] **First run on a real phone.** Done 2026-09-19/20 by the phone session
+      (`6e75411` and after): it runs signed in on a Xiaomi device and on the
+      Medium_Phone emulator. Known residual, recorded there rather than here:
+      msal-browser 5 keeps its token key in a *session* cookie, which a WebView
+      drops when its process is killed, so a cold start can ask for sign-in
+      again.
 - [ ] **Confirm `appId` `com.travelarchive.photos`** before installing it
       anywhere that matters — changing it later makes it a different app.
 - [x] **Launcher icon and splash.** Done 2026-09-19: a route mark, ring to dot,
@@ -995,6 +1010,95 @@ working practice this list was built with.
       kept month shows its captions untranslated: the Chinese caption files are
       not kept.
 - [ ] iOS is not added — it needs a Mac with Xcode.
+
+- [x] **Trips proposed instead of typed.** Done 2026-09-20 (`978b86a`,
+      `b49ed7c`, `7603e57`). The owner's words were "I am obviously lazy to
+      manually fill everything": every trip meant two dates and a name, looked
+      up by scrolling the album. Generate's Trip tab now lists ranges the server
+      proposes, each with an editable name and three answers — **Create** (a
+      trip with no story: free, instant, and refuses to overlap an existing one,
+      so a stale suggestion can never delete a trip named by hand), **Write its
+      story** (fills the form above), **Not a trip** (remembered in
+      `data/trip-suggestions-dismissed.json`).
+
+      Detecting trips from GPS had been tried and dropped once, because no
+      threshold separated a trip's first day (105km from home) from an ordinary
+      day out (87km). This measures **nights**, not distances: a day out ends at
+      home however far it went, a trip does not, and where "home" is comes from
+      the place with nights in the most distinct weeks within four months either
+      side — so it followed the owner's move from Beijing to the capital with nothing
+      to configure. It reproduces both hand-made trips exactly and proposes 30
+      more; the owner has accepted six of them.
+
+      Two corrections, both from the owner's own data:
+      - An evening 200km from home says where the camera was at six, not where
+        its owner slept. The **next morning** decides now, which turned York,
+        a city, a town, Maidstone, Tonbridge, New Alresford and Saint Peters
+        from bogus one-night trips into days out.
+      - A run used to bridge a day with no photos on evenings alone: the Essex
+        coast (24-27 June) ran on through 29 June, which *began* 3km from home,
+        and swallowed a separate Milton Keynes overnight. A morning at home now
+        ends a trip. **Trips accepted before this may run a day or two long.**
+
+- [x] **A day out, and a written day, are visible in their month.** Done
+      2026-09-20 (`f582f7e`, `847d26c`). Two things a month could not show.
+      Thirty days in two thousand have a summary and nothing marked which: they
+      now carry an accent dot on the date and a rule down the text, in the page
+      and in the contents bar.
+
+      And a day that went somewhere and came home the same night — 17 of them
+      here, York at 366km down to a town at 41km — was just another heading
+      over a grid. They are found beside the trip suggestions, from the same
+      pass over the same shards (`findExcursions`), and ride in `home.json` as
+      `excursions`, so the phone gets them for free. Each is headed like a small
+      trip: "Day out", the place in trip-page type, then date · distance ·
+      photos. The first version put a cover photo beside text that repeated the
+      heading below it; the owner's word for it was "sus".
+
+      A day out that has been summarized carries a **Trip / Gallery** switch —
+      the written page with its stops and placards, or the plain grid — with the
+      choice remembered, since it is a reading habit rather than a property of
+      one day.
+
+- [x] **Organize survives a model outage.** Fixed 2026-09-20 (`fd22382`,
+      `12e03df`). Gemini answered 503 on the ninth day of a run; the provider
+      retried five times, gave up, and the whole job failed. Because the index
+      was written only at the end, the eight summaries already paid for were
+      lost. Now a day the model will not write keeps whatever text it had and
+      stays stale, three failures in a row stop the run, and the index is
+      checkpointed every five written days. Separately, a job record is written
+      when a job *starts* and any left "running" by a dead process is settled on
+      the next launch — a run killed by the desktop app restarting under an
+      editor's changes used to vanish with no trace at all.
+
+- [x] **The phone shows its own photographs.** Done 2026-09-20 by the phone
+      session (`979ade8`, `00c60cc`): 24,110 of 31,721 photos, 79GB, served from
+      the device instead of OneDrive, matched on file name *and* exact byte size
+      (1,898 names have an archived copy at a different encoding, so either
+      alone would show a different picture from the one the archive describes).
+      The size is re-read at serve time and a mismatch falls back to OneDrive.
+
+- [ ] **A trip's dates cannot be edited.** Rename and delete exist; the range
+      does not. It matters now that trips are accepted from suggestions: the
+      ones taken before the two night-rule corrections above may include a day
+      or two spent at home, and the only way to fix one is to delete it and
+      create it again.
+
+- [ ] **An old job server silently strips new fields from `home.json`.** Seen
+      2026-09-20: the desktop app's server was the build from before
+      `excursions` existed, and its next write of the map index dropped the
+      field — the days out disappeared from the album with nothing to say why.
+      Schema drift between a running server and the app it serves is a class of
+      bug, not one instance; a version on the file that the reader can compare
+      would at least make it legible.
+
+- [ ] **289 days are captioned but unwritten.** Measured 2026-09-20 from the 30
+      days already written (~40 input and ~36 output tokens a photo, thinking at
+      1.47× output, taken from the real caption batch): about **$13** for all of
+      them, **$6.90** for the days inside a trip. Batch pricing halves both.
+      Building batch submission for day summaries was judged not worth it — the
+      saving is one-off and smaller than the work, and days stay written once
+      written.
 
 ### Resolved
 
