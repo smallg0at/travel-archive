@@ -1,4 +1,4 @@
-import { loadContentTranslations, loadIndex, SignInRequiredError } from "../archiveData";
+import { loadIndex, SignInRequiredError } from "../archiveData";
 import { completeRedirect, getActiveAccount, signIn, signInRedirect } from "../msAuth";
 import { checkHealth } from "../backend";
 import { localServerSource, setThumbnailSource } from "../photoSource";
@@ -13,7 +13,7 @@ import { renderDay } from "./day";
 import { renderLibrary, renderMonth } from "./library";
 import { renderSearch, renderSettings } from "./more";
 import { ICONS, setArchive, spinner } from "./ui";
-import { currentEtag, keepIndex, keptIndex } from "./cache";
+import { applyTranslationsKept, currentEtag, keepIndex, keptIndex } from "./cache";
 import { followThemeInSystemBars, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
 import { initDevicePhotos } from "./devicePhotos";
 
@@ -166,7 +166,7 @@ async function start(): Promise<void> {
   if (kept) {
     // Open on the kept copy — see cache.ts. The translations are small and
     // still fetched, so a Chinese reader's first screen is in Chinese.
-    await loadContentTranslations().catch(() => {});
+    await applyTranslationsKept().catch(() => {});
     setArchive(kept.index);
     void revalidate(kept.etag);
     // The kept copy opens without asking Microsoft anything, so a lost sign-in
@@ -181,7 +181,7 @@ async function start(): Promise<void> {
     try {
       // The eTag alongside, not after: it is what the next launch compares
       // against, and asking once the index has landed would add a round trip.
-      const [index, , etag] = await Promise.all([loadIndex(), loadContentTranslations(), currentEtag()]);
+      const [index, , etag] = await Promise.all([loadIndex(), applyTranslationsKept(), currentEtag()]);
       setArchive(index);
       void keepIndex(index, etag);
     } catch (err) {

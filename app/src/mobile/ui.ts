@@ -1,10 +1,11 @@
 import type { ArchiveIndexFile, DayExcursion, DayRecord, DaySegment, PhotoRecord, TripRecord } from "@travel-archive/shared";
 import { el, lazyImg } from "../photoUi";
-import { loadHomeIndex } from "../archiveData";
+
 import { contentLanguage } from "../contentLang";
 import { fmtDate, ui } from "../i18n";
 import { back } from "./router";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
+import { loadHomeKept } from "./cache";
 
 /* --- The archive, held for the session ---------------------------------- */
 
@@ -105,7 +106,7 @@ let excursions: Map<string, DayExcursion> | null | undefined;
 
 export async function daysOut(): Promise<Map<string, DayExcursion> | null> {
   if (excursions !== undefined) return excursions;
-  const home = await loadHomeIndex().catch(() => null);
+  const home = await loadHomeKept().catch(() => null);
   // No file (offline, signed out) or an older one without the field: unknown.
   excursions = home?.excursions ? new Map(home.excursions.map((e) => [e.date, e] as const)) : null;
   return excursions;

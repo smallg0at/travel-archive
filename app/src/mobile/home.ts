@@ -1,5 +1,5 @@
 import type { DayRecord, HomePlace } from "@travel-archive/shared";
-import { loadHomeIndex } from "../archiveData";
+
 import { drawPlaceMap, loadBasemap } from "../tripMap";
 import { homeMapOptions, homeMapPoints } from "../homeMap";
 import { el } from "../photoUi";
@@ -9,6 +9,7 @@ import { dismiss, openLayer } from "./overlay";
 import { go, switchTab } from "./router";
 import { openDate } from "./day";
 import { tripCard } from "./trips";
+import { loadHomeKept } from "./cache";
 import { archive, coverIds, ICONS, leave, note, phoneMapControls, screen, sectionFor, shortDate, thumb, trips } from "./ui";
 
 /**
@@ -107,7 +108,7 @@ function placeSheet(place: HomePlace): void {
 }
 
 async function fillMap(section: HTMLElement): Promise<void> {
-  const home = await loadHomeIndex();
+  const home = await loadHomeKept();
   const totals = section.querySelector<HTMLElement>(".m-home-totals")!;
   const slot = section.querySelector<HTMLElement>(".m-home-map")!;
   if (!home?.places.length) {

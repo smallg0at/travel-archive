@@ -1,8 +1,9 @@
-import type { ArchiveIndexFile, PhotoShard } from "@travel-archive/shared";
-import { loadMonth } from "../archiveData";
+import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, TranslationFile } from "@travel-archive/shared";
+import { loadHomeIndex, loadMonth } from "../archiveData";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "../msAuth";
 import { rememberPhotos } from "./devicePhotos";
+import { contentLanguage, useIndexTranslations } from "../contentLang";
 
 /**
  * The index, kept on the phone between launches.
@@ -134,4 +135,68 @@ export async function loadMonthKept(month: string): Promise<PhotoShard> {
     }
     throw err;
   }
+}
+
+/* --- The home index, and the reader's language -------------------------- */
+
+/**
+ * One metadata file from OneDrive, or null when it cannot be had. The same
+ * request `currentEtag` makes, without archiveData's retries: these two
+ * callers already fall back to a kept copy, so a retry would only make a
+ * phone with no signal wait longer for the same answer.
+ */
+async function graphJson<T>(fileName: string): Promise<T | null> {
+  const token = await getAccessToken();
+  const path = encodeURI(`${METADATA_FOLDER}/${fileName}`);
+  const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.ok ? ((await res.json()) as T) : null;
+}
+
+/**
+ * home.json, kept between launches like the shards are.
+ *
+ * The home page's map is drawn from its places, and the days out under the
+ * trips from its excursions, so with no network the phone lost both: the map
+ * section removed itself, because null there reads the same as "nothing has
+ * been placed". The basemap behind it is bundled in the app, so the only
+ * thing missing offline was this file.
+ *
+ * Network first, like a shard: it is ~100KB and changes whenever the library
+ * is organized, so there is nothing to gain from serving a kept copy while
+ * online.
+ */
+export async function loadHomeKept(): Promise<HomeIndexFile | null> {
+  const key = "home.json";
+  const home = await loadHomeIndex().catch(() => null);
+  if (home) {
+    void run("readwrite", (s) => s.put(home, key)).catch(() => {});
+    return home;
+  }
+  return (await run<HomeIndexFile | undefined>("readonly", (s) => s.get(key)).catch(() => undefined)) ?? null;
+}
+
+/**
+ * The reader's language for the archive's own words — trip names, places, day
+ * summaries — applied from the copy kept last time when OneDrive cannot be
+ * reached.
+ *
+ * Without this, a phone opening offline read half in Chinese: the interface
+ * is compiled into the app and the archive's text is not, so the buttons
+ * translated and the trips did not. Month captions still need the network
+ * (see `loadMonthKept`); this is the index, which is what every list, heading
+ * and card is drawn from.
+ */
+export async function applyTranslationsKept(): Promise<void> {
+  const lang = contentLanguage();
+  if (lang === "en") {
+    useIndexTranslations(null);
+    return;
+  }
+  const key = `i18n/${lang}/index.json`;
+  let file = await graphJson<TranslationFile>(key).catch(() => null);
+  if (file) void run("readwrite", (s) => s.put(file, key)).catch(() => {});
+  else file = (await run<TranslationFile | undefined>("readonly", (s) => s.get(key)).catch(() => undefined)) ?? null;
+  useIndexTranslations(file);
 }
