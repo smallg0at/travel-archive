@@ -61,6 +61,7 @@ export const zhHans: Messages = {
   album: {
     dayOut: "当日往返",
     dayOutFar: (km: string) => `距家 ${km} 公里`,
+    dayMode: { label: "这一天的显示方式", trip: "行程", gallery: "相册" },
     undated: "无日期",
     thumbnailSize: "缩略图大小",
     contents: "目录",

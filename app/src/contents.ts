@@ -16,6 +16,8 @@ export interface ContentsEntry {
   target: HTMLElement;
   label: string;
   meta?: string;
+  /** A short accent label above the row — "Day out", so an outing is visible in the list. */
+  kicker?: string;
   stops: { target: HTMLElement; label: string }[];
 }
 
@@ -81,8 +83,13 @@ export function withContents(body: DocumentFragment, entries: ContentsEntry[]): 
   };
   for (const entry of entries) {
     const li = el<HTMLLIElement>(
-      `<li class="toc-day"><button type="button"><span class="toc-label"></span><span class="toc-meta"></span></button></li>`,
+      `<li class="toc-day"><button type="button"><span class="toc-kicker"></span><span class="toc-label"></span><span class="toc-meta"></span></button></li>`,
     );
+    const kicker = li.querySelector<HTMLElement>(".toc-kicker")!;
+    if (entry.kicker) {
+      kicker.textContent = entry.kicker;
+      li.classList.add("is-kicked");
+    } else kicker.remove();
     // Day labels, places and stop titles are text — the titles are model output.
     li.querySelector(".toc-label")!.textContent = entry.label;
     const meta = li.querySelector<HTMLElement>(".toc-meta")!;

@@ -64,6 +64,8 @@ export const en = {
     /** The banner over a day that went somewhere and came home the same night. */
     dayOut: "Day out",
     dayOutFar: (km: string) => `${km} km from home`,
+    /** Reading a day out: its written page, or the plain grid every other day shows. */
+    dayMode: { label: "How to show this day", trip: "Trip", gallery: "Gallery" },
     undated: "Undated",
     thumbnailSize: "Thumbnail size",
     contents: "Contents",

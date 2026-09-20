@@ -1,6 +1,6 @@
 import type { ArchiveIndexFile, DayExcursion, DayRecord, MonthSummary, PhotoRecord, TripRecord } from "@travel-archive/shared";
 import { loadHomeIndex, loadMonth, SignInRequiredError } from "./archiveData";
-import { coverFirst, el, lazyImg } from "./photoUi";
+import { el, lazyImg } from "./photoUi";
 import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
 import { addDayControls, isRetimable, setDayEditingAvailable } from "./dayEdit";
@@ -249,47 +249,58 @@ export async function openDay(date: string, section: { kind: "trip" | "month"; i
   }
 }
 
-/**
- * A day out, as a card at the head of its day.
- *
- * A day that went somewhere and came home the same night is an outing, but in
- * the album it looked like any other Tuesday: a date, a photo count, a grid.
- * It needs no trip — there is nothing to define and no second page to keep —
- * so it is given a picture, where it went and how far, and the day's own grid
- * still follows underneath. The pipeline finds them (jobs/tripSuggest.ts,
- * findExcursions) and they ride in home.json.
- */
-function renderExcursionCard(excursion: DayExcursion, date: string, photos: PhotoRecord[]): HTMLElement {
-  const card = el<HTMLElement>(`
-    <div class="day-out">
-      <div class="day-out-cover"></div>
-      <div class="day-out-text">
-        <span class="day-out-kicker"></span>
-        <span class="day-out-place"></span>
-        <span class="day-out-meta"></span>
-      </div>
-    </div>
-  `);
-  card.querySelector(".day-out-kicker")!.textContent = ui.album.dayOut;
-  card.querySelector(".day-out-place")!.textContent =
-    (contentLanguage() === "zh-Hans" ? excursion.nameZh : excursion.nameEn) ?? excursion.name;
-  card.querySelector(".day-out-meta")!.textContent = [
-    formatDayHeading(date),
-    ui.album.dayOutFar(num(excursion.awayKm)),
-    ui.common.photos(photos.length),
-  ].join(" · ");
+/** A day out's destination, in the reader's language. */
+function excursionPlace(excursion: DayExcursion): string {
+  return (contentLanguage() === "zh-Hans" ? excursion.nameZh : excursion.nameEn) ?? excursion.name;
+}
 
-  // The same cover rule as the home page's cards, and the same behaviour: a
-  // photo opens the viewer, with the rest of the day behind the arrow keys.
-  const ordered = coverFirst(photos);
-  if (ordered.length) {
-    const cover = lazyImg(ordered[0], "large", "day-out-img");
-    cover.addEventListener("click", () => openPhoto(ordered[0], ordered));
-    card.querySelector(".day-out-cover")!.appendChild(cover);
-  } else {
-    card.querySelector(".day-out-cover")!.remove();
+/**
+ * Which way a day out is read, remembered between visits.
+ *
+ * Trip mode is the summarized page — stops, cards, translated placards — and
+ * is what a day out is for; gallery is the plain grid the month shows for
+ * every other day. The choice is the reader's habit rather than a property of
+ * the day, so it is one setting, not one per day.
+ */
+const DAY_MODE_KEY = "day-out-mode";
+type DayMode = "trip" | "gallery";
+function readDayMode(): DayMode {
+  try {
+    return localStorage.getItem(DAY_MODE_KEY) === "gallery" ? "gallery" : "trip";
+  } catch {
+    return "trip";
   }
-  return card;
+}
+
+/**
+ * Trip or gallery, for a day that can be read both ways.
+ *
+ * Two buttons rather than a switch: which one is on has to be readable at a
+ * glance, and a switch says only "on" and "off" of something unnamed.
+ */
+function modeToggle(mode: DayMode, onPick: (mode: DayMode) => void): HTMLElement {
+  const wrap = el<HTMLDivElement>(`<div class="day-mode" role="group"></div>`);
+  wrap.setAttribute("aria-label", ui.album.dayMode.label);
+  for (const value of ["trip", "gallery"] as const) {
+    const button = el<HTMLButtonElement>(`<button type="button"></button>`);
+    button.textContent = ui.album.dayMode[value];
+    button.dataset.mode = value;
+    const mark = (on: boolean) => {
+      button.classList.toggle("active", on);
+      button.setAttribute("aria-pressed", String(on));
+    };
+    mark(value === mode);
+    button.addEventListener("click", () => {
+      if (button.classList.contains("active")) return;
+      for (const other of wrap.querySelectorAll("button")) {
+        other.classList.toggle("active", other === button);
+        other.setAttribute("aria-pressed", String(other === button));
+      }
+      onPick(value);
+    });
+    wrap.appendChild(button);
+  }
+  return wrap;
 }
 
 function renderDaySection(
@@ -307,15 +318,39 @@ function renderDaySection(
   // So search results, and anything else holding only a date, can scroll to it.
   section.id = dayAnchor(date);
 
-  const header = el<HTMLDivElement>(`
+  // A day out is headed like a small trip — where it went, then the day
+  // beneath it — rather than by its date. The owner's word for the first
+  // version, a cover photo beside a block of text that repeated the heading
+  // below it, was "sus": it said the date and the photo count twice.
+  const header = el<HTMLDivElement>(
+    excursion
+      ? `
+    <div class="day-header day-out-head">
+      <span class="day-out-kicker"></span>
+      <h2 class="day-out-place"></h2>
+      <div class="day-meta"></div>
+    </div>
+  `
+      : `
     <div class="day-header">
       <div class="day-title"></div>
       <div class="day-meta"></div>
     </div>
-  `);
-  header.querySelector(".day-title")!.textContent = formatDayHeading(date);
-  header.querySelector(".day-meta")!.textContent =
-    `${ui.common.photos(photos.length)}${day?.place ? ` · ${day.place}` : ""}`;
+  `,
+  );
+  if (excursion) {
+    header.querySelector(".day-out-kicker")!.textContent = ui.album.dayOut;
+    header.querySelector(".day-out-place")!.textContent = excursionPlace(excursion);
+    header.querySelector(".day-meta")!.textContent = [
+      formatDayHeading(date),
+      ui.album.dayOutFar(num(excursion.awayKm)),
+      ui.common.photos(photos.length),
+    ].join(" · ");
+  } else {
+    header.querySelector(".day-title")!.textContent = formatDayHeading(date);
+    header.querySelector(".day-meta")!.textContent =
+      `${ui.common.photos(photos.length)}${day?.place ? ` · ${day.place}` : ""}`;
+  }
 
   if (day?.summary) {
     // Marked, not just shown: thirty days in two thousand have been written,
@@ -328,12 +363,7 @@ function renderDaySection(
   // Only a day `organize` has actually written can be corrected — there is no
   // record to patch for a day that is still a plain grid.
   if (day) addDayControls(header, day);
-  // Before the header, which keeps its title, meta, summary and controls: the
-  // card is a banner over the day, not a replacement for it.
-  if (excursion) {
-    section.classList.add("is-day-out");
-    section.appendChild(renderExcursionCard(excursion, date, photos));
-  }
+  if (excursion) section.classList.add("is-day-out");
   section.appendChild(header);
 
   // In a trip, a day broken into stops renders as a page; everything else is a
@@ -341,6 +371,28 @@ function renderDaySection(
   // spent.
   if (layout === "trip" && day?.segments?.length) {
     section.appendChild(renderDayBody(day, byId));
+  } else if (excursion && day?.segments?.length) {
+    // A day out can be read either way, and the switch sits in its heading.
+    // Only here: every other day in a month is a grid and has nothing to
+    // switch to, and a trip's days are already pages.
+    let mode = readDayMode();
+    const box = el<HTMLDivElement>(`<div class="day-body"></div>`);
+    const body = () => {
+      box.replaceChildren(mode === "trip" ? renderDayBody(day, byId) : renderAlbumGrid(photos));
+    };
+    header.appendChild(
+      modeToggle(mode, (next) => {
+        mode = next;
+        try {
+          localStorage.setItem(DAY_MODE_KEY, next);
+        } catch {
+          // Private window: the choice lasts the visit instead.
+        }
+        body();
+      }),
+    );
+    body();
+    section.appendChild(box);
   } else {
     section.appendChild(renderAlbumGrid(photos));
   }
@@ -375,11 +427,19 @@ function formatDayShort(date: string): string {
 }
 
 /** A day section as a contents entry: its date, its place, and its stops. */
-function dayEntry(section: HTMLElement, date: string, day: DayRecord | undefined): ContentsEntry {
+function dayEntry(
+  section: HTMLElement,
+  date: string,
+  day: DayRecord | undefined,
+  excursion?: DayExcursion,
+): ContentsEntry {
   return {
     target: section,
     label: formatDayShort(date),
-    meta: (day && locDay(day).place) || undefined,
+    // A day out says where it went, in place of the day's own place: that is
+    // what the row is for, and the two would otherwise be the same string.
+    kicker: excursion ? ui.album.dayOut : undefined,
+    meta: excursion ? excursionPlace(excursion) : (day && locDay(day).place) || undefined,
     stops: [...section.querySelectorAll<HTMLElement>("section.stop")].map((stop) => ({
       target: stop,
       label: stop.querySelector(".stop-title")?.textContent ?? "",
@@ -549,7 +609,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
   for (const date of ordered) {
     const section = renderDaySection(date, byDay.get(date)!, days.get(date), shard.photos, "album", excursions.get(date));
     frag.appendChild(section);
-    entries.push(dayEntry(section, date, days.get(date)));
+    entries.push(dayEntry(section, date, days.get(date), excursions.get(date)));
   }
 
   content.replaceChildren(withContents(frag, entries));

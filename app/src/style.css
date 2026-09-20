@@ -3273,60 +3273,65 @@ body.map-expanded::after {
   vertical-align: 1px;
 }
 
-/* A day that went somewhere and came home the same night: a banner over the
-   day it belongs to, not a page of its own. */
-.day-out {
-  display: flex;
-  gap: 14px;
-  align-items: stretch;
-  margin-bottom: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  background: var(--bg-muted);
-  overflow: hidden;
-}
-.day-out-cover {
-  flex: 0 0 168px;
-  aspect-ratio: 4 / 3;
-  background: var(--bg);
-}
-.day-out-img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  cursor: zoom-in;
-}
-.day-out-text {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 12px 14px 12px 0;
-  min-width: 0;
-}
-.day-out:not(:has(.day-out-cover)) .day-out-text { padding-left: 14px; }
+/* A day that went somewhere and came home the same night: headed like a small
+   trip — where it went, then the day beneath it — rather than by its date. The
+   first version was a cover photo beside a block of text that repeated the
+   heading below it. */
+.day-out-head { margin-bottom: 12px; }
 .day-out-kicker {
+  display: block;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
+  margin-bottom: 2px;
 }
 .day-out-place {
-  font-size: 19px;
+  margin: 0 0 3px;
+  font-size: 22px;
   font-weight: 650;
   line-height: 1.2;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
-.day-out-meta {
-  font-size: 12.5px;
+.day-out-head .day-meta { font-variant-numeric: tabular-nums; }
+
+/* Trip or gallery, in the day's own heading: the album's density control
+   (.density-control) is the same idea in the same place, so it is the same
+   control. */
+.day-mode {
+  display: inline-flex;
+  gap: 2px;
+  margin: 10px 0 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg-muted);
+}
+.day-mode button {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 12px;
+  border: 0;
+  border-radius: calc(var(--radius-s) - 1px);
+  background: none;
   color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
+  cursor: pointer;
 }
-/* Phone-width album: the cover goes on top, as the home page's cards do. */
-@media (max-width: 700px) {
-  .day-out { flex-direction: column; gap: 0; }
-  .day-out-cover { flex: none; width: 100%; aspect-ratio: 16 / 9; }
-  .day-out-text { padding: 12px 14px 14px; }
+.day-mode button:hover { color: var(--text); }
+.day-mode button.active {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The contents bar marks a day out, so the month's outings are visible in the
+   list without scrolling the page. */
+.toc-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
