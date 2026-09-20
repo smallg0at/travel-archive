@@ -16,6 +16,22 @@ working practice this list was built with.
 
 ## Open issues
 
+- [ ] **长时间进行AI总结每日摘要时可能出现同步误报冲突问题 (False-positive sync conflict during long-running AI daily summary generation).**
+      Raised 2026-09-20. When running batch AI summarization / organize jobs
+      over extended periods (e.g. summarizing months of photo days), the client
+      or sync check can trigger false-positive archive change / conflict notifications
+      (such as the "The archive has changed since this copy. [Refresh]" banner or
+      sync conflict warnings) while the pipeline is legitimately writing intermediate
+      day records to the archive mirror.
+
+      **To investigate and resolve**:
+      - Distinguish between external conflicting writes and self-induced incremental
+        job writes while a local pipeline job is actively running.
+      - Coordinate sync polling and conflict detection with the active job state so
+        spurious refresh prompts are suppressed until the batch run completes cleanly.
+      - Ensure mirror timestamps and ETag state stay consistent across prolonged
+        Graph write sequences.
+
 - [x] **Day summaries only where they earn their cost.** Owner's rule,
       2026-09-11: a day outside any trip is summarized only when it holds
       more than 15 photos (`SUMMARY_MIN_PHOTOS` in shared); trip days always
