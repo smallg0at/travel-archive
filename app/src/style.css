@@ -3376,11 +3376,16 @@ body.map-expanded::after {
   color: var(--text-secondary);
   cursor: pointer;
 }
-.density-control button:hover { background: var(--bg-muted); }
+/* --surface-hover and --surface-selected rather than --bg-muted, which the
+   original rules used: in light mode --bg-muted is #f5f5f5, the same colour as
+   the card these controls sit on in Settings and on the phone, so the chosen
+   option was invisible there. Both tokens are mixes, so they darken on light
+   and lighten on dark from one declaration. */
+.density-control button:hover { background: var(--surface-hover); }
 .density-control button.active {
-  background: var(--bg-muted);
-  color: var(--text);
-  font-weight: 500;
+  background: var(--surface-selected);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* Trip or gallery, in the day's own heading: the album's density control
