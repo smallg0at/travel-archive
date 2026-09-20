@@ -1,6 +1,6 @@
 import type { ArchiveIndexFile, HomePlace, PhotoRecord } from "@travel-archive/shared";
 import { dayMeta, loadHomeIndex, loadIndex, loadMonth } from "./archiveData";
-import { el, hydrateAll, lazyImg } from "./photoUi";
+import { coverFirst, el, hydrateAll, lazyImg } from "./photoUi";
 import { ui } from "./i18n";
 import { openDay } from "./album";
 import { drawPlaceMap, loadBasemap } from "./tripMap";
@@ -94,16 +94,7 @@ function photoIdsOf(index: ArchiveIndexFile, date: string): string[] {
 async function photosFor(date: string, ids: string[]): Promise<PhotoRecord[]> {
   const shard = await loadMonth(date.slice(0, 7)).catch(() => null);
   if (!shard) return [];
-  const photos = ids.map((id) => shard.photos[id]).filter(Boolean);
-  const score = (p: PhotoRecord) =>
-    (p.visibility === "feature" ? 4 : 0) +
-    (p.notable ? 2 : 0) +
-    (p.screenshot || p.contentType === "screenshot" ? -8 : 0) +
-    (p.quality === "poor" ? -4 : 0) +
-    (p.duplicateGroupId && !p.isDuplicateRepresentative ? -6 : 0) +
-    (p.visibility === "hidden" ? -3 : 0);
-  // Stable: equal scores keep the day's own order.
-  return photos.map((p, i) => ({ p, i, s: score(p) })).sort((a, b) => b.s - a.s || a.i - b.i).map(({ p }) => p);
+  return coverFirst(ids.map((id) => shard.photos[id]).filter(Boolean));
 }
 
 /* --- The page ----------------------------------------------------------- */

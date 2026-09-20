@@ -1,6 +1,7 @@
 import type { ArchiveIndexFile, HomeIndexFile, HomePlace, PhotoShard } from "@travel-archive/shared";
 import { loadAllShards, saveHomeIndex } from "../archiveStore.js";
 import { withheldFromSummaries } from "../sensitive.js";
+import { findExcursions } from "./tripSuggest.js";
 import type { ProgressFn } from "./analyze.js";
 
 /**
@@ -17,7 +18,8 @@ import type { ProgressFn } from "./analyze.js";
  * organize and after a collect.
  */
 
-export const HOME_SCHEMA = 1;
+/** 2 added `excursions` — the days out (findExcursions). */
+export const HOME_SCHEMA = 2;
 
 /**
  * Photos are grouped by the place name the gazetteer gave them rather than by
@@ -142,16 +144,22 @@ export async function buildHomeIndex(
   const countries = new Set(places.map((p) => p.country).filter(Boolean)).size;
   const days = new Set(places.flatMap((p) => p.days)).size;
 
+  // Days out ride with the map index rather than in a file of their own: they
+  // are built from the same pass over the same shards, and every reader that
+  // has one already fetches and refreshes the other.
+  const excursions = findExcursions(index, all);
+
   const file: HomeIndexFile = {
     schemaVersion: HOME_SCHEMA,
     builtAt: new Date().toISOString(),
     places,
     totals: { placed, photos, days, countries },
+    excursions,
   };
 
   const bytes = await saveHomeIndex(token, file);
   onProgress?.({
-    message: `Map index: ${places.length} place(s) in ${countries} countr${countries === 1 ? "y" : "ies"}, ${placed} photo(s) placed — ${(bytes / 1e3).toFixed(0)}KB.`,
+    message: `Map index: ${places.length} place(s) in ${countries} countr${countries === 1 ? "y" : "ies"}, ${placed} photo(s) placed, ${excursions.length} day(s) out — ${(bytes / 1e3).toFixed(0)}KB.`,
   });
   return { places: places.length, placed, countries, bytes };
 }

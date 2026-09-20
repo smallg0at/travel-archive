@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import type { ArchiveIndexFile, PhotoRecord, PhotoShard } from "@travel-archive/shared";
+import type { ArchiveIndexFile, DayExcursion, PhotoRecord, PhotoShard } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { loadAllShards, loadIndexForReading } from "../archiveStore.js";
 import { dataFile } from "../paths.js";
@@ -150,12 +150,13 @@ function homeFinder(nights: { day: number; at: Fix }[]): (day: number) => Fix | 
   };
 }
 
-export function suggestTrips(
-  index: ArchiveIndexFile,
-  shards: Map<string, PhotoShard>,
-  defined: TripDefinition[],
-  dismissed: Set<string> = new Set(),
-): TripSuggestion[] {
+/**
+ * Each day that has GPS, in order, with where it started and ended.
+ *
+ * Shared by the trip suggestions and the day excursions below, so both agree
+ * on what a day's evening was and where home was that week.
+ */
+function dayGeography(index: ArchiveIndexFile, shards: Map<string, PhotoShard>): DayGeo[] {
   const days: DayGeo[] = [];
   for (const day of index.sections.flatMap((s) => s.days).sort((a, b) => a.date.localeCompare(b.date))) {
     const shard = shards.get(day.date.slice(0, 7));
@@ -172,12 +173,44 @@ export function suggestTrips(
       photos: located,
     });
   }
+  return days;
+}
+
+/**
+ * Where each day's night was spent: away, or at home.
+ *
+ * The evening alone is not enough. A day out usually ends with its photos
+ * still at the destination — the last of the light, the platform, the train —
+ * so an evening 200km from home says where the camera was at six, not where
+ * its owner slept. The next morning settles it: a morning at home means the
+ * night was too, however late the last photo was taken. Only when the next
+ * morning is unknown, or is itself away, does the evening decide.
+ *
+ * Getting this wrong went both ways: York and a city were offered as
+ * one-night trips, and genuine days out were hidden behind the same mistake.
+ */
+function nightsAway(days: DayGeo[], homeAt: (day: number) => Fix | null): boolean[] {
+  return days.map((day, i) => {
+    const home = homeAt(dayNumber(day.date));
+    if (!home) return false;
+    if (km(day.evening, home) <= AWAY_KM) return false;
+    const next = days[i + 1];
+    const nextMorning = next && dayNumber(next.date) === dayNumber(day.date) + 1 ? next.morning : null;
+    if (nextMorning && km(nextMorning, home) <= AWAY_KM) return false;
+    return true;
+  });
+}
+
+export function suggestTrips(
+  index: ArchiveIndexFile,
+  shards: Map<string, PhotoShard>,
+  defined: TripDefinition[],
+  dismissed: Set<string> = new Set(),
+): TripSuggestion[] {
+  const days = dayGeography(index, shards);
 
   const homeAt = homeFinder(days.map((d) => ({ day: dayNumber(d.date), at: d.evening })));
-  const away = days.map((d) => {
-    const home = homeAt(dayNumber(d.date));
-    return home ? km(d.evening, home) > AWAY_KM : false;
-  });
+  const away = nightsAway(days, homeAt);
 
   // Chinese names where the gazetteer has none: a Chinese place's endonym is
   // Chinese already (漠河 where the English is Mohe), and a country's name is
@@ -346,4 +379,84 @@ export async function listTripSuggestions(): Promise<TripSuggestion[]> {
   const index = await loadIndexForReading(token);
   const shards = await loadAllShards(token, index);
   return suggestTrips(index, shards, await loadTripDefinitions(), new Set(await loadDismissed()));
+}
+
+/**
+ * Days out: went somewhere, came home the same night.
+ *
+ * The counterpart to a trip. A trip is nights away; this is the day that has
+ * none — a town and back, Derby and back — which the album otherwise shows
+ * as an ordinary heading over a grid of photos, indistinguishable from a
+ * Tuesday at home. It needs no trip page and no definition: it is one day, and
+ * the app gives it a card in its month.
+ *
+ * Measured the same way as the suggestions above, so the two cannot disagree:
+ * the day's evening must be home (or it is the start of a trip), and enough of
+ * its photos must be far enough from home to be an outing rather than an
+ * errand.
+ */
+export function findExcursions(index: ArchiveIndexFile, shards: Map<string, PhotoShard>): DayExcursion[] {
+  const days = dayGeography(index, shards);
+  const homeAt = homeFinder(days.map((d) => ({ day: dayNumber(d.date), at: d.evening })));
+  const away = nightsAway(days, homeAt);
+  // Days already inside a trip have a page of their own; a card there would be
+  // a second voice on the same day.
+  const inTrip = new Set(index.sections.filter((s) => s.kind === "trip").flatMap((s) => s.days.map((d) => d.date)));
+
+  const excursions: DayExcursion[] = [];
+  for (const [i, day] of days.entries()) {
+    if (inTrip.has(day.date)) continue;
+    const home = homeAt(dayNumber(day.date));
+    if (!home) continue;
+    // Home at both ends. Tonight at home is what separates a day out from the
+    // first day of a trip; last night at home separates it from the last day
+    // of one, which also comes home — the a city trip's third day came back
+    // 224km and read as a day out until the night before was checked. Where
+    // there is no photo the day before to judge by, the morning stands in.
+    const previous = days[i - 1];
+    const sleptHome =
+      previous && dayNumber(previous.date) === dayNumber(day.date) - 1
+        ? !away[i - 1]
+        : km(day.morning, home) <= AWAY_KM;
+    if (away[i] || !sleptHome) continue;
+
+    let farthest = 0;
+    let awayPhotos = 0;
+    const places = new Map<string, { name: string; en: string | null; zh: string | null; photos: number }>();
+    for (const photo of day.photos) {
+      const distance = km(photo.gps!, home);
+      if (distance > farthest) farthest = distance;
+      if (distance <= AWAY_KM) continue;
+      awayPhotos++;
+      if (!photo.place) continue;
+      const key = photo.place;
+      const place = places.get(key) ?? {
+        name: head(photo.place),
+        en: photo.placeNames ? head(photo.placeNames.en) : null,
+        zh: zhNameOf(photo),
+        photos: 0,
+      };
+      place.photos++;
+      places.set(key, place);
+    }
+    if (awayPhotos < MIN_AWAY_PHOTOS) continue;
+    const [best] = [...places.values()].sort((a, b) => b.photos - a.photos);
+    if (!best) continue;
+
+    excursions.push({
+      date: day.date,
+      name: best.name,
+      nameEn: best.en,
+      nameZh: best.zh,
+      awayKm: Math.round(farthest),
+      photoCount: awayPhotos,
+    });
+  }
+  return excursions;
+}
+
+/** A Chinese name for a place: the gazetteer's, or the endonym when it is already Chinese. */
+function zhNameOf(photo: PhotoRecord): string | null {
+  if (photo.placeNames?.zh) return head(photo.placeNames.zh);
+  return photo.place && CJK.test(photo.place) ? head(photo.place) : null;
 }

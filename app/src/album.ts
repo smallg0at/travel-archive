@@ -1,11 +1,11 @@
-import type { ArchiveIndexFile, DayRecord, MonthSummary, PhotoRecord, TripRecord } from "@travel-archive/shared";
-import { loadMonth, SignInRequiredError } from "./archiveData";
-import { el, lazyImg } from "./photoUi";
+import type { ArchiveIndexFile, DayExcursion, DayRecord, MonthSummary, PhotoRecord, TripRecord } from "@travel-archive/shared";
+import { loadHomeIndex, loadMonth, SignInRequiredError } from "./archiveData";
+import { coverFirst, el, lazyImg } from "./photoUi";
 import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
 import { addDayControls, isRetimable, setDayEditingAvailable } from "./dayEdit";
 import { selectionClick } from "./retime";
-import { loc, locDay } from "./contentLang";
+import { contentLanguage, loc, locDay } from "./contentLang";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
@@ -150,7 +150,7 @@ export function renderDensityControl(): HTMLElement {
 function addExportButton(heading: HTMLElement): void {
   if (!canPrint()) return;
   const button = el<HTMLButtonElement>(`<button class="page-export" type="button">${ui.nav.savePdf}</button>`);
-  button.addEventListener("click", () => void printView());
+  button.addEventListener("click", () => void printView(pageTitle));
   heading.appendChild(button);
 }
 
@@ -249,12 +249,56 @@ export async function openDay(date: string, section: { kind: "trip" | "month"; i
   }
 }
 
+/**
+ * A day out, as a card at the head of its day.
+ *
+ * A day that went somewhere and came home the same night is an outing, but in
+ * the album it looked like any other Tuesday: a date, a photo count, a grid.
+ * It needs no trip — there is nothing to define and no second page to keep —
+ * so it is given a picture, where it went and how far, and the day's own grid
+ * still follows underneath. The pipeline finds them (jobs/tripSuggest.ts,
+ * findExcursions) and they ride in home.json.
+ */
+function renderExcursionCard(excursion: DayExcursion, date: string, photos: PhotoRecord[]): HTMLElement {
+  const card = el<HTMLElement>(`
+    <div class="day-out">
+      <div class="day-out-cover"></div>
+      <div class="day-out-text">
+        <span class="day-out-kicker"></span>
+        <span class="day-out-place"></span>
+        <span class="day-out-meta"></span>
+      </div>
+    </div>
+  `);
+  card.querySelector(".day-out-kicker")!.textContent = ui.album.dayOut;
+  card.querySelector(".day-out-place")!.textContent =
+    (contentLanguage() === "zh-Hans" ? excursion.nameZh : excursion.nameEn) ?? excursion.name;
+  card.querySelector(".day-out-meta")!.textContent = [
+    formatDayHeading(date),
+    ui.album.dayOutFar(num(excursion.awayKm)),
+    ui.common.photos(photos.length),
+  ].join(" · ");
+
+  // The same cover rule as the home page's cards, and the same behaviour: a
+  // photo opens the viewer, with the rest of the day behind the arrow keys.
+  const ordered = coverFirst(photos);
+  if (ordered.length) {
+    const cover = lazyImg(ordered[0], "large", "day-out-img");
+    cover.addEventListener("click", () => openPhoto(ordered[0], ordered));
+    card.querySelector(".day-out-cover")!.appendChild(cover);
+  } else {
+    card.querySelector(".day-out-cover")!.remove();
+  }
+  return card;
+}
+
 function renderDaySection(
   date: string,
   photos: PhotoRecord[],
   day: DayRecord | undefined,
   byId: Record<string, PhotoRecord>,
   layout: "trip" | "album",
+  excursion?: DayExcursion,
 ): HTMLElement {
   // In the reader's language, with their hand edits in it over the top — and
   // so the editors below open on the text they are actually looking at.
@@ -274,6 +318,9 @@ function renderDaySection(
     `${ui.common.photos(photos.length)}${day?.place ? ` · ${day.place}` : ""}`;
 
   if (day?.summary) {
+    // Marked, not just shown: thirty days in two thousand have been written,
+    // and scrolling a month gave no way to tell which without reading.
+    section.classList.add("is-summarized");
     const summary = el<HTMLDivElement>(`<div class="day-summary"></div>`);
     summary.textContent = loc(day.summary);
     header.appendChild(summary);
@@ -281,6 +328,12 @@ function renderDaySection(
   // Only a day `organize` has actually written can be corrected — there is no
   // record to patch for a day that is still a plain grid.
   if (day) addDayControls(header, day);
+  // Before the header, which keeps its title, meta, summary and controls: the
+  // card is a banner over the day, not a replacement for it.
+  if (excursion) {
+    section.classList.add("is-day-out");
+    section.appendChild(renderExcursionCard(excursion, date, photos));
+  }
   section.appendChild(header);
 
   // In a trip, a day broken into stops renders as a page; everything else is a
@@ -467,6 +520,10 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
 
   const photos = Object.values(shard.photos).sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? ""));
   const days = dayIndexOf(index);
+  // Memoised and already fetched by the home page; a library with no map
+  // index simply has no days out to draw.
+  const home = await loadHomeIndex().catch(() => null);
+  const excursions = new Map((home?.excursions ?? []).map((e) => [e.date, e] as const));
 
   const byDay = new Map<string, PhotoRecord[]>();
   for (const photo of photos) {
@@ -490,7 +547,7 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
 
   const entries: ContentsEntry[] = [];
   for (const date of ordered) {
-    const section = renderDaySection(date, byDay.get(date)!, days.get(date), shard.photos, "album");
+    const section = renderDaySection(date, byDay.get(date)!, days.get(date), shard.photos, "album", excursions.get(date));
     frag.appendChild(section);
     entries.push(dayEntry(section, date, days.get(date)));
   }
@@ -1057,7 +1114,10 @@ function enter(hash: string): void {
  */
 const APP_TITLE = ui.app.title;
 
+let pageTitle = "";
+
 function setTitle(page: string): void {
+  pageTitle = page;
   document.title = `${page} · ${APP_TITLE}`;
 }
 

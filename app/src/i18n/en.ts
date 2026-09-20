@@ -61,6 +61,9 @@ export const en = {
   },
 
   album: {
+    /** The banner over a day that went somewhere and came home the same night. */
+    dayOut: "Day out",
+    dayOutFar: (km: string) => `${km} km from home`,
     undated: "Undated",
     thumbnailSize: "Thumbnail size",
     contents: "Contents",

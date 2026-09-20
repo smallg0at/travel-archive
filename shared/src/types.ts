@@ -546,6 +546,30 @@ export interface HomeIndexFile {
     days: number;
     countries: number;
   };
+  /**
+   * Days out — went somewhere and came home the same night. Absent in a file
+   * built before they existed, which an older reader simply does not draw.
+   */
+  excursions?: DayExcursion[];
+}
+
+/**
+ * One day that left home and came back the same night.
+ *
+ * Not a trip: it has no nights away, needs no definition and no page of its
+ * own. The album gives the day a card in its month, so a day out reads as an
+ * outing rather than as another heading over a grid.
+ */
+export interface DayExcursion {
+  date: string;
+  /** Where it went: the endonym of the place with most of the day's photos away from home. */
+  name: string;
+  nameEn: string | null;
+  nameZh: string | null;
+  /** How far the day reached, in km from home. */
+  awayKm: number;
+  /** Photos taken away from home that day. */
+  photoCount: number;
 }
 
 /** One place, as the map draws it: a dot, a label, and what it opens. */

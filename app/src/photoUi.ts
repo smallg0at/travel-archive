@@ -129,6 +129,36 @@ export async function hydrateAll(
 }
 
 
+/**
+ * A day's photos, the best cover first.
+ *
+ * The first photo of a day is usually its least interesting — the platform,
+ * the queue, a screenshot of the ticket. The captioner already marks what is
+ * worth featuring (`visibility: "feature"`, `notable`), so a cover is chosen
+ * from those, and screenshots, poor frames and duplicate copies go to the
+ * back rather than out: the viewer still walks every photo.
+ *
+ * Shared by the home page's "on this day" cards and the album's day-out
+ * cards, which would otherwise pick different covers for the same day.
+ */
+export function coverFirst(photos: PhotoRecord[]): PhotoRecord[] {
+  const score = (p: PhotoRecord) =>
+    (p.visibility === "feature" ? 4 : 0) +
+    (p.notable ? 2 : 0) +
+    (p.screenshot || p.contentType === "screenshot" ? -8 : 0) +
+    // A placard, a menu, a museum label: photographed for what it says, not
+    // for the look of it. The a town day out led with an information board.
+    (p.contentType === "document" ? -5 : 0) +
+    (p.quality === "poor" ? -4 : 0) +
+    (p.duplicateGroupId && !p.isDuplicateRepresentative ? -6 : 0) +
+    (p.visibility === "hidden" ? -3 : 0);
+  // Stable: equal scores keep the day's own order.
+  return photos
+    .map((p, i) => ({ p, i, s: score(p) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map(({ p }) => p);
+}
+
 export function lazyImg(photo: PhotoRecord, size: "medium" | "large" = "medium", className = ""): HTMLImageElement {
   const img = document.createElement("img");
   img.src = BLANK_PIXEL;
