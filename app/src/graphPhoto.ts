@@ -1,4 +1,4 @@
-import { getAccessToken } from "./msAuth";
+import { getAccessToken, TokenRenewalError } from "./msAuth";
 import { getCached, putThumb, releaseObjectUrls } from "./thumbCache";
 import { thumbnailSource } from "./photoSource";
 
@@ -81,8 +81,12 @@ async function flush(): Promise<void> {
     let token: string;
     try {
       token = await getAccessToken();
-    } catch {
-      signInRequired();
+    } catch (err) {
+      // Only a session that really has ended raises the banner. Thumbnails
+      // are the app's most frequent Graph request by far, so a renewal that
+      // merely timed out used to announce an expired session several times a
+      // browsing session; the pictures simply stay blank instead.
+      if (!(err instanceof TokenRenewalError)) signInRequired();
       for (const entry of batch) entry.resolve(null);
       return;
     }
@@ -221,8 +225,8 @@ export async function loadFullPhoto(itemId: string): Promise<string | null> {
   let token: string;
   try {
     token = await getAccessToken();
-  } catch {
-    signInRequired();
+  } catch (err) {
+    if (!(err instanceof TokenRenewalError)) signInRequired();
     return null;
   }
 

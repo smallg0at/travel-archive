@@ -8,7 +8,12 @@
 // platform in Azure AD (that's what makes the token endpoint answer CORS
 // preflights) — see README "Photo access" for the registration step, and
 // msalConfig.ts for why the redirect URI points at a dedicated bridge page.
-import { BrowserAuthError, PublicClientApplication, type AccountInfo } from "@azure/msal-browser";
+import {
+  BrowserAuthError,
+  InteractionRequiredAuthError,
+  PublicClientApplication,
+  type AccountInfo,
+} from "@azure/msal-browser";
 import { msalConfig, SCOPES } from "./msalConfig";
 
 const msalInstance = new PublicClientApplication(msalConfig);
@@ -78,10 +83,28 @@ export async function signIn(): Promise<AccountInfo> {
 }
 
 /**
+ * Silent renewal failed for a reason signing in again would not fix: a
+ * renewal iframe that timed out, a throttled or 5xx token endpoint, no
+ * network. Callers report it as a failed load, not as an expired session.
+ */
+export class TokenRenewalError extends Error {
+  constructor(readonly cause: unknown) {
+    super("TOKEN_RENEWAL_FAILED");
+  }
+}
+
+/**
  * A valid Graph access token via silent renewal — no user gesture needed,
  * works as long as the cached session is still valid. Throws if there's no
  * signed-in account, or if silent renewal fails and interactive sign-in
  * would be required (that has to go back through signIn(), from a click).
+ *
+ * Anything else silent renewal can fail with — a renewal iframe that timed
+ * out, a throttled or 5xx token endpoint, no network — throws
+ * `TokenRenewalError` instead, because it is not an expired session and must
+ * not be reported as one. Every failure used to arrive as SIGN_IN_REQUIRED,
+ * so one unlucky shard or thumbnail told a signed-in reader their session had
+ * expired; the owner saw that on the phone.
  */
 export async function getAccessToken(): Promise<string> {
   await ensureInitialized();
@@ -91,8 +114,18 @@ export async function getAccessToken(): Promise<string> {
   try {
     const result = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account });
     return result.accessToken;
-  } catch {
-    throw new Error("SIGN_IN_REQUIRED");
+  } catch (err) {
+    // Only these two mean the reader has to sign in again. `interaction_in_
+    // progress` is one of them on purpose rather than a transient failure: a
+    // stuck lock outlives any number of retries, and the banner's click goes
+    // through signIn(), which clears it (clearStaleInteractionLock). Clearing
+    // it here instead would pull the rug from under a sign-in that really is
+    // open in a popup.
+    if (err instanceof InteractionRequiredAuthError) throw new Error("SIGN_IN_REQUIRED");
+    if (err instanceof BrowserAuthError && err.errorCode === "interaction_in_progress") {
+      throw new Error("SIGN_IN_REQUIRED");
+    }
+    throw new TokenRenewalError(err);
   }
 }
 

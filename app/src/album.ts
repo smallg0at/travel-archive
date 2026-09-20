@@ -487,7 +487,13 @@ async function showTrip(trip: TripRecord): Promise<void> {
       content.replaceChildren(loadingNote(ui.common.signInToLoad(loc(trip.name))));
       return;
     }
-    throw err;
+    // Anything else — Graph throttling, a token renewal that timed out — is a
+    // failed load, and says so where the trip would have been. It used to be
+    // rethrown into a floating rejection, which left this pane reading
+    // "Loading…" for as long as the reader cared to wait.
+    console.error(err);
+    content.replaceChildren(loadingNote(ui.app.failedToLoad((err as Error).message)));
+    return;
   }
 
   const frag = document.createDocumentFragment();
@@ -586,7 +592,9 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
       content.replaceChildren(loadingNote(ui.common.signInToLoad(label)));
       return;
     }
-    throw err;
+    console.error(err);
+    content.replaceChildren(loadingNote(ui.app.failedToLoad((err as Error).message)));
+    return;
   }
 
   const photos = Object.values(shard.photos).sort((a, b) => (a.takenAt ?? "").localeCompare(b.takenAt ?? ""));

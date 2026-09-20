@@ -1,6 +1,6 @@
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
-import { getAccessToken } from "./msAuth";
+import { getAccessToken, TokenRenewalError } from "./msAuth";
 import { localArchiveJson } from "./backend";
 import type { TranslationFile } from "@travel-archive/shared";
 import { contentLanguage, translatedMonths, useIndexTranslations, useMonthTranslations } from "./contentLang";
@@ -55,8 +55,18 @@ async function fetchMetadataJson<T>(fileName: string, localPath: string): Promis
     let token: string;
     try {
       token = await getAccessToken();
-    } catch {
-      throw new SignInRequiredError();
+    } catch (err) {
+      // A renewal that failed for a reason a sign-in cannot fix gets the same
+      // one more try as a throttled Graph — a renewal iframe that timed out
+      // usually succeeds on the next attempt — and then reads as a failed
+      // load. Saying "your session has expired" to a reader whose session is
+      // fine sends them to sign in again for nothing.
+      if (!(err instanceof TokenRenewalError)) throw new SignInRequiredError();
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(DEFAULT_BACKOFF_MS * attempt);
+        continue;
+      }
+      throw new Error(`Failed to load ${fileName}: could not renew the Microsoft token`);
     }
 
     const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
