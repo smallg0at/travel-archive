@@ -128,9 +128,18 @@ listed is refused; a refusal falls back to OneDrive rather than showing a gap.
 in `localStorage` with a key held in a *session* cookie, and an Android WebView
 ends that session whenever the process dies — an update, a swipe away, Android
 reclaiming memory. The app therefore rewrites `msal.cache.encryption` with a
-year's expiry (`keepSignInAcrossLaunches`, `mobile/native.ts`) and flushes
-cookies in `onPause`. Without it the app opened on its kept index, signed out,
-every time. Third-party cookies are enabled in `MainActivity` for the same
+year's expiry (`keepSignInAcrossLaunches`, `mobile/native.ts`) and flushes it
+to disk immediately (`CookiesPlugin`), as well as in `onPause`. Without it the
+app opened on its kept index, signed out, every time.
+
+The expiry alone was not enough, and the flush is not belt-and-braces: a cookie
+written from the page lives in memory until the WebView gets round to writing
+it, so a process that ends without pausing — a crash, a "force stop", an
+install over the top — takes the key with it. Measured on the emulator: a probe
+cookie written exactly the way the key is written was gone after `am
+force-stop`, and the app came back with the key regenerated and `localStorage`
+down to `msal.version`, showing "Your Microsoft session has expired". With the
+flush, the same kill leaves the key unchanged. Third-party cookies are enabled in `MainActivity` for the same
 reason: MSAL renews silently through a hidden Microsoft iframe once the SPA
 refresh token's 24 hours are up.
 

@@ -27,8 +27,17 @@ export const isNative = Capacitor.isNativePlatform();
  * protects, which, inside the app's own sandbox, is the durability an
  * installed app's sign-in should have. The browser build is left alone.
  * Call after MSAL has initialized.
+ *
+ * An expiry alone was not enough. A cookie written from the page sits in
+ * memory until the WebView flushes it, which it does on its own timer and at
+ * `onPause` — so a process that ends without pausing takes the key with it.
+ * Measured on the emulator: a probe cookie written exactly this way was gone
+ * after `am force-stop`, and the app came back with `msal.cache.encryption`
+ * regenerated and localStorage down to `msal.version` — signed out, the
+ * banner the owner photographed. So the key is flushed to disk here, the
+ * moment it is written (android/.../CookiesPlugin.java).
  */
-export function keepSignInAcrossLaunches(): void {
+export async function keepSignInAcrossLaunches(): Promise<void> {
   if (!isNative) return;
   const name = "msal.cache.encryption";
   const raw = document.cookie
@@ -39,7 +48,11 @@ export function keepSignInAcrossLaunches(): void {
   // The value is written back exactly as read (MSAL encoded it), with MSAL's
   // own Secure and SameSite=None, so its next read finds what it wrote.
   document.cookie = `${name}=${raw}; max-age=${365 * 24 * 3600}; path=/; secure; samesite=None`;
+  await Cookies.flush().catch(() => {});
 }
+
+/** MainActivity's own plugin (android/.../CookiesPlugin.java). */
+const Cookies = registerPlugin<{ flush(): Promise<void> }>("Cookies");
 
 /** MainActivity's own plugin (android/.../SystemBarsPlugin.java). */
 const SystemBars = registerPlugin<{ setStyle(options: { dark: boolean; color: string | null }): Promise<void> }>("SystemBars");

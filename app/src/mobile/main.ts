@@ -209,7 +209,7 @@ async function main(): Promise<void> {
   // index.html). Once the response is handled, be at the root again — a
   // cancelled sign-in lands on the sign-in screen, not on a leftover path.
   if (location.pathname.startsWith("/auth")) history.replaceState(null, "", "/");
-  keepSignInAcrossLaunches();
+  void keepSignInAcrossLaunches();
   // Photographs this phone already holds are served from it. Only when the
   // reader has allowed it in Settings; nothing is asked for here.
   void initDevicePhotos();
