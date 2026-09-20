@@ -2878,15 +2878,19 @@ body.map-expanded::after {
      take one each. Without this a "normal" card is a 44mm column with a
      three-word line wrap. */
   .cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 8mm 6mm;
   }
   .card-full {
-    grid-column: span 2;
+    grid-column: span 6;
   }
-  .card-half,
+  .card-half {
+    grid-column: span 3;
+  }
+  /* Two tracks of six: three small cards to a row, ~58mm each, so they read as
+     smaller than a half card (90mm) instead of identical to it. */
   .card-normal {
-    grid-column: span 1;
+    grid-column: span 2;
   }
 
   /* Heights in mm, not px: the screen values are tuned to a viewport, and a
@@ -2902,9 +2906,11 @@ body.map-expanded::after {
   .card-full .card-images img {
     height: 85mm;
   }
-  .card-half .card-images img,
-  .card-normal .card-images img {
+  .card-half .card-images img {
     height: 52mm;
+  }
+  .card-normal .card-images img {
+    height: 34mm;
   }
 
   /* The shimmer placeholder is a loading state; on paper it is a grey box with
@@ -3244,3 +3250,83 @@ body.map-expanded::after {
 .sug-dismiss { margin-left: auto; }
 .sug-error { margin: 0; color: var(--danger, #c0392b); }
 .sug-more { align-self: flex-start; background: var(--bg-muted); }
+
+/* ---------------------------------------------------------------------------
+   A written day, and a day out (album.ts).
+   --------------------------------------------------------------------------- */
+
+/* Thirty days in two thousand have a summary. An accent rule down the text,
+   and a dot on the date, make them findable while scrolling a month rather
+   than only readable once found. */
+.day-page.is-summarized .day-summary {
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-m) var(--radius-m) 0;
+}
+.day-page.is-summarized .day-title::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 1px;
+}
+
+/* A day that went somewhere and came home the same night: a banner over the
+   day it belongs to, not a page of its own. */
+.day-out {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+.day-out-cover {
+  flex: 0 0 168px;
+  aspect-ratio: 4 / 3;
+  background: var(--bg);
+}
+.day-out-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+.day-out-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 12px 14px 12px 0;
+  min-width: 0;
+}
+.day-out:not(:has(.day-out-cover)) .day-out-text { padding-left: 14px; }
+.day-out-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.day-out-place {
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.day-out-meta {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+/* Phone-width album: the cover goes on top, as the home page's cards do. */
+@media (max-width: 700px) {
+  .day-out { flex-direction: column; gap: 0; }
+  .day-out-cover { flex: none; width: 100%; aspect-ratio: 16 / 9; }
+  .day-out-text { padding: 12px 14px 14px; }
+}
