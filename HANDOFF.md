@@ -108,6 +108,15 @@ app there instead and sign-in breaks in a way that looks like an MSAL problem.
 
 **No backend is a supported state, not a failure.** It is the phone. A failed
 health check means: no Generate page, no pins, thumbnails via Graph + IndexedDB.
+
+**A running server silently strips fields it does not know about.** Derived
+files are rewritten wholesale from the writing server's own type, so a server
+built before a field existed drops it on its next write, with nothing on screen
+to explain it. This happened to `home.json`'s `excursions` — the days out
+vanished from the album because the shell was still running the previous
+`pipeline/dist`. `HomeIndexFile` carries `schemaVersion` for exactly this
+reason. **After changing a derived file's shape, rebuild `pipeline/dist` and
+restart the shell before believing anything the app shows you.**
 Every feature needs that path to degrade rather than error. The installed phone
 app does not even ask: its WebView is `https://localhost`, and a request to
 `http://127.0.0.1:4319` is mixed content.
@@ -198,6 +207,11 @@ and the form warns.
 | Generate page | `app/src/tripMode.ts` |
 | PDF export rules | `app/src/print.ts` + the `@media print` block |
 | trip map | `app/src/tripMap.ts` |
+| home map (whole-world, clustered) | `app/src/homeMap.ts` |
+| trip + day-out detection | `pipeline/src/jobs/tripSuggest.ts` |
+| trip suggestion UI | `app/src/tripSuggestions.ts` |
+| day-out heading, Trip/Gallery switch | `app/src/album.ts` (`excursionPlace`, `modeToggle`) |
+| map index + days out (`home.json`) | `pipeline/src/jobs/homeIndex.ts` |
 | phone app: screens, stack, viewer | `app/src/mobile/` (`main.ts` routes, `router.ts`, `day.ts`) |
 | phone app: native shell | `app/capacitor.config.ts`, `app/vite.mobile.config.ts`, `app/android/` |
 | phone app: photos from the device | `app/src/mobile/devicePhotos.ts`, `android/…/LocalPhotosPlugin.java` |
@@ -295,6 +309,31 @@ before believing it.
 `--remote-debugging-port=9222` and a ~40-line CDP client, since it is not Chrome
 and the extension cannot attach.
 
+**When a file is the thing in question, read that file.** "Days out are missing
+on the phone" produced three confident diagnoses across two sessions — a stale
+server stripping the field, then the local mirror being ahead of the upload —
+and all of them were inferred from downstream behaviour. One direct read of
+`home.json` from OneDrive (via the pipeline's own auth) disproved both in a
+minute: `schemaVersion: 2`, 17 excursions, `builtAt` byte-identical to the
+mirror's. The real cause was that the device was signed out, so the file was
+never requested at all. A signed-out app is worth recognising by that shape —
+`getAccessToken()` throws, no metadata is fetched, and every feature reading it
+looks *empty* rather than broken.
+
+**Several sessions work in this tree at once.** Four, recently: this one, the
+phone app, the basemap's China worldview, and an editor agent on the desktop
+shell. Consequences that have actually bitten:
+
+- **Check `git status` before assuming a broken file is yours.** A stale patch
+  applied over a committed redesign left `album.ts`, `dayEdit.ts` and
+  `style.css` with every rewritten line duplicated — the old copy first, never
+  closed. CSS nesting made the stylesheet *parse*, silently nesting the rest of
+  the file inside one selector. `git show HEAD:<file>` proved the committed
+  state clean, which is what identified it as another session's in-flight work.
+- **Ask before editing a shared renderer** (`tripMap.ts`, `search.ts`,
+  `home.ts`, `archiveData.ts`) — the phone reuses them, and a peer may have
+  uncommitted work in the same file.
+
 **Precise measurement answers the wrong question when the question is "does
 this look right."** The Fluent 2 sidebar refresh (`TODO.md`, 2026-09-09) spent
 several rounds proving a chevron centered to 0.5px and a marker column's math
@@ -313,8 +352,9 @@ over the library casually.
 
 ## The one piece of work with real value left
 
-**Caption the rest of the library** — 23,425 photos were still uncaptioned on
-2026-09-11. Everything it needs is built and was run end to end on 3 photos:
+**Caption the rest of the library** — **2,413 of 31,742 photos** were still
+uncaptioned on 2026-09-20, down from 23,425 on 2026-09-11 as the self-submitting
+batch run works through them. Everything it needs is built:
 
 - **Context.** The prompt carries the camera's clock in words, the trip, the
   town, a street-level venue and street (Nominatim `zoom=18`, looked up
@@ -360,5 +400,14 @@ comes back empty (RECITATION) stays uncaptioned — one interactive Analyze
 afterwards picks those up with its fallback.
 
 The i18n decision no longer blocks this: captions stay English and are
-translated beside the archive. Still open and cheaper: day summaries are
-written in isolation, and the owner's notes reach only the trip narrator.
+translated beside the archive.
+
+**Day summaries are no longer the gap they were.** Measured 2026-09-20 from
+`index.json`: **340 days are written** (245 in months, 95 in trips), against 30
+earlier that week. Six eligible days remain unwritten, all inside trips, and 19
+written days are stale — their captioned set has moved on since the prose was
+written. What is left of this is a rewrite at the owner's choosing, not a body
+of work.
+
+Still open and cheaper: day summaries are written in isolation, and the owner's
+notes reach only the trip narrator.

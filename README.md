@@ -96,8 +96,30 @@ get summarized — there's nothing for the model to work from otherwise — and 
 days whose photo set actually changed get a fresh call. Output goes into
 `index.json`'s `sections`; the shards aren't touched.
 
+`organize` survives a model outage rather than losing the run. A day the model
+will not write keeps whatever text it had and stays stale, three failures in a
+row stop the run, and the index is checkpointed every five written days —
+before that, one 503 on the ninth day of a run discarded eight summaries that
+had already been paid for.
+
 Rescanning never discards AI work: `scan` merges, carrying forward captions,
 tags, OCR text and geocoded places for photos it has seen before.
+
+Two maintenance passes exist for the case where something the summary does
+*not* depend on has changed underneath it, so that a paid re-run isn't needed
+to clear the staleness:
+
+```
+npm run --workspace pipeline dayplaces    # copy each day's dominant place onto the day record
+npm run --workspace pipeline accept-days  # accept the current photo set for already-written days
+```
+
+Neither calls a model. `dayplaces` exists because `npm run places` rewrites the
+shards while `DayRecord.place` is written by organize, so re-placing a library
+left 939 days both displaying the old name and marked stale. `accept-days`
+covers days whose summary was written before a late caption arrived. A day
+whose *prose* names the old place still names it — that half is a rewrite, at
+the owner's choosing.
 
 ## Provider abstraction
 
@@ -116,8 +138,12 @@ To add another provider (a local model, a different vendor): implement
 ## Trips vs. everyday
 
 Photo libraries that mix travel photos with daily snapshots and screenshots
-have no reliable *automatic* signal to detect trips from — no clean day-gaps,
-no clean geo-cluster. So trips are **defined manually**, in `pipeline/trips.json`:
+have no reliable signal in *distance* to detect trips from — no clean day-gaps,
+no clean geo-cluster. An early attempt was dropped because nothing separated a
+trip's first day (105km from home) from an ordinary day out (87km).
+
+So a trip is still an explicit record in `pipeline/data/trips.json`, but it no
+longer has to be typed by hand — see **Trips propose themselves** below:
 
 ```json
 [
@@ -125,13 +151,45 @@ no clean geo-cluster. So trips are **defined manually**, in `pipeline/trips.json
 ]
 ```
 
-The intended workflow: tell an agent (a Claude Code session — this one included)
-something like *"look at the photos from March 1–15 and call that the Japan
-trip"*. It inspects `pipeline/data/photos/*.json` for that date range and adds
-an entry here; `organize.ts` (`tripDefs.ts`) then slots any day whose date falls
-in `[startDate, endDate]` into that trip. Any day not covered falls into a month
+`organize.ts` (`tripDefs.ts`) slots any day whose date falls in
+`[startDate, endDate]` into that trip. Any day not covered falls into a month
 bucket instead. First matching range wins if ranges overlap, so keep them
-non-overlapping.
+non-overlapping — `POST /trips/define` refuses an overlap for that reason.
+
+You can still write one by hand, or tell an agent *"look at the photos from
+March 1–15 and call that the Japan trip"*. Mostly you accept a suggestion.
+
+### Trips propose themselves
+
+`pipeline/src/jobs/tripSuggest.ts` proposes ranges, and Generate's Trip tab
+lists them with an editable name and three answers: **Create** (a trip with no
+story — free, instant), **Write its story** (fills the generation form), and
+**Not a trip** (remembered in `data/trip-suggestions-dismissed.json`).
+
+The measure is **nights, not distances**. A day out ends at home however far it
+went; a trip does not. So a night counts as away when the evening is more than
+`AWAY_KM` (40km) from home *and* the next morning is not at home either — an
+evening 200km out says where the camera was at six, not where its owner slept.
+A run ends at the first morning spent at home, which stops a trip bridging a
+photo-less day into the next one.
+
+Home is not configured. It is the 0.2° grid cell holding nights in the most
+distinct weeks within ±120 days of the day being judged, so it follows a move
+between cities on its own — this library's does, from Beijing to the capital.
+
+It reproduced both hand-made trips exactly, and 15 trips are now defined.
+
+### Days out
+
+The same pass (`findExcursions`) picks up the other half: a day that went
+somewhere and came home the same night — home both sides, at least
+`MIN_AWAY_PHOTOS` (10) photos away, and not already inside a defined trip.
+There are 17 here, York at 366km down to a town at 41km.
+
+They need no trip page and get none. They ride in `home.json` as `excursions`
+(`DayExcursion` in `shared/src/types.ts`), because they come from the same pass
+over the same shards and every reader that fetches one fetches the other — so
+the phone gets them for free.
 
 ## The app
 
@@ -144,6 +202,19 @@ Days that `organize` has summarized render with their AI-chosen layout
 (`render.ts`: hero / document_focus / gallery / standard) instead of the plain
 grid. Everything else is the plain grid. The AI layer is purely additive — the
 album works fully without it.
+
+Two things a month marks, because thirty days in two thousand have a summary
+and nothing used to say which:
+
+- A **summarized day** carries an accent dot on its date and a rule down the
+  text, in the page and in the contents bar.
+- A **day out** is headed like a small trip rather than carded: a "Day out"
+  kicker, the place in trip-page type, then date · distance · photos. If it has
+  a summary it also carries a **Trip / Gallery** switch — the written page with
+  its stops, or the plain grid. The choice is stored under
+  `localStorage["day-out-mode"]` and is deliberately global rather than
+  per-day, since it is a reading habit; the phone uses the same key so the two
+  shells agree.
 
 ```
 npm run --workspace app dev        # local dev server
@@ -283,6 +354,20 @@ Two things that follow from it being a child process:
   `npm run --workspace app build`, press **Ctrl+R** in the window to pick the new
   bundle up. For UI work `npm run --workspace app dev` is the faster loop; the
   shell is for testing what it actually ships.
+
+A busy port is normal in development, so the shell adopts what is already
+there — but only after asking the port for the page and recognising this app in
+the answer. Anything else raises a dialog naming what it found and the shell
+stops, because showing the owner a stranger's page as their archive is worse
+than not starting.
+
+The static server sends a **Content-Security-Policy** with every response
+(`desktop/src/static.ts`). Inline script is allowed, since both pages bootstrap
+the theme from an inline block before the stylesheets paint; `unsafe-eval` is
+not, which is the part Electron actually warns about. `img-src` allows `https:`
+for whichever OneDrive CDN host Graph hands out that hour, `connect-src` is
+Graph, the sign-in host and loopback, and `frame-src` is the sign-in host alone
+so MSAL can still renew tokens in its hidden iframe.
 
 `DESKTOP_PORT` and `SERVE_PORT` override the two ports.
 

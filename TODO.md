@@ -1,20 +1,23 @@
 # TODO
 
-State as of **2026-09-20**. The library is 31,741 photos over 123 months;
-28,883 are captioned after the whole-library batch, and **30 days** have a
-written summary. The **the train 1** trip (2026-08-16 → 09-02, 18 days) is
-fully analyzed and cost **under £8**. Eight trips are now defined, most of them
-accepted from the suggestions the pipeline proposes.
+State as of **2026-09-20**, measured from `index.json` and the shards rather
+than recalled. The library is 31,742 photos over 123 months; 29,329 are
+captioned as the self-submitting batch run works through the tail, and **340
+days** have a written summary (245 in months, 95 in trips). The **the train
+1** trip (2026-08-16 → 09-02, 18 days) is fully analyzed and cost **under £8**.
+**15 trips** are defined, most of them accepted from the suggestions the
+pipeline proposes, and 17 days out are detected beside them.
 
-**18 open, 71 done.** The list grows because each session surfaces defects that
+**17 open, 73 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the phone
 app, the basemap's China worldview, and an editor agent on the desktop shell),
 so entries name the commit that closed them.
 
-The cluster with real user-visible value still in it is day summaries: 289 days
-are captioned and unwritten, at roughly $13 for all of them or $7 for the trip
-days alone.
+The cluster with real user-visible value in it was day summaries, and it has
+largely closed: 340 days are now written, with six eligible days left and 19
+gone stale. What remains is captioning the tail of the library — 2,413 photos
+of 31,742 — which the batch run is submitting by itself.
 
 Open items are listed first in each section; fixes are kept below them
 (collapsed under "Resolved") for the measurement detail they record — see
@@ -52,8 +55,22 @@ working practice this list was built with.
       *What remains is not this: the phone's "archive has changed" banner
       (`mobile/main.ts`) is its own mechanism — it revalidates its kept
       index.json by eTag on launch — and a checkpointing run does legitimately
-      change that file several times. The phone session has been told; whether
-      to suppress it while `/health` reports a running job is its call.*
+      change that file several times. Open below, owned by the phone session.*
+
+- [x] **Damp the phone's "archive has changed" banner during a long job.**
+      **Won't do, by the owner's decision, 2026-09-20.** A checkpointing
+      organize rewrites index.json every five written days, and each rewrite
+      is a real eTag change, so the banner is telling the truth — just far
+      too often, and the first instinct was to suppress it while `/health`
+      reports a job running.
+
+      That instinct only ever covered half the problem. The phone session
+      measured the other half: the installed app cannot reach
+      `127.0.0.1:4319` at all, because that is mixed content from
+      `https://localhost`. `/health` is not reachable there, so the shell
+      that actually runs on a phone could never have used the fix. The
+      owner's call was to leave the banner alone on that reasoning — it is
+      one line with a Refresh button, not a modal, and it is accurate.
 
 - [x] **Day summaries only where they earn their cost.** Owner's rule,
       2026-09-11: a day outside any trip is summarized only when it holds
@@ -1008,10 +1025,16 @@ working practice this list was built with.
       sign in — Microsoft will answer AADSTS50011.
 - [x] **First run on a real phone.** Done 2026-09-19/20 by the phone session
       (`6e75411` and after): it runs signed in on a Xiaomi device and on the
-      Medium_Phone emulator. Known residual, recorded there rather than here:
-      msal-browser 5 keeps its token key in a *session* cookie, which a WebView
-      drops when its process is killed, so a cold start can ask for sign-in
-      again.
+      Medium_Phone emulator. The sign-out-on-restart residual is closed too
+      (`ae5fbc6`): msal-browser keeps its cache encryption key in a cookie, and
+      a long expiry was not enough, because a cookie written from the page
+      lives in memory until the WebView flushes it — so a crash, a force-stop
+      or an install over the top lost the key and signed the app out silently.
+      A Cookies plugin now flushes on demand the moment the key is written, and
+      the key hash survives `am force-stop`. Worth knowing for its downstream
+      shape: signed out means `getAccessToken()` throws, so `home.json` is
+      never fetched and anything reading it looks empty rather than broken —
+      which is exactly how it presented, as "days out are missing".
 - [ ] **Confirm `appId` `com.travelarchive.photos`** before installing it
       anywhere that matters — changing it later makes it a different app.
 - [x] **Launcher icon and splash.** Done 2026-09-19: a route mark, ring to dot,
@@ -1108,13 +1131,21 @@ working practice this list was built with.
       bug, not one instance; a version on the file that the reader can compare
       would at least make it legible.
 
-- [ ] **289 days are captioned but unwritten.** Measured 2026-09-20 from the 30
-      days already written (~40 input and ~36 output tokens a photo, thinking at
-      1.47× output, taken from the real caption batch): about **$13** for all of
-      them, **$6.90** for the days inside a trip. Batch pricing halves both.
-      Building batch submission for day summaries was judged not worth it — the
-      saving is one-off and smaller than the work, and days stay written once
-      written.
+- [x] **289 days are captioned but unwritten.** Estimated 2026-09-20 from the
+      30 days written at that point (~40 input and ~36 output tokens a photo,
+      thinking at 1.47× output, taken from the real caption batch): about
+      **$13** for all of them, **$6.90** for the days inside a trip. Batch
+      pricing halves both. Building batch submission for day summaries was
+      judged not worth it — the saving is one-off and smaller than the work,
+      and days stay written once written.
+
+      *Done the same day, by the owner running organize rather than by any
+      change here. Measured from `index.json` afterwards: **340 days written**,
+      245 in months and 95 in trips. Six eligible days are still unwritten, all
+      inside trips, and 19 written days are stale — the captioned set moved on
+      after the prose was written, which is a rewrite at the owner's choosing
+      rather than a gap. The estimate held: the work that remained was the
+      cheap end of it.*
 
 ### Resolved
 
