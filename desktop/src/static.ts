@@ -78,13 +78,84 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
 }
 
 /**
- * Starts the static server, or resolves null when the port is already taken.
+ * A Content-Security-Policy for the app the shell serves.
+ *
+ * Electron warns on every renderer that has none, and the warning was right:
+ * there was no policy at all. It is deliberately loose where the app really
+ * does reach outward and tight everywhere else.
+ *
+ * - `script-src` allows inline, because both pages bootstrap the theme from an
+ *   inline `<script>` before the stylesheets paint, and a hash would have to
+ *   be regenerated on every edit of that block. It does **not** allow
+ *   `unsafe-eval`, which is the part Electron actually warns about.
+ * - `img-src https:` because thumbnails come from whichever OneDrive CDN host
+ *   Graph hands out that hour, and `blob:` for the ones the app builds itself.
+ * - `connect-src` is Graph, the sign-in host, and the job server on loopback.
+ * - `frame-src` is the sign-in host alone: MSAL renews tokens in a hidden
+ *   iframe, and without this the session would die silently after an hour.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' http://127.0.0.1:* http://localhost:* https://graph.microsoft.com https://login.microsoftonline.com",
+  "frame-src https://login.microsoftonline.com",
+  "object-src 'none'",
+  "base-uri 'none'",
+].join("; ");
+
+/** What `serveApp` found: the server it started, or what already held the port. */
+export type ServeResult =
+  | { kind: "serving"; server: Server }
+  /** Something else is on the port and it is serving this app — reuse it. */
+  | { kind: "adopted" }
+  /** Something else is on the port and it is not this app. */
+  | { kind: "occupied"; by: string };
+
+/**
+ * Starts the static server, or reports what already holds the port.
  *
  * A busy port is the normal case during development — `run-preview.ps1` or a
- * Vite dev server already owns 4173 — so it is treated as "somebody is already
- * serving this" and the window simply loads it, rather than as a fatal error.
+ * Vite dev server already owns it — so it is treated as "somebody is already
+ * serving this" and the window loads it, rather than as a fatal error. But
+ * "somebody" used to be taken on trust: whatever answered that port had the
+ * window pointed at it, and an unrelated service would have been shown to the
+ * owner as their archive. It is now asked for the page first, and only adopted
+ * if what comes back is this app.
  */
-export function serveApp(root: string, port: number): Promise<Server | null> {
+export async function serveApp(root: string, port: number): Promise<ServeResult> {
+  const started = await listen(root, port);
+  if (started) return { kind: "serving", server: started };
+  return (await servesThisApp(port)) ? { kind: "adopted" } : { kind: "occupied", by: await describe(port) };
+}
+
+/** Whether whatever owns the port answers with this app's own page. */
+async function servesThisApp(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return false;
+    const html = await res.text();
+    // The shell's own markup, and Vite's dev entry for the same page, both
+    // carry this id; a stranger's page will not.
+    return html.includes('id="app"') || html.includes("/src/main.ts");
+  } catch {
+    return false;
+  }
+}
+
+/** A line about whatever holds the port, for the error the owner sees. */
+async function describe(port: number): Promise<string> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(2000) });
+    return `HTTP ${res.status} ${res.headers.get("content-type") ?? "unknown type"}`;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+function listen(root: string, port: number): Promise<Server | null> {
   const rootPath = resolve(root);
 
   const server = createServer(async (req, res) => {
@@ -96,6 +167,7 @@ export function serveApp(root: string, port: number): Promise<Server | null> {
       }
       res.writeHead(200, {
         "Content-Type": MIME[extname(target).toLowerCase()] ?? "application/octet-stream",
+        "Content-Security-Policy": CSP,
         // The shell serves a build that changes whenever the app is rebuilt,
         // and a cached index.html would keep loading stale asset hashes.
         "Cache-Control": "no-cache",

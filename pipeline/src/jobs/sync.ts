@@ -109,7 +109,15 @@ export async function cachedSync(): Promise<SyncStatus> {
  * without a restart. Skipped while a job runs: its own `saveIndex` moves the
  * eTag anyway, and the next minute tries again.
  */
+/**
+ * Whether this server is part-way through writing the archive. Set by
+ * `startSyncChecks`, which is where the server hands the jobs module over;
+ * false until then, so a CLI run comparing its own replica behaves as before.
+ */
+let localJobRunning: () => boolean = () => false;
+
 export function startSyncChecks(busy: () => boolean): void {
+  localJobRunning = busy;
   const check = async (why: string) => {
     if (busy()) return;
     try {
@@ -136,8 +144,18 @@ export function startSyncChecks(busy: () => boolean): void {
  * The whole design rests on this being cheap: the same question asked by
  * fetching `/content` costs 2.4MB and 1-3 seconds, which is why the app used to
  * spend that on every single page load.
+ *
+ * **Not while this server is writing.** Every `saveIndex` moves the remote
+ * eTag, and a long organize now checkpoints every five written days, so a
+ * check landing mid-run compares the replica against a remote *it has just
+ * changed itself* — and, in the window between `markDirty` and `markSynced`,
+ * reports a conflict against its own upload. The scheduled checks always
+ * skipped a running job; "Check now" and the page's own uncached request did
+ * not, which is where the false alarms came from. The last measured answer is
+ * returned instead, with `checkedAt` saying how old it is.
  */
 export async function checkSync(): Promise<SyncStatus> {
+  if (localJobRunning()) return cachedSync();
   const state = await readSync();
 
   const { status, local } = await localStatus();

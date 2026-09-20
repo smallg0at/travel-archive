@@ -435,12 +435,27 @@ async function startup(): Promise<void> {
     return;
   }
 
-  // null means the port was already taken. On a dedicated port that should
-  // only happen if another copy of the shell is up — which the single-instance
-  // lock already prevents — so this is a safety net rather than the normal
-  // path, and loading what is there beats refusing to start.
-  staticServer = await serveApp(APP_DIST, APP_PORT);
-  log(staticServer ? `Serving ${APP_DIST} on ${APP_URL}` : `Reusing whatever already serves ${APP_URL}`);
+  // A taken port should only mean another copy of the shell — which the
+  // single-instance lock already prevents — so this is a safety net rather
+  // than the normal path. What is there is adopted only if it answers with
+  // this app; anything else is reported, because showing the owner a
+  // stranger's page as their archive is worse than not starting.
+  const served = await serveApp(APP_DIST, APP_PORT);
+  staticServer = served.kind === "serving" ? served.server : null;
+  if (served.kind === "occupied") {
+    dialog.showErrorBox(
+      "Port in use",
+      `Something else is already using ${APP_URL} (${served.by}), and it is not Photo Archive. ` +
+        `Close it and start again, or set APP_PORT to another port.`,
+    );
+    app.quit();
+    return;
+  }
+  log(
+    served.kind === "serving"
+      ? `Serving ${APP_DIST} on ${APP_URL}`
+      : `Reusing the Photo Archive already serving ${APP_URL}`,
+  );
 
   // The window opens at once, on a "Starting…" page, and the app loads into
   // it once the job server answers.
