@@ -3350,6 +3350,39 @@ body.map-expanded::after {
 }
 .day-out-head .day-meta { font-variant-numeric: tabular-nums; }
 
+/* The three-way control: thumbnail size (album.ts), theme and language
+   (theme.ts, settings). Its rules went out with the month heading's redesign
+   in a1af269, which moved that heading to .btn-action — but the class is still
+   what Settings is built from on both shells, so every one of those controls
+   lost its frame and read as three bare words. The phone's own rules
+   (mobile.css `.m-settings-group .density-control`) only add layout on top of
+   these, which is why it went with it. */
+.density-control {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  align-self: center;
+  flex-shrink: 0;
+}
+.density-control button {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-l);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.density-control button:hover { background: var(--bg-muted); }
+.density-control button.active {
+  background: var(--bg-muted);
+  color: var(--text);
+  font-weight: 500;
+}
+
 /* Trip or gallery, in the day's own heading: the album's density control
    (.density-control) is the same idea in the same place, so it is the same
    control. */
