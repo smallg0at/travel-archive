@@ -8,7 +8,7 @@ days** have a written summary (245 in months, 95 in trips). The **the train
 **15 trips** are defined, most of them accepted from the suggestions the
 pipeline proposes, and 17 days out are detected beside them.
 
-**19 open, 73 done.** The list grows because each session surfaces defects that
+**18 open, 74 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the phone
 app, the basemap's China worldview, and an editor agent on the desktop shell),
@@ -1626,32 +1626,15 @@ started from the app is refused while a CLI writer holds the archive lock —
 
 ### Packaging (2026-09-06)
 
-- [ ] **`desktop/scripts/make-icon.mjs` does not parse** (`node --check`:
-      `Identifier 'chunk' has already been declared`). Committed broken as
-      `f262b66`, labelled as another session's WIP; it is nobody's in this
-      session, and no owner has claimed it.
-
-      Nothing is blocked: `icon` is a standalone script
-      (`desktop/package.json`), neither `build` nor `package` runs it, and
-      `desktop/build/icon.png` already exists. Only `npm run icon` fails.
-
-      It is **two different icons interleaved line by line**, not a patch of
-      one — the same half-applied shape that damaged `album.ts`, `dayEdit.ts`
-      and `style.css` the same day:
-      - the committed design (`15e1fc0`, parses) is the route mark — origin
-        ring, four route dots, destination disc, `#0078d4` — drawn through
-        `draw()`/`isMark()` with 4×4 supersampling, mirroring the phone's
-        `ic_launcher_mark.xml`;
-      - the WIP is a different picture altogether, a photograph on a tile
-        (ink tile, paper photo, sky, sun, two hills) written top-level and
-        imperative. It is also truncated: the sun's loops and `hill()` never
-        close.
-
-      So whoever picks this up chooses a design rather than repairing a file.
-      Reverting that one path to `15e1fc0` restores a working script and the
-      branding both documents describe; keeping the WIP means finishing the
-      cut-off code and accepting that the desktop icon no longer matches the
-      phone's.
+- [x] **`desktop/scripts/make-icon.mjs` did not parse.** Committed broken as
+      `f262b66` (two different icons interleaved line by line — the same
+      half-applied shape that damaged `album.ts`, `dayEdit.ts` and
+      `style.css` that morning). *Closed by `c6d7541`, which dropped the
+      unfinished photograph-on-a-tile design rather than completing it: 5
+      insertions against 82 deletions, and `git diff 15e1fc0 c6d7541` on that
+      file is comments and blank lines alone, so the route mark that mirrors
+      the phone's `ic_launcher_mark.xml` is byte-identical and the branding
+      never diverged. `node --check` passes at HEAD.*
 
 Three things had to change before an installed build could work.
 

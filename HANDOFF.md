@@ -312,6 +312,15 @@ print stylesheet until 2026-09-08. **After any CSS edit, count `@media` blocks
 and braces**, not just the selectors you meant to touch. Use anchored replacements of exact text and verify the
 selector count afterwards.
 
+**Before deleting a CSS rule, find out who builds that class.** A month-heading
+redesign (`a1af269`) took the `.density-control` rules with it, because the
+heading no longer used them — but `album.ts:120` and `theme.ts:108` still build
+that class, so all three Settings controls (theme, thumbnail size, language)
+lost their frame on the desktop *and* on the phone, where `mobile.css` only
+layers flex and min-height on top of those base rules. The owner spotted it;
+restored in `64e6473`. `grep` for the class name across `app/src` before
+removing its rules, and remember that the phone may be styling on top of them.
+
 **Watch for `display: …` beating `[hidden]`.** An author-origin `display` rule
 overrides the UA's `[hidden] { display: none }`. This has bitten three times —
 `.lightbox`, `.signin-banner`, `.job-form`. The remedy in the stylesheet is to
