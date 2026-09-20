@@ -170,11 +170,19 @@ const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doct
 <style>
   :root { color-scheme: light dark; }
   html, body { height: 100%; margin: 0; background: transparent; }
-  body { display: grid; place-items: center; color: #6b6a64;
+  body { display: flex; align-items: center; justify-content: center; gap: 12px;
+         color: #6b6a64; --ring: #d9d7cf;
          font: 13px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
-  @media (prefers-color-scheme: dark) { body { color: #9a988f; } }
+  @media (prefers-color-scheme: dark) { body { color: #9a988f; --ring: #3a3935; } }
+  /* Matches the app's own loading spinner (style.css \`.trip-map-loading\`). */
+  i { flex: none; width: 16px; height: 16px; border: 2px solid var(--ring);
+      border-top-color: currentColor; border-radius: 50%;
+      animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { i { animation-duration: 2.4s; } }
+  p { margin: 0; }
 </style>
-<p>Starting the archive…</p>`)}`;
+<i></i><p>Starting the archive…</p>`)}`;
 
 /** Set once the app itself may be shown — after the job server answers, or the wait above gives up. */
 let appLoadable = false;
@@ -219,6 +227,17 @@ function createWindow(): void {
       setTimeout(() => captureDevScreenshot(mainWindow!), 2500);
     }
   });
+
+  // Windows 11 DWM workaround: re-apply background material when regaining focus or restoring
+  if (process.platform === "win32") {
+    const refreshMaterial = () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setBackgroundMaterial("mica");
+      }
+    };
+    mainWindow.on("focus", refreshMaterial);
+    mainWindow.on("restore", refreshMaterial);
+  }
 
   // Development shortcuts: F12 for DevTools, F5/Ctrl+R for reload, F8 for material, F9 for screenshot
   if (!PACKAGED) {
@@ -329,13 +348,22 @@ if (process.platform === "win32") {
  * rule (style.css) rather than duplicating it here; `displayHeaderFooter` is
  * false so no URL/date/title band is added, which is the entire point.
  */
-ipcMain.handle("print-to-pdf", async (event) => {
+ipcMain.handle("print-to-pdf", async (event, name?: string) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return { ok: false, error: "No window" };
 
+  // Named after what is open (a trip, a place). Strip characters Windows
+  // forbids in file names, and fall back to the app name when nothing is left.
+  const base =
+    (typeof name === "string" ? name : "")
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120) || "Photo Archive";
+
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
     title: "Export as PDF",
-    defaultPath: "Photo Archive.pdf",
+    defaultPath: `${base}.pdf`,
     filters: [{ name: "PDF", extensions: ["pdf"] }],
   });
   if (canceled || !filePath) return { ok: false, error: "cancelled" };
