@@ -251,10 +251,19 @@ export function suggestTrips(
     }
     // A run of nights away, allowing short gaps with no located photo.
     let last = i;
+    const wokeAway = (index: number) => {
+      const home = homeAt(dayNumber(days[index].date));
+      return !home || km(days[index].morning, home) > AWAY_KM;
+    };
     while (
       last + 1 < days.length &&
       away[last + 1] &&
-      dayNumber(days[last + 1].date) - dayNumber(days[last].date) <= MAX_GAP_DAYS + 1
+      dayNumber(days[last + 1].date) - dayNumber(days[last].date) <= MAX_GAP_DAYS + 1 &&
+      // A morning at home ends the trip, whatever the evening does. Over a gap
+      // with no photos the evening alone chained two separate outings into one:
+      // the Essex coast (24-27 June) ran on through 29 June, which began 3km
+      // from home, and swallowed a Milton Keynes overnight after it.
+      wokeAway(last + 1)
     ) {
       last++;
     }
