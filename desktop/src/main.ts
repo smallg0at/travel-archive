@@ -197,6 +197,7 @@ function createWindow(): void {
       symbolColor: "#ffffff",
       height: 36,
     },
+    icon: join(__dirname, "../build/icon.png"),
     backgroundColor: "#00000000",
     backgroundMaterial: "mica",
     title: "Photo Archive",
