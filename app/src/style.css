@@ -240,8 +240,8 @@ html.desktop-shell .sidebar-header {
 .sidebar-header-icon {
   width: 16px;
   height: 16px;
-  color: var(--accent);
   flex-shrink: 0;
+  border-radius: 3.5px;
 }
 .sidebar-header-title {
   overflow: hidden;
