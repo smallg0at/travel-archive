@@ -164,6 +164,18 @@ export interface StartOptions<R> {
 }
 
 /**
+ * A log line's time, on this machine's clock.
+ *
+ * It used to be `new Date().toISOString().slice(11, 19)` — UTC — so every line
+ * read eight hours early to an owner in UTC+8, and the timestamps down the log
+ * disagreed with the `startedAt`/`finishedAt` the app formats in local time.
+ * A job runs here; its clock is this machine's.
+ */
+function clockTime(now = new Date()): string {
+  return [now.getHours(), now.getMinutes(), now.getSeconds()].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+/**
  * Starts a job and returns immediately with its record. The work runs detached;
  * callers watch it via `subscribe` or poll `getJob`.
  */
@@ -204,7 +216,7 @@ export function start<R extends object>(opts: StartOptions<R>): JobRecord {
       message: p.message ?? null,
     };
     if (p.message) {
-      record.log.push(`${new Date().toISOString().slice(11, 19)}  ${p.message}`);
+      record.log.push(`${clockTime()}  ${p.message}`);
       if (record.log.length > MAX_LOG_LINES) record.log.splice(0, record.log.length - MAX_LOG_LINES);
     }
     emit(job);
