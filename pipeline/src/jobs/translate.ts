@@ -65,6 +65,12 @@ const BATCH_ITEMS = 60;
 const BATCH_CHARS = 8000;
 /** Batches between checkpoint saves, the way analyze saves every 150 photos. */
 const SAVE_EVERY_BATCHES = 10;
+/**
+ * Months read at once before translating starts. Each is a mirror shard plus a
+ * Graph download of that month's file; sequentially that is 123 round trips
+ * before the first call, which is the "Reading the archive..." wait.
+ */
+const PREPARE_CONCURRENCY = 6;
 
 /**
  * Measured on the first real run (September 2026 into zh-Hans, 948 texts,
@@ -311,14 +317,33 @@ export async function runTranslate(
     work.push({ part: "index", file: indexFile, missing: missingOf(sources, indexFile) });
   }
   if (opts.scope !== "day") {
-    for (const month of captionMonths(index, opts.only)) {
-      if (signal?.aborted) break;
-      const sources = captionSources(await loadShardForReading(token, month));
-      if (sources.size === 0) continue;
-      const file = await loadTranslations(token, opts.lang, month);
-      const missing = missingOf(sources, file);
-      if (missing.length) work.push({ part: month, file, missing });
-    }
+    // Every month's file and shard, read concurrently and reporting progress:
+    // sequentially this is one Graph round trip per month before any call is
+    // made, which on a slow link is the whole "Reading the archive..." wait and
+    // shows no count while it happens. `pooled` preserves the month order.
+    const months = captionMonths(index, opts.only);
+    const prepared: (Work | null)[] = new Array(months.length).fill(null);
+    let read = 0;
+    await pooled(
+      months.map((month, i) => ({ month, i })),
+      PREPARE_CONCURRENCY,
+      async ({ month, i }) => {
+        if (signal?.aborted) return;
+        const sources = captionSources(await loadShardForReading(token, month));
+        if (sources.size > 0) {
+          const file = await loadTranslations(token, opts.lang, month);
+          const missing = missingOf(sources, file);
+          if (missing.length) prepared[i] = { part: month, file, missing };
+        }
+        onProgress({
+          phase: "planning",
+          done: ++read,
+          total: months.length,
+          message: `Reading the archive… ${read}/${months.length}`,
+        });
+      },
+    );
+    for (const item of prepared) if (item) work.push(item);
   }
 
   const total = work.reduce((n, w) => n + w.missing.length, 0);
