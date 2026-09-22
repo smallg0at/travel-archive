@@ -5,7 +5,6 @@ import { getProvider } from "../providers/index.js";
 import { env } from "../env.js";
 import {
   emptyTranslations,
-  loadIndex,
   loadIndexForReading,
   loadShardForReading,
   loadTranslations,
@@ -275,16 +274,20 @@ interface Work {
 /**
  * Translates whatever in scope has no entry yet.
  *
- * Runs inside the archive lock like every job (server/jobs.ts). The language
- * files are loaded from Graph, not the mirror: this writes them, and a mirror
- * gone stale on another machine would be merged onto and uploaded over the
- * newer copy (HANDOFF.md).
+ * Runs inside the archive lock like every job (server/jobs.ts), and reads the
+ * mirror rather than OneDrive — a deliberate exception to "a write path reads
+ * Graph". The mirror is written local-first by every save and this is the only
+ * machine that writes it (the phone is a reader), which is the assumption the
+ * archive already rests on; reading from Graph instead cost a round trip per
+ * month plus 6MB for the index before a single call. The shapes are additive —
+ * month files only ever gain entries — so a stale mirror's worst case is an
+ * entry translated late, not one dropped.
  *
- * Captions are read from the mirror all the same — reading every captioned
- * shard from Graph would add a round trip per month to a job that does not
- * write shards. The cost of a stale mirror there is a caption translated late,
- * which is why entries are never *dropped* from caption files: only the day
- * text, whose source is the Graph copy of the index, is pruned.
+ * What sync cannot see: another machine *translating* moves no archive eTag, so
+ * `checkSync` reports "in-sync" and pulls nothing. A second writer of
+ * translations would need the eTag comparison extended to these files first. A
+ * second writer of the archive itself is already detected — it moves
+ * index.json's eTag — and sync pulls these files along with it.
  */
 export async function runTranslate(
   opts: TranslateOptions,
@@ -296,8 +299,8 @@ export async function runTranslate(
   const result: TranslateResult = { translated: 0, failed: 0, dropped: 0, batches: 0, inputTokens: 0, outputTokens: 0 };
 
   onProgress({ phase: "planning", message: "Reading the archive..." });
-  const index = await loadIndex(token);
-  const indexFile = await loadTranslations(token, opts.lang, "index");
+  const index = await loadIndexForReading(token);
+  const indexFile = await loadTranslationsForReading(token, opts.lang, "index");
   indexFile.parts ??= [];
   indexFile.owner ??= {};
 
@@ -331,7 +334,7 @@ export async function runTranslate(
         if (signal?.aborted) return;
         const sources = captionSources(await loadShardForReading(token, month));
         if (sources.size > 0) {
-          const file = await loadTranslations(token, opts.lang, month);
+          const file = await loadTranslationsForReading(token, opts.lang, month);
           const missing = missingOf(sources, file);
           if (missing.length) prepared[i] = { part: month, file, missing };
         }
