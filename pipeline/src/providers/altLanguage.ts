@@ -24,8 +24,8 @@ type SchemaNode = { properties?: Record<string, unknown>; required?: string[]; i
  * A copy of `schema` with an `_alt` twin beside every text field.
  *
  * The twin is a copy of the original field's own schema, so it keeps however
- * that provider spells "nullable" (Gemini's `nullable: true`, Anthropic's
- * `anyOf` with null) without this needing to know.
+ * that provider spells "nullable" (Gemini's `nullable: true`) without this
+ * needing to know.
  */
 export function withAltFields<T>(schema: T, lang: string): T {
   const name = LANGUAGE_NAMES[lang] ?? lang;

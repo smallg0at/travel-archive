@@ -407,16 +407,6 @@ function generationSection(): HTMLElement {
   const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
   body.appendChild(state);
 
-  const providerRow = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.provider}</span></div>`);
-  const provider = el<HTMLSelectElement>(`
-    <select class="set-select">
-      <option value="anthropic">Claude (Anthropic)</option>
-      <option value="gemini">Gemini (Google)</option>
-    </select>
-  `);
-  providerRow.appendChild(provider);
-  body.appendChild(providerRow);
-
   const keyField = el<HTMLLabelElement>(`
     <label class="set-scan-field set-key-field">
       <span>${ui.settings.apiKey}</span>
@@ -435,8 +425,8 @@ function generationSection(): HTMLElement {
     ui.common.save,
     () => {
       const value = key.value.trim();
-      const patch: Record<string, string> = { AI_PROVIDER: provider.value };
-      if (value) patch[provider.value === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"] = value;
+      const patch: Record<string, string> = { AI_PROVIDER: "gemini" };
+      if (value) patch.GEMINI_API_KEY = value;
       status.hidden = false;
       status.textContent = ui.common.saving;
       save.disabled = true;
@@ -464,29 +454,26 @@ function generationSection(): HTMLElement {
   let latest: ConfigStatus | null = null;
 
   /**
-   * Describes the provider currently **selected**, not the one last saved.
-   *
-   * Keying this on the saved provider was wrong in a way that lied: selecting
-   * Anthropic while Gemini was the configured one still read "Ready", still
-   * offered "Saved — type a new key to replace it", and still showed Gemini's
-   * shadow warning — for a provider with no key at all.
+   * Gemini is the only provider, so this reports the *configured* one rather
+   * than a selection. It used to key on a provider dropdown, which was wrong
+   * in a way that lied: a provider with no key still read "Ready" because the
+   * configured one had one.
    */
   const render = () => {
-    const selected = provider.value;
     if (!latest) {
       state.textContent = ui.settings.unavailable;
       state.className = "set-sync-state tone-muted";
       return;
     }
-    const hasKey = selected === "gemini" ? latest.keys.gemini : latest.keys.anthropic;
-    const ready = hasKey && selected === latest.provider;
+    const hasKey = latest.keys.gemini;
+    const ready = hasKey && latest.provider === "gemini";
 
     state.textContent = hasKey
-      ? selected === latest.provider
+      ? latest.provider === "gemini"
         ? ui.settings.ready
         : ui.settings.readyOnceSaved
       : ui.settings.noKey;
-    state.className = `set-sync-state tone-${ready ? "ok" : hasKey ? "warn" : "warn"}`;
+    state.className = `set-sync-state tone-${ready ? "ok" : "warn"}`;
 
     key.placeholder = hasKey ? ui.settings.keySaved : ui.settings.keyPaste;
     note.textContent = ui.settings.keyNote(latest.path);
@@ -494,23 +481,17 @@ function generationSection(): HTMLElement {
     // dotenv never overrides a real environment variable, so a key saved here
     // would work until the next restart and then quietly lose to the machine's
     // own setting. Better said than discovered.
-    const name = selected === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY";
-    const shadowed = latest.shadowed.includes(name);
+    const shadowed = latest.shadowed.includes("GEMINI_API_KEY");
     warning.hidden = !shadowed;
     if (shadowed) {
-      warning.textContent = ui.settings.shadowed(name);
+      warning.textContent = ui.settings.shadowed("GEMINI_API_KEY");
     }
   };
 
   const apply = (config: ConfigStatus | null) => {
     latest = config;
-    // Only a fresh answer from the server moves the selection; a reload must not
-    // undo a choice the user is part-way through making.
-    if (config) provider.value = config.provider === "gemini" ? "gemini" : "anthropic";
     render();
   };
-
-  provider.addEventListener("change", render);
 
   apply(null);
   void getConfig().then(apply);

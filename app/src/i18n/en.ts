@@ -248,7 +248,7 @@ export const en = {
     proxySystem: "System proxy",
     proxySystemDetected: (url: string) => `Detected: ${url}`,
     proxySystemNone: "No system proxy detected",
-    proxyAi: "AI provider (Gemini / Claude)",
+    proxyAi: "AI provider (Gemini)",
     proxyGraph: "Microsoft Graph (OneDrive)",
     proxyModes: {
       system: "Follow system proxy",

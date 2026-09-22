@@ -36,8 +36,6 @@ import { getProxySettings, updateProxyDispatcher } from "./proxy.js";
  */
 const WRITABLE = [
   "AI_PROVIDER",
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_MODEL",
   "GEMINI_API_KEY",
   "GEMINI_MODEL",
   "ONEDRIVE_PHOTOS_FOLDER",
@@ -53,21 +51,20 @@ const WRITABLE = [
 export type WritableKey = (typeof WRITABLE)[number];
 
 /** Secrets, which are reported as set-or-not and never sent back out. */
-const SECRET: WritableKey[] = ["ANTHROPIC_API_KEY", "GEMINI_API_KEY"];
+const SECRET: WritableKey[] = ["GEMINI_API_KEY"];
 
 export function configStatus(): ConfigStatus {
   const provider = env.aiProvider;
-  const keys = { anthropic: Boolean(env.anthropicApiKey), gemini: Boolean(env.geminiApiKey) };
+  const keys = { gemini: Boolean(env.geminiApiKey) };
   return {
     path: homeFile(".env"),
     exists: existsSync(homeFile(".env")),
     provider,
-    ready: provider === "gemini" ? keys.gemini : keys.anthropic,
+    ready: provider === "gemini" && keys.gemini,
     keys,
     photosFolder: env.photosFolder,
     metadataFolder: env.metadataFolder,
     geocodeContactEmail: env.geocodeContactEmail,
-    anthropicModel: env.anthropicModel,
     geminiModel: env.geminiModel,
     shadowed: WRITABLE.filter(shadowedByEnvironment),
     proxy: getProxySettings(),

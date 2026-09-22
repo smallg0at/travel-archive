@@ -1076,7 +1076,7 @@ server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`  GET  /health`);
   console.log(`  GET  /archive/status`);
   console.log(`  GET  /config              generation settings; never returns keys`);
-  console.log(`  POST /config              {AI_PROVIDER,ANTHROPIC_API_KEY,...}`);
+  console.log(`  POST /config              {AI_PROVIDER,GEMINI_API_KEY,...}`);
   console.log(`  GET  /prefs               the app's theme, density, sidebar width, language`);
   console.log(`  POST /prefs               {theme,density,sidebarWidth,contentLang,navOpenGroups}`);
   console.log(`  POST /jobs/scan           {mode,from,to}    free, Graph listing only`);

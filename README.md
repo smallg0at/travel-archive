@@ -123,13 +123,12 @@ the owner's choosing.
 
 ## Provider abstraction
 
-`analyze.ts` and `organize.ts` never call Claude or Gemini directly — they call
+`analyze.ts` and `organize.ts` never call the model directly — they call
 `getProvider()` from `pipeline/src/providers/index.ts`, which returns whichever
 implementation of the `AiProvider` interface (`pipeline/src/providers/types.ts`)
 matches `AI_PROVIDER` in `.env`.
 
-- `providers/anthropic.ts` — Claude, structured JSON output.
-- `providers/gemini.ts` — same contract, via `@google/genai`. **Verified working** against the real API (`pipeline/scripts/smoke-gemini.mjs` — run it any time after changing this file to sanity-check without needing OneDrive access). Default model is `gemini-3.6-flash`; `gemini-2.5-flash` was retired and returns a 404 pointing at the replacement, which is how the current default was picked.
+- `providers/gemini.ts` — the only provider today, via `@google/genai`, structured JSON output. **Verified working** against the real API (`pipeline/scripts/smoke-gemini.mjs` — run it any time after changing this file to sanity-check without needing OneDrive access). Default model is `gemini-3.6-flash`; `gemini-2.5-flash` was retired and returns a 404 pointing at the replacement, which is how the current default was picked.
 
 To add another provider (a local model, a different vendor): implement
 `captionPhoto` and `summarizeDay` per the `AiProvider` interface in a new
@@ -447,7 +446,7 @@ time. Pattern to follow: default the class to `display: none`, then add
 ## One-time setup
 
 1. **Azure app registration**: portal.azure.com → App registrations → New registration, "Personal Microsoft accounts only". Under Authentication add **both** platforms from the table above, set "Allow public client flows" to **Yes** under Advanced settings, and copy the Application (client) ID.
-2. `cp pipeline/.env.example pipeline/.env` — fill in `AZURE_CLIENT_ID`, `ONEDRIVE_PHOTOS_FOLDER` (the folder holding the date subfolders, `yyyy-mm/` or `yyyy/mm/`), `ONEDRIVE_METADATA_FOLDER`, `GEOCODE_CONTACT_EMAIL`, and the Anthropic or Gemini section.
+2. `cp pipeline/.env.example pipeline/.env` — fill in `AZURE_CLIENT_ID`, `ONEDRIVE_PHOTOS_FOLDER` (the folder holding the date subfolders, `yyyy-mm/` or `yyyy/mm/`), `ONEDRIVE_METADATA_FOLDER`, `GEOCODE_CONTACT_EMAIL`, and the Gemini section.
 3. `cp app/.env.example app/.env` — same client ID as `VITE_AZURE_CLIENT_ID`, and `VITE_ONEDRIVE_METADATA_FOLDER` matching `ONEDRIVE_METADATA_FOLDER`.
 4. `npm install` at the repo root (installs all three workspaces).
 
@@ -467,5 +466,5 @@ Settings says so when it detects one.
 
 - **The desktop holds shards in memory for the session, not persisted client-side.** Flipping between month tabs is instant after first load, but a reload re-fetches. The phone does persist them (README, "The phone app"); on the desktop the job server's mirror is a ~34ms read, so there is less to gain.
 - **No cross-archive search.** Finding "everything tagged `temple` in 2023" means loading every shard. The fix when it's wanted is a third artifact — a compact `search.json` of `{id, tags, place, truncated text}`, ~1.5MB at 10k photos — not turning the store into a database.
-- **Model is configurable via `ANTHROPIC_MODEL`/`GEMINI_MODEL`** (defaults `claude-opus-5` / `gemini-3.6-flash`). For bulk tagging at this volume a cheaper tier (`claude-haiku-4-5`, `gemini-3.6-flash-lite`) is worth considering.
+- **Model is configurable via `GEMINI_MODEL`** (default `gemini-3.6-flash`). For bulk tagging at this volume a cheaper tier (`gemini-3.6-flash-lite`) is worth considering.
 - **Trip ranges are edited by hand** (`pipeline/trips.json`); re-run `organize` after adding one.

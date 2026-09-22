@@ -79,11 +79,7 @@ function getProxyAgent(url: string): ProxyAgent {
 }
 
 function isAiHost(host: string): boolean {
-  return (
-    host.includes("googleapis.com") ||
-    host.includes("anthropic.com") ||
-    host.includes("openai.com")
-  );
+  return host.includes("googleapis.com") || host.includes("openai.com");
 }
 
 function isGraphHost(host: string): boolean {

@@ -644,11 +644,10 @@ export interface ConfigStatus {
   provider: string;
   /** Whether the *selected* provider has a key — what decides if generation works. */
   ready: boolean;
-  keys: { anthropic: boolean; gemini: boolean };
+  keys: { gemini: boolean };
   photosFolder: string;
   metadataFolder: string;
   geocodeContactEmail: string;
-  anthropicModel: string;
   geminiModel: string;
   /**
    * Settings whose value comes from a real environment variable, which beats

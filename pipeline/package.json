@@ -19,7 +19,6 @@
     "serve": "node dist/serve.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.116.0",
     "@azure/msal-node": "^3.8.0",
     "@google/genai": "^2.21.0",
     "@travel-archive/shared": "*",

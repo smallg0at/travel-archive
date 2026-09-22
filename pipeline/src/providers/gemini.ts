@@ -18,13 +18,13 @@ import { altInstructions, nativeText, withAltFields } from "./altLanguage.js";
 import { captionContextBlock } from "./captionContext.js";
 
 // Written against @google/genai's documented structured-output shape
-// (responseSchema + the Type enum, nullable fields instead of Claude-style
-// anyOf) at the time this was added. The JS SDK's surface here has moved
-// before — if this throws on your first run, check the current Gemini API
-// docs for GenerateContentConfig.responseSchema before assuming the prompt
-// or schema content itself is wrong.
-// Built on first use and rebuilt when the key changes — see the same note in
-// anthropic.ts. The key can arrive at runtime from the Settings config form.
+// (responseSchema + the Type enum, nullable fields) at the time this was
+// added. The JS SDK's surface here has moved before — if this throws on your
+// first run, check the current Gemini API docs for
+// GenerateContentConfig.responseSchema before assuming the prompt or schema
+// content itself is wrong.
+// Built on first use and rebuilt when the key changes. The key can arrive at
+// runtime from the Settings config form.
 let genai: GoogleGenAI | null = null;
 let genaiKey: string | undefined;
 

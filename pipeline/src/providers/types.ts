@@ -202,11 +202,10 @@ export interface TranslateResult {
 
 /**
  * Everything the pipeline needs from a model provider. Implement this to
- * swap in a different vision/text model (Gemini, etc.) — see
- * providers/anthropic.ts for the reference implementation, including the
- * JSON schema and prompt each method is expected to honor, and
- * providers/gemini.ts for a second implementation of the same contract.
- * providers/index.ts picks between them via the AI_PROVIDER env var.
+ * swap in a different vision/text model — see providers/gemini.ts for the
+ * reference implementation, including the JSON schema and prompt each method
+ * is expected to honor. providers/index.ts picks the implementation via the
+ * AI_PROVIDER env var.
  */
 export interface AiProvider {
   captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult>;

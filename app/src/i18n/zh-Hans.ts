@@ -240,7 +240,7 @@ export const zhHans: Messages = {
     proxySystem: "系统代理",
     proxySystemDetected: (url) => `已检测到：${url}`,
     proxySystemNone: "未检测到系统代理",
-    proxyAi: "AI 服务商 (Gemini / Claude)",
+    proxyAi: "AI 服务商 (Gemini)",
     proxyGraph: "Microsoft Graph (OneDrive)",
     proxyModes: {
       system: "跟随系统代理",

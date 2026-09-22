@@ -99,8 +99,7 @@ async function thumbnailBuffer(token, id) {
  * Which models to compare. Defaults to Gemini's newest Flash against Pro:
  * Flash is what a 14,500-photo bulk pass would realistically use, and Pro is
  * the question — does it read museum placards materially better, and is that
- * worth reserving it for the text-heavy days? Anthropic is included only if a
- * key happens to be set.
+ * worth reserving it for the text-heavy days?
  */
 const DEFAULT_MODELS = "gemini-3.8-flash,gemini-3.1-pro-preview";
 
@@ -109,12 +108,6 @@ async function loadProviders(requested) {
   const { createGeminiProvider } = await import("../dist/providers/gemini.js");
 
   for (const model of (requested ?? DEFAULT_MODELS).split(",").map((s) => s.trim())) {
-    if (model === "anthropic") {
-      if (!process.env.ANTHROPIC_API_KEY) continue;
-      const { anthropicProvider } = await import("../dist/providers/anthropic.js");
-      available.push({ name: `anthropic/${process.env.ANTHROPIC_MODEL ?? "default"}`, provider: anthropicProvider });
-      continue;
-    }
     if (!process.env.GEMINI_API_KEY) continue;
     available.push({ name: model, provider: createGeminiProvider(model) });
   }
@@ -129,7 +122,7 @@ function mediaTypeFor(name) {
 async function main() {
   const providers = await loadProviders(arg("--providers"));
   if (providers.length === 0) {
-    console.error("No providers have credentials. Set GEMINI_API_KEY and/or ANTHROPIC_API_KEY.");
+    console.error("No providers have credentials. Set GEMINI_API_KEY.");
     process.exit(1);
   }
   console.log(`Providers: ${providers.map((p) => p.name).join(", ")}`);

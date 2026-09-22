@@ -37,7 +37,7 @@ function parseArgs(): AnalyzeOptions & { yes: boolean } {
 
 async function runMain() {
   const opts = parseArgs();
-  console.log(`Provider: ${env.aiProvider} (${env.aiProvider === "gemini" ? env.geminiModel : env.anthropicModel})`);
+  console.log(`Provider: ${env.aiProvider} (${env.geminiModel})`);
 
   // Printed rather than silently spent: this is the only step that costs money.
   // No early return when the count is zero: runAnalyze still sweeps for photos

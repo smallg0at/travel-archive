@@ -96,9 +96,7 @@ function readEnv() {
     // Which providers/*.ts implementation of AiProvider to use. Add more
     // providers by implementing the interface in providers/types.ts and
     // wiring a new case into providers/index.ts.
-    aiProvider: fromEnv("AI_PROVIDER") ?? "anthropic",
-    anthropicApiKey: fromEnv("ANTHROPIC_API_KEY"),
-    anthropicModel: fromEnv("ANTHROPIC_MODEL") ?? "claude-opus-5",
+    aiProvider: fromEnv("AI_PROVIDER") ?? "gemini",
     geminiApiKey: fromEnv("GEMINI_API_KEY"),
     // 3.7 over 3.8: tied on caption quality in the bake-off, marginally faster
     // (2093ms vs 2255ms median), 27% fewer thinking tokens, and it read a
