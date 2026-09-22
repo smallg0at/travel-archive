@@ -352,14 +352,14 @@ from their last build, so after pulling or editing either one, rebuild it
 first — a stale `pipeline/dist` runs yesterday's server with no warning.
 
 **Don't also start the job server by hand** (`npm run --workspace pipeline
-serve`). If anything already holds 4319 the shell's own child fails to bind,
+serve`). If anything already holds 18419 the shell's own child fails to bind,
 and `/health` answers from the other one — possibly older code, and not
 stopped when the window closes. Stop it first; the shell starts and stops its
 own.
 
 `npm run desktop` builds `desktop/` and starts Electron. The shell then serves
 the built app on **17923** and starts the pipeline's job server as a child
-process on **4319**, waiting for it to answer `/health` before relying on it. If
+process on **18419**, waiting for it to answer `/health` before relying on it. If
 the job server cannot start, the window still opens and the archive still reads
 from OneDrive — only generation is unavailable, which is the same read-only path
 the phone takes.
@@ -368,7 +368,7 @@ Two things that follow from it being a child process:
 
 - **Only one instance may run.** A second would fight over both ports and, worse,
   run a second job server writing the same archive. The shell enforces this, and
-  quitting stops the child — a job server left holding port 4319 and the archive
+  quitting stops the child — a job server left holding port 18419 and the archive
   lock is a failure with nothing on screen to explain it.
 - **The window serves a build, not a dev server.** After
   `npm run --workspace app build`, press **Ctrl+R** in the window to pick the new

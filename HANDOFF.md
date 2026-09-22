@@ -41,7 +41,7 @@ Three workspaces plus a shell:
   stripping, where a relative import between `.ts` files would not resolve.
 - **`pipeline/`** — `scan` (free, Graph listing only) → `analyze` (costs money,
   captions photos) → `organize` (day and place summaries) → `trip` (narrative).
-  Plus `serve.ts`, the local job server on **127.0.0.1:4319**.
+  Plus `serve.ts`, the local job server on **127.0.0.1:18419**.
 - **`app/`** — a reader. It never writes the archive; it asks the server to.
 - **`desktop/`** — Electron. Serves `app/dist` on **17923** and spawns the job
   server.
@@ -126,7 +126,7 @@ reason. **After changing a derived file's shape, rebuild `pipeline/dist` and
 restart the shell before believing anything the app shows you.**
 Every feature needs that path to degrade rather than error. The installed phone
 app does not even ask: its WebView is `https://localhost`, and a request to
-`http://127.0.0.1:4319` is mixed content.
+`http://127.0.0.1:18419` is mixed content.
 
 **A photo shown from the phone must be the file the archive describes.** The
 installed app serves photographs from the phone's own storage where it has them

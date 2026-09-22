@@ -75,7 +75,7 @@ $bmp.Dispose()
  * cannot reach the job server.
  */
 const APP_PORT = Number(process.env.DESKTOP_PORT ?? 17923);
-const PIPELINE_PORT = Number(process.env.SERVE_PORT ?? 4319);
+const PIPELINE_PORT = Number(process.env.SERVE_PORT ?? 18419);
 
 /**
  * Where the built app and the pipeline live, which differs once installed.
@@ -543,7 +543,7 @@ app.on("window-all-closed", () => app.quit());
  * Stop the child before exiting.
  *
  * `before-quit` covers the ordinary path. The `exit` handler is the backstop:
- * a job server left running would hold port 4319 and, if it were mid-write,
+ * a job server left running would hold port 18419 and, if it were mid-write,
  * the archive lock too — leaving the next launch refusing to work for reasons
  * nothing on screen could explain.
  */

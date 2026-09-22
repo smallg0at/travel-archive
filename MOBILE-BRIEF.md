@@ -13,7 +13,7 @@ Gemini, writes metadata), `app/` (Vite + TypeScript web app, no framework),
 `desktop/` (Electron shell), `shared/` (types). The app reads `index.json` and
 per-month photo shards **from OneDrive at runtime** via Microsoft Graph, so a
 pipeline run shows up with no rebuild. When a local job server is running on
-`127.0.0.1:4319` the app prefers its byte-identical mirror; when there is none
+`127.0.0.1:18419` the app prefers its byte-identical mirror; when there is none
 it goes straight to Graph. That second path is the phone's path and it already
 works — see `app/src/archiveData.ts`.
 

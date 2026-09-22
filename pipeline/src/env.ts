@@ -81,7 +81,7 @@ function readEnv() {
     // credentials, so it must not be reachable from the LAN. That is also why
     // the phone is a read-only client: it talks to OneDrive directly, never to
     // this server.
-    servePort: Number(fromEnv("SERVE_PORT") ?? 4319),
+    servePort: Number(fromEnv("SERVE_PORT") ?? 18419),
 
     /**
      * How many photos `analyze` captions at once.

@@ -23,7 +23,7 @@ import type {
  * separate build, no separate code path, just a failed health check.
  */
 
-const BACKEND = import.meta.env.VITE_PIPELINE_URL || "http://127.0.0.1:4319";
+const BACKEND = import.meta.env.VITE_PIPELINE_URL || "http://127.0.0.1:18419";
 
 /** Short: an absent backend is the normal case, and must not stall first paint. */
 const HEALTH_TIMEOUT_MS = 1500;

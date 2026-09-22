@@ -72,7 +72,7 @@ export interface ThumbnailSource {
  */
 export const localServerSource: ThumbnailSource = {
   name: "local server",
-  // Loopback, but a different origin from the page (port 4319 against the
+  // Loopback, but a different origin from the page (port 18419 against the
   // app's own), so canvas export needs the opt-in. serve.ts already answers
   // with Access-Control-Allow-Origin for every registered app origin.
   crossOrigin: "anonymous",
