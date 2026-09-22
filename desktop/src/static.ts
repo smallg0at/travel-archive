@@ -91,6 +91,11 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
  *   `unsafe-eval`, which is the part Electron actually warns about.
  * - `img-src https:` because thumbnails come from whichever OneDrive CDN host
  *   Graph hands out that hour, and `blob:` for the ones the app builds itself.
+ *   It also allows loopback: when the job server is up the app takes thumbnails
+ *   from it (`http://127.0.0.1:<port>/thumb/...`), which is what lets the window
+ *   show them without a Microsoft session of its own. Omitting loopback here
+ *   while `connect-src` has it is a trap — the API calls succeed, so the server
+ *   looks healthy, and only the images silently fail.
  * - `connect-src` is Graph, the sign-in host, and the job server on loopback.
  * - `frame-src` is the sign-in host alone: MSAL renews tokens in a hidden
  *   iframe, and without this the session would die silently after an hour.
@@ -99,7 +104,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
+  "img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:*",
   "font-src 'self' data:",
   "connect-src 'self' http://127.0.0.1:* http://localhost:* https://graph.microsoft.com https://login.microsoftonline.com",
   "frame-src https://login.microsoftonline.com",
