@@ -1034,9 +1034,13 @@ working practice this list was built with.
       archive in both languages: home map, on-this-day, trips, the trip route
       map, day pages with cards, the viewer, a 4,440-photo month, search and
       settings; Back restores each page's scroll. **Not yet run on a device.**
-- [ ] **[Owner] Register `https://localhost/auth/`** as a Single-page
-      application redirect URI in Azure. Until then the Android app cannot
-      sign in — Microsoft will answer AADSTS50011.
+- [x] **[Owner] Register the redirect URI** as a Single-page application
+      redirect URI in Azure. Done 2026-09-22, as `/auth.html` on four origins
+      (`https://localhost`, `http://localhost:17923`, `:5173`, `:4173`) rather
+      than the trailing-slash `/auth/` the code first used. The file extension
+      is load-bearing: Capacitor's html5mode serves any extensionless path as
+      `index.html`, which put the whole app inside msal-browser's hidden
+      renewal iframe and broke silent renewal. See HANDOFF.
 - [x] **First run on a real phone.** Done 2026-09-19/20 by the phone session
       (`6e75411` and after): it runs signed in on a Xiaomi device and on the
       Medium_Phone emulator. The sign-out-on-restart residual is closed too

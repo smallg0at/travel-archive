@@ -15,7 +15,7 @@ const config: CapacitorConfig = {
   server: {
     // Android serves the app from https://localhost (Capacitor's default,
     // stated here because sign-in depends on it): MSAL's redirect URI is
-    // `${origin}/auth/`, so https://localhost/auth/ is what has to be
+    // `${origin}/auth.html`, so https://localhost/auth.html is what has to be
     // registered in Azure as a Single-page application redirect URI.
     androidScheme: "https",
     /**

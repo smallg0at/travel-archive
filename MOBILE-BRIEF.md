@@ -46,9 +46,9 @@ Build and check with `npx tsc --noEmit -p app` and
    security decision, not a flag change. Read the comment at
    `pipeline/src/serve.ts:48` before proposing anything here.
 2. **Auth follows the origin.** `app/src/msalConfig.ts` sets
-   `redirectUri: ${window.location.origin}/auth/`, so any new origin must be
+   `redirectUri: ${window.location.origin}/auth.html`, so any new origin must be
    registered as a redirect URI in the Azure app registration — an action only
-   the owner can take. Currently registered: `http://localhost:17923/auth/`
+   the owner can take. Currently registered: `http://localhost:17923/auth.html`
    and the Vite dev/preview ports. Inside Capacitor the origin becomes
    `https://localhost` (Android) or `capacitor://localhost` (iOS), which MSAL
    in a WebView handles badly; a system-browser flow is usually required.

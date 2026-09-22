@@ -55,7 +55,7 @@ $bmp.Dispose()
  * Everything visible is the same build that runs in a browser tab.
  *
  * **The window loads the app over HTTP on localhost, never file://.** MSAL's
- * redirect URI is `${window.location.origin}/auth/` and has to match a URI
+ * redirect URI is `${window.location.origin}/auth.html` and has to match a URI
  * registered under Azure's "Single-page application" platform; file:// has a
  * null origin and a custom scheme cannot be registered as one. Serving the
  * built app over loopback HTTP is what lets the shell add nothing to app/src —
@@ -63,7 +63,7 @@ $bmp.Dispose()
  */
 
 /**
- * The shell's own port, registered in Azure as `http://localhost:17923/auth/`.
+ * The shell's own port, registered in Azure as `http://localhost:17923/auth.html`.
  *
  * Deliberately not 4173, which `run-preview.ps1` uses: a dedicated port means
  * the desktop app and a dev preview can run at the same time without one
@@ -141,7 +141,7 @@ function log(line: string): void {
  *
  * `about:blank` is MSAL's synchronous placeholder popup; the login origin is
  * where it then navigates; and the app's own origin is where it lands at the
- * end, on the /auth/ bridge page that hands the response back to the opener.
+ * end, on the /auth.html bridge page that hands the response back to the opener.
  */
 function isAuthWindowUrl(url: string): boolean {
   return url === "about:blank" || url.startsWith(LOGIN_ORIGIN) || url.startsWith(APP_URL);
@@ -274,7 +274,7 @@ function createWindow(): void {
    * MSAL signs in through `window.open`, which Electron denies by default.
    *
    * Allowing it keeps the popup flow — the popup lands back on the app's own
-   * origin at /auth/, same origin as the opener, so the bridge page's
+   * origin at /auth.html, same origin as the opener, so the bridge page's
    * BroadcastChannel handoff works exactly as it does in a browser.
    * app/src/msAuth.ts already falls back to `loginRedirect` on
    * `popup_window_error`, so a denial here would still sign in; this is the

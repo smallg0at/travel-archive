@@ -57,7 +57,7 @@ function clearStaleInteractionLock(): void {
  * that as `popup_window_error`, so treat it as "this browser does not do
  * popups" and navigate the whole tab instead.
  *
- * The redirect lands on the same /auth/ bridge page the popup uses, which is
+ * The redirect lands on the same /auth.html bridge page the popup uses, which is
  * already registered in Azure — see auth/main.ts, which handles both arrivals.
  * A redirect never returns: the promise below is left pending while the tab
  * navigates away.
@@ -134,7 +134,7 @@ export async function getAccessToken(): Promise<string> {
  * WebView has no second window to open, so `window.open` either fails or
  * replaces the app itself, and MSAL's popup handoff has nothing to hand back
  * to. The whole WebView goes to Microsoft instead and returns through the
- * /auth/ bridge. Never resolves — the page navigates away.
+ * /auth.html bridge. Never resolves — the page navigates away.
  */
 export async function signInRedirect(): Promise<void> {
   await ensureInitialized();

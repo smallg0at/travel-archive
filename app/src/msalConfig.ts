@@ -11,18 +11,23 @@ export const msalConfig: Configuration = {
     clientId: CLIENT_ID,
     authority: `https://login.microsoftonline.com/${TENANT}`,
     // Must exactly match a redirect URI registered under the "Single-page
-    // application" platform in Azure — including the trailing slash. This
-    // is a DEDICATED bridge page (auth/index.html), not the main app:
-    // msal-browser's loginPopup() needs the popup to land on a page that
-    // just initializes MSAL, which then detects it's running inside a
-    // popup it opened and broadcasts the response back via BroadcastChannel
-    // — pointing this at the main app (which runs the whole UI instead)
-    // means that handoff never happens and the popup never closes. The
-    // trailing slash matters: confirmed live that Vite's dev/preview
-    // server only resolves auth/index.html for the exact path `/auth/`
-    // (directory-index convention) — `/auth` without it falls through to
-    // the SPA fallback and serves the main app instead.
-    redirectUri: `${window.location.origin}/auth/`,
+    // application" platform in Azure. This is a DEDICATED bridge page
+    // (auth.html), not the main app: msal-browser's loginPopup() needs the
+    // popup to land on a page that just initializes MSAL, which then detects
+    // it's running inside a popup it opened and broadcasts the response back
+    // via BroadcastChannel — pointing this at the main app (which runs the
+    // whole UI instead) means that handoff never happens and the popup never
+    // closes.
+    //
+    // The `.html` extension is load-bearing, which is why this is not the
+    // trailing-slash `/auth/` it used to be. Capacitor's local server runs in
+    // html5mode: it serves *any* extensionless path as index.html, so `/auth/`
+    // booted the whole app inside msal-browser's hidden renewal iframe instead
+    // of the bridge, and silent renewal timed out once the SPA refresh token's
+    // 24 hours lapsed. A real file path is served as itself by every server
+    // here — Capacitor, Vite dev/preview, and the desktop's own static server
+    // — with no per-platform routing to get right.
+    redirectUri: `${window.location.origin}/auth.html`,
   },
   cache: {
     cacheLocation: "localStorage",

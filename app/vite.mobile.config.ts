@@ -6,9 +6,10 @@ import { resolve } from "node:path";
  *
  * The desktop build (vite.config.ts) puts the phone page at /mobile/, beside
  * the desktop app at /. Inside the native app the phone page has to *be* the
- * root: the WebView opens `/`, and the MSAL bridge at /auth/ returns to `/`
- * once a redirect sign-in completes (auth/main.ts). So this build keeps only
- * the phone page and the bridge, and moves the phone page up to index.html.
+ * root: the WebView opens `/`, and the MSAL bridge at /auth.html returns to
+ * `/` once a redirect sign-in completes (auth/main.ts). So this build keeps
+ * only the phone page and the bridge, and moves the phone page up to
+ * index.html.
  */
 function phonePageAtRoot(): Plugin {
   return {
@@ -34,7 +35,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         mobile: resolve(__dirname, "mobile/index.html"),
-        auth: resolve(__dirname, "auth/index.html"),
+        auth: resolve(__dirname, "auth.html"),
       },
     },
   },

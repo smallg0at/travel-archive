@@ -1,5 +1,4 @@
 import { loadIndex, SignInRequiredError } from "../archiveData";
-import { broadcastResponseToMainFrame } from "@azure/msal-browser/redirect-bridge";
 import { completeRedirect, getActiveAccount, signIn, signInRedirect } from "../msAuth";
 import { checkHealth } from "../backend";
 import { localServerSource, setThumbnailSource } from "../photoSource";
@@ -81,7 +80,7 @@ function message(text: string): void {
  * Signed out: one screen, one button. The button has to be a real click —
  * `signIn` opens a popup first, and browsers only allow that from a gesture.
  * Inside the native app the popup is refused and MSAL falls back to a full
- * redirect through /auth/, which returns to this page already signed in.
+ * redirect through /auth.html, which returns to this page already signed in.
  */
 function signInScreen(): void {
   const view = el<HTMLElement>(`
@@ -206,25 +205,12 @@ async function start(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  // A fallback for the hidden iframe msal-browser uses to renew silently.
-  // MainActivity serves the redirect bridge at /auth/ now (see MainActivity
-  // and auth/main.ts), so a renewal's frame usually runs the bridge and never
-  // reaches this module. But Capacitor's local server serves an otherwise
-  // unhandled path as index.html, and if a subframe redirect ever slips past
-  // that interception and lands here, booting the app would leave
-  // msal-browser's `waitForBridgeResponse` waiting for a broadcast that never
-  // comes — every renewal past the refresh token's 24-hour life would time
-  // out. Send the broadcast, and do not boot.
-  if (location.pathname.startsWith("/auth") && window.self !== window.top) {
-    await broadcastResponseToMainFrame().catch((err) => console.error("Auth frame failed:", err));
-    return;
-  }
-  // First, before anything asks for a token: this load may be the return from
-  // a redirect sign-in that MSAL left for this page to finish (msAuth.ts).
-  // Normally the bridge page at /auth/ handles that; this is the fallback for
-  // when Capacitor's fallback served this module there instead.
+  // A redirect sign-in lands on /auth.html, which serves the bridge page
+  // (auth/main.ts); this call is the safety net for a load that reaches the
+  // app with an auth response instead — handleRedirectPromise() consumes it
+  // when there is one and does nothing on an ordinary load.
   await completeRedirect().catch((err) => console.error("Sign-in could not be completed:", err));
-  // Once an /auth/ arrival is handled, be at the root again — a cancelled
+  // Once an /auth arrival is handled, be at the root again — a cancelled
   // sign-in lands on the sign-in screen, not on a leftover path.
   if (location.pathname.startsWith("/auth")) history.replaceState(null, "", "/");
   void keepSignInAcrossLaunches();

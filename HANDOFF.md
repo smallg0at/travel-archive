@@ -102,9 +102,16 @@ null origin. Changing the desktop port means registering the URI **and** adding
 the origin to `ALLOWED_ORIGINS` in `serve.ts` — miss the second and the archive
 renders but every job request fails CORS silently.
 
-**`/auth/` with the trailing slash serves a bridge page**, not the app. The
-static server in `desktop/src/static.ts` reproduces that deliberately. Serve the
-app there instead and sign-in breaks in a way that looks like an MSAL problem.
+**The MSAL bridge is `/auth.html`, a real file — keep it that way.** msal-browser
+5 renews silently in a hidden iframe that lands on the redirect URI and waits for
+the bridge's `BroadcastChannel` message (`waitForBridgeResponse`). Give it an
+extensionless path and Capacitor's local server, in html5mode, serves
+`index.html` there instead: the whole app boots inside the hidden frame, never
+broadcasts, and every renewal past the SPA refresh token's 24 hours times out.
+The desktop's static server (`desktop/src/static.ts`) needs no special rule for a
+real file; it had one for the old `/auth/`. A trail of this — `auth/index.html`
+under a trailing-slash `/auth/`, and a `shouldInterceptRequest` shim to rescue it
+— was replaced by the plain `/auth.html`.
 
 **No backend is a supported state, not a failure.** It is the phone. A failed
 health check means: no Generate page, no pins, thumbnails via Graph + IndexedDB.

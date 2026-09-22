@@ -6,18 +6,19 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 /**
  * Serves `app/dist` the way Vite's preview server does.
  *
- * Deliberately not a generic static handler, because the app depends on two
- * behaviours a naive one gets wrong — and both fail in ways that look like an
+ * Deliberately not a generic static handler, because the app depends on a
+ * behaviour a naive one gets wrong — and it fails in a way that looks like an
  * auth bug rather than a routing bug:
  *
- *  - **`/auth/` must serve `auth/index.html`.** MSAL's redirect URI is
- *    `${origin}/auth/`, and app/src/msalConfig.ts documents that the trailing
- *    slash is load-bearing: Vite resolves the directory index only for the
- *    exact path, and `/auth` without it falls through to the SPA fallback and
- *    serves the main app instead — which silently breaks the popup handoff,
- *    because the bridge page never runs.
  *  - **Everything unmatched falls back to `index.html`**, so the app is a
- *    single-page app rather than a set of files.
+ *    single-page app rather than a set of files. Asset requests are excluded
+ *    (see `targetFor`), so a missing script 404s instead of being served an
+ *    HTML page.
+ *
+ * The MSAL bridge is an ordinary file now — `/auth.html` (`src/msalConfig.ts`)
+ * — so, unlike the trailing-slash `/auth/` it replaced, it needs no
+ * directory-index rule of its own: Vite's preview server, this one and
+ * Capacitor all serve a real path as itself.
  */
 
 const MIME: Record<string, string> = {
@@ -63,7 +64,7 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
   const within = resolveWithin(root, urlPath);
   if (!within) return join(root, "index.html");
 
-  // Directory index, which is what makes `/auth/` work.
+  // Directory index, which is how `/` finds index.html.
   if (urlPath.endsWith("/")) {
     const index = join(within, "index.html");
     if (await fileExists(index)) return index;
