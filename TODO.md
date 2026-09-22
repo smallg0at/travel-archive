@@ -8,11 +8,13 @@ days** have a written summary (245 in months, 95 in trips). The **the train
 **15 trips** are defined, most of them accepted from the suggestions the
 pipeline proposes, and 17 days out are detected beside them.
 
-**18 open, 74 done.** The list grows because each session surfaces defects that
+**17 open, 76 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the phone
 app, the basemap's China worldview, and an editor agent on the desktop shell),
-so entries name the commit that closed them.
+so entries name the commit that closed them. Two landed 2026-09-22: the phone's
+whole-library offline cache (`86bff48`) and the bridge-path fix for silent
+sign-in renewal (`12491a7`).
 
 The cluster with real user-visible value in it was day summaries, and it has
 largely closed: 340 days are now written, with six eligible days left and 19
@@ -1053,6 +1055,23 @@ working practice this list was built with.
       shape: signed out means `getAccessToken()` throws, so `home.json` is
       never fetched and anything reading it looks empty rather than broken —
       which is exactly how it presented, as "days out are missing".
+- [x] **Silent renewal broke past the refresh token's 24 hours — the bridge
+      path, not MSAL.** Found and fixed 2026-09-22 (`12491a7`), after the app
+      was reported to ask for a sign-in again in normal use. msal-browser 5
+      renews silently in a hidden iframe that lands on the redirect URI and
+      waits for the bridge's `BroadcastChannel` message. The redirect URI was
+      the trailing-slash `/auth/`, which Capacitor's local server — in html5mode
+      — serves as `index.html`: the whole app booted inside the hidden frame,
+      never broadcast, and every renewal past 24 hours timed out. The bridge is
+      a real file now, `/auth.html`, served as itself by Capacitor, Vite and the
+      desktop static server alike. A `shouldInterceptRequest` shim that briefly
+      rescued `/auth/`, and Capacitor's `RouteProcessor` (never asked about an
+      extensionless path), were both tried and dropped. Verified on the device:
+      a hidden frame at `/auth.html` runs the bridge and broadcasts, and an
+      interactive sign-in through it lands back at `/`. The >24-hour renewal
+      itself still needs a day's wait to prove. Clearing cookies/session
+      reproduces the "asked to sign in" state on demand — and leaves the offline
+      archive intact; see HANDOFF.
 - [ ] **Confirm `appId` `com.travelarchive.photos`** before installing it
       anywhere that matters — changing it later makes it a different app.
 - [x] **Launcher icon and splash.** Done 2026-09-19: a route mark, ring to dot,
@@ -1066,6 +1085,19 @@ working practice this list was built with.
       exercised — nothing here could take the test browser offline. Offline, a
       kept month shows its captions untranslated: the Chinese caption files are
       not kept.
+
+      **Followed up 2026-09-22 (`86bff48`):** the phone now caches the whole
+      library by itself, not only the months opened. A background pass
+      (`offline.ts`) walks every month — a quiet toast reports it, Settings ›
+      Offline shows the count and bytes and can turn it off, and returning to
+      the foreground resumes a pass the WebView stalled. A launch asks OneDrive
+      for one listing of the `photos` folder (`listRemoteShardEtags`) and pulls
+      only the shards whose eTag moved; already-kept months are never
+      re-downloaded. `loadMonthKept` is local-first, the index translations are
+      read from their kept copy before first paint, and the Chinese caption
+      files are kept per month. The fallback branch is exercised now: taken
+      offline over CDP, a kept month renders. Measured: 122 of 123 months, the
+      last a ghost month OneDrive does not hold (Graph 404 on `2016-01.json`).
 - [ ] iOS is not added — it needs a Mac with Xcode.
 
 - [x] **Trips proposed instead of typed.** Done 2026-09-20 (`978b86a`,

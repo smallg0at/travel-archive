@@ -179,6 +179,30 @@ treat the fix as reasoned and shipped, not as measured. Third-party cookies are 
 reason: MSAL renews silently through a hidden Microsoft iframe once the SPA
 refresh token's 24 hours are up.
 
+**The MSAL bridge is `/auth.html`, and the extension is load-bearing.** The
+hidden renewal frame lands on the redirect URI and waits for the bridge's
+`BroadcastChannel` message (msal-browser 5's `waitForBridgeResponse`). Capacitor's
+local server runs in html5mode and serves *any* extensionless path as
+`index.html`, so the trailing-slash `/auth/` the app first used booted the whole
+app inside that frame: it never broadcast, every renewal past the refresh token's
+24 hours timed out, and the app asked to be signed in again — a real, reported
+failure that looked like an MSAL problem. A real file is served as itself by
+Capacitor, Vite and `desktop/src/static.ts` alike, so there is no per-platform
+routing to get wrong. `auth/main.ts` answers the popup, the full-page redirect and
+the silent frame with one rule (a silent frame is treated like a popup); a
+`shouldInterceptRequest` shim that briefly rescued the old path, and Capacitor's
+`RouteProcessor` (which is never asked about an extensionless path), were both
+tried and dropped.
+
+**Clearing cookies/session resets the interface, but not the offline archive.**
+Measured 2026-09-22 by clearing the WebView's cookies, `localStorage` and
+`sessionStorage`: the MSAL keys go 7 → 0 and the app asks for a sign-in again,
+which is correct — there is nothing left to renew. The IndexedDB store is
+untouched, so the phone's kept months survive, and a fresh sign-in immediately
+rewrites `msal.cache.encryption`. What does *not* survive is the interface
+preferences: the installed app has no job server, so `localStorage` is their only
+store and they fall back to defaults (English, system theme).
+
 **`Vary: Origin` must be sent whether or not the request had an Origin.**
 Thumbnails are cached `immutable` for a year. Send it only when an `Origin` is
 present and a no-CORS fetch caches a copy with no record that CORS mattered —
@@ -242,9 +266,27 @@ and the form warns.
 | phone app: screens, stack, viewer | `app/src/mobile/` (`main.ts` routes, `router.ts`, `day.ts`) |
 | phone app: native shell | `app/capacitor.config.ts`, `app/vite.mobile.config.ts`, `app/android/` |
 | phone app: photos from the device | `app/src/mobile/devicePhotos.ts`, `android/…/LocalPhotosPlugin.java` |
+| phone app: offline months, shard cache, incremental pull | `app/src/mobile/offline.ts`, `mobile/cache.ts` |
+| phone app: MSAL bridge page | `app/auth.html` + `app/auth/main.ts` |
 | thumbnails / disk cache | `pipeline/src/thumbStore.ts`, `serve.ts` |
 | sync | `pipeline/src/jobs/sync.ts`, `syncStore.ts` |
 | place names (offline) | `pipeline/src/geocodeOffline.ts` + `scripts/build-geo.mjs` |
+
+### The phone's offline archive
+
+The phone keeps every month's `PhotoRecords` in IndexedDB and opens from them
+rather than the network. `offline.ts` runs one background pass over the whole
+library (a quiet toast reports it; Settings › Offline shows the count, the bytes
+and an off switch), and a launch asks OneDrive for a single listing of the
+`photos` folder to diff each month's eTag and pull only the shards that moved —
+so a month already kept is never re-downloaded. `loadMonthKept` is local-first,
+and the index translations are read from their kept copy before first paint, so a
+slow link costs freshness, never the first screen; coming back to the foreground
+resumes a pass a backgrounded WebView stalled. The month caption files are kept
+too, so an offline month reads in the reader's language. Measured on this
+library: 122 of 123 months, the last being a shard the index lists but OneDrive
+does not hold (the ghost-month issue in TODO, seen as a Graph 404 for
+`2016-01.json`).
 
 ### Place names come from a local gazetteer, not a service
 
