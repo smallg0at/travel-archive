@@ -20,7 +20,7 @@ metadata and photo bytes client-side.
 Everything lives under `ONEDRIVE_METADATA_FOLDER`:
 
 ```
-index.json              nav + day structure only, no PhotoRecords (~200-400KB)
+index.json              nav + day structure, no PhotoRecords (~6MB minified)
 photos/2025-04.json     every PhotoRecord for that month (~200-400KB each)
 photos/2025-05.json
 ```
@@ -295,8 +295,8 @@ What it does differently from the desktop, and why:
   then goes to Home, then leaves — not WebView history, which after a
   redirect sign-in holds Microsoft's login pages.
 - **Photographs come from the phone itself where it has them**, which is most
-  of them: measured on the owner's phone, 24,110 of 31,721 photos and 79GB of
-  103GB, over 90% for every year since 2021. This is the third source
+  of them: measured on the owner's phone, ~24,000 of ~31,700 photos and ~80GB of
+  ~100GB, over 90% for every year since 2021. This is the third source
   `photoSource.ts` was written for, and it is off until allowed in Settings —
   it needs `READ_MEDIA_IMAGES`, and Android's own dialog says nothing about
   why an archive reader wants the camera folder.
@@ -318,8 +318,8 @@ archive against it. The bytes are served by MainActivity's `WebViewClient` from
 and nothing leaves the phone. Photos are only read.
 
 **Matched on file name *and* exact byte size, never one alone.** This library
-holds 1,898 names whose archived copy is a different encoding of the same
-picture — 235KB against 2.6MB — and showing one for the other would show a
+holds ~1,900 names whose archived copy is a different encoding of the same
+picture — ~235KB against ~2.6MB — and showing one for the other would show a
 different picture from the one the archive describes. A miss falls back to
 OneDrive, which is also what happens for the quarter of the archive that was
 never on this phone, so the feature cannot introduce a new failure.

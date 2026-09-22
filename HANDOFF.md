@@ -133,7 +133,7 @@ app does not even ask: its WebView is `https://localhost`, and a request to
 a month's captions only when `parts` names it. It was an accumulated array that a
 translate run loaded and only ever appended to, so a run starting from an index
 without it wrote a *shorter* one — and one had: `parts` named 5 months while 123
-caption files with 29,476 entries existed, so 118 months read in English on the
+caption files with ~29,500 entries existed, so 118 months read in English on the
 phone and in the desktop window, and sync, which reads the same list, skipped
 them too. `translationParts()` (`archiveStore.ts`) derives it now from a Graph
 folder listing unioned with the mirror, and the index is rewritten whenever the
@@ -144,8 +144,8 @@ entries.
 installed app serves photographs from the phone's own storage where it has them
 (README, "Photographs from the phone's own storage") — 76% of this library.
 The match is file name **plus exact byte size**, and both halves are load
-bearing: 1,898 names in this library have an archived copy that is a different
-encoding of the same picture, 235KB against 2.6MB. Match on the name alone and
+bearing: ~1,900 names in this library have an archived copy that is a different
+encoding of the same picture, ~235KB against ~2.6MB. Match on the name alone and
 the reader is shown a different photograph from the one the caption, the day
 and the place were written about, which is the one failure this feature could
 introduce and the reason it cannot. Every URL carries the expected size and the
@@ -442,8 +442,8 @@ over the library casually.
 
 ## The one piece of work with real value left
 
-**Caption the rest of the library** — **2,413 of 31,742 photos** were still
-uncaptioned on 2026-09-20, down from 23,425 on 2026-09-11 as the self-submitting
+**Caption the rest of the library** — **~2,400 of ~31,700 photos** were still
+uncaptioned on 2026-09-20, down from ~23,400 on 2026-09-11 as the self-submitting
 batch run works through them. Everything it needs is built:
 
 - **Context.** The prompt carries the camera's clock in words, the trip, the
