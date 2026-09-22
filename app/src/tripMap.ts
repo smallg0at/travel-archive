@@ -332,6 +332,20 @@ export interface PlaceMapOptions {
    * 300px one.
    */
   labelPx?: number;
+  /**
+   * Fit the places to the frame's own aspect instead of the trip map's fixed
+   * 1.9:1. The home map wants this: a fixed aspect leaves part of the frame
+   * unused, and since discs and labels are a fixed size on screen, the unused
+   * span made the map read as cramped on a narrow frame and padded on a wide
+   * one. The trip map keeps 1.9:1, which it was drawn around.
+   */
+  aspectFromContainer?: boolean;
+  /**
+   * A floor under the fitted span, in unit-square degrees (the world is 1).
+   * The home map uses it so a library confined to one region still opens on a
+   * world-scale view rather than a close-up of that region.
+   */
+  minSpan?: number;
   /** A group's display name, for a cluster that holds the whole of one (see MapPoint.group). */
   groupName?: (group: string) => string;
   /** A cluster's name: its biggest place, and how many more it holds. */
@@ -968,15 +982,39 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   const ysAll = points.map((p) => p[1]);
   const spanX = Math.max(...xsAll) - Math.min(...xsAll);
   const spanY = Math.max(...ysAll) - Math.min(...ysAll);
-  const span = Math.max(spanX, spanY, 0.004) * (1 + pad * 2);
-  const aspect = 1.9;
 
-  const view = {
-    w: span * aspect * 1e5,
-    h: span * 1e5,
-    x: ((Math.min(...xsAll) + Math.max(...xsAll)) / 2) * 1e5,
-    y: ((Math.min(...ysAll) + Math.max(...ysAll)) / 2) * 1e5,
+  /**
+   * The places' own extent, padded — what a refit must keep in view. `minSpan`
+   * puts a floor under each axis so a library confined to one region still
+   * opens on a world-scale view; `0.004` is the old floor for a single place.
+   */
+  const minSpan = opts.minSpan ?? 0.004;
+  const extent = {
+    w: Math.max(spanX, minSpan) * (1 + pad * 2) * 1e5,
+    h: Math.max(spanY, minSpan) * (1 + pad * 2) * 1e5,
   };
+  const centreX = ((Math.min(...xsAll) + Math.max(...xsAll)) / 2) * 1e5;
+  const centreY = ((Math.min(...ysAll) + Math.max(...ysAll)) / 2) * 1e5;
+
+  /**
+   * The default fit. The home map takes the frame's own aspect
+   * (`aspectFromContainer`) and contains the places in it, so no part of the
+   * frame is wasted — which matters because discs and labels are a fixed size
+   * on screen. The trip map keeps the fixed 1.9:1 it was designed around, box
+   * and all.
+   */
+  const frame = canvas.getBoundingClientRect();
+  const aspect =
+    opts.aspectFromContainer && frame.width > 0 && frame.height > 0 ? frame.width / frame.height : 1.9;
+
+  let view: { w: number; h: number; x: number; y: number };
+  if (opts.aspectFromContainer) {
+    const h = Math.max(extent.w / aspect, extent.h);
+    view = { w: h * aspect, h, x: centreX, y: centreY };
+  } else {
+    const span = Math.max(spanX, spanY, 0.004) * (1 + pad * 2);
+    view = { w: span * aspect * 1e5, h: span * 1e5, x: centreX, y: centreY };
+  }
   const home = { ...view };
   /** The fit as first computed, before any container reshaped `home` (setExpanded). */
   const fitted = { w: home.w, h: home.h };
@@ -995,8 +1033,6 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
    */
   let lastFit = { ...view };
   const markFit = () => (lastFit = { ...view });
-  /** The places' own extent, padded the same way — what a refit must keep in view. */
-  const extent = { w: Math.max(spanX, 0.004) * (1 + pad * 2) * 1e5, h: Math.max(spanY, 0.004) * (1 + pad * 2) * 1e5 };
 
   // Everything drawn on top of the basemap — strokes, city discs, labels — is
   // sized as a fraction of the *fitted* view, then multiplied by how far you
@@ -1236,6 +1272,39 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   };
 
   expand.addEventListener("click", () => setExpanded(!root.classList.contains("is-expanded")));
+
+  /**
+   * The frame's shape changing on its own — a window resize. Only the home map,
+   * whose fit follows the frame's aspect: re-fit while the reader is still at
+   * the fit, so a resize does not throw away a zoom or pan, and otherwise just
+   * re-derive `home`, the size reference, so discs and labels keep the size they
+   * are drawn at and Fit stays right.
+   */
+  if (opts.aspectFromContainer) {
+    const onFrameResize = () => {
+      if (!root.isConnected) return;
+      const box = canvas.getBoundingClientRect();
+      if (box.height <= 0) return;
+      const shape = box.width / box.height;
+      const contain = (b: { w: number; h: number }) =>
+        shape >= b.w / b.h ? { w: b.h * shape, h: b.h } : { w: b.w, h: b.w / shape };
+      const atFit = view.w === lastFit.w && view.h === lastFit.h && view.x === lastFit.x && view.y === lastFit.y;
+      Object.assign(home, contain(fitted));
+      const fit = contain(extent);
+      Object.assign(fitView, fit.h < fitted.h ? { w: fitted.h * shape, h: fitted.h } : fit);
+      if (atFit) {
+        Object.assign(view, fitView);
+        markFit();
+      } else {
+        Object.assign(view, contain(view));
+      }
+      clusterBucket = Number.NaN;
+      pixelHeight = 0;
+      frameAspect = 0;
+      apply();
+    };
+    new ResizeObserver(onFrameResize).observe(canvas);
+  }
   // Removed with the map: the home page is rebuilt on every visit, and one
   // listener per visit would pile up for the life of the page.
   const onEscape = (event: KeyboardEvent) => {

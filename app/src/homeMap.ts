@@ -91,6 +91,13 @@ export function homeMapOptions(places: HomePlace[]): PlaceMapOptions {
     // weighted by photos, and type sized for a world rather than a trip.
     cluster: true,
     labelPx: 12.5,
+    // Fit to the frame's own aspect rather than the trip map's 1.9:1. The home
+    // map's discs and labels are a fixed size on screen, so unused frame was
+    // the map reading as cramped on a narrow window and padded on a wide one.
+    aspectFromContainer: true,
+    // And keep a world-scale floor: a library that lives in one country should
+    // still open on a view that reads as a map, not a close-up of that country.
+    minSpan: 0.16,
     groupName: countries.display,
     clusterName: ui.map.clusterMore,
     groupsName: ui.map.clusterCountries,
