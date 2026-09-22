@@ -194,7 +194,12 @@ function renderNow(host: HTMLElement, job: JobRecord | null): void {
     box.querySelector(".job-phase")!.textContent = `${jobTitle(j)} · ${phase}${total > 0 ? ` · ${num(done)}/${num(total)}` : ""}`;
     box.querySelector<HTMLElement>(".job-bar-fill")!.style.width = `${total > 0 ? Math.round((done / total) * 100) : 0}%`;
     // Model output and file names end up in here, so it is set as text.
-    box.querySelector(".job-log")!.textContent = j.log.slice(-8).join("\n");
+    // A whole tail, not the last few lines: a scan writes one line per folder,
+    // so eight showed barely the current one. The box scrolls (see `.job-log`)
+    // and is pinned to the newest line so a growing log stays readable.
+    const log = box.querySelector<HTMLPreElement>(".job-log")!;
+    log.textContent = j.log.slice(-40).join("\n");
+    log.scrollTop = log.scrollHeight;
   };
   paint(job);
   host.appendChild(box);
