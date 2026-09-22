@@ -128,6 +128,18 @@ Every feature needs that path to degrade rather than error. The installed phone
 app does not even ask: its WebView is `https://localhost`, and a request to
 `http://127.0.0.1:18419` is mixed content.
 
+**A "which files exist" list must be read back from the files.** `parts` in a
+`TranslationFile` names the months that have a caption file, and the app fetches
+a month's captions only when `parts` names it. It was an accumulated array that a
+translate run loaded and only ever appended to, so a run starting from an index
+without it wrote a *shorter* one — and one had: `parts` named 5 months while 123
+caption files with 29,476 entries existed, so 118 months read in English on the
+phone and in the desktop window, and sync, which reads the same list, skipped
+them too. `translationParts()` (`archiveStore.ts`) derives it now from a Graph
+folder listing unioned with the mirror, and the index is rewritten whenever the
+list differs. The files are the source of truth; a summary of them can only lose
+entries.
+
 **A photo shown from the phone must be the file the archive describes.** The
 installed app serves photographs from the phone's own storage where it has them
 (README, "Photographs from the phone's own storage") — 76% of this library.

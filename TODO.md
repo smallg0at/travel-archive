@@ -8,13 +8,15 @@ days** have a written summary (245 in months, 95 in trips). The **the train
 **15 trips** are defined, most of them accepted from the suggestions the
 pipeline proposes, and 17 days out are detected beside them.
 
-**17 open, 76 done.** The list grows because each session surfaces defects that
+**17 open, 78 done.** The list grows because each session surfaces defects that
 were previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the phone
 app, the basemap's China worldview, and an editor agent on the desktop shell),
-so entries name the commit that closed them. Two landed 2026-09-22: the phone's
-whole-library offline cache (`86bff48`) and the bridge-path fix for silent
-sign-in renewal (`12491a7`).
+so entries name the commit that closed them. Four landed 2026-09-22: the phone's
+whole-library offline cache (`86bff48`), the bridge-path fix for silent sign-in
+renewal (`12491a7`), the caption index rebuilt from its files after it had lost
+118 of 123 months (`66a8e16`), and the home map fitting the frame's aspect
+(`efe8daf`).
 
 The cluster with real user-visible value in it was day summaries, and it has
 largely closed: 340 days are now written, with six eligible days left and 19
@@ -192,6 +194,20 @@ working practice this list was built with.
       **Still to translate**: 5,129 texts — 3,278 August captions, 32 from
       2025-04, 1,819 day and trip texts outside September. Generate →
       Translate → Estimate first.
+
+      **Fixed 2026-09-22 (`66a8e16`) — the caption index had lost 118 of its 123
+      months.** `TranslationFile.parts` is what tells the app which months have
+      a caption file, and the app fetches a month's captions only when `parts`
+      names it. It was an accumulated array a translate run loaded and appended
+      to, so a run that started from an index without it wrote a *shorter* one:
+      `parts` named 5 months while 123 caption files with 29,476 entries sat
+      there, and 118 months read in English on the phone and in the desktop
+      window (sync used the same list, so it skipped them too). `parts` is now
+      derived from the files that exist — one Graph folder listing unioned with
+      the mirror (`translationParts`, `archiveStore.ts`) — and rewritten when it
+      differs, so it repairs itself. The live index was rebuilt to 123 months,
+      locally and on OneDrive. The lesson is the HANDOFF invariant: a list of
+      which files exist must be read back from the files.
 
 - [x] **A page refresh lost the reader's place — always back to the newest
       trip.** Raised by the owner 2026-09-10. `captureView` only kept the view

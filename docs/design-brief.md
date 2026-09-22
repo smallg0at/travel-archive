@@ -8,8 +8,8 @@ been getting mocked up wrong.
 
 ## What it is
 
-A **personal photo archive** over one person's OneDrive library: ~18,400 photos
-across 61 months, 2016–2026. It does two things:
+A **personal photo archive** over one person's OneDrive library: ~31,700 photos
+across 123 months, 2016–2026. It does two things:
 
 1. Shows the whole library, filed by month.
 2. Turns selected stretches of it into something **written and readable** — an
@@ -178,7 +178,7 @@ Recorded so the same corrections are not needed twice:
 
 | | |
 |---|---|
-| library | ~18,400 photos, 61 months, 2016–2026 |
+| library | ~31,700 photos, 123 months, 2016–2026 |
 | reference trip | the train 1, 2026-08-16 → 09-02, 18 days, 4,685 photos |
 | its segments | 125 places, 81 transit |
 | its cards | 725 (125 full, 152 half, 448 normal) |

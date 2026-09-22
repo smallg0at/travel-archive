@@ -274,9 +274,17 @@ server is used when it answers, so it loads in milliseconds. The APK needs
 What it does differently from the desktop, and why:
 
 - **It opens on the index it kept last time** (IndexedDB, `mobile/cache.ts`),
-  then asks OneDrive for just that file's eTag and fetches the 3.7MB index
-  only when it changed — offering a refresh rather than rebuilding the page
-  under the reader. Nothing else on the Graph path persisted between launches.
+  then asks OneDrive for just that file's eTag and fetches the index
+  (~6MB minified) only when it changed — offering a refresh rather than
+  rebuilding the page under the reader. Nothing else on the Graph path
+  persisted between launches before the phone's own cache, below.
+- **It keeps the whole library on the phone.** A background pass caches every
+  month's photo records (a quiet toast reports it; Settings › Offline shows the
+  count and controls it), so the library opens without the network and days
+  already read work offline. A launch asks OneDrive for one listing of the
+  `photos` folder and pulls only the shards whose eTag moved; the index
+  translations are read from their kept copy before first paint. See "The
+  phone's offline archive" in `HANDOFF.md`.
 - **Sign-in is a full-page redirect inside the app's WebView**, never a popup,
   and Microsoft's login hosts are in Capacitor's `allowNavigation`. The system
   browser cannot be used: a sign-in finished there lands on
@@ -457,7 +465,7 @@ Settings says so when it detects one.
 
 ## Known simplifications
 
-- **Shards are held in memory for the session, not persisted client-side.** Flipping between month tabs is instant after first load, but a reload re-fetches. An IndexedDB cache keyed on `generatedAt` would fix that; not worth it until the app is actually on a phone.
+- **The desktop holds shards in memory for the session, not persisted client-side.** Flipping between month tabs is instant after first load, but a reload re-fetches. The phone does persist them (README, "The phone app"); on the desktop the job server's mirror is a ~34ms read, so there is less to gain.
 - **No cross-archive search.** Finding "everything tagged `temple` in 2023" means loading every shard. The fix when it's wanted is a third artifact — a compact `search.json` of `{id, tags, place, truncated text}`, ~1.5MB at 10k photos — not turning the store into a database.
 - **Model is configurable via `ANTHROPIC_MODEL`/`GEMINI_MODEL`** (defaults `claude-opus-5` / `gemini-3.6-flash`). For bulk tagging at this volume a cheaper tier (`claude-haiku-4-5`, `gemini-3.6-flash-lite`) is worth considering.
 - **Trip ranges are edited by hand** (`pipeline/trips.json`); re-run `organize` after adding one.

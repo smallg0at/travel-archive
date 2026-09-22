@@ -1,5 +1,12 @@
 # Brief: make the photo archive usable on a phone
 
+> **Historical, written 2026-09-18.** The phone app this brief asked for exists:
+> `app/mobile/` + `app/android/`, and it caches the whole library offline now.
+> Read `README.md` ("The phone app") and `HANDOFF.md` ("The phone's offline
+> archive") for the current state; this file is kept for the reasoning that got
+> it there, and some of its "what is already true" is no longer true — notably
+> the cold-start and persistence notes below.
+
 You are picking up one strand of an ongoing personal photo-archive project at
 `C:\Code\proj`. Another session is working in the same repo on unrelated
 features (a home page, place-name quality). **Do not commit files you did not
