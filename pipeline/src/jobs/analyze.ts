@@ -285,6 +285,7 @@ export function captionContextFor(record: PhotoRecord, sources: ContextSources):
     venue: record.near?.venue ?? null,
     street: record.near?.street ?? null,
     dayNote: day ? (sources.notes.get(day) ?? null) : null,
+    isVideo: Boolean(record.video),
   };
   return Object.values(context).some(Boolean) ? context : null;
 }

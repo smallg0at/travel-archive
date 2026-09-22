@@ -23,12 +23,16 @@ export function captionContextBlock(context: CaptionContext | null): string {
   if (context.venue) lines.push(`Nearest named place on the map at those coordinates: ${context.venue}`);
   if (context.street) lines.push(`Street: ${context.street}`);
   if (context.dayNote) lines.push(`The owner's own note about this day: "${context.dayNote}"`);
-  if (!lines.length) return "";
+  if (!lines.length && !context.isVideo) return "";
+  const videoLine = context.isVideo
+    ? "This image is the **poster frame of a video**, not a photograph — describe what this frame shows, and do not describe motion, sound or anything the single frame cannot support."
+    : null;
   return [
     "",
     "",
     "CONTEXT — use it only to name what you can already see, never to add what you cannot:",
-    lines.join("\n"),
+    ...(videoLine ? [videoLine] : []),
+    ...lines,
     "",
     "If this context lets you name a place, a building or an exhibit that the image shows, use the name. " +
       "The map's nearest named place can be a neighbour of what is photographed, so use it only where the image agrees. " +

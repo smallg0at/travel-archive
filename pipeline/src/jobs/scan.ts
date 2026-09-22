@@ -112,9 +112,12 @@ function toRecord(photo: ScannedPhoto, month: string, allowlist: string[]): Phot
     notable: false,
     quality: null,
     visibility: null,
-    screenshot: isScreenshot(photo.name) ? screenshotPolicyFor(photo.name, allowlist) : null,
+    screenshot: !photo.isVideo && isScreenshot(photo.name) ? screenshotPolicyFor(photo.name, allowlist) : null,
     sensitive: null,
     inheritedFrom: null,
+    video: photo.isVideo
+      ? { durationMs: photo.durationMs, width: photo.width, height: photo.height, fourCC: photo.fourCC }
+      : null,
   };
 }
 

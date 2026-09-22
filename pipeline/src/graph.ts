@@ -18,6 +18,7 @@ export interface DriveItem {
   folder?: { childCount: number };
   photo?: { takenDateTime?: string };
   image?: { width?: number; height?: number };
+  video?: { duration?: number; width?: number; height?: number; fourCC?: string };
   location?: { latitude?: number; longitude?: number };
   fileSystemInfo?: { createdDateTime?: string };
 }
@@ -30,7 +31,7 @@ interface ChildrenPage {
 // Explicit $select keeps the listing payload small and, more importantly,
 // makes the facets above actually show up — Graph omits some of them from
 // the default projection.
-const PHOTO_SELECT = "id,name,size,file,folder,photo,image,location,fileSystemInfo";
+const PHOTO_SELECT = "id,name,size,file,folder,photo,image,video,location,fileSystemInfo";
 
 async function graphFetch(token: string, path: string, init: RequestInit = {}): Promise<Response> {
   return graphFetchUrl(token, `${GRAPH_BASE}${path}`, init);
@@ -185,6 +186,11 @@ export interface ScannedPhoto {
   /** Doubles as a free sharpness proxy when picking a burst's representative — see bursts.ts. */
   bytes: number;
   gps: GeoPoint | null;
+  /** True for a `video/*` item. Its poster frame is what gets captioned. */
+  isVideo: boolean;
+  /** Graph's `video.duration`, milliseconds. Null on an image, or when Graph omits it. */
+  durationMs: number | null;
+  fourCC: string | null;
 }
 
 function coordsOf(item: DriveItem): GeoPoint | null {
@@ -244,9 +250,14 @@ function takenAtOf(item: DriveItem): { takenAt: string | null; dateSource: DateS
 }
 
 /**
- * Every image in one folder. Pages are fully drained before recursing so a
- * paginated month never gets interleaved with its siblings. Non-image files
- * (this library has plenty of .mp4 alongside the photos) are skipped.
+ * Every image or video in one folder. Pages are fully drained before recursing
+ * so a paginated month never gets interleaved with its siblings. Anything that
+ * is neither `image/*` nor `video/*` is skipped.
+ *
+ * **Videos are indexed like photos**, with Graph's `video` facet supplying
+ * duration and dimensions. They cost nothing to index and, crucially, Graph
+ * renders a **poster thumbnail** for them — so `analyze` can caption that one
+ * frame through the same path as a photo without ever downloading the video.
  */
 export async function listPhotosInFolder(token: string, folderPath: string, recursive = true): Promise<ScannedPhoto[]> {
   const results: ScannedPhoto[] = [];
@@ -256,18 +267,24 @@ export async function listPhotosInFolder(token: string, folderPath: string, recu
     const itemPath = `${folderPath}/${item.name}`;
     if (item.folder) {
       if (recursive) subfolders.push(itemPath);
-    } else if (item.file?.mimeType.startsWith("image/")) {
-      results.push({
-        id: item.id,
-        name: item.name,
-        path: itemPath,
-        ...takenAtOf(item),
-        width: item.image?.width ?? null,
-        height: item.image?.height ?? null,
-        bytes: item.size ?? 0,
-        gps: coordsOf(item),
-      });
+      continue;
     }
+    const mime = item.file?.mimeType ?? "";
+    const isVideo = mime.startsWith("video/");
+    if (!mime.startsWith("image/") && !isVideo) continue;
+    results.push({
+      id: item.id,
+      name: item.name,
+      path: itemPath,
+      ...takenAtOf(item),
+      width: item.image?.width ?? item.video?.width ?? null,
+      height: item.image?.height ?? item.video?.height ?? null,
+      bytes: item.size ?? 0,
+      gps: coordsOf(item),
+      isVideo,
+      durationMs: item.video?.duration ?? null,
+      fourCC: item.video?.fourCC ?? null,
+    });
   }
 
   for (const sub of subfolders) {

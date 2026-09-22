@@ -110,6 +110,14 @@ export interface SensitiveFlag {
   dismissed: boolean;
 }
 
+/** Graph's `video` facet on a driveItem, reduced to what the archive uses. */
+export interface VideoMeta {
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+  fourCC: string | null;
+}
+
 export interface PhotoRecord {
   id: string;
   fileName: string;
@@ -137,6 +145,15 @@ export interface PhotoRecord {
   height: number | null;
   /** File size from Graph. Doubles as a free sharpness proxy — blurry frames compress smaller. */
   bytes: number;
+
+  /**
+   * Present only on a video. `analyze` captions the **poster frame** Graph
+   * generates for the item, which is what lets a video run through the same
+   * pipeline as a photo — but the prompt should know it is looking at one
+   * frame, not the recording. Absent on everything indexed before video
+   * support, and ignored by older readers.
+   */
+  video?: VideoMeta | null;
 
   gps: GeoPoint | null;
   place: string | null;

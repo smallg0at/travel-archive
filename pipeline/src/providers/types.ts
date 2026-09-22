@@ -34,6 +34,8 @@ export interface CaptionContext {
   street: string | null;
   /** The owner's note for the day: the one field a person wrote. */
   dayNote: string | null;
+  /** True when the image is a video's poster frame, so the caption must not describe motion it cannot see. */
+  isVideo: boolean;
 }
 
 /**
