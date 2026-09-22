@@ -195,6 +195,10 @@ export function lazyImg(photo: PhotoRecord, size: "medium" | "large" = "medium",
   img.alt = loc(photo.caption) ?? "";
   img.loading = "lazy";
   img.dataset.photoId = photo.id;
+  // A video's poster is a still, so the grids cannot tell it from a photo
+  // without a mark. Set here rather than at each call site, so every grid that
+  // wraps its images in a positioned cell gets the badge from one CSS rule.
+  if (photo.video) img.dataset.video = "";
   if (size === "large") img.dataset.loader = "large";
   if (className) img.className = className;
   thumbObserver.observe(img);

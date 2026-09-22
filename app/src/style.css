@@ -824,6 +824,24 @@ html.desktop-shell .nav-year:hover {
   cursor: zoom-in;
 }
 
+/* A video's poster frame is a still photograph to the eye, so a cell needs a
+   mark to say so. A CSS triangle, not a glyph, so it does not depend on a font
+   that may not carry "▶". Only cells that are positioned can host it, which is
+   why `.album-cell` is relative — see its rule above. */
+.album-cell:has(img[data-video])::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 7px 0 7px 12px;
+  border-color: transparent transparent transparent #fff;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.85));
+  pointer-events: none;
+}
+
 /* Every photo carries its caption as `alt`, which a screen reader needs and a
    sighted user must never see: when a thumbnail fails — an expired CDN link, a
    throttled batch, an offline phone — the browser lays that sentence out

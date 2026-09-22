@@ -105,6 +105,14 @@ const CSP = [
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:*",
+  /*
+   * `media-src` is separate from `img-src` and has no fallback of its own —
+   * without it the `<video>` fell back to `default-src 'self'` and every video
+   * was refused with a CSP error. It needs the same two origins as images: the
+   * job server on loopback, which 302s the request, and `https:` for the
+   * OneDrive CDN host it redirects to.
+   */
+  "media-src 'self' blob: https: http://127.0.0.1:* http://localhost:*",
   "font-src 'self' data:",
   "connect-src 'self' http://127.0.0.1:* http://localhost:* https://graph.microsoft.com https://login.microsoftonline.com",
   "frame-src https://login.microsoftonline.com",
