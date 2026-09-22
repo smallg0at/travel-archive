@@ -9,6 +9,9 @@ import android.webkit.WebView;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 public class MainActivity extends BridgeActivity {
 
@@ -75,7 +78,35 @@ public class MainActivity extends BridgeActivity {
             if ("localhost".equals(url.getHost()) && url.getPath() != null && url.getPath().startsWith("/_device/")) {
                 return LocalPhotosPlugin.serve(view.getContext(), url);
             }
+            /*
+             * /auth/ serves the redirect-bridge page, as it does on the
+             * desktop (desktop/src/static.ts, and the invariant in
+             * HANDOFF.md). Capacitor's local server has no directory-index
+             * resolution, so /auth/ falls through to index.html and the whole
+             * app boots there instead — which broke msal-browser's silent
+             * renewal: its hidden iframe lands on /auth/, msal waits for the
+             * bridge's BroadcastChannel response, and the app that loaded
+             * instead never sends one, so every renewal past the refresh
+             * token's 24-hour life timed out. Serving the bridge here puts the
+             * phone back in line with the desktop.
+             */
+            if ("localhost".equals(url.getHost()) && url.getPath() != null
+                    && (url.getPath().equals("/auth") || url.getPath().equals("/auth/"))) {
+                InputStream html = openAuthBridge(view);
+                if (html != null) {
+                    return new WebResourceResponse("text/html", "utf-8", html);
+                }
+            }
             return super.shouldInterceptRequest(view, request);
+        }
+
+        /** The built bridge page, from the bundled web assets, or null if it is not there. */
+        private InputStream openAuthBridge(WebView view) {
+            try {
+                return new BufferedInputStream(view.getContext().getAssets().open("public/auth/index.html"));
+            } catch (IOException e) {
+                return null;
+            }
         }
 
         @Override

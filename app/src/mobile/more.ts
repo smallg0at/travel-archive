@@ -4,6 +4,8 @@ import { renderThemeControl } from "../theme";
 import { renderContentLanguageControl } from "../contentLang";
 import { getActiveAccount } from "../msAuth";
 import { cacheStats } from "../thumbCache";
+import { keptStats } from "./cache";
+import { allMonths, autoCacheEnabled, cacheAllNow, setAutoCacheEnabled } from "./offline";
 import { ui } from "../i18n";
 import { openDate } from "./day";
 import { openViewer } from "./viewer";
@@ -113,6 +115,41 @@ export function renderSettings(): HTMLElement {
       size.querySelector(".m-setting-value")!.textContent = ui.mobile.cacheSize(count, (bytes / 1e6).toFixed(1));
     })
     .catch(() => size.remove());
+
+  // Keeping months offline, and seeing how much of the library is already
+  // here. The auto pass runs at launch (offline.ts); this is where the reader
+  // can watch it, stop it by turning it off, or force it now.
+  const offline = group(ui.mobile.offlineGroup);
+  const total = allMonths().length;
+  const kept = row(ui.mobile.offlineKept, "…");
+  offline.body.appendChild(kept);
+  const refreshKept = () =>
+    void keptStats()
+      .then(({ months, bytes }) => {
+        const sizeText = bytes ? ` · ${ui.mobile.cacheBytes((bytes / 1e6).toFixed(1))}` : "";
+        kept.querySelector(".m-setting-value")!.textContent = ui.mobile.cacheMonths(months, total) + sizeText;
+      })
+      .catch(() => {});
+  refreshKept();
+
+  const auto = document.createElement("input");
+  auto.type = "checkbox";
+  auto.checked = autoCacheEnabled();
+  auto.addEventListener("change", () => setAutoCacheEnabled(auto.checked));
+  offline.body.appendChild(row(ui.mobile.autoCache, auto));
+
+  const download = el<HTMLButtonElement>(`<button type="button" class="m-primary"></button>`);
+  download.textContent = ui.mobile.cacheNow;
+  download.addEventListener("click", () => {
+    download.disabled = true;
+    void cacheAllNow(allMonths()).finally(() => {
+      download.disabled = false;
+      refreshKept();
+    });
+  });
+  offline.body.appendChild(download);
+  offline.body.appendChild(Object.assign(document.createElement("p"), { className: "m-note", textContent: ui.mobile.autoCacheWhy }));
+  page.appendChild(offline.section);
 
   return page;
 }

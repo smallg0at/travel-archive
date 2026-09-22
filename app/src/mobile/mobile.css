@@ -262,6 +262,32 @@ body.m h1, body.m h2, body.m h3, body.m h4, body.m p { margin: 0; }
   border-radius: 999px;
 }
 
+/* Progress for background work — caching months, mostly. A quiet pill above
+   the tabs that never takes a tap and never covers a control: it reports, it
+   does not ask. Sits below the banner, which has an action and wins if both
+   are up. */
+.m .m-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tab-h) + var(--safe-bottom) + 12px);
+  transform: translateX(-50%);
+  z-index: 35;
+  max-width: calc(100% - 32px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-muted) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.m .m-toast[hidden] { display: none; }
+.m .m-toast:not([hidden]) { animation: m-rise .26s var(--ease-out); }
+
 .m .m-center {
   min-height: 100dvh;
   display: flex;
@@ -843,7 +869,7 @@ body.m {
 .m .m-tab.is-active svg { animation: m-pop .28s var(--ease-out); }
 
 @media (prefers-reduced-motion: reduce) {
-  .m .m-sheet, .m .m-sheet-backdrop, .m .m-screen, .m .m-viewer, .m .m-map, .m .m-banner, .m .m-tab svg, .m .m-viewer-sheet { animation: none !important; }
+  .m .m-sheet, .m .m-sheet-backdrop, .m .m-screen, .m .m-viewer, .m .m-map, .m .m-banner, .m .m-toast, .m .m-tab svg, .m .m-viewer-sheet { animation: none !important; }
   .m :is(.m-tab, .m-icon-btn, .m-map-btn, .m-chip, .m-primary, .m-trip-card, .m-then, .m-row-card, .m-day-row, .m-month-row, .m-list-row):active { transform: none; }
 }
 

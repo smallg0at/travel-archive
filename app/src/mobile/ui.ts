@@ -296,6 +296,34 @@ export function spinner(): HTMLElement {
   return el<HTMLElement>(`<div class="m-spinner" role="progressbar" aria-busy="true"><span></span></div>`);
 }
 
+/**
+ * A small bar low on the screen, above the tabs, that reports background work
+ * without taking a tap or covering the page — caching months, mostly. One at a
+ * time; a second caller reuses the element and replaces its text.
+ *
+ * `close` is the caller's to call: a download that ends in a sentence wants to
+ * linger a moment, and one that is cancelled wants to go at once.
+ */
+let toastEl: HTMLElement | null = null;
+
+export function showToast(text: string): { set(text: string): void; close(): void } {
+  if (!toastEl) {
+    toastEl = el<HTMLElement>(`<div class="m-toast" role="status" aria-live="polite"></div>`);
+    document.body.appendChild(toastEl);
+  }
+  const element = toastEl;
+  element.textContent = text;
+  element.hidden = false;
+  return {
+    set(text: string) {
+      if (element.isConnected) element.textContent = text;
+    },
+    close() {
+      element.hidden = true;
+    },
+  };
+}
+
 /** Paragraphs from model prose, which separates them with blank lines. */
 export function paragraphs(text: string): DocumentFragment {
   const frag = document.createDocumentFragment();

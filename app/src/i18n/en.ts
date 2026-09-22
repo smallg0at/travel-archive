@@ -492,6 +492,17 @@ export const en = {
     cache: "Stored on this phone",
     cacheSize: (photos: number, mb: string) => `${count(photos, "thumbnail", "thumbnails")} · ${mb} MB`,
     source: "Reading directly from OneDrive. Generating captions and summaries needs the desktop app.",
+    autoCache: "Keep months offline",
+    offlineGroup: "Offline",
+    offlineKept: "Months kept",
+    autoCacheWhy:
+      "Downloads every month's photo records in the background, so the library opens at once and works with no signal. Pictures stay on OneDrive and load as you scroll.",
+    cacheMonths: (kept: number, total: number) => `${num(kept)} of ${num(total)} months kept`,
+    cacheBytes: (mb: string) => `${mb} MB`,
+    cacheNow: "Download all months now",
+    caching: (done: number, total: number) => `Caching months… ${num(done)}/${num(total)}`,
+    cachedDone: (n: number) => `Available offline: ${count(n, "month", "months")}.`,
+    cachedStopped: "Stopped. Progress is kept.",
     tapPlace: "Pinch to zoom · tap a place to see its days",
   },
 };

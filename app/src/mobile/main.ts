@@ -1,4 +1,5 @@
 import { loadIndex, SignInRequiredError } from "../archiveData";
+import { broadcastResponseToMainFrame } from "@azure/msal-browser/redirect-bridge";
 import { completeRedirect, getActiveAccount, signIn, signInRedirect } from "../msAuth";
 import { checkHealth } from "../backend";
 import { localServerSource, setThumbnailSource } from "../photoSource";
@@ -13,9 +14,10 @@ import { renderDay } from "./day";
 import { renderLibrary, renderMonth } from "./library";
 import { renderSearch, renderSettings } from "./more";
 import { ICONS, setArchive, spinner } from "./ui";
-import { applyTranslationsKept, currentEtag, keepIndex, keptIndex } from "./cache";
+import { applyTranslationsKept, applyTranslationsKeptLocal, currentEtag, keepIndex, keptIndex, refreshTranslations } from "./cache";
 import { followThemeInSystemBars, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
 import { initDevicePhotos } from "./devicePhotos";
+import { allMonths, initOfflineResume, startAutoCache, syncAndRefresh } from "./offline";
 
 /** A popup where there can be one; the installed app always redirects — see signInRedirect. */
 const signInNow = (): Promise<unknown> => (isNative ? signInRedirect() : signIn());
@@ -164,9 +166,12 @@ let useKept = true;
 async function start(): Promise<void> {
   const kept = useKept ? await keptIndex() : null;
   if (kept) {
-    // Open on the kept copy — see cache.ts. The translations are small and
-    // still fetched, so a Chinese reader's first screen is in Chinese.
-    await applyTranslationsKept().catch(() => {});
+    // Open on the kept copy — see cache.ts. The translations are read from
+    // their own kept copy, with no network: a Chinese reader's first screen is
+    // in Chinese, and a slow link cannot hold it up. The fresh copy is fetched
+    // in the background for the next launch.
+    await applyTranslationsKeptLocal().catch(() => {});
+    void refreshTranslations();
     setArchive(kept.index);
     void revalidate(kept.etag);
     // The kept copy opens without asking Microsoft anything, so a lost sign-in
@@ -201,13 +206,26 @@ async function start(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // A fallback for the hidden iframe msal-browser uses to renew silently.
+  // MainActivity serves the redirect bridge at /auth/ now (see MainActivity
+  // and auth/main.ts), so a renewal's frame usually runs the bridge and never
+  // reaches this module. But Capacitor's local server serves an otherwise
+  // unhandled path as index.html, and if a subframe redirect ever slips past
+  // that interception and lands here, booting the app would leave
+  // msal-browser's `waitForBridgeResponse` waiting for a broadcast that never
+  // comes — every renewal past the refresh token's 24-hour life would time
+  // out. Send the broadcast, and do not boot.
+  if (location.pathname.startsWith("/auth") && window.self !== window.top) {
+    await broadcastResponseToMainFrame().catch((err) => console.error("Auth frame failed:", err));
+    return;
+  }
   // First, before anything asks for a token: this load may be the return from
   // a redirect sign-in that MSAL left for this page to finish (msAuth.ts).
+  // Normally the bridge page at /auth/ handles that; this is the fallback for
+  // when Capacitor's fallback served this module there instead.
   await completeRedirect().catch((err) => console.error("Sign-in could not be completed:", err));
-  // In the installed app, Microsoft returns to /auth/, and Capacitor serves
-  // this page there too (its html5 fallback maps any extensionless path to
-  // index.html). Once the response is handled, be at the root again — a
-  // cancelled sign-in lands on the sign-in screen, not on a leftover path.
+  // Once an /auth/ arrival is handled, be at the root again — a cancelled
+  // sign-in lands on the sign-in screen, not on a leftover path.
   if (location.pathname.startsWith("/auth")) history.replaceState(null, "", "/");
   void keepSignInAcrossLaunches();
   // Photographs this phone already holds are served from it. Only when the
@@ -235,6 +253,18 @@ async function main(): Promise<void> {
   // as nothing to read, since a signed-in local server serves the whole
   // archive. `start` shows the sign-in screen only when loading needs it.
   await start();
+
+  // Background work, after the first screen is on. Only on the Graph path:
+  // when a local server answered (this page opened on the desktop) the mirror
+  // is already local and current, and there is no Microsoft session here to
+  // list OneDrive with.
+  if (started && useKept) {
+    void syncAndRefresh();
+    startAutoCache(allMonths());
+    // And again whenever the app comes back or the network does, since a
+    // backgrounded WebView stops the pass it started.
+    initOfflineResume();
+  }
 }
 
 main().catch((err) => {

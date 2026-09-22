@@ -216,3 +216,31 @@ export function currentTab(): Tab | null {
   if (!top) return null;
   return (Object.keys(TAB_ROOTS) as Tab[]).find((tab) => TAB_ROOTS[tab] === top.hash) ?? null;
 }
+
+/** The hash of the page showing, or null before the first render. */
+export function currentHashOrNull(): string | null {
+  return stack.at(-1)?.hash ?? null;
+}
+
+/**
+ * Rebuilds the page showing from its route, in place, keeping its position in
+ * the stack and its scroll offset. For a background change to the data under
+ * it — a kept month replaced after its shard moved — where the alternative is
+ * showing a stale page until the reader navigates away and back.
+ *
+ * Only the top page is rebuilt. The ones under it are hidden and keep their
+ * own DOM; re-rendering them would throw away scroll positions and thumbnails
+ * the reader will come back to.
+ */
+export function rerender(): void {
+  const top = stack.at(-1);
+  if (!top) return;
+  const found = match(top.hash);
+  if (!found) return;
+  const scroll = window.scrollY;
+  const el = found.route.render(found.params);
+  top.el.replaceWith(el);
+  top.el = el;
+  top.scrollY = scroll;
+  window.scrollTo(0, scroll);
+}

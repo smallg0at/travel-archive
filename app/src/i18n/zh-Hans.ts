@@ -464,6 +464,17 @@ export const zhHans: Messages = {
     cache: "手机本地存储",
     cacheSize: (photos: number, mb: string) => `${num(photos)} 张缩略图 · ${mb} MB`,
     source: "直接从 OneDrive 读取数据。生成照片说明与摘要需使用桌面端应用。",
+    autoCache: "离线保存全部月份",
+    offlineGroup: "离线",
+    offlineKept: "已保留月份",
+    autoCacheWhy:
+      "在后台下载每个月的照片记录，让图库即开即用、无信号也能浏览。照片仍保存在 OneDrive，滚动时按需加载。",
+    cacheMonths: (kept: number, total: number) => `已保留 ${num(kept)}/${num(total)} 个月`,
+    cacheBytes: (mb: string) => `${mb} MB`,
+    cacheNow: "立即下载全部月份",
+    caching: (done: number, total: number) => `正在缓存月份… ${num(done)}/${num(total)}`,
+    cachedDone: (n: number) => `已可离线使用：${num(n)} 个月。`,
+    cachedStopped: "已停止，进度已保留。",
     tapPlace: "双指缩放 · 点击地点查看相应日程",
   },
 };
