@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { env, reloadEnv, shadowedByEnvironment } from "./env.js";
 import { homeFile } from "./paths.js";
+import { getProxySettings, updateProxyDispatcher } from "./proxy.js";
 
 /**
  * Reading and writing the pipeline's own `.env` at runtime.
@@ -42,6 +43,11 @@ const WRITABLE = [
   "ONEDRIVE_PHOTOS_FOLDER",
   "ONEDRIVE_METADATA_FOLDER",
   "GEOCODE_CONTACT_EMAIL",
+  "PROXY_SYSTEM_ENABLED",
+  "PROXY_AI_MODE",
+  "PROXY_AI_URL",
+  "PROXY_GRAPH_MODE",
+  "PROXY_GRAPH_URL",
 ] as const;
 
 export type WritableKey = (typeof WRITABLE)[number];
@@ -64,6 +70,7 @@ export function configStatus(): ConfigStatus {
     anthropicModel: env.anthropicModel,
     geminiModel: env.geminiModel,
     shadowed: WRITABLE.filter(shadowedByEnvironment),
+    proxy: getProxySettings(),
   };
 }
 
@@ -118,6 +125,7 @@ export async function saveConfig(patch: Partial<Record<WritableKey, string>>): P
   // environment variable beats the file.
   for (const [key, value] of entries) process.env[key] = value;
   reloadEnv();
+  updateProxyDispatcher();
 
   return configStatus();
 }

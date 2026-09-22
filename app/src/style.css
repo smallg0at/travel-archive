@@ -2336,6 +2336,11 @@ html.desktop-shell #nav-tools {
   color: var(--text-secondary);
   cursor: pointer;
 }
+.set-proxy-detected {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.set-proxy-detected.tone-ok { color: var(--accent); }
 .set-pin > span { color: var(--text); }
 
 /* The export control lives in the page's own heading, so it cannot be pressed

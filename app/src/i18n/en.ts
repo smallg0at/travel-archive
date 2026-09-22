@@ -244,6 +244,21 @@ export const en = {
     shadowed: (name: string) =>
       `${name} is also set as a system environment variable, which wins over this file when the app restarts. Change it there, or unset it, for a key saved here to survive.`,
 
+    proxy: "Network proxy",
+    proxySystem: "System proxy",
+    proxySystemDetected: (url: string) => `Detected: ${url}`,
+    proxySystemNone: "No system proxy detected",
+    proxyAi: "AI provider (Gemini / Claude)",
+    proxyGraph: "Microsoft Graph (OneDrive)",
+    proxyModes: {
+      system: "Follow system proxy",
+      direct: "Direct (no proxy)",
+      custom: "Custom proxy",
+    },
+    proxyCustomPlaceholder: "e.g. http://127.0.0.1:7890",
+    proxyNote: "Control whether AI calls and OneDrive sync route through a proxy.",
+    proxySaved: "Proxy settings saved.",
+
     sync: "Sync",
     checkingOneDrive: "Checking OneDrive…",
     lastChecked: "Last checked",

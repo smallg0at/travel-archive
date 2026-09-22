@@ -112,6 +112,13 @@ function readEnv() {
     // that provider's own model. Translation is bulk text where quality matters
     // least, so this is the setting for the cheapest model that will do.
     translateModel: fromEnv("TRANSLATE_MODEL"),
+
+    // Network proxy settings
+    proxySystemEnabled: fromEnv("PROXY_SYSTEM_ENABLED") === "true",
+    proxyAiMode: (fromEnv("PROXY_AI_MODE") as "system" | "direct" | "custom") || "system",
+    proxyAiUrl: fromEnv("PROXY_AI_URL") || "",
+    proxyGraphMode: (fromEnv("PROXY_GRAPH_MODE") as "system" | "direct" | "custom") || "direct",
+    proxyGraphUrl: fromEnv("PROXY_GRAPH_URL") || "",
   };
 }
 

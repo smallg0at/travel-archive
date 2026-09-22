@@ -620,6 +620,17 @@ export interface AppPrefs {
   navOpenGroups: string[] | null;
 }
 
+export type ProxyCategoryMode = "system" | "direct" | "custom";
+
+export interface ProxySettings {
+  systemEnabled: boolean;
+  systemDetected: string | null;
+  aiMode: ProxyCategoryMode;
+  aiUrl: string | null;
+  graphMode: ProxyCategoryMode;
+  graphUrl: string | null;
+}
+
 /**
  * The generation settings, as reported by the local server.
  *
@@ -644,6 +655,7 @@ export interface ConfigStatus {
    * `.env`. Saving one of these works now and is undone by the next restart.
    */
   shadowed: string[];
+  proxy: ProxySettings;
 }
 
 /**

@@ -18,6 +18,7 @@ import { env } from "./env.js";
 import { getCachedAccessToken } from "./auth.js";
 import { loadIndex } from "./archiveStore.js";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
+import { initProxyDispatcher } from "./proxy.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import {
   autoSubmitDue,
@@ -1066,6 +1067,9 @@ const server = createServer(async (req, res) => {
 
 // Eviction must know what is pinned before it ever runs.
 setProtectedProvider(protectedPaths);
+
+// Initialize proxy dispatcher for global fetch (AI Provider / Graph)
+initProxyDispatcher();
 
 server.listen(env.servePort, "127.0.0.1", () => {
   console.log(`pipeline serve — http://127.0.0.1:${env.servePort} (loopback only)`);

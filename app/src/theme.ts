@@ -15,9 +15,9 @@
 import { ui } from "./i18n";
 import { rememberPref, THEME_KEY } from "./prefs";
 
-function syncElectronTheme(): void {
+function syncElectronTheme(explicit?: Theme): void {
   try {
-    window.electronAPI?.setTheme?.(effectiveTheme());
+    window.electronAPI?.setTheme?.(effectiveTheme(explicit));
   } catch {
     // Ignore outside Electron
   }
@@ -72,26 +72,27 @@ export function showTheme(theme: Theme): void {
   const root = document.documentElement;
   if (theme === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", theme);
-  syncElectronTheme();
+  syncElectronTheme(theme);
 }
 
 export function applyTheme(theme: Theme): void {
-  showTheme(theme);
-
   try {
     if (theme === "system") localStorage.removeItem(THEME_KEY);
     else localStorage.setItem(THEME_KEY, theme);
   } catch {
     // Not persisting is fine; the choice still holds for this session.
   }
+
+  showTheme(theme);
+
   // And to the server, which is the copy that survives the renderer being
   // killed — see prefs.ts.
   rememberPref({ theme });
 }
 
 /** Which theme is actually showing, with "system" resolved. */
-export function effectiveTheme(): "light" | "dark" {
-  const chosen = readTheme();
+export function effectiveTheme(explicit?: Theme): "light" | "dark" {
+  const chosen = explicit ?? readTheme();
   if (chosen !== "system") return chosen;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }

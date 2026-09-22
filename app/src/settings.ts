@@ -240,6 +240,7 @@ export async function showSettings(): Promise<void> {
   frag.appendChild(librarySection(archive));
   frag.appendChild(scanSection(sync));
   frag.appendChild(generationSection());
+  frag.appendChild(proxySection());
   frag.appendChild(syncSection(sync));
   frag.appendChild(offlineSection(sync));
   frag.appendChild(storageSection(sync));
@@ -510,6 +511,142 @@ function generationSection(): HTMLElement {
   };
 
   provider.addEventListener("change", render);
+
+  apply(null);
+  void getConfig().then(apply);
+  return s;
+}
+
+function proxySection(): HTMLElement {
+  const s = section(ui.settings.proxy);
+  const body = s.querySelector(".set-body")!;
+
+  const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
+  body.appendChild(state);
+
+  const sysRow = el<HTMLDivElement>(`
+    <div class="set-row">
+      <label class="set-check">
+        <input type="checkbox" name="proxy-system" />
+        <span>${ui.settings.proxySystem}</span>
+      </label>
+      <span class="set-proxy-detected"></span>
+    </div>
+  `);
+  const sysCheck = sysRow.querySelector<HTMLInputElement>('input[name="proxy-system"]')!;
+  const detectedLabel = sysRow.querySelector<HTMLSpanElement>(".set-proxy-detected")!;
+  body.appendChild(sysRow);
+
+  const aiRow = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.proxyAi}</span></div>`);
+  const aiMode = el<HTMLSelectElement>(`
+    <select class="set-select">
+      <option value="system">${ui.settings.proxyModes.system}</option>
+      <option value="direct">${ui.settings.proxyModes.direct}</option>
+      <option value="custom">${ui.settings.proxyModes.custom}</option>
+    </select>
+  `);
+  aiRow.appendChild(aiMode);
+  body.appendChild(aiRow);
+
+  const aiUrlField = el<HTMLLabelElement>(`
+    <label class="set-scan-field set-key-field" hidden>
+      <span>URL</span>
+      <input type="text" name="ai-url" placeholder="${ui.settings.proxyCustomPlaceholder}" spellcheck="false" autocomplete="off" />
+    </label>
+  `);
+  const aiUrlInput = aiUrlField.querySelector<HTMLInputElement>('input[name="ai-url"]')!;
+  body.appendChild(aiUrlField);
+
+  const graphRow = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.proxyGraph}</span></div>`);
+  const graphMode = el<HTMLSelectElement>(`
+    <select class="set-select">
+      <option value="direct">${ui.settings.proxyModes.direct}</option>
+      <option value="system">${ui.settings.proxyModes.system}</option>
+      <option value="custom">${ui.settings.proxyModes.custom}</option>
+    </select>
+  `);
+  graphRow.appendChild(graphMode);
+  body.appendChild(graphRow);
+
+  const graphUrlField = el<HTMLLabelElement>(`
+    <label class="set-scan-field set-key-field" hidden>
+      <span>URL</span>
+      <input type="text" name="graph-url" placeholder="${ui.settings.proxyCustomPlaceholder}" spellcheck="false" autocomplete="off" />
+    </label>
+  `);
+  const graphUrlInput = graphUrlField.querySelector<HTMLInputElement>('input[name="graph-url"]')!;
+  body.appendChild(graphUrlField);
+
+  const note = el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.proxyNote}</p>`);
+  body.appendChild(note);
+
+  const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
+
+  const save = button(
+    ui.common.save,
+    () => {
+      status.hidden = false;
+      status.textContent = ui.common.saving;
+      save.disabled = true;
+
+      const patch: Record<string, string> = {
+        PROXY_SYSTEM_ENABLED: sysCheck.checked ? "true" : "false",
+        PROXY_AI_MODE: aiMode.value,
+        PROXY_AI_URL: aiUrlInput.value.trim(),
+        PROXY_GRAPH_MODE: graphMode.value,
+        PROXY_GRAPH_URL: graphUrlInput.value.trim(),
+      };
+
+      void saveConfig(patch)
+        .then((next) => {
+          status.textContent = ui.settings.proxySaved;
+          apply(next);
+        })
+        .catch((err: Error) => (status.textContent = err.message))
+        .finally(() => (save.disabled = false));
+    },
+    "primary",
+  );
+
+  const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  actions.appendChild(save);
+  body.append(actions, status);
+
+  const apply = (config: ConfigStatus | null) => {
+    if (!config?.proxy) {
+      state.textContent = ui.settings.unavailable;
+      state.className = "set-sync-state tone-muted";
+      return;
+    }
+    const p = config.proxy;
+    sysCheck.checked = p.systemEnabled;
+    detectedLabel.textContent = p.systemDetected
+      ? ui.settings.proxySystemDetected(p.systemDetected)
+      : ui.settings.proxySystemNone;
+
+    aiMode.value = p.aiMode;
+    aiUrlInput.value = p.aiUrl ?? "";
+    aiUrlField.hidden = p.aiMode !== "custom";
+
+    graphMode.value = p.graphMode;
+    graphUrlInput.value = p.graphUrl ?? "";
+    graphUrlField.hidden = p.graphMode !== "custom";
+
+    if ((p.systemEnabled && p.systemDetected) || p.aiMode === "custom" || p.graphMode === "custom") {
+      state.textContent = ui.settings.ready;
+      state.className = "set-sync-state tone-ok";
+    } else {
+      state.textContent = ui.settings.proxyModes.direct;
+      state.className = "set-sync-state tone-muted";
+    }
+  };
+
+  aiMode.addEventListener("change", () => {
+    aiUrlField.hidden = aiMode.value !== "custom";
+  });
+  graphMode.addEventListener("change", () => {
+    graphUrlField.hidden = graphMode.value !== "custom";
+  });
 
   apply(null);
   void getConfig().then(apply);

@@ -236,6 +236,21 @@ export const zhHans: Messages = {
     shadowed: (name) =>
       `${name} 已在系统环境变量中设置，应用重启时系统环境变量优先于本文件中的值。请在系统设置中修改或删除该变量，此处保存的密钥才会生效。`,
 
+    proxy: "网络代理",
+    proxySystem: "系统代理",
+    proxySystemDetected: (url) => `已检测到：${url}`,
+    proxySystemNone: "未检测到系统代理",
+    proxyAi: "AI 服务商 (Gemini / Claude)",
+    proxyGraph: "Microsoft Graph (OneDrive)",
+    proxyModes: {
+      system: "跟随系统代理",
+      direct: "直连 (不使用代理)",
+      custom: "自定义代理",
+    },
+    proxyCustomPlaceholder: "例如 http://127.0.0.1:7890",
+    proxyNote: "分别控制 AI 模型请求与 OneDrive 同步是否经过代理。",
+    proxySaved: "代理设置已保存。",
+
     sync: "同步",
     checkingOneDrive: "正在检查 OneDrive…",
     lastChecked: "上次检查",

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell, systemPreferences } from "electron";
 import type { Server } from "node:http";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -195,6 +195,7 @@ function loadApp(): void {
 function createWindow(): void {
   Menu.setApplicationMenu(null);
 
+  const initialDark = nativeTheme.shouldUseDarkColors;
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -202,7 +203,7 @@ function createWindow(): void {
     titleBarStyle: "hidden",
     titleBarOverlay: {
       color: "#00000000",
-      symbolColor: "#ffffff",
+      symbolColor: initialDark ? "#ffffff" : "#161614",
       height: 36,
     },
     icon: join(__dirname, "../build/icon.png"),
@@ -312,11 +313,15 @@ function createWindow(): void {
  * Dynamically adjust window controls overlay symbol color on theme switch.
  */
 ipcMain.on("set-theme", (_event, theme: "light" | "dark") => {
+  nativeTheme.themeSource = theme;
   mainWindow?.setTitleBarOverlay({
     color: "#00000000",
     symbolColor: theme === "light" ? "#161614" : "#ffffff",
     height: 36,
   });
+  if (process.platform === "win32" && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setBackgroundMaterial("mica");
+  }
 });
 
 function getSystemAccentColor(): string | null {
