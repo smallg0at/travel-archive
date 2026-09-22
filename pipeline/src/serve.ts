@@ -3,7 +3,7 @@ import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type C
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
 import { readFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl } from "./graph.js";
 import {
   invalidateCacheStats,
   readThumb,
@@ -520,6 +520,27 @@ const routes: [RegExp, string, Handler][] = [
       const bytes = await fetchAndCache(size as ThumbSize, itemId);
       if (!bytes) return json(res, 404, { error: "No image for that item, or not signed in" });
       sendImage(bytes);
+    },
+  ],
+
+  /**
+   * A video, streamed. The app points a `<video>` at this, and its range
+   * requests are redirected to OneDrive — so only the part being watched
+   * crosses the wire, the difference between a few MB and a 382MB original. A
+   * 302 rather than a proxy because the pre-authenticated CDN URL already
+   * speaks Range; this server never touches the bytes.
+   */
+  [
+    /^\/video\/(.+)$/,
+    "GET",
+    async (_req, res, [encodedId]) => {
+      const itemId = decodeURIComponent(encodedId);
+      const token = await getCachedAccessToken();
+      if (!token) return json(res, 404, { error: "Not signed in" });
+      const url = await fetchItemDownloadUrl(token, itemId);
+      if (!url) return json(res, 404, { error: "No video for that item" });
+      res.writeHead(302, { Location: url, "Cache-Control": "no-store" });
+      res.end();
     },
   ],
 

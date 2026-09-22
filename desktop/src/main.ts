@@ -15,6 +15,22 @@ import {
 } from "./pipelineServer";
 
 /**
+ * Let Chromium decode HEVC through the platform, not ffmpeg.
+ *
+ * Electron ships no HEVC software decoder — Chromium's ffmpeg never includes
+ * H.265 — so an HEVC original, which is most of this library's videos, would
+ * simply fail to play. Since Electron 20 the platform decoder is compiled in
+ * but off by default; this turns it on. On Windows that is Media Foundation,
+ * which needs the "HEVC Video Extensions" package installed; where it is not,
+ * or the GPU cannot decode the profile, the viewer's `canPlayType` probe fails
+ * and it falls back to the poster frame rather than a black player.
+ *
+ * Must be before `app.whenReady()`, and there is no other `enable-features`
+ * switch in this file for it to clobber.
+ */
+app.commandLine.appendSwitch("enable-features", "PlatformHEVCDecoderSupport");
+
+/**
  * Path for debug screenshots in development, placed in OS %TEMP%.
  */
 const DEBUG_SCREENSHOT_PATH = join(tmpdir(), "photo-archive-debug.png");

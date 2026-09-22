@@ -1,4 +1,4 @@
-import { localThumbSizes, localThumbUrl, warmThumbnails } from "./backend";
+import { localThumbSizes, localThumbUrl, localVideoUrl, warmThumbnails } from "./backend";
 
 /**
  * Where thumbnail bytes come from.
@@ -43,6 +43,12 @@ export interface ThumbnailSource {
    */
   fullUrl?(itemId: string): string;
   /**
+   * A URL for the original video, streamed with range requests. Separate from
+   * `fullUrl`, which reads the whole file — fine for a photo, fatal for a
+   * multi-hundred-MB video.
+   */
+  videoUrl?(itemId: string): string;
+  /**
    * Fetch these ahead of time, if the source can. Optional because it only
    * makes sense where fetching is expensive and cached fetching is not.
    */
@@ -79,6 +85,7 @@ export const localServerSource: ThumbnailSource = {
   url: async (itemId, size) => localThumbUrl(itemId, size),
   sizes: (ids, size) => localThumbSizes(ids, size),
   fullUrl: (itemId) => localThumbUrl(itemId, "full"),
+  videoUrl: (itemId) => localVideoUrl(itemId),
   warm: (ids, size) => warmThumbnails(ids, size as "medium" | "large"),
 };
 

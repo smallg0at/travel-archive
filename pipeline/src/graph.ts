@@ -400,6 +400,21 @@ export async function recycleItem(token: string, itemId: string): Promise<void> 
   await graphFetch(token, `/me/drive/items/${itemId}`, { method: "DELETE" });
 }
 
+/**
+ * The pre-authenticated CDN URL for an item's bytes, without fetching them.
+ *
+ * Used for video playback: a `<video>` pointed at this streams through HTTP
+ * Range requests, so only the part actually watched crosses the wire rather
+ * than a 382MB original. Contrast `downloadPhotoBuffer`, which reads the whole
+ * file into memory.
+ */
+export async function fetchItemDownloadUrl(token: string, itemId: string): Promise<string | null> {
+  const res = await graphFetch(token, `/me/drive/items/${itemId}?$select=@microsoft.graph.downloadUrl`);
+  if (!res.ok) return null;
+  const body = (await res.json()) as Record<string, string>;
+  return body["@microsoft.graph.downloadUrl"] ?? null;
+}
+
 export async function downloadPhotoBuffer(token: string, itemId: string): Promise<Buffer> {
   const res = await graphFetch(token, `/me/drive/items/${itemId}/content`);
   return Buffer.from(await res.arrayBuffer());

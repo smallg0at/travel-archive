@@ -1,5 +1,5 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
-import { loadFullPhoto, loadLarge, releaseFullPhoto } from "./graphPhoto";
+import { loadFullPhoto, loadLarge, loadVideoUrl, releaseFullPhoto } from "./graphPhoto";
 import { el, transcript, transcriptOriginal } from "./photoUi";
 import { addPhotoTimeControl } from "./dayEdit";
 import { loc } from "./contentLang";
@@ -38,6 +38,7 @@ function dom() {
   return {
     lightbox: document.getElementById("lightbox")!,
     img: document.getElementById("lightbox-img") as HTMLImageElement,
+    video: document.getElementById("lightbox-video") as HTMLVideoElement,
     spinner: document.getElementById("lightbox-spinner")!,
     cardPanel: document.getElementById("lightbox-card")!,
     photoPanel: document.getElementById("lightbox-photo")!,
@@ -330,6 +331,62 @@ function initZoomControls(): void {
 
 // --- Showing one photo -----------------------------------------------------
 
+/** Whether this build can decode the video's codec — HEVC needs the platform decoder. */
+function canPlayVideo(photo: PhotoRecord): boolean {
+  if (!photo.video) return false;
+  const probe = document.createElement("video");
+  const fourCC = (photo.video.fourCC ?? "").toUpperCase();
+  const codecs =
+    fourCC === "HEVC" ? ["hvc1.1.6.L93.B0", "hev1.1.6.L93.B0"] : ["avc1.42E01E", "hvc1.1.6.L93.B0"];
+  return codecs.some((codec) => probe.canPlayType(`video/mp4; codecs="${codec}"`) !== "");
+}
+
+/** Tears the video down so the next photo does not inherit its src or audio. */
+function hideVideo(): void {
+  const { video } = dom();
+  if (video.hidden) return;
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+  video.hidden = true;
+}
+
+/**
+ * Play the video, or fall back to its poster.
+ *
+ * The fallback is the same frame `analyze` captioned, so an undecodable codec
+ * costs a still picture rather than an empty player. Most of this library is
+ * HEVC, which only plays when the platform decoder is present —
+ * desktop/src/main.ts turns it on, and `canPlayType` is the honest probe of
+ * whether it worked.
+ */
+async function showVideo(photo: PhotoRecord, mine: number): Promise<void> {
+  const { img, video, spinner } = dom();
+  spinner.hidden = true;
+
+  const showPoster = () => {
+    video.hidden = true;
+    img.hidden = false;
+    void loadLarge(photo.id).then((url) => {
+      if (mine === token && url) img.src = url;
+    });
+  };
+
+  if (!canPlayVideo(photo)) return showPoster();
+
+  img.hidden = true;
+  video.hidden = false;
+  const url = await loadVideoUrl(photo.id);
+  // A stream URL can fail when signed out; the poster is still better than black.
+  if (mine !== token) return;
+  if (!url) return showPoster();
+
+  video.src = url;
+  void video.play().catch(() => {
+    /* Autoplay may be refused; the controls are there. */
+  });
+}
+
 async function show(index: number): Promise<void> {
   if (!session) return;
   session.index = index;
@@ -347,6 +404,12 @@ async function show(index: number): Promise<void> {
     if (i === index) t.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
 
+  if (photo.video) {
+    await showVideo(photo, mine);
+    return;
+  }
+  hideVideo();
+  img.hidden = false;
   img.dataset.full = "0";
   spinner.hidden = false;
 
@@ -447,6 +510,8 @@ function close(): void {
   img.classList.remove("preview");
   img.style.transform = "";
   delete img.dataset.full;
+  img.hidden = false;
+  hideVideo();
   spinner.hidden = true;
 
   if (openObjectUrl) {

@@ -242,6 +242,34 @@ export function releaseFullPhoto(url: string): void {
 }
 
 /**
+ * A streamable URL for a video's original bytes.
+ *
+ * Not turned into an object URL: the point is to let the `<video>` element do
+ * range requests against the CDN and stream, so it is handed the URL directly
+ * and never buffered through JS. Through the local server when there is one
+ * (which 302s to the CDN), and straight to Graph otherwise — the phone's case.
+ */
+export async function loadVideoUrl(itemId: string): Promise<string | null> {
+  const source = thumbnailSource();
+  if (source?.videoUrl) return source.videoUrl(itemId);
+
+  let token: string;
+  try {
+    token = await getAccessToken();
+  } catch (err) {
+    if (!(err instanceof TokenRenewalError)) signInRequired();
+    return null;
+  }
+
+  const res = await fetch(`${GRAPH_BASE}/me/drive/items/${itemId}?$select=@microsoft.graph.downloadUrl`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as Record<string, string>;
+  return body["@microsoft.graph.downloadUrl"] ?? null;
+}
+
+/**
  * Frees the current view's thumbnails. Call this — not `releaseObjectUrls`
  * directly — whenever the visible set of photos is replaced.
  *

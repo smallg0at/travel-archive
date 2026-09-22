@@ -103,6 +103,15 @@ export function localThumbUrl(itemId: string, size: "medium" | "large" | "full")
 }
 
 /**
+ * The server's video-stream route. It 302s to OneDrive's pre-authenticated URL
+ * so the range requests, and the bytes, go straight to the CDN — this is what
+ * keeps playback from downloading a whole original.
+ */
+export function localVideoUrl(itemId: string): string {
+  return `${BACKEND}/video/${encodeURIComponent(itemId)}`;
+}
+
+/**
  * How the local replica stands against OneDrive, plus pins and disk use.
  *
  * `cached` skips the eTag comparison — a Graph round trip measured at
