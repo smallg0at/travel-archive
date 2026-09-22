@@ -4,7 +4,7 @@ Open items, and nothing else. Everything closed — with the measurements that
 closed it — lives in `docs/TODO-history.md`: a verbatim archive of this file
 as of 2026-09-22, kept for the record and no longer maintained.
 
-**17 open.** The list grows because each session surfaces defects that were
+**18 open.** The list grows because each session surfaces defects that were
 previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the
 phone app, the basemap's China worldview, and an editor agent on the desktop
@@ -15,6 +15,13 @@ photos over 123 months**, ~29,300 captioned, ~340 days written up, 15 trips
 defined. Generate → Translate → Estimate for what is left of the text.
 
 ## Open issues
+
+- [ ] **The video viewer keeps the image zoom controls.** Raised 2026-09-23.
+      Zoom, Fit and the percentage sit over a playing `<video>` and do nothing:
+      `setZoom`/`applyZoom` only transform `#lightbox-img`, and `showVideo`
+      returns before any of that runs. Hide `#lightbox-zoom` while a video is
+      showing and restore it on the image path — or gate it on `photo.video` in
+      the viewer's `show()`.
 
 - [ ] **Confirm the phone's sign-in now survives a hard kill.** Raised
       2026-09-20 by the phone session. The key that unlocks MSAL's kept
