@@ -11,6 +11,33 @@ export function el<T extends HTMLElement>(html: string): T {
 }
 
 /**
+ * A photograph's transcript in the reader's language, with the verbatim kept.
+ *
+ * The text inside a photo — a label, a menu, a note — is evidence, so the
+ * original is never discarded; but its translation is stored beside the archive
+ * (`jobs/translate.ts`) and is what a reader who does not read the language
+ * wants first. `original` is null when the text came back as written, so
+ * callers add the toggle only when there is something behind it.
+ *
+ * The source text is verbatim, so it can be in any language, and a bilingual
+ * label prints the same thing twice — the translation asks for the meaning once
+ * (see translatePrompt.ts).
+ */
+export function transcript(originals: string[]): { shown: string; original: string | null } {
+  const raw = originals.join("\n\n");
+  const shown = originals.map((text) => loc(text)).join("\n\n");
+  return { shown, original: shown === raw ? null : raw };
+}
+
+/** The nested "original text" toggle the transcript sites share. */
+export function transcriptOriginal(original: string, label: string): HTMLDetailsElement {
+  const details = el<HTMLDetailsElement>(`<details class="transcript-original"><summary></summary><pre></pre></details>`);
+  details.querySelector("summary")!.textContent = label;
+  details.querySelector("pre")!.textContent = original;
+  return details;
+}
+
+/**
  * A 1x1 transparent GIF.
  *
  * An <img> with no `src` draws the browser's missing-image glyph — the little

@@ -185,6 +185,13 @@ export interface TranslateInput {
   sourceLang: string;
   targetLang: string;
   items: TranslateItem[];
+  /**
+   * The texts are in whatever language each was found in, not one source
+   * language — a photographed label or sign often prints the same thing in two
+   * or three languages at once. The prompt then asks for the meaning once, not
+   * once per language (see translatePrompt.ts).
+   */
+  mixedSource?: boolean;
 }
 
 export interface TranslateResult {

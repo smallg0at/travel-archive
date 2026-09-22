@@ -1,6 +1,6 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "./graphPhoto";
-import { el } from "./photoUi";
+import { el, transcript, transcriptOriginal } from "./photoUi";
 import { addPhotoTimeControl } from "./dayEdit";
 import { loc } from "./contentLang";
 import { fmtDateTime, ui } from "./i18n";
@@ -153,8 +153,10 @@ function renderPhotoPanel(photo: PhotoRecord): void {
     const label = document.createElement("h4");
     label.textContent = ui.viewer.transcribed;
     const body = document.createElement("div");
-    body.textContent = photo.extractedText;
+    const shown = transcript([photo.extractedText]);
+    body.textContent = shown.shown;
     block.append(label, body);
+    if (shown.original) block.appendChild(transcriptOriginal(shown.original, ui.day.originalText));
     photoPanel.appendChild(block);
   }
 }

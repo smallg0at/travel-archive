@@ -20,9 +20,13 @@ export function translatePrompt(input: TranslateInput): string {
   const examples = input.targetLang.startsWith("zh")
     ? " (for example 城市 for a city, 美泉宫 for Schönbrunn Palace)"
     : "";
-  return `Translate the texts below from ${from} into ${to}. They come from a personal travel photo archive: captions of single photos, names of places and stops, short summaries of days, card descriptions, and English renderings of museum placards.
+  const opening = input.mixedSource
+    ? `Translate the texts below into ${to}. They are written in whichever language each was photographed in — a museum label, a menu or a sign often prints the same thing in two or three languages at once.`
+    : `Translate the texts below from ${from} into ${to}.`;
+  return `${opening} They come from a personal travel photo archive: captions of single photos, names of places and stops, short summaries of days, card descriptions, English renderings of museum placards, and transcripts of the text in a photograph (a label, a menu, a note).
 
 - Translate faithfully and plainly. Add nothing, explain nothing, leave nothing out.
+- When a text repeats the same content in two or more languages — a bilingual label — translate that meaning **once** into ${to}. Do not print it once per language.
 - Names of places, venues, artworks and dishes: use the established ${to} name where one exists${examples}. Where none exists, keep the original name as written.
 - Keep numbers, dates and times as they are.
 - A text already in ${to} is returned unchanged.

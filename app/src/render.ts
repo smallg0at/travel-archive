@@ -1,5 +1,5 @@
 import type { DayRecord, DaySegment, Highlight, PhotoRecord } from "@travel-archive/shared";
-import { el, lazyImg } from "./photoUi";
+import { el, lazyImg, transcript, transcriptOriginal } from "./photoUi";
 import { openCard, openPhoto } from "./viewer";
 import { anchorFor } from "./tripMap";
 import { addStopControls, isRetimable } from "./dayEdit";
@@ -89,9 +89,9 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
     details.querySelector("summary")!.textContent = highlight.documentTranslation
       ? ui.day.originalText
       : ui.day.fromPlacards(withText.length);
-    details.querySelector(".card-source-text")!.textContent = withText
-      .map((d) => d.extractedText)
-      .join("\n\n");
+    const shown = transcript(withText.map((d) => d.extractedText as string));
+    details.querySelector(".card-source-text")!.textContent = shown.shown;
+    if (shown.original) details.appendChild(transcriptOriginal(shown.original, ui.day.originalText));
     card.querySelector(".card-body")!.appendChild(details);
   }
 

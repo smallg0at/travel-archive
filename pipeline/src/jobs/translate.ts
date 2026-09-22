@@ -15,6 +15,8 @@ import {
   translationParts,
 } from "../archiveStore.js";
 import { pooled, type ProgressFn } from "./analyze.js";
+import { mayBeAnalyzed } from "../screenshots.js";
+import { withheldFromSummaries } from "../sensitive.js";
 
 /**
  * Putting text the archive already has into a second language.
@@ -50,7 +52,7 @@ export interface TranslateResult {
   outputTokens: number;
 }
 
-type SourceKind = "caption" | "title" | "summary" | "description" | "placard" | "narrative" | "place" | "name";
+type SourceKind = "caption" | "title" | "summary" | "description" | "placard" | "narrative" | "place" | "name" | "transcript";
 
 interface Source {
   key: string;
@@ -133,10 +135,22 @@ export function dayTextSources(index: ArchiveIndexFile, only: string | null = nu
   return sources;
 }
 
-/** A month's captions. Tags are left out: the app never shows them. */
+/**
+ * A month's per-photo text: its caption, and the text inside the photograph —
+ * a label, a menu, a note — as `transcript`. Tags are left out: the app never
+ * shows them.
+ *
+ * A transcript is sent only for a photo the archive would analyze at all. A
+ * screenshot nobody approved, or one a redaction flag withholds from summaries,
+ * carries private text and is never handed to a model; `caption` needs no such
+ * gate because analyze only ever wrote one for photos that passed it.
+ */
 function captionSources(shard: PhotoShard): Map<string, Source> {
   const sources = new Map<string, Source>();
-  for (const photo of Object.values(shard.photos)) add(sources, photo.caption, "caption");
+  for (const photo of Object.values(shard.photos)) {
+    add(sources, photo.caption, "caption");
+    if (mayBeAnalyzed(photo) && !withheldFromSummaries(photo)) add(sources, photo.extractedText, "transcript");
+  }
   return sources;
 }
 
@@ -337,6 +351,10 @@ export async function runTranslate(
           sourceLang: "en",
           targetLang: opts.lang,
           items: batch.map(({ key, text, kind }) => ({ key, text, kind })),
+          // A transcript is in whatever language the sign was written in, and a
+          // bilingual one prints the same thing twice; the prompt then asks for
+          // the meaning once rather than once per language.
+          mixedSource: batch.some((s) => s.kind === "transcript"),
         });
         result.batches++;
         result.inputTokens += out.usage?.promptTokens ?? 0;

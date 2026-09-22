@@ -1,6 +1,6 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "../graphPhoto";
-import { el } from "../photoUi";
+import { el, transcript, transcriptOriginal } from "../photoUi";
 import { contentLanguage, loc } from "../contentLang";
 import { fmtDateTime, ui } from "../i18n";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
@@ -30,7 +30,8 @@ export interface CardContext {
   title: string;
   description: string | null;
   placard: string | null;
-  originalText: string | null;
+  /** The placard photos' text: in the reader's language, with the verbatim behind it. */
+  transcript: { shown: string; original: string | null } | null;
 }
 
 export function cardContext(highlight: Highlight, byId: Record<string, PhotoRecord>): CardContext {
@@ -39,7 +40,7 @@ export function cardContext(highlight: Highlight, byId: Record<string, PhotoReco
     title: loc(highlight.title),
     description: loc(highlight.description),
     placard: loc(highlight.documentTranslation),
-    originalText: docs.length ? docs.map((d) => d.extractedText).join("\n\n") : null,
+    transcript: docs.length ? transcript(docs.map((d) => d.extractedText as string)) : null,
   };
 }
 
@@ -227,10 +228,13 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
         quote.textContent = context.placard;
         card.appendChild(quote);
       }
-      if (context.originalText) {
+      if (context.transcript) {
         const details = el<HTMLDetailsElement>(`<details><summary></summary><pre></pre></details>`);
-        details.querySelector("summary")!.textContent = ui.day.originalText;
-        details.querySelector("pre")!.textContent = context.originalText;
+        details.querySelector("summary")!.textContent = ui.viewer.transcribed;
+        details.querySelector("pre")!.textContent = context.transcript.shown;
+        if (context.transcript.original) {
+          details.appendChild(transcriptOriginal(context.transcript.original, ui.day.originalText));
+        }
         card.appendChild(details);
       }
       sheetBody.appendChild(card);
@@ -257,9 +261,11 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     );
     row(ui.mobile.places, placeName(photo));
     if (photo.extractedText) {
+      const shown = transcript([photo.extractedText]);
       const details = el<HTMLDetailsElement>(`<details><summary></summary><pre></pre></details>`);
       details.querySelector("summary")!.textContent = ui.viewer.transcribed;
-      details.querySelector("pre")!.textContent = photo.extractedText;
+      details.querySelector("pre")!.textContent = shown.shown;
+      if (shown.original) details.appendChild(transcriptOriginal(shown.original, ui.day.originalText));
       own.appendChild(details);
     }
     sheetBody.appendChild(own);
