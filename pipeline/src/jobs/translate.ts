@@ -12,6 +12,7 @@ import {
   loadTranslationsForReading,
   readTranslationsLocal,
   saveTranslations,
+  translationParts,
 } from "../archiveStore.js";
 import { pooled, type ProgressFn } from "./analyze.js";
 
@@ -371,9 +372,14 @@ export async function runTranslate(
   }
 
   // The language index last: it names the caption files that now exist, so it
-  // must not be written before they are.
-  if (work.length > 0 || result.dropped > 0) {
-    indexFile.parts.sort();
+  // must not be written before they are. `parts` is re-derived from the files
+  // rather than carried forward: an accumulated list can only lose months (see
+  // translationParts), and a run whose scope never touched captions would then
+  // write a shorter one.
+  const actualParts = await translationParts(token, opts.lang);
+  const partsChanged = JSON.stringify(actualParts) !== JSON.stringify([...indexFile.parts].sort());
+  indexFile.parts = actualParts;
+  if (work.length > 0 || result.dropped > 0 || partsChanged) {
     onProgress({ phase: "saving", message: "Saving day and trip text..." });
     await saveTranslations(token, opts.lang, "index", indexFile);
   }

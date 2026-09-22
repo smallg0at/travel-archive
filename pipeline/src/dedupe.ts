@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { PhotoRecord } from "@travel-archive/shared";
 import { getAccessToken } from "./auth.js";
-import { loadIndex, loadShard } from "./archiveStore.js";
+import { loadIndexForReading, loadShardForReading } from "./archiveStore.js";
 import { fetchItemHashes, recycleItem, type ItemHashes } from "./graph.js";
 import { dataFile } from "./paths.js";
 import { pooled } from "./jobs/analyze.js";
@@ -70,10 +70,14 @@ const csvField = (v: string | number | null) => `"${String(v ?? "").replace(/"/g
  * reason to prefer the representative: they are inherited by every member.
  */
 async function pairsOf(token: string): Promise<{ groups: number; pairs: Pair[] }> {
-  const index = await loadIndex(token);
+  // Read path: this only picks copies to check, and whether one goes is decided
+  // later from the files' live OneDrive hashes. The mirror is the same bytes
+  // saveIndex/saveShard wrote, so read it rather than pulling the index and
+  // every month's shard back out of OneDrive.
+  const index = await loadIndexForReading(token);
   const groups = new Map<string, { month: string; photos: PhotoRecord[] }>();
   for (const summary of index.months) {
-    const shard = await loadShard(token, summary.month);
+    const shard = await loadShardForReading(token, summary.month);
     for (const photo of Object.values(shard.photos)) {
       if (photo.duplicateKind !== "exact" || !photo.duplicateGroupId) continue;
       const key = `${summary.month}/${photo.duplicateGroupId}`;

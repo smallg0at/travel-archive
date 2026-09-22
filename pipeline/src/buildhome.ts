@@ -1,5 +1,5 @@
 import { getAccessToken } from "./auth.js";
-import { loadIndex } from "./archiveStore.js";
+import { loadIndexForReading } from "./archiveStore.js";
 import { buildHomeIndex } from "./jobs/homeIndex.js";
 import { withArchiveLock } from "./lock.js";
 
@@ -22,7 +22,10 @@ import { withArchiveLock } from "./lock.js";
  */
 async function main(): Promise<void> {
   const token = await getAccessToken();
-  const index = await loadIndex(token);
+  // The index is read for its month list alone, and the shards come from the
+  // mirror already (buildHomeIndex → loadAllShards), so read it from the mirror
+  // too rather than pulling 3.7MB back out of OneDrive for a derived file.
+  const index = await loadIndexForReading(token);
   const result = await buildHomeIndex(token, index, ({ message }) => {
     if (message) console.log(message);
   });

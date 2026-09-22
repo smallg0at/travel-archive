@@ -112,6 +112,12 @@ const FLAT_MONTH_FOLDER = /^\d{4}-\d{2}$/;
 const YEAR_FOLDER = /^\d{4}$/;
 const NESTED_MONTH_FOLDER = /^\d{1,2}$/;
 
+/** The file names directly under a folder, one paginated Graph listing. */
+export async function listFolderFileNames(token: string, folderPath: string): Promise<string[]> {
+  const items = await listChildren(token, folderPath, "name");
+  return items.map((item) => item.name).filter((name): name is string => !!name);
+}
+
 export interface PhotoFolder {
   path: string;
   /** The month this folder implies ("2025-04"), or null when it just holds loose files. */

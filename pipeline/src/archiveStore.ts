@@ -1,9 +1,9 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { dirname } from "node:path";
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
-import { downloadMetadataJson, uploadMetadataJson } from "./graph.js";
+import { downloadMetadataJson, listFolderFileNames, uploadMetadataJson } from "./graph.js";
 import { env } from "./env.js";
 import { markDirty, markSynced } from "./syncStore.js";
 
@@ -179,6 +179,39 @@ export async function saveTranslations(token: string, lang: string, part: string
   file.generatedAt = new Date().toISOString();
   await writeLocal(translationFile(lang, part), file);
   await uploadMetadataJson(token, env.metadataFolder, translationFile(lang, part), file);
+}
+
+/**
+ * The months that actually have a caption file for `lang`, from OneDrive and
+ * the mirror together.
+ *
+ * `TranslationFile.parts` was an accumulated list a translate run carried
+ * forward and only ever appended to. A run that started from an index without
+ * the list — an upload that failed, a mirror re-created from scratch — wrote a
+ * *shorter* list, and the months it dropped stopped loading in the app (118 of
+ * 123 here; the app only fetches a month's captions when `parts` names it).
+ * Deriving it from the files themselves is the only version that cannot lose
+ * them.
+ */
+export async function translationParts(token: string, lang: string): Promise<string[]> {
+  const months = new Set<string>();
+  try {
+    for (const name of await listFolderFileNames(token, `${env.metadataFolder}/i18n/${lang}/photos`)) {
+      const match = /^(\d{4}-\d{2})\.json$/.exec(name);
+      if (match) months.add(match[1]);
+    }
+  } catch {
+    // OneDrive unreachable: the mirror below still answers.
+  }
+  try {
+    for (const name of await readdir(dataFile(`i18n/${lang}/photos`))) {
+      const match = /^(\d{4}-\d{2})\.json$/.exec(name);
+      if (match) months.add(match[1]);
+    }
+  } catch {
+    // No mirror folder yet.
+  }
+  return [...months].sort();
 }
 
 /** Read-only shard load: the mirror if it has it, Graph if not. */
