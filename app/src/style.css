@@ -1191,7 +1191,33 @@ html.desktop-shell .nav-year:hover {
   line-height: 1.55;
   color: var(--text-secondary);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   max-height: 260px;
+  overflow: auto;
+}
+
+/* The verbatim behind a translated transcript — see `transcriptOriginal` in
+   photoUi.ts. Inherits its colour so it reads on the light card and the dark
+   viewer alike; `pre-wrap` + `anywhere` are the point, since a museum label has
+   long unbroken runs. */
+.transcript-original { margin-top: 8px; }
+.transcript-original summary {
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+}
+.transcript-original summary::marker,
+.transcript-original summary::-webkit-details-marker { display: none; }
+.transcript-original pre {
+  margin: 6px 0 0;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.55;
+  opacity: 0.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
   overflow: auto;
 }
 
@@ -1919,6 +1945,7 @@ html.desktop-shell .lightbox-header {
   line-height: 1.65;
   color: rgb(241 239 232 / 0.85);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 /* The transcript is the reason this column is wide, so it gets the leftovers
    and scrolls in place rather than sitting in a fixed box. */

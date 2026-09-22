@@ -112,8 +112,10 @@ function renderCardPanel(highlight: Highlight | null, byId: Record<string, Photo
     const label = document.createElement("h4");
     label.textContent = ui.day.fromPlacards(sources.length);
     const body = document.createElement("div");
-    body.textContent = sources.join("\n\n");
+    const shown = transcript(sources);
+    body.textContent = shown.shown;
     block.append(label, body);
+    if (shown.original) block.appendChild(transcriptOriginal(shown.original, ui.day.originalText));
     cardPanel.appendChild(block);
   }
 }

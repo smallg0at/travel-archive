@@ -995,9 +995,13 @@ body.m {
 .m .m-viewer-sheet summary { min-height: 40px; display: flex; align-items: center; color: var(--accent); font-weight: 600; }
 .m .m-viewer-sheet pre {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font: 13px/1.5 ui-monospace, "Cascadia Mono", monospace;
   background: var(--surface);
   padding: 10px 12px;
   border-radius: 8px;
   margin: 4px 0 0;
 }
+/* The nested verbatim under a translated transcript; a step quieter than the
+   translation it sits under. */
+.m .m-viewer-sheet .transcript-original pre { background: transparent; padding: 0 12px 0 0; color: var(--text-secondary); }
