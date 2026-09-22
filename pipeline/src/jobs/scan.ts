@@ -180,6 +180,24 @@ function wasCovered(path: string, folders: PhotoFolder[]): boolean {
   return folders.some((f) => (f.recursive ? dir === f.path || dir.startsWith(`${f.path}/`) : dir === f.path));
 }
 
+/**
+ * A key-order-independent serialization, for comparing a shard before and after
+ * a scan. `JSON.stringify` alone would report a change when only insertion order
+ * differs — and `merge` rebuilding a record can reorder its fields — which
+ * would re-upload the shard over a difference no reader can see.
+ */
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    return `{${Object.keys(obj)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stable(obj[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
 export async function runScan(range: Range, onProgress: ProgressFn, signal?: AbortSignal): Promise<ScanResult> {
   const result: ScanResult = { scanned: 0, folders: 0, undated: 0, shards: 0, indexed: 0, analyzed: 0, months: 0 };
 
@@ -255,6 +273,7 @@ export async function runScan(range: Range, onProgress: ProgressFn, signal?: Abo
 
   for (const [i, [month, photos]] of touched.entries()) {
     const shard = await loadShard(token, month);
+    const before = stable(shard.photos);
 
     // Drop records from territory this run covered that no longer exist —
     // i.e. photos deleted from OneDrive. Records sourced from outside the
@@ -278,9 +297,19 @@ export async function runScan(range: Range, onProgress: ProgressFn, signal?: Abo
     assignDuplicates(records);
     flagGpsOutliersByDay(records);
 
-    await saveShard(token, shard);
+    // Most months of a full re-scan are untouched: no new photo, no deleted
+    // one, no changed metadata. Uploading those again was the slow half of the
+    // write phase — 143 shards over the network for nothing. The mirror is
+    // still written, so read paths stay current; only the upload is skipped.
+    const unchanged = stable(shard.photos) === before;
     summaries.set(month, summarize(shard));
-    onProgress({ phase: "saving", done: i + 1, total: touched.length, message: `Wrote ${month}` });
+    await saveShard(token, shard, { upload: !unchanged });
+    onProgress({
+      phase: "saving",
+      done: i + 1,
+      total: touched.length,
+      message: `${unchanged ? "Unchanged" : "Wrote"} ${month}`,
+    });
   }
   result.shards = touched.length;
 

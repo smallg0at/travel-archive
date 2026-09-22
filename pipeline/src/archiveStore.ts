@@ -119,9 +119,19 @@ export async function loadShard(token: string, month: string): Promise<PhotoShar
   return existing ?? { month, generatedAt: new Date().toISOString(), photos: {} };
 }
 
-export async function saveShard(token: string, shard: PhotoShard): Promise<void> {
+/**
+ * One month's records, to the mirror and then OneDrive.
+ *
+ * `upload: false` writes the mirror and stops. `scan` uses it for a month whose
+ * records came back identical: a full re-scan changes nothing in most months,
+ * yet re-uploaded every shard — 143 of them — which is what made the write
+ * phase of a whole-library scan crawl. The mirror is still refreshed, so the
+ * read paths that trust it stay current.
+ */
+export async function saveShard(token: string, shard: PhotoShard, opts: { upload?: boolean } = {}): Promise<void> {
   shard.generatedAt = new Date().toISOString();
   await writeLocal(shardFile(shard.month), shard);
+  if (opts.upload === false) return;
   await uploadMetadataJson(token, env.metadataFolder, shardFile(shard.month), shard);
 }
 
