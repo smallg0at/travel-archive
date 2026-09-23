@@ -107,21 +107,24 @@ ${stopBlocks(input)}${metadataCaveats(input)}${altInstructions(input.alsoIn)}`;
 }
 
 /**
- * Turns each day into one line the narrator can reason over, with the movement
- * facts attached.
+ * Turns each day into one line the narrator can reason over.
  *
- * A trip's first and last days are usually spent getting there and back, and
- * the day summaries alone do not make that obvious — this archive's Sep 2 reads
- * as a day of terminal shops and aerial views, which sounds like a day out in
- * a city until you can see the day started 870km from where it ended.
+ * **No figures reach the model.** It used to be given the photo count, the
+ * notable count and the day's movement in kilometres, and asked to use them —
+ * which it did, out loud: the narrative said "110 photos, 24 of them especially
+ * notable" and "because this day moved 19km from Bedford I count it as travel
+ * rather than a place visited". Those are the prompt's own workings, narrated.
+ * The judgement is made in trip.ts now and arrives as a word, and the counts are
+ * simply gone — a model cannot quote a number it was never shown.
  */
 function tripDayLines(input: SummarizeTripInput): string {
   return input.days
     .map((d) => {
-      const moved = d.movedFromPreviousKm === null ? "" : ` moved ${Math.round(d.movedFromPreviousKm)}km from the previous day;`;
-      const span = d.spanKm === null ? "" : ` ranged ${Math.round(d.spanKm)}km within the day;`;
       const place = d.place ? ` [${d.place}]` : "";
-      return `${d.date}${place} — ${d.photoCount} photos, ${d.notableCount} notable;${moved}${span}\n  ${d.summary ?? "(no summary written for this day)"}`;
+      const kind = d.isTravel ? " [a travel day]" : "";
+      const where = d.places.length ? `\n  Places: ${d.places.join("; ")}` : "";
+      const what = d.highlights.length ? `\n  Stood out: ${d.highlights.join("; ")}` : "";
+      return `${d.date}${place}${kind}\n  ${d.summary ?? "(no summary written for this day)"}${where}${what}`;
     })
     .join("\n\n");
 }
@@ -144,12 +147,14 @@ export function tripPrompt(input: SummarizeTripInput): string {
 
   return `Write the story of one trip, from its day-by-day summaries.
 
-${input.startDate} to ${input.endDate}, ${input.days.length} day(s).
+${input.startDate} to ${input.endDate}.
 ${naming}
 
 Write it as the traveller's own diary, looking back: what the trip was, where it went, what stood out. Prose only — no headings, no lists, no day-by-day recital. Break it into 3-6 paragraphs separated by a blank line. Do not invent anything the days below do not support.
 
-The first and last days of a trip are usually spent travelling in and out, and they count as part of the trip. But an airport or a station passed through on the way is not a place visited: keep transit as travel, and leave it out of "places". Use the movement figures to tell the difference — a day that moved hundreds of kilometres is a travel day, however many photos it holds.
+A day marked [a travel day] was spent getting somewhere; the rest were spent somewhere. An airport or a station passed through on the way is not a place visited — keep it as travel, and leave it out of "places".
+
+**Never mention counts, distances, dates as figures, or how all this was recorded.** No "110 photos", no "24 stood out", no "moved 19km", no "three days". You are telling someone what the trip was like, not reporting on the material you were given, and a diary does not cite its own notes. Say a day was busy, or that it went to travelling, in your own words.
 
 Days:
 

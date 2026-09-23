@@ -136,21 +136,24 @@ export interface TripDayInput {
   date: string;
   place: string | null;
   summary: string | null;
-  photoCount: number;
-  /** Highlights across the day's stops — how much of it was worth describing. */
-  notableCount: number;
   /**
-   * How far the day's centre sits from the previous day's, and how far the day
-   * itself ranged. Both from GPS the free scan pass already collected.
+   * Whether this was a day of travelling rather than a day spent somewhere.
    *
-   * These exist because a trip's first and last days are usually spent
-   * travelling, and captions alone make an airport look like a destination —
-   * the archive's own Sep 2 is nothing but the airport terminal shops and aerial
-   * views, which reads as "a day in a city" unless you can see that the day
-   * began 870km away. Null when the day carries no usable GPS.
+   * **The kind, not the figures.** The prompt used to carry `movedFromPreviousKm`
+   * and `spanKm` and ask the model to use them to tell the two apart — and it
+   * narrated them instead: "because this day moved 19km from Bedford I count it
+   * as travel". A distance is an input to a judgement, and once it is in the
+   * text the model has something to quote. The judgement happens in trip.ts;
+   * only its result travels.
    */
-  movedFromPreviousKm: number | null;
-  spanKm: number | null;
+  isTravel: boolean;
+  /** Titles of the places the day was spent at, transit excluded. */
+  places: string[];
+  /** Titles of what stood out — an exhibition, a building, a train. No descriptions. */
+  highlights: string[];
+  /** Kept for callers that still measure movement; never rendered into the prompt. */
+  movedFromPreviousKm?: number | null;
+  spanKm?: number | null;
 }
 
 export interface SummarizeTripInput {

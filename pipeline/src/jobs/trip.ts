@@ -41,6 +41,15 @@ export interface TripResult {
   places: number;
 }
 
+/**
+ * How far a day must have moved to count as a travel day rather than a day out.
+ *
+ * The judgement used to be the model's, with the kilometres handed to it — and
+ * it narrated them back ("because this day moved 19km…"). 25km separates a day
+ * that went somewhere new from one spent wandering a city.
+ */
+const TRAVEL_DAY_KM = 25;
+
 function km(a: [number, number], b: [number, number]): number {
   const [la1, lo1] = a;
   const [la2, lo2] = b;
@@ -256,10 +265,25 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
       date: day.date,
       place: day.place,
       summary: day.summary,
-      photoCount: day.photoIds.length,
-      notableCount: day.segments.reduce((n, seg) => n + seg.highlights.length, 0),
+      // The numbers decide the kind **here**, and only the kind travels on.
+      // Handing the model "moved 19km, ranged 71km" and asking it to use them
+      // produced prose that narrated the figures — "because this day moved
+      // 19km from Bedford I count it as travel" — which is the prompt leaking
+      // into the story. A day either was a travel day or was not; that is the
+      // whole of what the narrative needs.
       movedFromPreviousKm: moved,
       spanKm: geometry?.spanKm ?? null,
+      isTravel: moved !== null && moved >= TRAVEL_DAY_KM,
+      // Titles only: a trip narrative wants to know an exhibition happened, and
+      // has no use for a card's description or its placard translation.
+      places: day.segments
+        .filter((seg) => seg.title && !/^train|^flight|^drive|^transit/i.test(seg.title))
+        .map((seg) => seg.title)
+        .slice(0, 12),
+      highlights: day.segments
+        .flatMap((seg) => seg.highlights.filter((h) => h.title))
+        .map((h) => h.title)
+        .slice(0, 12),
     };
   });
 
