@@ -211,6 +211,16 @@ export interface TranslateResult {
  */
 export interface AiProvider {
   captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult>;
+  /**
+   * Optional: caption several photos in **one** request, returning results in
+   * input order. A provider that can do it (DeepSeek) gets a large cut in
+   * request count over a bulk pass; the single-photo method above stays the
+   * contract for one-off use. Callers must tolerate a shorter return — a result
+   * the model omitted is left for the next run.
+   */
+  captionPhotos?(inputs: CaptionPhotoInput[]): Promise<CaptionResult[]>;
+  /** Optional: how many `captionPhotos` wants per call. Ignored when absent. */
+  batchSize?: number;
   summarizeDay(input: SummarizeDayInput): Promise<DaySummaryResult>;
   summarizeTrip(input: SummarizeTripInput): Promise<TripSummaryResult>;
   /** Text only, no images: the cheap way to put existing text into another language. */

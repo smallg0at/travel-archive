@@ -111,6 +111,13 @@ function readEnv() {
     // least, so this is the setting for the cheapest model that will do.
     translateModel: fromEnv("TRANSLATE_MODEL"),
 
+    // DeepSeek, used when AI_PROVIDER=deepseek. The default model is the
+    // image-capable Flash: `deepseek-v4-flash` (the current V4.1) is text-only,
+    // and the vision alias is the one that accepts a poster frame.
+    deepseekApiKey: fromEnv("DEEPSEEK_API_KEY"),
+    deepseekBaseUrl: fromEnv("DEEPSEEK_BASE_URL") ?? "https://api.deepseek.com/v1",
+    deepseekModel: fromEnv("DEEPSEEK_MODEL") ?? "deepseek-v4-flash-vision-exp",
+
     // Network proxy settings
     proxySystemEnabled: fromEnv("PROXY_SYSTEM_ENABLED") === "true",
     proxyAiMode: (fromEnv("PROXY_AI_MODE") as "system" | "direct" | "custom") || "system",

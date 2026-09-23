@@ -1,0 +1,249 @@
+import type {
+  AiProvider,
+  CallUsage,
+  CaptionPhotoInput,
+  CaptionResult,
+  DaySummaryResult,
+  SummarizeDayInput,
+  SummarizeTripInput,
+  TranslateInput,
+  TranslateResult,
+  TripSummaryResult,
+} from "./types.js";
+import { env } from "../env.js";
+import { captionContextBlock } from "./captionContext.js";
+import { translatePrompt } from "./translatePrompt.js";
+
+/**
+ * DeepSeek, over its OpenAI-compatible Chat Completions API.
+ *
+ * The reason this provider exists is the **video poster pass**: 894 videos
+ * whose poster frames have to be captioned, at volume, and DeepSeek's
+ * image-capable Flash is a fraction of Gemini's price with no project spend
+ * cap to hit. It is a plain HTTP provider — no vendor SDK, because the wire
+ * format is OpenAI's and `fetch` is enough.
+ *
+ * **Batching is the point.** `captionPhotos` sends several poster frames in one
+ * request and asks for one JSON object per image in order, which is what turns
+ * 877 calls into a few dozen. `batchSize` is deliberately modest: the model
+ * aligns well at this size, and a batch that fails costs one retry rather than
+ * the whole run.
+ *
+ * Day and trip summaries are **not** ported yet — those prompts are longer and
+ * shaped for Gemini's responseSchema. Running `organize` or `trip` with
+ * AI_PROVIDER=deepseek throws a clear error; captioning and translation work.
+ */
+
+const MAX_ATTEMPTS = 5;
+/** Fetches and DeepSeek's own 5xx/429s are worth a retry; a 400 is not. */
+const RETRYABLE =
+  /(429|500|502|503|504|RESOURCE_EXHAUSTED|UNAVAILABLE|DEADLINE_EXCEEDED|INTERNAL|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up)/i;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+interface ImagePart {
+  type: "image_url";
+  image_url: { url: string };
+}
+interface TextPart {
+  type: "text";
+  text: string;
+}
+type Part = TextPart | ImagePart;
+interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string | Part[];
+}
+
+/** The same cataloguing brief Gemini gets, so a switch of provider does not also switch what a caption means. */
+const CAPTION_PROMPT = `You are cataloging a personal photo library that mixes travel photos, everyday snapshots, and phone screenshots. There are no people to identify — focus on place, subject, and content.
+- content_type: scene, document (signs/plaques/menus/text-heavy), food, landscape, screenshot (a screen capture, not a camera photo), or other.
+- caption: one plain sentence, no preamble.
+- tags: 3-6 short lowercase tags.
+- extracted_text: if this is primarily a sign, museum plaque, menu, or document, transcribe its text in full. Otherwise null.
+- notable: true only if this photo should get its own write-up; false for routine snapshots that can be folded into a day summary.`;
+
+const CAPTION_JSON = `Reply with ONE JSON object and nothing else:
+{"content_type":"scene|document|food|landscape|screenshot|other","caption":"one plain sentence","tags":["3-6 short lowercase tags"],"extracted_text":"full transcribed text, or null","notable":true|false}`;
+
+function dataUrl(input: CaptionPhotoInput): string {
+  return `data:${input.mediaType};base64,${input.imageBase64}`;
+}
+
+function usageOf(body: { usage?: Record<string, unknown> }): CallUsage {
+  const u = (body.usage ?? {}) as {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+  const thoughts = u.completion_tokens_details?.reasoning_tokens ?? 0;
+  return {
+    promptTokens: u.prompt_tokens ?? 0,
+    thoughtsTokens: thoughts,
+    // DeepSeek counts reasoning inside completion_tokens; split it out the way
+    // Gemini reports it so the two providers' usage lines mean the same thing.
+    outputTokens: Math.max(0, (u.completion_tokens ?? 0) - thoughts),
+  };
+}
+
+function backoffMs(attempt: number, retryAfter: string | null): number {
+  const header = Number(retryAfter);
+  if (Number.isFinite(header) && header > 0) return header * 1000;
+  return Math.min(30_000, 1500 * 2 ** (attempt - 1)) * (0.7 + Math.random() * 0.6);
+}
+
+async function chat(messages: ChatMessage[], opts: { maxTokens: number }): Promise<{ text: string; usage: CallUsage }> {
+  if (!env.deepseekApiKey) {
+    throw new Error("DEEPSEEK_API_KEY is not set — add it to pipeline/.env, or set it in the environment");
+  }
+  const url = `${env.deepseekBaseUrl.replace(/\/+$/, "")}/chat/completions`;
+
+  for (let attempt = 1; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.deepseekApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: env.deepseekModel,
+          messages,
+          temperature: 0,
+          max_tokens: opts.maxTokens,
+          // The prompts above already say "one JSON object"; DeepSeek keeps
+          // OpenAI's rule that json_object mode needs the word JSON in the prompt.
+          response_format: { type: "json_object" },
+        }),
+      });
+    } catch (err) {
+      if (attempt < MAX_ATTEMPTS && RETRYABLE.test(String(err))) {
+        await sleep(backoffMs(attempt, null));
+        continue;
+      }
+      throw err;
+    }
+
+    if (!res.ok) {
+      const body = await res.text();
+      if (attempt < MAX_ATTEMPTS && (res.status === 429 || res.status >= 500)) {
+        await sleep(backoffMs(attempt, res.headers.get("retry-after")));
+        continue;
+      }
+      throw new Error(`DeepSeek ${res.status}: ${body.slice(0, 300)}`);
+    }
+
+    const body = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+      usage?: Record<string, unknown>;
+    };
+    const text = body.choices?.[0]?.message?.content ?? "";
+    if (!text) throw new Error("DeepSeek returned an empty message");
+    return { text, usage: usageOf(body) };
+  }
+}
+
+/** The model's JSON as a `CaptionResult`, tolerant of a stray prose wrapper. */
+function toCaption(raw: unknown): Omit<CaptionResult, "usage"> {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    contentType: (typeof r.content_type === "string" ? r.content_type : "other") as CaptionResult["contentType"],
+    caption: typeof r.caption === "string" ? r.caption : "",
+    tags: Array.isArray(r.tags) ? (r.tags as unknown[]).map(String) : [],
+    extractedText: typeof r.extracted_text === "string" ? r.extracted_text : null,
+    notable: Boolean(r.notable),
+  };
+}
+
+/** Models sometimes wrap JSON in a ```json fence despite json_object mode. */
+function looseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
+    const braced = /\{[\s\S]*\}/.exec(text);
+    return JSON.parse(fenced?.[1] ?? braced?.[0] ?? text);
+  }
+}
+
+async function captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult> {
+  const { text, usage } = await chat(
+    [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: `${CAPTION_PROMPT}${captionContextBlock(input.context)}\n\n${CAPTION_JSON}` },
+          { type: "image_url", image_url: { url: dataUrl(input) } },
+        ],
+      },
+    ],
+    { maxTokens: 1024 },
+  );
+  return { ...toCaption(looseJson(text)), usage };
+}
+
+/**
+ * Several posters in one call. The images are sent in order and the model is
+ * asked for a `results` array in the same order; per-image context, where it
+ * exists, is listed by number before the images so it lines up.
+ */
+async function captionPhotos(inputs: CaptionPhotoInput[]): Promise<CaptionResult[]> {
+  if (inputs.length === 0) return [];
+  if (inputs.length === 1) return [await captionPhoto(inputs[0])];
+
+  const contexts = inputs
+    .map((input, i) => {
+      const block = captionContextBlock(input.context).trim();
+      return block ? `Image ${i + 1}:\n${block}` : "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  const content: Part[] = [
+    {
+      type: "text",
+      text:
+        `${CAPTION_PROMPT}\n\nYou are given ${inputs.length} images, in order. ` +
+        `Reply with ONE JSON object: {"results":[ exactly ${inputs.length} objects, in the SAME order as the images, ` +
+        `each {"content_type":...,"caption":...,"tags":[...],"extracted_text":...,"notable":...} ]}` +
+        (contexts ? `\n\nPer-image context (use only to name what the image already shows):\n${contexts}` : ""),
+    },
+  ];
+  for (const input of inputs) content.push({ type: "image_url", image_url: { url: dataUrl(input) } });
+
+  const { text, usage } = await chat([{ role: "user", content }], { maxTokens: Math.min(8192, 400 * inputs.length + 512) });
+  const parsed = looseJson(text) as { results?: unknown[] };
+  const results = Array.isArray(parsed.results) ? parsed.results : [];
+  // Charged once, on the first result; the rest carry none, so a caller summing
+  // usage over a batch does not multiply the same call N times.
+  return results.map((raw, i) => ({ ...toCaption(raw), usage: i === 0 ? usage : undefined }));
+}
+
+async function translate(input: TranslateInput): Promise<TranslateResult> {
+  const { text, usage } = await chat(
+    [
+      {
+        role: "user",
+        content: `${translatePrompt(input)}\n\nReply with ONE JSON object: {"items":[{"key":"...","text":"..."}]}`,
+      },
+    ],
+    { maxTokens: 8192 },
+  );
+  const parsed = looseJson(text) as { items?: { key: string; text: string }[] };
+  return { items: parsed.items ?? [], usage };
+}
+
+function notPorted(what: string): never {
+  throw new Error(
+    `The deepseek provider does not implement ${what} yet — it covers captioning and translation. ` +
+      `Set AI_PROVIDER=gemini for organize/trip, or port the prompt.`,
+  );
+}
+
+export const deepseekProvider: AiProvider = {
+  captionPhoto,
+  captionPhotos,
+  /** Keep a retry's blast radius small and alignment obvious. */
+  batchSize: 12,
+  summarizeDay: (_input: SummarizeDayInput): Promise<DaySummaryResult> => notPorted("day summaries"),
+  summarizeTrip: (_input: SummarizeTripInput): Promise<TripSummaryResult> => notPorted("trip summaries"),
+  translate,
+};
