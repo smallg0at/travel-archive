@@ -102,7 +102,7 @@ The day is already divided into stops by where and when the photos were taken. R
 
 Use each photo at most once across the whole day — a photo already used by one highlight must not appear in another. Not every photo needs to be a highlight; the rest are still shown, in a grid under the stop.
 
-Also write a 2-4 sentence summary of the day as a whole.
+Also write a 2-4 sentence summary of the day as a whole. Plain and concrete: what was done and what was seen, in order. No interpretation, no closing flourish, no metaphors, and never tell the reader what the day meant.
 
 ${stopBlocks(input)}${metadataCaveats(input)}${altInstructions(input.alsoIn)}`;
 }
@@ -146,12 +146,18 @@ export function tripPrompt(input: SummarizeTripInput): string {
     ? `The traveller calls this trip "${input.name}". Use that name verbatim.`
     : `The traveller has not named this trip. Propose a short name from where they actually went.`;
 
-  return `Write the story of one trip, from its day-by-day summaries.
+  return `Write an account of one trip, from its day-by-day summaries.
 
 ${input.startDate} to ${input.endDate}.
 ${naming}
 
-Write it as the traveller's own diary, looking back: what the trip was, where it went, what stood out. Prose only — no headings, no lists, no day-by-day recital. Break it into 3-6 paragraphs separated by a blank line. Do not invent anything the days below do not support.
+One traveller's own recollection of what the trip was, where it went and what stood out. Prose only — no headings, no lists, no day-by-day recital. Break it into 3-6 paragraphs separated by a blank line. Do not invent anything the days below do not support.
+
+**Tone: a plain written account with the life left in it.** Concrete and readable — the specific things that happened, in the order they happened, in the traveller's own voice. Warm is fine. Literary is not:
+- State what happened; do not interpret what it meant. No "it was one of those days that adds up to more than the sum of what you did", no "the river made the town feel like a place with its own weather".
+- No closing flourish and no aphorism. Do not end on lines like "it turned out to be enough", "I'd go again for the cab alone", "that was the idea". End on a fact, not a sentiment.
+- No metaphors or similes. Say the waterfowl were used to people; do not say the river gave the town its own weather.
+- Do not tell the reader how to feel about the trip, and do not summarise its meaning.
 
 A day marked [a travel day] was spent getting somewhere; the rest were spent somewhere. An airport or a station passed through on the way is not a place visited — keep it as travel, and leave it out of "places".
 
