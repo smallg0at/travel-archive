@@ -153,6 +153,8 @@ ${naming}
 
 One traveller's own recollection of what the trip was, where it went and what stood out. Prose only — no headings, no lists, no day-by-day recital. Break it into 3-6 paragraphs separated by a blank line. Do not invent anything the days below do not support.
 
+**The narrative never names the trip.** Do not open with "this trip was called X", do not say what it is called, and do not announce the subject at all — the name is its own field and is already printed above the text as the page's title. Begin with the first thing that happened.
+
 **Tone: a plain written account with the life left in it.** Concrete and readable — the specific things that happened, in the order they happened, in the traveller's own voice. Warm is fine. Literary is not:
 - State what happened; do not interpret what it meant. No "it was one of those days that adds up to more than the sum of what you did", no "the river made the town feel like a place with its own weather".
 - No closing flourish and no aphorism. Do not end on lines like "it turned out to be enough", "I'd go again for the cab alone", "that was the idea". End on a fact, not a sentiment.
