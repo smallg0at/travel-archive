@@ -200,10 +200,18 @@ function decideDay(args: {
   // Place is an input to the summary, not just a label, so a day whose place
   // changed is as stale as one whose photos changed — geocoding lands after
   // captioning, and the dominant-place fix above moved several days.
+  //
+  // A day that merely *gained a few photos* is deliberately not stale. The
+  // check used to be set equality, so one new photo — a screenshot, a
+  // duplicate, a late import — re-summarized the whole day for pay. A day's
+  // summary is prose about what happened, and it does not change because two
+  // more frames arrived; the new photos still appear in the grid. What does
+  // make it stale is a photo *leaving* (the summary may still describe it) or
+  // enough arriving to change the day's shape.
   const unchanged =
     !opts.force &&
     prior?.summarizedPhotoIds != null &&
-    sameIds(prior.summarizedPhotoIds, summarizedIds) &&
+    photosOnlyGrew(prior.summarizedPhotoIds, summarizedIds) &&
     prior.place === place &&
     // A note is an input to the summary like the photos are, so editing one
     // makes the day stale. `?? null` on both sides because days written before
@@ -221,6 +229,23 @@ function decideDay(args: {
   // reported as needing Analyze — that is the reason it would stay blank in a trip.
   if (!inTrip && photoCount <= SUMMARY_MIN_PHOTOS) return "skip-small";
   return "rewrite";
+}
+
+/**
+ * Whether `next` is `prior` plus a few additions, with nothing removed.
+ *
+ * The tolerance is what keeps a late-arriving photo or two from re-running a
+ * day, while still catching a genuine change: once additions pass a quarter of
+ * the day (or three photos, whichever is larger) the day is treated as rewritten,
+ * because at that point the summary may no longer describe what is there.
+ */
+function photosOnlyGrew(prior: string[], next: string[]): boolean {
+  if (next.length < prior.length) return false;
+  if (next.length === prior.length) return sameIds(prior, next);
+  const before = new Set(prior);
+  const added = next.filter((id) => !before.has(id)).length;
+  const tolerance = Math.max(3, Math.floor(prior.length / 4));
+  return added <= tolerance;
 }
 
 export interface OrganizeOptions {
@@ -553,8 +578,11 @@ export async function runOrganize(
       photoIds,
       segments,
       // A skipped small day keeps what its stored summary was written from, so
-      // it is still seen as stale once it joins a trip or grows.
-      summarizedPhotoIds: outcome === "skip-small" ? (prior?.summarizedPhotoIds ?? []) : summarizedIds,
+      // it is still seen as stale once it joins a trip or grows. A *reused* day
+      // absorbs the photos it tolerated — otherwise the same few additions would
+      // be seen as "new" on every run and the day would look stale forever
+      // without ever being rewritten. A rewrite records exactly what it read.
+      summarizedPhotoIds: outcome === "reuse" || outcome === "rewrite" ? summarizedIds : (prior?.summarizedPhotoIds ?? []),
       note,
       // Only a rewrite consumed the note; a reused day keeps whatever its
       // stored summary was actually written from, or the staleness check would

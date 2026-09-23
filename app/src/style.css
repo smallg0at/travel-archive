@@ -828,7 +828,7 @@ html.desktop-shell .nav-year:hover {
    mark to say so. A CSS triangle, not a glyph, so it does not depend on a font
    that may not carry "▶". The three positioned cell wrappers are the album
    grid, the stop grid and a card's image strip. */
-:is(.album-cell, .grid-cell, .card-cell):has(img[data-video])::after {
+:is(.album-cell, .grid-cell, .card-cell, .search-cell):has(img[data-video])::after {
   content: "";
   position: absolute;
   right: 6px;
@@ -3208,6 +3208,11 @@ body.map-expanded::after {
   gap: 4px;
   padding: 0 8px;
 }
+.search-cell {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
 .search-thumb {
   width: 96px;
   height: 96px;
@@ -3302,6 +3307,7 @@ body.map-expanded::after {
   overflow: hidden;
 }
 .then-cover {
+  position: relative;
   aspect-ratio: 4 / 3;
   background: var(--bg);
 }
@@ -3357,6 +3363,26 @@ body.map-expanded::after {
   gap: 3px;
   padding: 0 14px 14px;
   margin-top: auto;
+}
+/* The strip's own cells are the images, so the badge is positioned against the
+   image's own box rather than a wrapper. */
+.then-strip img[data-video],
+.then-cover-img[data-video] {
+  position: relative;
+}
+.then-strip img[data-video]::after,
+.then-cover-img[data-video]::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 0 6px 10px;
+  border-color: transparent transparent transparent #fff;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.85));
+  pointer-events: none;
 }
 .then-thumb {
   display: block;

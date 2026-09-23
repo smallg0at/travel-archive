@@ -220,17 +220,21 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
       const photos = await photosFor(day);
       if (mine !== run) return;
       const images = photos.map((photo) => {
-        const img = lazyImg(photo, "medium", "search-thumb");
-        img.title = photo.caption ?? "";
-        img.addEventListener("click", () => {
+        const thumb = lazyImg(photo, "medium", "search-thumb");
+        thumb.title = photo.caption ?? "";
+        thumb.addEventListener("click", () => {
           if (opts.onOpenPhoto) opts.onOpenPhoto(photo, photos);
           else {
             const section = dayMeta(archive, day.date).section;
             if (section) opts.onOpenDay(day.date, section);
           }
         });
-        host.appendChild(img);
-        return img;
+        // Wrapped so a video's poster can carry its play badge — an <img> is a
+        // replaced element and cannot host the ::after the badge is drawn with.
+        const cell = el<HTMLDivElement>(`<div class="search-cell"></div>`);
+        cell.appendChild(thumb);
+        host.appendChild(cell);
+        return thumb;
       });
       void hydrateAll(images);
     }
