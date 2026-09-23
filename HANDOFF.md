@@ -90,6 +90,29 @@ the newer copy. This has now been found in three separate places
 (`/archive/status`, `planAnalyze`, `loadAllShards`), each time as a
 multi-second wait with an instant answer sitting on disk.
 
+**A write path may read the mirror too, when it can prove it is safe.** The rule
+above is about a *stale* mirror, not about writing. `loadShardForWriting` reads
+locally unless the remote's `lastModifiedDateTime` is newer than the mirror
+file's own mtime — one metadata request instead of a full download, and a
+genuine external write still falls back to Graph. On a whole-library pass this
+is the difference between 80 downloads and 80 metadata reads. `translate`,
+`renameTrip`, `deleteTrip` and `editTrip` read the index the same way
+(`loadIndexForReading`). The archive lock (`lock.ts`) is what makes the
+single-writer assumption hold; a second machine that only *translates* moves no
+eTag and is not detectable by `checkSync`.
+
+**Read the index back after a job that wrote it.** `runTrip` summarises missing
+days through `runOrganize`, which saves the index itself; carrying on with the
+copy read beforehand silently overwrote what had just been paid for — "1 day
+summarized" and the day still empty. Whenever a nested job writes, re-`loadIndex`
+and rebuild anything derived from it.
+
+**A `display` on an id beats `[hidden]`.** `#print-progress`, `.signin-banner`
+and `.lightbox` have each shipped a control that could not be dismissed because
+an unconditional `display: flex` outranks the browser's `[hidden] { display:
+none }`. Express it as `:not([hidden]) { display: flex }`, or the flag the code
+sets does nothing visible.
+
 **Paths split two ways** (`pipeline/src/paths.ts`). Writable per-user state
 resolves from `ARCHIVE_HOME`; read-only config that ships with the build
 resolves from the module. Get this wrong and an installed app writes into a
@@ -245,6 +268,30 @@ writes only an **allowlist** of names: it turns a request into environment
 variables the process reads on next start, so an unrestricted version would let
 `NODE_OPTIONS` run arbitrary code.
 
+**Two provider shapes, one table.** `pipeline/src/providers/index.ts`'s `PRESETS`
+lists every backend Settings can switch to. Two kinds exist and the difference is
+real: **gemini** (its own SDK, `responseSchema` enforced by the API, and the only
+one with a Batch API) and **openai** — anything speaking Chat Completions, which
+is DeepSeek, SiliconFlow, DashScope, Zhipu, Moonshot, OpenRouter and a local
+Ollama, all served by `openaiCompatible.ts`. A new service is an entry there, not
+a module. The two switches that genuinely vary between vendors are on the entry
+(`tokenParam`, `jsonMode`).
+
+**The provider is chosen for the job, not once for the app.** Gemini's
+`responseSchema` is a hard constraint the prompt-only path cannot match, which is
+why day and trip pages come out more reliably on it; DeepSeek is roughly 3-6x
+cheaper and has no project spend cap, which is what makes bulk captioning
+affordable. `AI_PROVIDER=deepseek` with DeepSeek cost **¥1.32** to caption 791
+photos (~¥1.98/M tokens) — the same work wanted ~$1.30 on Gemini and hit the
+project's monthly cap.
+
+**`max_tokens` is a cap, not a budget.** Nothing is charged for unused headroom,
+and on DeepSeek's JSON mode the cap is a **hard truncation** — a low one does not
+save money, it cuts the reply mid-object and loses the whole call. Sizes live in
+`MAX_OUTPUT` in `openaiCompatible.ts`; the day summary (33 cards per stop) is the
+longest reply these prompts ask for. A reply that still will not parse is
+repaired (`closeTruncated`) or retried without cards, never dropped whole.
+
 **`process.env` beats `.env`, silently.** dotenv never overrides a real
 environment variable, so a key saved in Settings works until the next restart
 and then loses to the machine's own setting. This machine has `GEMINI_API_KEY`
@@ -343,6 +390,31 @@ the app (`POST /jobs/scan`, three modes in Settings), and the missing-`.env`
 dialog is now a **Settings > Generation** form that writes the key and applies
 it without a restart. Both are in `TODO.md`'s Resolved list.
 
+**2026-09-24 — a day of "it was already broken by the fix."** Worth reading as a
+class, because three of the four were self-inflicted within the same session:
+
+- **Save-as-PDF had not disappeared; its button was never created.**
+  `addExportButton` ran `if (!canPrint()) return` while the header was still
+  being built, before any photograph existed in the DOM. The count was always
+  zero, so the button never appeared on any page. The check is deferred now.
+  (A second, real defect in the same area: `exportableImages` and `slotPxFor`
+  knew only the card layout, so a grid export would have embedded full-size
+  images.)
+- **The print toast could not be cancelled and would not go away.** Two separate
+  causes: nothing checked for an interruption during the encode loop (fixed with
+  an `AbortSignal` and a Cancel button), and then `#print-progress` grew an
+  unconditional `display: flex` — my own addition of that button — which
+  outranked `[hidden]` and left it on screen forever.
+- **A nested job's work was overwritten by the caller's stale copy.** `runTrip`
+  summarises missing days via `runOrganize`, which saves the index; `runTrip`
+  then re-bucketed days from the copy it had read *before* that, writing the
+  empty days back. Symptom: "1 day summarized", and the day still had no summary.
+- **The `_alt` second-language fields were never requested.** The instruction
+  said "every text field has a twin ending in `_alt`", but on the OpenAI-compatible
+  path the only place those fields exist is the JSON shape in the prompt, and it
+  listed none of them. Gemini got them from `withAltFields` in its schema, so
+  only Gemini wrote them.
+
 ---
 
 ## How to work on this
@@ -435,16 +507,42 @@ thing. Look at the screen first, especially when a critique is about how
 something reads rather than whether it matches a spec.
 
 **Cost is real.** `analyze` spends money per photo. The whole 18-day trip cost
-under £8 for 4,181 photos. Show an estimate before spending, and never re-run
-over the library casually.
+under £8 for 4,181 photos on Gemini; on DeepSeek the same work is single-digit
+yuan. Show an estimate before spending, and never re-run over the library
+casually.
+
+**The writing has a register, and it was chosen on purpose.** A trip narrative is
+**a plain written account with the life left in it** — concrete, in order, in the
+traveller's own voice. Warm is allowed; literary is not. Named and forbidden in
+`tripPrompt`: interpretation ("what it meant"), closing flourishes and aphorisms
+("it turned out to be enough"), metaphors, telling the reader how to feel, photo
+counts and distances, and **naming the trip inside its own narrative**. Each of
+those was a real output that had to be argued out of it.
+
+**Rolling the dice does not change a voice.** Three runs on one input produced
+the same travel-essay mode every time, so the register is the model's reading of
+"write a diary", not sampling noise — a `prompt` change is the only lever. When a
+generated text reads wrong, regenerate *after* fixing the prompt, not instead of.
+
+**The second language is written, not translated.** `altInstructions` asks for the
+twin `_alt` fields to be composed **directly** in that language; asking for "the
+same content written in X" produced translationese in both providers — Gemini's
+stored narratives read "低地国家以其充满活力的建筑奇观……迎接了我". And on the
+OpenAI-compatible path the `_alt` fields must be listed in the JSON shape, or the
+model is told about fields it cannot see (see the regressions above).
 
 ---
 
 ## The one piece of work with real value left
 
-**Caption the rest of the library** — **~2,400 of ~31,700 photos** were still
-uncaptioned on 2026-09-20, down from ~23,400 on 2026-09-11 as the self-submitting
-batch run works through them. Everything it needs is built:
+**Caption what is left** — the 2,574 uncaptioned photos are mostly **deliberate**:
+2,395 are withheld screenshots. The genuinely capturable remainder was **52**
+(31 photos + 21 videos) on 2026-09-24, of which 41 have no Graph thumbnail at all
+— older videos, HEIC and DNG, which the thumbnail pipeline does not decode. There
+is no model work left in the archive; what remains is a **local decode** for those
+41 if they are wanted.
+
+### How captioning works, for when it is needed again
 
 - **Context.** The prompt carries the camera's clock in words, the trip, the
   town, a street-level venue and street (Nominatim `zoom=18`, looked up
