@@ -40,6 +40,17 @@ const MAX_ATTEMPTS = 5;
 const RETRYABLE =
   /(429|500|502|503|504|RESOURCE_EXHAUSTED|UNAVAILABLE|DEADLINE_EXCEEDED|INTERNAL|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up)/i;
 
+/**
+ * Images per request.
+ *
+ * Lowered from 12 after a real truncation: with reasoning counted into the
+ * completion budget, a ten-image batch could spend most of `max_tokens` on
+ * thinking and cut the JSON mid-object, losing every caption in it. Six keeps
+ * the JSON small enough that the budget is never the constraint, and a batch
+ * that still fails is only six photos to re-send.
+ */
+const BATCH_SIZE = 6;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface ImagePart {
@@ -219,14 +230,31 @@ async function captionPhotos(inputs: CaptionPhotoInput[]): Promise<CaptionResult
   ];
   for (const input of inputs) content.push({ type: "image_url", image_url: { url: dataUrl(input) } });
 
-  // Budget covers thinking as well as the JSON — DeepSeek bills reasoning into
-  // completion_tokens, and a truncated array is worse than a slightly larger cap.
-  const { text, usage } = await chat([{ role: "user", content }], { maxTokens: Math.min(8192, 500 * inputs.length + 1024) });
-  const parsed = looseJson(text) as { results?: unknown[] };
-  const results = Array.isArray(parsed.results) ? parsed.results : [];
+  /**
+   * One request for the batch; **fall back to one per image** if it does not
+   * come back as JSON.
+   *
+   * A reply that is truncated or malformed used to lose all N captions at once.
+   * Sending the same images individually means only the genuinely bad one fails,
+   * at the cost of a few extra calls — and a batch small enough to stay under
+   * the output ceiling is the first line of defence anyway.
+   */
+  let parsed: { results?: unknown[] };
+  let batchUsage: CallUsage | undefined;
+  try {
+    const { text, usage } = await chat([{ role: "user", content }], { maxTokens: 8192 });
+    batchUsage = usage;
+    parsed = looseJson(text) as { results?: unknown[] };
+    if (!Array.isArray(parsed.results) || parsed.results.length === 0) throw new Error("no results array");
+  } catch (err) {
+    console.warn(`  batch of ${inputs.length} did not parse (${(err as Error).message}); retrying one at a time`);
+    const singles: CaptionResult[] = [];
+    for (const input of inputs) singles.push(await captionPhoto(input));
+    return singles;
+  }
   // Charged once, on the first result; the rest carry none, so a caller summing
   // usage over a batch does not multiply the same call N times.
-  return results.map((raw, i) => ({ ...toCaption(raw), usage: i === 0 ? usage : undefined }));
+  return parsed.results.map((raw, i) => ({ ...toCaption(raw), usage: i === 0 ? batchUsage : undefined }));
 }
 
 async function translate(input: TranslateInput): Promise<TranslateResult> {
@@ -263,8 +291,7 @@ async function summarizeTrip(input: SummarizeTripInput): Promise<TripSummaryResu
 export const deepseekProvider: AiProvider = {
   captionPhoto,
   captionPhotos,
-  /** Keep a retry's blast radius small and alignment obvious. */
-  batchSize: 12,
+  batchSize: BATCH_SIZE,
   summarizeDay,
   summarizeTrip,
   translate,

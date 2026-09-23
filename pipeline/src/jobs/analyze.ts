@@ -489,7 +489,15 @@ export async function runAnalyze(
       }
       for (const [i, s] of settled.entries()) {
         if (signal?.aborted) return;
-        if (captions[i]) await applyCaption(s, captions[i]);
+        if (captions[i]) {
+          await applyCaption(s, captions[i]);
+        } else {
+          // The model returned fewer objects than images. Not a failure of the
+          // call — just this photo unanswered — so it is left for the next run
+          // rather than counted as one, exactly like an omitted single result.
+          result.skipped += 1;
+          onProgress({ message: `no caption returned: ${s.record.fileName}` });
+        }
       }
     };
 
