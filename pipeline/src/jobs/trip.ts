@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { DayRecord, PhotoRecord } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
-import { loadIndex, loadShard, saveIndex } from "../archiveStore.js";
+import { loadIndex, loadShard, loadIndexForReading, saveIndex } from "../archiveStore.js";
 import { getProvider } from "../providers/index.js";
 import { loadTripDefinitions, TRIPS_FILE, type TripDefinition } from "../tripDefs.js";
 import { bucketDays } from "./sections.js";
@@ -133,7 +133,11 @@ export async function renameTrip(id: string, name: string): Promise<void> {
     const def = defs.find((d) => d.id === id);
     if (!def) throw new Error(`There is no trip "${id}".`);
     const token = await getAccessToken();
-    const index = await loadIndex(token);
+    // From the mirror: the index is ~9MB and reading it locally rather than
+    // downloading costs nothing but the upload that follows, which is
+    // unavoidable. Single-writer, like the translate pass — see
+    // loadIndexForReading. A rename touched one field of one section.
+    const index = await loadIndexForReading(token);
     const section = index.sections.find((s) => s.id === id);
     if (section) {
       section.name = clean;
@@ -155,7 +159,9 @@ export async function deleteTrip(id: string): Promise<void> {
     const rest = defs.filter((d) => d.id !== id);
     if (rest.length === defs.length) throw new Error(`There is no trip "${id}".`);
     const token = await getAccessToken();
-    const index = await loadIndex(token);
+    // From the mirror, for the same reason renameTrip is: ~9MB, read locally,
+    // one upload after. See loadIndexForReading.
+    const index = await loadIndexForReading(token);
     index.sections = bucketDays(
       index.sections.flatMap((s) => s.days),
       rest,
