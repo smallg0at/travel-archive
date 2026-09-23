@@ -649,6 +649,27 @@ export interface ProxySettings {
 }
 
 /**
+ * One selectable generation backend, as the Settings form sees it.
+ *
+ * Enough to render a row and know whether it is usable, and **never the key** —
+ * `hasKey` is a boolean across this boundary, exactly like `keys` below.
+ */
+export interface ProviderOption {
+  id: string;
+  label: string;
+  kind: "gemini" | "openai";
+  baseUrl: string | null;
+  model: string;
+  /** The `.env` variable the key is written to, so the form can target it. */
+  apiKeyEnv: string;
+  hasKey: boolean;
+  /** Gemini's Batch API only; false makes the Batch checkbox meaningless. */
+  supportsBatch: boolean;
+  /** The fields this provider actually uses, so the form can hide the rest. */
+  editable: { baseUrl: boolean; model: boolean; apiKey: boolean };
+}
+
+/**
  * The generation settings, as reported by the local server.
  *
  * **Never carries an API key back out** — `keys` says only whether each one is
@@ -659,6 +680,8 @@ export interface ConfigStatus {
   path: string;
   exists: boolean;
   provider: string;
+  /** Every backend the server knows, in the order Settings should show them. */
+  providers: ProviderOption[];
   /** Whether the *selected* provider has a key — what decides if generation works. */
   ready: boolean;
   keys: { gemini: boolean };

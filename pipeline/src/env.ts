@@ -93,10 +93,10 @@ function readEnv() {
      */
     analyzeConcurrency: Math.max(1, Number(fromEnv("ANALYZE_CONCURRENCY") ?? 4)),
 
-    // Which providers/*.ts implementation of AiProvider to use. Add more
-    // providers by implementing the interface in providers/types.ts and
-    // wiring a new case into providers/index.ts.
-    aiProvider: fromEnv("AI_PROVIDER") ?? "gemini",
+    // Which providers/*.ts implementation of AiProvider to use. Any id from
+    // providers/index.ts's PRESETS; a new OpenAI-compatible service is a table
+    // entry there plus `AI_PROVIDER=<id>`. Names are validated in getProvider.
+    aiProvider: fromEnv("AI_PROVIDER") ?? "deepseek",
     geminiApiKey: fromEnv("GEMINI_API_KEY"),
     // 3.7 over 3.8: tied on caption quality in the bake-off, marginally faster
     // (2093ms vs 2255ms median), 27% fewer thinking tokens, and it read a

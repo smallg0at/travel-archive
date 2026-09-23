@@ -1,9 +1,10 @@
-import type { ConfigStatus } from "@travel-archive/shared";
+import type { ConfigStatus, ProviderOption } from "@travel-archive/shared";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { env, reloadEnv, shadowedByEnvironment } from "./env.js";
 import { homeFile } from "./paths.js";
 import { getProxySettings, updateProxyDispatcher } from "./proxy.js";
+import { PRESETS } from "./providers/index.js";
 
 /**
  * Reading and writing the pipeline's own `.env` at runtime.
@@ -38,6 +39,27 @@ const WRITABLE = [
   "AI_PROVIDER",
   "GEMINI_API_KEY",
   "GEMINI_MODEL",
+  "DEEPSEEK_API_KEY",
+  "DEEPSEEK_MODEL",
+  "DEEPSEEK_BASE_URL",
+  "SILICONFLOW_API_KEY",
+  "SILICONFLOW_MODEL",
+  "SILICONFLOW_BASE_URL",
+  "DASHSCOPE_API_KEY",
+  "DASHSCOPE_MODEL",
+  "DASHSCOPE_BASE_URL",
+  "ZHIPU_API_KEY",
+  "ZHIPU_MODEL",
+  "ZHIPU_BASE_URL",
+  "MOONSHOT_API_KEY",
+  "MOONSHOT_MODEL",
+  "MOONSHOT_BASE_URL",
+  "OPENROUTER_API_KEY",
+  "OPENROUTER_MODEL",
+  "OPENROUTER_BASE_URL",
+  "OLLAMA_API_KEY",
+  "OLLAMA_MODEL",
+  "OLLAMA_BASE_URL",
   "ONEDRIVE_PHOTOS_FOLDER",
   "ONEDRIVE_METADATA_FOLDER",
   "GEOCODE_CONTACT_EMAIL",
@@ -50,17 +72,36 @@ const WRITABLE = [
 
 export type WritableKey = (typeof WRITABLE)[number];
 
-/** Secrets, which are reported as set-or-not and never sent back out. */
-const SECRET: WritableKey[] = ["GEMINI_API_KEY"];
+/**
+ * Secrets, which are reported as set-or-not and never sent back out.
+ *
+ * Every provider's key variable ends in `_API_KEY`, so it is matched by that
+ * suffix rather than listed — a new service added to PRESETS cannot be
+ * forgotten here and leak its key into a response.
+ */
+const SECRET = WRITABLE.filter((k) => k.endsWith("_API_KEY")) as WritableKey[];
 
 export function configStatus(): ConfigStatus {
   const provider = env.aiProvider;
   const keys = { gemini: Boolean(env.geminiApiKey) };
+  const providers: ProviderOption[] = PRESETS.map((p) => ({
+    id: p.id,
+    label: p.label,
+    kind: p.kind,
+    baseUrl: process.env[`${p.id.toUpperCase()}_BASE_URL`] || p.baseUrl || null,
+    model: process.env[`${p.id.toUpperCase()}_MODEL`] || p.model,
+    apiKeyEnv: p.apiKeyEnv,
+    hasKey: Boolean(process.env[p.apiKeyEnv]),
+    supportsBatch: p.kind === "gemini",
+    editable: { baseUrl: p.kind === "openai", model: true, apiKey: true },
+  }));
+  const selected = providers.find((p) => p.id === provider);
   return {
     path: homeFile(".env"),
     exists: existsSync(homeFile(".env")),
     provider,
-    ready: provider === "gemini" && keys.gemini,
+    providers,
+    ready: Boolean(selected?.hasKey),
     keys,
     photosFolder: env.photosFolder,
     metadataFolder: env.metadataFolder,

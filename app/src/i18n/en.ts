@@ -244,6 +244,18 @@ export const en = {
     shadowed: (name: string) =>
       `${name} is also set as a system environment variable, which wins over this file when the app restarts. Change it there, or unset it, for a key saved here to survive.`,
 
+    providerTableNote:
+      "Pick the backend captions, day summaries and translations run on. Each is separate — switching submits the one row you save. Keys are stored in the file above and never sent back.",
+    providerBaseUrl: "Endpoint",
+    providerModel: "Model",
+    providerUse: "Use this",
+    providerActive: "In use",
+    providerKeySet: "Key saved",
+    providerKeyMissing: "No key",
+    providerBatchOk: "Batch available (half price, within a day)",
+    providerNoBatch: "No batch — captions run immediately",
+    providerOpenAiHint: "Any OpenAI-compatible endpoint works here.",
+
     proxy: "Network proxy",
     proxySystem: "System proxy",
     proxySystemDetected: (url: string) => `Detected: ${url}`,

@@ -236,6 +236,18 @@ export const zhHans: Messages = {
     shadowed: (name) =>
       `${name} 已在系统环境变量中设置，应用重启时系统环境变量优先于本文件中的值。请在系统设置中修改或删除该变量，此处保存的密钥才会生效。`,
 
+    providerTableNote:
+      "选择生成（说明、当天摘要、翻译）所用的后端。各家独立——保存哪一行就切换到哪一行。密钥保存在上面的文件中，服务器不会回传。",
+    providerBaseUrl: "接口地址",
+    providerModel: "模型",
+    providerUse: "使用此项",
+    providerActive: "使用中",
+    providerKeySet: "密钥已保存",
+    providerKeyMissing: "未配置密钥",
+    providerBatchOk: "支持批量任务（半价，24 小时内）",
+    providerNoBatch: "不支持批量——立即执行",
+    providerOpenAiHint: "任何 OpenAI 兼容接口都可以填在这里。",
+
     proxy: "网络代理",
     proxySystem: "系统代理",
     proxySystemDetected: (url) => `已检测到：${url}`,

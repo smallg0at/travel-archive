@@ -10,29 +10,21 @@ import type {
   TranslateResult,
   TripSummaryResult,
 } from "./types.js";
-import { env } from "../env.js";
 import { captionContextBlock } from "./captionContext.js";
 import { translatePrompt } from "./translatePrompt.js";
 import { DAY_JSON_SHAPE, TRIP_JSON_SHAPE, dayPrompt, parseDaySummary, parseTripSummary, tripPrompt } from "./summarise.js";
 
 /**
- * DeepSeek, over its OpenAI-compatible Chat Completions API.
+ * Any OpenAI-compatible Chat Completions endpoint — see `createOpenAiCompatProvider`
+ * at the bottom for why this is one module instead of one per vendor.
  *
- * The reason this provider exists is the **video poster pass**: 894 videos
- * whose poster frames have to be captioned, at volume, and DeepSeek's
- * image-capable Flash is a fraction of Gemini's price with no project spend
- * cap to hit. It is a plain HTTP provider — no vendor SDK, because the wire
- * format is OpenAI's and `fetch` is enough.
+ * The reason it exists at all is the **video poster pass**: 894 videos whose
+ * poster frames have to be captioned, at volume, where a cheap image-capable
+ * model with no project spend cap is what makes the pass affordable.
  *
  * **Batching is the point.** `captionPhotos` sends several poster frames in one
  * request and asks for one JSON object per image in order, which is what turns
- * 877 calls into a few dozen. `batchSize` is deliberately modest: the model
- * aligns well at this size, and a batch that fails costs one retry rather than
- * the whole run.
- *
- * Day and trip summaries are **not** ported yet — those prompts are longer and
- * shaped for Gemini's responseSchema. Running `organize` or `trip` with
- * AI_PROVIDER=deepseek throws a clear error; captioning and translation work.
+ * 877 calls into a few dozen.
  */
 
 const MAX_ATTEMPTS = 5;
@@ -104,27 +96,46 @@ function backoffMs(attempt: number, retryAfter: string | null): number {
   return Math.min(30_000, 1500 * 2 ** (attempt - 1)) * (0.7 + Math.random() * 0.6);
 }
 
-async function chat(messages: ChatMessage[], opts: { maxTokens: number }): Promise<{ text: string; usage: CallUsage }> {
-  if (!env.deepseekApiKey) {
-    throw new Error("DEEPSEEK_API_KEY is not set — add it to pipeline/.env, or set it in the environment");
+/** Endpoint settings for one OpenAI-compatible service. */
+export interface OpenAiCompatConfig {
+  /** Shown in errors, e.g. "DeepSeek" or "SiliconFlow". */
+  label: string;
+  baseUrl: string;
+  apiKey: string | undefined;
+  model: string;
+  /** `max_tokens` (DeepSeek, most) or `max_completion_tokens` (newer OpenAI). */
+  tokenParam?: "max_tokens" | "max_completion_tokens";
+  /** JSON mode: send OpenAI's `response_format`, or rely on the prompt alone. */
+  jsonMode?: "response_format" | "prompt";
+}
+
+async function chat(
+  cfg: OpenAiCompatConfig,
+  messages: ChatMessage[],
+  opts: { maxTokens: number },
+): Promise<{ text: string; usage: CallUsage }> {
+  if (!cfg.apiKey) {
+    throw new Error(`${cfg.label}: no API key — add one in Settings, or set the matching *_API_KEY in pipeline/.env`);
   }
-  const url = `${env.deepseekBaseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const url = `${cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
   for (let attempt = 1; ; attempt++) {
     let res: Response;
     try {
+      const payload: Record<string, unknown> = {
+        model: cfg.model,
+        messages,
+        temperature: 0,
+        [cfg.tokenParam ?? "max_tokens"]: opts.maxTokens,
+      };
+      // The prompts already say "one JSON object"; OpenAI keeps the rule that
+      // json_object mode also needs the word JSON in the prompt, which they do.
+      // Some endpoints reject the field outright, hence the switch.
+      if ((cfg.jsonMode ?? "response_format") === "response_format") payload.response_format = { type: "json_object" };
       res = await fetch(url, {
         method: "POST",
-        headers: { Authorization: `Bearer ${env.deepseekApiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: env.deepseekModel,
-          messages,
-          temperature: 0,
-          max_tokens: opts.maxTokens,
-          // The prompts above already say "one JSON object"; DeepSeek keeps
-          // OpenAI's rule that json_object mode needs the word JSON in the prompt.
-          response_format: { type: "json_object" },
-        }),
+        headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
     } catch (err) {
       if (attempt < MAX_ATTEMPTS && RETRYABLE.test(String(err))) {
@@ -140,7 +151,7 @@ async function chat(messages: ChatMessage[], opts: { maxTokens: number }): Promi
         await sleep(backoffMs(attempt, res.headers.get("retry-after")));
         continue;
       }
-      throw new Error(`DeepSeek ${res.status}: ${body.slice(0, 300)}`);
+      throw new Error(`${cfg.label} ${res.status}: ${body.slice(0, 300)}`);
     }
 
     const body = (await res.json()) as {
@@ -156,7 +167,7 @@ async function chat(messages: ChatMessage[], opts: { maxTokens: number }): Promi
         await sleep(backoffMs(attempt, null));
         continue;
       }
-      throw new Error("DeepSeek returned an empty message");
+      throw new Error(`${cfg.label} returned an empty message`);
     }
     return { text, usage: usageOf(body) };
   }
@@ -185,8 +196,9 @@ function looseJson(text: string): unknown {
   }
 }
 
-async function captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult> {
+async function captionPhoto(cfg: OpenAiCompatConfig, input: CaptionPhotoInput): Promise<CaptionResult> {
   const { text, usage } = await chat(
+    cfg,
     [
       {
         role: "user",
@@ -206,9 +218,9 @@ async function captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult> {
  * asked for a `results` array in the same order; per-image context, where it
  * exists, is listed by number before the images so it lines up.
  */
-async function captionPhotos(inputs: CaptionPhotoInput[]): Promise<CaptionResult[]> {
+async function captionPhotos(cfg: OpenAiCompatConfig, inputs: CaptionPhotoInput[]): Promise<CaptionResult[]> {
   if (inputs.length === 0) return [];
-  if (inputs.length === 1) return [await captionPhoto(inputs[0])];
+  if (inputs.length === 1) return [await captionPhoto(cfg, inputs[0])];
 
   const contexts = inputs
     .map((input, i) => {
@@ -242,14 +254,14 @@ async function captionPhotos(inputs: CaptionPhotoInput[]): Promise<CaptionResult
   let parsed: { results?: unknown[] };
   let batchUsage: CallUsage | undefined;
   try {
-    const { text, usage } = await chat([{ role: "user", content }], { maxTokens: 8192 });
+    const { text, usage } = await chat(cfg, [{ role: "user", content }], { maxTokens: 8192 });
     batchUsage = usage;
     parsed = looseJson(text) as { results?: unknown[] };
     if (!Array.isArray(parsed.results) || parsed.results.length === 0) throw new Error("no results array");
   } catch (err) {
     console.warn(`  batch of ${inputs.length} did not parse (${(err as Error).message}); retrying one at a time`);
     const singles: CaptionResult[] = [];
-    for (const input of inputs) singles.push(await captionPhoto(input));
+    for (const input of inputs) singles.push(await captionPhoto(cfg, input));
     return singles;
   }
   // Charged once, on the first result; the rest carry none, so a caller summing
@@ -257,8 +269,9 @@ async function captionPhotos(inputs: CaptionPhotoInput[]): Promise<CaptionResult
   return parsed.results.map((raw, i) => ({ ...toCaption(raw), usage: i === 0 ? batchUsage : undefined }));
 }
 
-async function translate(input: TranslateInput): Promise<TranslateResult> {
+async function translate(cfg: OpenAiCompatConfig, input: TranslateInput): Promise<TranslateResult> {
   const { text, usage } = await chat(
+    cfg,
     [
       {
         role: "user",
@@ -272,27 +285,45 @@ async function translate(input: TranslateInput): Promise<TranslateResult> {
 }
 
 /** Day and trip summaries: no images, just the shared prompts plus a JSON shape the model is told to follow. */
-async function summarizeDay(input: SummarizeDayInput): Promise<DaySummaryResult> {
+async function summarizeDay(cfg: OpenAiCompatConfig, input: SummarizeDayInput): Promise<DaySummaryResult> {
   const { text } = await chat(
+    cfg,
     [{ role: "user", content: `${dayPrompt(input)}\n\nReply with ONE JSON object:\n${DAY_JSON_SHAPE}` }],
     { maxTokens: 8192 },
   );
   return parseDaySummary(input, looseJson(text));
 }
 
-async function summarizeTrip(input: SummarizeTripInput): Promise<TripSummaryResult> {
+async function summarizeTrip(cfg: OpenAiCompatConfig, input: SummarizeTripInput): Promise<TripSummaryResult> {
   const { text, usage } = await chat(
+    cfg,
     [{ role: "user", content: `${tripPrompt(input)}\n\nReply with ONE JSON object:\n${TRIP_JSON_SHAPE}` }],
     { maxTokens: 8192 },
   );
   return { ...parseTripSummary(input, looseJson(text)), usage };
 }
 
-export const deepseekProvider: AiProvider = {
-  captionPhoto,
-  captionPhotos,
-  batchSize: BATCH_SIZE,
-  summarizeDay,
-  summarizeTrip,
-  translate,
-};
+/**
+ * A provider over any OpenAI-compatible Chat Completions endpoint.
+ *
+ * This used to be `deepseek.ts`, with the endpoint settings read straight from
+ * `env.deepseek*`. They are a parameter now, because the wire format is a
+ * standard: the same code serves DeepSeek, SiliconFlow, DashScope, Zhipu,
+ * Moonshot, OpenRouter, a local Ollama, and anything else that accepts
+ * `image_url` data URLs. What differs between them is not the shape but small
+ * switches — `tokenParam` and `jsonMode` below exist because those really do
+ * vary — so a new service is a config entry rather than a new module.
+ *
+ * Every call in a run shares one `cfg`, so a change of model or base URL takes
+ * effect on the next run without rebuilding a client.
+ */
+export function createOpenAiCompatProvider(cfg: OpenAiCompatConfig): AiProvider {
+  return {
+    captionPhoto: (input) => captionPhoto(cfg, input),
+    captionPhotos: (inputs) => captionPhotos(cfg, inputs),
+    batchSize: BATCH_SIZE,
+    summarizeDay: (input) => summarizeDay(cfg, input),
+    summarizeTrip: (input) => summarizeTrip(cfg, input),
+    translate: (input) => translate(cfg, input),
+  };
+}

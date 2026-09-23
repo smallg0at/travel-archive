@@ -1,4 +1,11 @@
-import type { ArchiveStatus, ConfigStatus, JobRecord, SyncState, SyncStatus } from "@travel-archive/shared";
+import type {
+  ArchiveStatus,
+  ConfigStatus,
+  JobRecord,
+  ProviderOption,
+  SyncState,
+  SyncStatus,
+} from "@travel-archive/shared";
 import {
   archiveStatus,
   checkHealth,
@@ -81,6 +88,14 @@ function button(label: string, onClick: () => void, kind = ""): HTMLButtonElemen
   b.textContent = label;
   b.addEventListener("click", onClick);
   return b;
+}
+
+/** A labelled input, for the provider rows. */
+function labelledInput(label: string, control: string): HTMLLabelElement {
+  const node = el<HTMLLabelElement>(`<label class="set-scan-field"><span></span></label>`);
+  node.querySelector("span")!.textContent = label;
+  node.insertAdjacentHTML("beforeend", control);
+  return node;
 }
 
 /**
@@ -407,84 +422,148 @@ function generationSection(): HTMLElement {
   const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
   body.appendChild(state);
 
-  const keyField = el<HTMLLabelElement>(`
-    <label class="set-scan-field set-key-field">
-      <span>${ui.settings.apiKey}</span>
-      <input type="password" name="key" autocomplete="off" spellcheck="false" />
-    </label>
-  `);
-  const key = keyField.querySelector("input") as HTMLInputElement;
-  body.appendChild(keyField);
-
-  const note = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
-  const warning = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
-  body.append(note, warning);
-
-  const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
-  const save = button(
-    ui.common.save,
-    () => {
-      const value = key.value.trim();
-      const patch: Record<string, string> = { AI_PROVIDER: "gemini" };
-      if (value) patch.GEMINI_API_KEY = value;
-      status.hidden = false;
-      status.textContent = ui.common.saving;
-      save.disabled = true;
-      void saveConfig(patch)
-        .then((next) => {
-          // Cleared on success so a key is never left sitting in the DOM.
-          key.value = "";
-          status.textContent = next.ready ? ui.settings.savedReady : ui.settings.saved;
-          apply(next);
-        })
-        .catch((err: Error) => (status.textContent = err.message))
-        .finally(() => (save.disabled = false));
-    },
-    "primary",
-  );
-
-  const actions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
-  actions.appendChild(save);
-  body.append(actions, status);
+  const intro = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
+  intro.textContent = ui.settings.providerTableNote;
+  body.appendChild(intro);
 
   /**
-   * The last status from the server. Kept so the display can be recomputed
-   * when the *selection* changes without asking again.
+   * One row per backend, built once and updated in place.
+   *
+   * A row is a small form: an endpoint and a model (for the OpenAI-compatible
+   * ones), a key, and a button that makes it the active provider. Keeping the
+   * inputs mounted means the response of one save can repaint the others
+   * without the reader losing half-typed text.
    */
+  interface Row {
+    id: string;
+    root: HTMLDivElement;
+    keyInput: HTMLInputElement;
+    note: HTMLElement;
+    button: HTMLButtonElement;
+    paint: (option: ProviderOption, active: boolean) => void;
+  }
+  const rows: Row[] = [];
+
+  const makeRow = (): Row => {
+    const root = el<HTMLDivElement>(`<div class="set-provider"></div>`);
+    const head = el<HTMLDivElement>(`<div class="set-provider-head"></div>`);
+    const name = el<HTMLSpanElement>(`<span class="set-provider-name"></span>`);
+    const badge = el<HTMLSpanElement>(`<span class="set-provider-badge"></span>`);
+    const useButton = button(ui.settings.providerUse, () => {}, "primary");
+    head.append(name, badge, useButton);
+
+    const fields = el<HTMLDivElement>(`<div class="set-provider-fields"></div>`);
+    const urlField = labelledInput(ui.settings.providerBaseUrl, `<input type="text" name="baseUrl" spellcheck="false" />`);
+    const modelField = labelledInput(ui.settings.providerModel, `<input type="text" name="model" spellcheck="false" />`);
+    const keyField = labelledInput(
+      ui.settings.apiKey,
+      `<input type="password" name="key" autocomplete="off" spellcheck="false" />`,
+    );
+    fields.append(urlField, modelField, keyField);
+
+    const note = el<HTMLElement>(`<p class="set-note"></p>`);
+    const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
+    root.append(head, fields, note, status);
+    body.appendChild(root);
+
+    const urlInput = urlField.querySelector("input") as HTMLInputElement;
+    const modelInput = modelField.querySelector("input") as HTMLInputElement;
+    const keyInput = keyField.querySelector("input") as HTMLInputElement;
+
+    const row: Row = {
+      id: "",
+      root,
+      keyInput,
+      note,
+      button: useButton,
+      paint(option, active) {
+        row.id = option.id;
+        name.textContent = option.label;
+        badge.textContent = active ? ui.settings.providerActive : "";
+        badge.hidden = !active;
+        badge.classList.toggle("tone-ok", active);
+        root.classList.toggle("is-active", active);
+        // The endpoint only means something for an OpenAI-compatible service —
+        // Gemini's own client has it baked in.
+        urlField.hidden = !option.editable.baseUrl;
+        urlInput.value = option.baseUrl ?? "";
+        modelInput.value = option.model;
+        urlInput.placeholder = option.baseUrl ?? "";
+        keyInput.placeholder = option.hasKey ? ui.settings.keySaved : ui.settings.keyPaste;
+        const batch = option.supportsBatch ? ui.settings.providerBatchOk : ui.settings.providerNoBatch;
+        note.textContent = `${option.hasKey ? ui.settings.providerKeySet : ui.settings.providerKeyMissing} · ${batch}`;
+        note.classList.toggle("tone-warn", !option.hasKey);
+        useButton.disabled = active;
+      },
+    };
+
+    keyInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") useButton.click();
+    });
+    return row;
+  };
+
   let latest: ConfigStatus | null = null;
 
-  /**
-   * Gemini is the only provider, so this reports the *configured* one rather
-   * than a selection. It used to key on a provider dropdown, which was wrong
-   * in a way that lied: a provider with no key still read "Ready" because the
-   * configured one had one.
-   */
   const render = () => {
     if (!latest) {
       state.textContent = ui.settings.unavailable;
       state.className = "set-sync-state tone-muted";
       return;
     }
-    const hasKey = latest.keys.gemini;
-    const ready = hasKey && latest.provider === "gemini";
-
-    state.textContent = hasKey
-      ? latest.provider === "gemini"
-        ? ui.settings.ready
-        : ui.settings.readyOnceSaved
+    const active = latest.providers.find((p) => p.id === latest!.provider);
+    state.textContent = active?.hasKey
+      ? `${active.label} · ${ui.settings.ready}`
       : ui.settings.noKey;
-    state.className = `set-sync-state tone-${ready ? "ok" : "warn"}`;
+    state.className = `set-sync-state tone-${active?.hasKey ? "ok" : "warn"}`;
 
-    key.placeholder = hasKey ? ui.settings.keySaved : ui.settings.keyPaste;
-    note.textContent = ui.settings.keyNote(latest.path);
+    // Rows exist for every provider the server knows, created on first sight so
+    // the order is the server's.
+    for (const option of latest.providers) {
+      let row = rows.find((r) => r.id === option.id);
+      if (!row) {
+        row = makeRow();
+        rows.push(row);
+        row.button.addEventListener("click", () => void save(row!));
+      }
+      row.paint(option, option.id === latest.provider);
+    }
+  };
 
-    // dotenv never overrides a real environment variable, so a key saved here
-    // would work until the next restart and then quietly lose to the machine's
-    // own setting. Better said than discovered.
-    const shadowed = latest.shadowed.includes("GEMINI_API_KEY");
-    warning.hidden = !shadowed;
-    if (shadowed) {
-      warning.textContent = ui.settings.shadowed("GEMINI_API_KEY");
+  /**
+   * Writes one row. Only the fields that row uses, so saving DeepSeek cannot
+   * blank Gemini's model, and vice versa.
+   */
+  const save = async (row: Row) => {
+    if (!latest) return;
+    const option = latest.providers.find((p) => p.id === row.id);
+    if (!option) return;
+    const root = row.root;
+    const key = row.keyInput;
+    const url = root.querySelector<HTMLInputElement>('input[name="baseUrl"]')!;
+    const model = root.querySelector<HTMLInputElement>('input[name="model"]')!;
+    const status = root.querySelector<HTMLElement>(".set-progress")!;
+
+    const patch: Record<string, string> = { AI_PROVIDER: option.id };
+    const prefix = option.id.toUpperCase();
+    if (option.editable.baseUrl && url.value.trim()) patch[`${prefix}_BASE_URL`] = url.value.trim();
+    if (option.editable.model && model.value.trim()) patch[`${prefix}_MODEL`] = model.value.trim();
+    // Write a model for Gemini too, under the name its own code reads.
+    if (option.id === "gemini" && model.value.trim()) patch.GEMINI_MODEL = model.value.trim();
+    const typed = key.value.trim();
+    if (typed) patch[option.apiKeyEnv] = typed;
+
+    status.hidden = false;
+    status.textContent = ui.common.saving;
+    row.button.disabled = true;
+    try {
+      const next = await saveConfig(patch);
+      key.value = "";
+      status.textContent = next.ready ? ui.settings.savedReady : ui.settings.saved;
+      apply(next);
+    } catch (err) {
+      status.textContent = (err as Error).message;
+      row.button.disabled = false;
     }
   };
 

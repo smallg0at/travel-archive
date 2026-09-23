@@ -2403,6 +2403,59 @@ html.desktop-shell #nav-tools {
   max-width: 460px;
 }
 
+/* --- Provider rows (Settings > Generation) -------------------------------- */
+
+.set-provider {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-muted);
+}
+/* The one in force, so the list reads as a choice rather than four forms. */
+.set-provider.is-active {
+  border-color: var(--accent);
+  background: var(--surface-selected);
+}
+.set-provider-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.set-provider-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.set-provider-badge {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.set-provider-head button {
+  margin-left: auto;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+}
+.set-provider-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+/* The endpoint gets a row of its own; model and key sit side by side under it. */
+.set-provider-fields > :first-child {
+  grid-column: 1 / -1;
+}
+.set-provider-fields .set-scan-field input {
+  width: 100%;
+}
+.set-provider .set-note {
+  margin: 8px 0 0;
+}
+.set-provider .set-progress {
+  margin-top: 6px;
+}
+
 .set-select {
   font: inherit;
   font-size: 12px;
