@@ -35,7 +35,7 @@ import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
-import { defineTrip, deleteTrip, renameTrip, runTrip } from "./jobs/trip.js";
+import { defineTrip, deleteTrip, editTrip, renameTrip, runTrip } from "./jobs/trip.js";
 import { dismissTripSuggestion, listTripSuggestions } from "./jobs/tripSuggest.js";
 import { parseTranslateOptions, planTranslate, runTranslate } from "./jobs/translate.js";
 import * as jobs from "./server/jobs.js";
@@ -924,6 +924,25 @@ const routes: [RegExp, string, Handler][] = [
       try {
         await deleteTrip(decodeURIComponent(id));
         json(res, 200, { ok: true });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+  /**
+   * The owner's own corrections to a trip's narrative or name, in whichever
+   * language they are reading. Synchronous, one write, nothing spent — see
+   * editTrip. `lang` picks the sidecar the text belongs to.
+   */
+  [
+    /^\/trips\/([^/]+)\/edit$/,
+    "POST",
+    async (req, res, [id]) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{ narrative?: string | null; name?: string | null; lang?: string | null }>(req);
+      try {
+        const edits = await editTrip(decodeURIComponent(id), body);
+        json(res, 200, { ok: true, edits });
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }

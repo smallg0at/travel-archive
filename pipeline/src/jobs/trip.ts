@@ -1,10 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { DayRecord, PhotoRecord } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
-import { loadIndex, loadShard, loadIndexForReading, saveIndex } from "../archiveStore.js";
+import { loadIndex, loadShard, loadIndexForReading, loadTranslations, saveIndex, saveTranslations } from "../archiveStore.js";
+import type { TripEdits } from "@travel-archive/shared";
 import { getProvider } from "../providers/index.js";
 import { loadTripDefinitions, TRIPS_FILE, type TripDefinition } from "../tripDefs.js";
 import { bucketDays } from "./sections.js";
+import { runOrganize } from "./organize.js";
 import type { ProgressFn } from "./analyze.js";
 import { NATIVE_LANGUAGE, saveNativeText } from "./translate.js";
 import type { TripDayInput } from "../providers/types.js";
@@ -149,6 +151,64 @@ export async function renameTrip(id: string, name: string): Promise<void> {
 }
 
 /**
+ * Records the owner's hand corrections to a trip's narrative or name.
+ *
+ * The same shape as the day editor: `lang` absent writes the **original** (onto
+ * the section, `TripRecord.edits`), and a language code writes that language's
+ * corrections into its sidecar (`TranslationFile.tripOwner`), where they sit
+ * over the translation and are touched by neither a translate run nor a
+ * regeneration. A null value clears that field's correction and hands the text
+ * back to the model.
+ *
+ * **No staleness flag.** A day summary has consumers that read it — a trip
+ * narrative, a search index — so editing one has to mark the day for rewrite.
+ * A narrative is the end of the chain; an edit is the final word until somebody
+ * asks for a new one, which is what Regenerate is for.
+ */
+export async function editTrip(
+  id: string,
+  patch: { narrative?: string | null; name?: string | null; lang?: string | null },
+): Promise<TripEdits | null> {
+  return withArchiveLock("edit trip", async () => {
+    const lang = patch.lang?.trim() || null;
+    const token = await getAccessToken();
+
+    if (lang) {
+      // This language's own corrections, in its own file.
+      const file = await loadTranslations(token, lang, "index");
+      file.tripOwner ??= {};
+      const next: TripEdits = { ...(file.tripOwner[id] ?? {}) };
+      if (patch.narrative !== undefined) next.narrative = patch.narrative ?? "";
+      if (patch.name !== undefined) next.name = patch.name ?? "";
+      const pruned = pruneTripEdits(next);
+      if (pruned) file.tripOwner[id] = pruned;
+      else delete file.tripOwner[id];
+      await saveTranslations(token, lang, "index", file);
+      return pruned;
+    }
+
+    const index = await loadIndexForReading(token);
+    const section = index.sections.find((s) => s.id === id);
+    if (!section) throw new Error(`There is no trip "${id}".`);
+    const next: TripEdits = { ...(section.edits ?? {}) };
+    if (patch.narrative !== undefined) next.narrative = patch.narrative ?? "";
+    if (patch.name !== undefined) next.name = patch.name ?? "";
+    const pruned = pruneTripEdits(next);
+    section.edits = pruned;
+    await saveIndex(token, index);
+    return pruned;
+  });
+}
+
+/** Drops fields that say nothing, so a cleared edit does not linger as an empty string. */
+function pruneTripEdits(edits: TripEdits): TripEdits | null {
+  const next: TripEdits = {};
+  if (edits.narrative) next.narrative = edits.narrative;
+  if (edits.name) next.name = edits.name;
+  return next.narrative || next.name ? next : null;
+}
+
+/**
  * Deletes a trip — its date range and its narrative. Its days go back to
  * their months with their summaries intact, and no photo is touched. A pin on
  * the trip goes too, since it would name nothing.
@@ -237,18 +297,41 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
   }
 
   const missing = inRange.filter((d) => !d.summary);
-  // Most of the trip unsummarized: the narrative would rest on place names and
-  // little else, yet read as authoritative — and be paid for. A few missing
-  // days only thin it, which the warning below says.
-  if (missing.length * 2 > inRange.length && !opts.allowMissingSummaries) {
-    throw new Error(
-      `${missing.length} of ${inRange.length} day(s) have no summary yet, so a narrative written now would have little to go on. Write the day summaries for this range first, or tick "Write it anyway".`,
-    );
-  }
+  // Days with no summary are written **here**, before the narrative, rather
+  // than warned about.
+  //
+  // This used to be the reader's problem: a range was ticked, the days were
+  // skipped as too small, and the trip asked to be written anyway on nothing —
+  // or refused. The work is one model call per day, and it is what makes the
+  // range a trip at all: `organize` summarises a day of three photos when the
+  // day belongs to a trip, and it did not when the trip was defined afterwards.
+  //
+  // The lock is already held by `runTrip`, and `runOrganize` does not take one,
+  // so this is safe to call from inside it. Only the missing dates are passed,
+  // so nothing already paid for is rewritten.
   if (missing.length > 0) {
     onProgress({
-      message: `${missing.length} of ${inRange.length} day(s) have no summary yet (${missing.map((d) => d.date).join(", ")}) — the narrative will be thinner for them.`,
+      phase: "summarizing",
+      message: `${missing.length} day(s) in this range have no summary yet — writing them first (~${missing.length} model call(s)).`,
     });
+    await runOrganize(
+      { only: null, days: missing.map((d) => d.date), force: false },
+      onProgress,
+      signal,
+    );
+    // Read back: the run wrote summaries onto the index.
+    const refreshed = await loadIndex(token);
+    const byDate = new Map(refreshed.sections.flatMap((s) => s.days).map((d) => [d.date, d] as const));
+    for (const [i, day] of inRange.entries()) {
+      const now = byDate.get(day.date);
+      if (now) inRange[i] = now;
+    }
+    const stillMissing = inRange.filter((d) => !d.summary).length;
+    if (stillMissing > 0 && stillMissing * 2 > inRange.length && !opts.allowMissingSummaries) {
+      throw new Error(
+        `${stillMissing} of ${inRange.length} day(s) still have no summary after writing them, so a narrative now would have little to go on.`,
+      );
+    }
   }
 
   // Only the shards the range actually spans; a trip is days, not years.

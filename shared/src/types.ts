@@ -317,6 +317,19 @@ export interface DayEdits {
   stops?: StopEdit[];
 }
 
+/**
+ * The owner's corrections to a trip narrative, which a re-run must not throw away.
+ *
+ * Simpler than `DayEdits`: a narrative is one block of prose and a trip has one
+ * name, so there is nothing to anchor. `undefined` means "not edited"; an empty
+ * string is a deliberate clear, which is why the two are distinguished rather
+ * than both spelled `null`.
+ */
+export interface TripEdits {
+  narrative?: string;
+  name?: string;
+}
+
 export interface DayRecord {
   date: string;
   place: string | null;
@@ -381,6 +394,15 @@ export interface TripRecord {
    */
   places: string[];
   narrativeGeneratedAt: string | null;
+  /**
+   * The owner's hand corrections to this trip's narrative and name.
+   *
+   * Kept **beside** the generated text rather than replacing it, so a
+   * regeneration can be offered without destroying what was written by hand —
+   * and so a second language's corrections can live in its own sidecar
+   * (`TranslationFile.tripOwner`) with this one staying the original's.
+   */
+  edits?: TripEdits | null;
 }
 
 /** One month tab in the album, summarized. Cheap enough to hold every month. */
@@ -838,6 +860,14 @@ export interface TranslationFile {
    * by a translation or a summarizer run.
    */
   owner?: Record<string, DayEdits>;
+  /**
+   * Index file only: the owner's hand edits to trip narratives, by trip id.
+   *
+   * Keyed by id rather than date because a narrative belongs to the trip, not to
+   * a day — the same sidecar, a different unit. Like `owner`, a translate run
+   * never touches it: it is shown over the translation rather than being one.
+   */
+  tripOwner?: Record<string, TripEdits>;
 }
 
 export type TranslateScope = "day" | "captions" | "all";

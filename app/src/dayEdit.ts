@@ -1,8 +1,8 @@
 import type { DayRecord, DaySegment, PhotoRecord, TripRecord } from "@travel-archive/shared";
-import { deleteTrip, editDay, getJob, renameTrip, setPhotoTakenAt, startOrganize, type DayPatch } from "./backend";
+import { deleteTrip, editDay, editTrip, getJob, renameTrip, setPhotoTakenAt, startOrganize, startTrip, type DayPatch } from "./backend";
 import { el } from "./photoUi";
 import { forgetMonths } from "./archiveData";
-import { contentLanguage } from "./contentLang";
+import { contentLanguage, locTrip } from "./contentLang";
 import { ui } from "./i18n";
 
 /**
@@ -143,6 +143,126 @@ export function addTripControls(header: HTMLElement, actions: HTMLElement, trip:
   });
   saveBtn.addEventListener("click", async () => {
     if (await save(saveBtn, async () => void (await renameTrip(trip.id, input.value)))) refresh?.();
+  });
+
+  // --- The narrative itself -------------------------------------------------
+
+  /**
+   * The story's own editor, in whatever language the reader is on.
+   *
+   * `lang` is left off for English, so `editTrip` writes the original's
+   * corrections onto the section; for any other language the server files them
+   * in that language's sidecar (`TranslationFile.tripOwner`). That is why the
+   * text shown here is the *displayed* narrative rather than `trip.narrative` —
+   * editing Chinese must start from the Chinese.
+   */
+  const current = contentLanguage();
+  const editStory = el<HTMLButtonElement>(`
+    <button class="btn-action trip-story-btn" type="button" title="${ui.edit.editTripStory}">
+      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+        <path fill="currentColor" d="M3 4.75A1.75 1.75 0 0 1 4.75 3h10.5A1.75 1.75 0 0 1 17 4.75v7.5A1.75 1.75 0 0 1 15.25 14H9.56l-3.2 2.56A.75.75 0 0 1 5.13 16v-2H4.75A1.75 1.75 0 0 1 3 12.25v-7.5zm3 2.5a.75.75 0 0 0 0 1.5h8a.75.75 0 0 0 0-1.5H6zm0 3a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5H6z"/>
+      </svg>
+      <span>${ui.edit.editTripStory}</span>
+    </button>
+  `);
+  actions.insertBefore(editStory, rename);
+
+  const story = el<HTMLDivElement>(`
+    <div class="day-editor trip-story-editor" hidden>
+      <label class="day-field">
+        <span>${ui.edit.tripStoryLabel}</span>
+        <textarea class="trip-story-text" rows="12"></textarea>
+      </label>
+      <p class="set-note">${ui.edit.tripStoryNote}</p>
+      <div class="day-editor-actions"></div>
+    </div>
+  `);
+  const area = story.querySelector<HTMLTextAreaElement>(".trip-story-text")!;
+  const storySave = button(ui.common.save, "day-save");
+  const storyCancel = button(ui.common.cancel, "day-cancel");
+  story.querySelector(".day-editor-actions")!.append(storySave, storyCancel);
+  header.after(story);
+
+  // The narrative as it stands in the reader's language, which is what an edit
+  // must start from — the record holds the original.
+  const shownStory = locTrip(trip).narrative ?? "";
+  area.value = shownStory;
+
+  editStory.addEventListener("click", () => {
+    story.hidden = !story.hidden;
+    if (!story.hidden) area.focus();
+  });
+  storyCancel.addEventListener("click", () => {
+    area.value = shownStory;
+    story.hidden = true;
+  });
+  storySave.addEventListener("click", async () => {
+    const text = area.value.trim();
+    await save(storySave, async () => {
+      // Empty means "there is no correction" rather than "an empty story", which
+      // is what the server's pruner reads it as.
+      await editTrip(trip.id, { narrative: text || null, lang: current === "en" ? null : current });
+    });
+    refresh?.();
+  });
+
+  // --- Writing it again -----------------------------------------------------
+
+  /**
+   * Regenerate: the story written fresh, with anything the owner can add.
+   *
+   * The notes box is the point of this half — it is the only channel for what no
+   * photograph carries ("this was the airshow", "the museum was closed"), and it
+   * goes straight into the prompt as first-hand testimony. The existing text is
+   * replaced, which the note above the box says.
+   */
+  const again = el<HTMLButtonElement>(`
+    <button class="btn-action trip-regenerate-btn" type="button" title="${ui.edit.regenerate}">
+      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+        <path fill="currentColor" d="M10 3a7 7 0 1 0 6.32 3.98.75.75 0 1 1 1.36-.63A8.5 8.5 0 1 1 10 1.5V3z"/>
+        <path fill="currentColor" d="M10 1.5 7.5 3.75 10 6V1.5z"/>
+      </svg>
+      <span>${ui.edit.regenerate}</span>
+    </button>
+  `);
+  actions.insertBefore(again, remove);
+
+  const regen = el<HTMLDivElement>(`
+    <div class="day-editor trip-regen-editor" hidden>
+      <p class="set-note">${ui.edit.regenerateNote}</p>
+      <label class="day-field">
+        <span>${ui.edit.regenerateNotesLabel}</span>
+        <textarea class="trip-regen-notes" rows="3"></textarea>
+      </label>
+      <div class="day-editor-actions"></div>
+    </div>
+  `);
+  const notesArea = regen.querySelector<HTMLTextAreaElement>(".trip-regen-notes")!;
+  const regenGo = button(ui.edit.regenerateRun, "day-save");
+  const regenCancel = button(ui.common.cancel, "day-cancel");
+  regen.querySelector(".day-editor-actions")!.append(regenGo, regenCancel);
+  header.after(regen);
+
+  again.addEventListener("click", () => {
+    regen.hidden = !regen.hidden;
+    if (!regen.hidden) notesArea.focus();
+  });
+  regenCancel.addEventListener("click", () => {
+    notesArea.value = "";
+    regen.hidden = true;
+  });
+  regenGo.addEventListener("click", async () => {
+    await save(regenGo, async () => {
+      await startTrip({
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        name: trip.name,
+        notes: notesArea.value.trim() || undefined,
+      });
+    });
+    notesArea.value = "";
+    regen.hidden = true;
+    refresh?.();
   });
 
   let armed: ReturnType<typeof setTimeout> | null = null;

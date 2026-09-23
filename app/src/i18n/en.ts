@@ -102,6 +102,16 @@ export const en = {
     deleteTrip: "Delete trip",
     confirmDeleteTrip: "Press again to delete — its days and photos stay",
     tripNameLabel: "Trip name",
+    editTripStory: "Edit the text",
+    tripStoryLabel: "Trip story",
+    tripStoryNote:
+      "Your own wording for this trip, in the language you are reading. It stands until you ask for a new one — a translate run and a regeneration both leave it alone.",
+    tripStoryCleared: "Cleared. Save to hand the text back to the model.",
+    regenerate: "Write it again",
+    regenerateNote:
+      "Add anything the photographs could not know — what a place was, why the day mattered — and the story is written again with it. The current text is replaced.",
+    regenerateNotesLabel: "Anything to add (optional)",
+    regenerateRun: "Write the story",
     rewritten: "Rewritten.",
     rename: "Rename",
     stopSummaryPlaceholder: "What happened here (optional)",

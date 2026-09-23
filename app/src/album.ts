@@ -5,7 +5,7 @@ import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
 import { addDayControls, isRetimable, setDayEditingAvailable } from "./dayEdit";
 import { selectionClick } from "./retime";
-import { contentLanguage, loc, locDay } from "./contentLang";
+import { contentLanguage, loc, locDay, locTrip } from "./contentLang";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
@@ -494,12 +494,12 @@ function dayEntry(
  */
 async function showTrip(trip: TripRecord): Promise<void> {
   const content = document.getElementById("content")!;
-  setTitle(loc(trip.name));
+  setTitle(locTrip(trip).name);
   cancelLookAhead();
   releaseSettings();
   releaseActivity();
   releaseThumbnails();
-  content.replaceChildren(loadingNote(ui.common.loading(loc(trip.name))));
+  content.replaceChildren(loadingNote(ui.common.loading(locTrip(trip).name)));
 
   const months = [...new Set(trip.days.map((d) => d.date.slice(0, 7)))];
   const photos: Record<string, PhotoRecord> = {};
@@ -513,7 +513,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
   } catch (err) {
     if (err instanceof SignInRequiredError) {
       window.dispatchEvent(new CustomEvent("signin-required"));
-      content.replaceChildren(loadingNote(ui.common.signInToLoad(loc(trip.name))));
+      content.replaceChildren(loadingNote(ui.common.signInToLoad(locTrip(trip).name)));
       return;
     }
     // Anything else — Graph throttling, a token renewal that timed out — is a
@@ -535,7 +535,7 @@ async function showTrip(trip: TripRecord): Promise<void> {
       <div class="heading-actions"></div>
     </div>
   `);
-  header.querySelector("h1")!.textContent = loc(trip.name);
+  header.querySelector("h1")!.textContent = locTrip(trip).name;
   const photoCount = trip.days.reduce((n, d) => n + d.photoIds.length, 0);
   header.querySelector(".heading-meta")!.textContent =
     `${formatDayHeading(trip.startDate)} – ${formatDayHeading(trip.endDate)} · ${ui.common.days(trip.days.length)} · ${ui.common.photos(photoCount)}`;
@@ -545,11 +545,12 @@ async function showTrip(trip: TripRecord): Promise<void> {
   addPinControl(actions, "trip", trip.id);
   addExportButton(actions);
 
-  if (trip.narrative) {
+  const shown = locTrip(trip);
+  if (shown.narrative) {
     const narrative = el<HTMLDivElement>(`<div class="trip-narrative"></div>`);
     // Paragraph by paragraph as text nodes — this is model output and must
     // never be parsed as markup.
-    for (const para of loc(trip.narrative).split(/\n\s*\n/)) {
+    for (const para of shown.narrative.split(/\n\s*\n/)) {
       const p = document.createElement("p");
       p.textContent = para.trim();
       narrative.appendChild(p);

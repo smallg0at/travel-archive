@@ -485,6 +485,22 @@ export function deleteTrip(id: string): Promise<{ ok: boolean }> {
   return post<{ ok: boolean }>(`/trips/${encodeURIComponent(id)}/delete`, {});
 }
 
+/**
+ * The owner's own corrections to a trip's narrative or name.
+ *
+ * `lang` selects which language's copy is being edited — the current one, so a
+ * correction made while reading Chinese lands in Chinese and leaves the English
+ * alone. Omit it to edit the original.
+ */
+export function editTrip(
+  id: string,
+  patch: { narrative?: string | null; name?: string | null; lang?: string | null },
+): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>(`/trips/${encodeURIComponent(id)}/edit`, patch);
+}
+
+/** The narrative model run itself, for a trip whose story should be written again. */
+
 export function cancelJob(id: string): Promise<JobRecord> {
   return post<JobRecord>(`/jobs/${id}/cancel`, {});
 }

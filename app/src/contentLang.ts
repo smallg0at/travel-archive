@@ -1,4 +1,4 @@
-import type { DayRecord, TranslationFile } from "@travel-archive/shared";
+import type { DayRecord, TranslationFile, TripRecord } from "@travel-archive/shared";
 import { applyEdits, textKey } from "@travel-archive/shared";
 import { CONTENT_LANG_KEY, rememberPref } from "./prefs";
 
@@ -117,6 +117,26 @@ export function locDay(day: DayRecord): DayRecord {
   const segments = day.segments.map((s) => ({ ...s, title: loc(s.title), summary: loc(s.summary) }));
   const shown = applyEdits(loc(day.summary), segments, indexFile?.owner?.[day.date]);
   return { ...day, summary: shown.summary, segments: shown.segments };
+}
+
+/**
+ * A trip as the reader sees it: its narrative and name in their language, with
+ * the corrections written in that language over the top.
+ *
+ * The narrative counterpart to `locDay`, and the same two layers in the same
+ * order — the translation first, then the owner's own text where they wrote it.
+ * `TranslationFile.tripOwner` holds the other languages' corrections and
+ * `TripRecord.edits` the original's, so an edit made while reading Chinese does
+ * not overwrite the English one and vice versa.
+ */
+export function locTrip(trip: TripRecord): TripRecord {
+  if (current === "en") return trip;
+  const edits = indexFile?.tripOwner?.[trip.id];
+  return {
+    ...trip,
+    name: edits?.name || loc(trip.name),
+    narrative: edits?.narrative || loc(trip.narrative),
+  };
 }
 
 /** `label` from the caller, which may import `i18n/` where this module may not. */
