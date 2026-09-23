@@ -17,6 +17,7 @@ import {
   loadIndexForReading,
   loadShard,
   loadShardForReading,
+  loadShardForWriting,
   saveIndex,
   saveShard,
 } from "../archiveStore.js";
@@ -38,14 +39,14 @@ import { mayBeAnalyzed } from "../screenshots.js";
  */
 
 /**
- * Photos captioned between shard writes.
- *
- * Saving only at the end of a month was fine when a run was a few hundred
- * photos; a 17-day range puts ~2,900 in a single month, so a crash or a killed
- * terminal at photo 2,500 would discard an hour of paid work. Each save is one
- * upload of a few MB, so a checkpoint every 150 costs little against that.
+ * The caption path saves to the **mirror** per caption and uploads a shard once
+ * at its month's end. That split is the whole reason a cancel or a kill no
+ * longer discards paid work: the local copy is always current, so the next run
+ * resumes from it, and OneDrive sees one upload per month instead of one per
+ * caption. (Uploads used to ride a `SAVE_EVERY` counter, which meant a run that
+ * ended mid-month had saved nothing at all.)
  */
-const SAVE_EVERY = 150;
+
 
 /**
  * Per photo, measured on this library. Output+thinking ~250. Input was ~1,227
@@ -65,6 +66,8 @@ export interface AnalyzeOptions {
 export interface AnalyzeResult {
   analyzed: number;
   failed: number;
+  /** No thumbnail at all — Graph has none, so nothing to send and nothing a retry would fix. */
+  skipped: number;
   inherited: number;
   geocoded: number;
 }
@@ -350,7 +353,7 @@ export async function runAnalyze(
 
   const plan: { month: string; targets: PhotoRecord[]; shard: PhotoShard }[] = [];
   for (const summary of months) {
-    const shard = await loadShard(token, summary.month);
+    const shard = await loadShardForWriting(token, summary.month);
     const targets = selectTargets(shard, opts);
     if (targets.length) plan.push({ month: summary.month, targets, shard });
   }
@@ -360,7 +363,7 @@ export async function runAnalyze(
     opts.limit,
   );
 
-  const result: AnalyzeResult = { analyzed: 0, failed: 0, inherited: 0, geocoded: 0 };
+  const result: AnalyzeResult = { analyzed: 0, failed: 0, skipped: 0, inherited: 0, geocoded: 0 };
 
   if (total === 0) {
     // Still sweep for missing places. The geocode pass is self-healing by
@@ -371,7 +374,7 @@ export async function runAnalyze(
     // could never acquire a place. That is how the city airport stayed off the map.
     for (const summary of months) {
       if (signal?.aborted) break;
-      const shard = await loadShard(token, summary.month);
+      const shard = await loadShardForWriting(token, summary.month);
       const found = await geocodePending(shard, onProgress, signal);
       if (found === 0) continue;
       result.geocoded += found;
@@ -406,22 +409,8 @@ export async function runAnalyze(
     await geocodeBeforeCaptioning(shard, batch, onProgress, signal);
 
     const analyzed: PhotoRecord[] = [];
-    let sinceSave = 0;
 
-    // Guarded so two workers finishing together cannot start overlapping
-    // uploads of the same shard.
-    let saving: Promise<void> = Promise.resolve();
-    const checkpoint = async () => {
-      sinceSave = 0;
-      const pending = saving.then(async () => {
-        onProgress({ phase: "saving", message: `Checkpoint — ${result.analyzed} captioned so far.` });
-        await saveShard(token, shard);
-      });
-      saving = pending.catch(() => {});
-      await pending;
-    };
-
-    /** Writes one caption onto the shard and its records, and checkpoints every so often. */
+    /** Writes one caption onto the shard and its records, durably. */
     const applyCaption = async (
       s: { record: PhotoRecord; current: PhotoRecord },
       caption: CaptionResult,
@@ -439,10 +428,14 @@ export async function runAnalyze(
       analyzed.push(updated);
       result.inherited += inheritToDuplicates(shard, updated);
       result.analyzed++;
+      // Mirror-only, per caption: this is the real mid-run save. A cancel reads
+      // the mirror back on the next run, so work already paid for is never
+      // re-sent, and nothing local is lost to a kill. Uploads stay at month
+      // boundaries — see the note above.
+      await saveShard(token, shard, { upload: false });
       if (result.analyzed % 5 === 0 || result.analyzed === total) {
         onProgress({ phase: "analyzing", done: result.analyzed, total });
       }
-      if (++sinceSave >= SAVE_EVERY) await checkpoint();
     };
 
     /**
@@ -458,7 +451,11 @@ export async function runAnalyze(
         try {
           const image = await downloadThumbnailBuffer(token, record.id);
           if (!image) {
-            result.failed++;
+            // Not a failure: Graph has no thumbnail for this item (older
+            // videos, some HEIC/DNG), and a retry would get the same answer.
+            // Counted separately so the run's `failed` means "the model or the
+            // network let us down", which is worth acting on.
+            result.skipped += 1;
             onProgress({ message: `no thumbnail: ${record.fileName}` });
             continue;
           }
@@ -490,7 +487,10 @@ export async function runAnalyze(
         onProgress({ message: `batch failed (${settled.length}): ${(err as Error).message}` });
         return;
       }
-      for (const [i, s] of settled.entries()) if (captions[i]) await applyCaption(s, captions[i]);
+      for (const [i, s] of settled.entries()) {
+        if (signal?.aborted) return;
+        if (captions[i]) await applyCaption(s, captions[i]);
+      }
     };
 
     // Chunk within the month so a chunk never mixes shards, and chunks run
@@ -518,7 +518,11 @@ export async function runAnalyze(
     phase: "done",
     done: result.analyzed,
     total,
-    message: `Analyzed ${result.analyzed} photo(s)${result.failed ? `, ${result.failed} failed` : ""}.`,
+    message:
+      `Analyzed ${result.analyzed} photo(s)` +
+      (result.skipped ? `, ${result.skipped} had no thumbnail` : "") +
+      (result.failed ? `, ${result.failed} failed` : "") +
+      `.`,
   });
   return result;
 }

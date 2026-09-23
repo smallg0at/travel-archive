@@ -1,9 +1,9 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dataFile } from "./paths.js";
 import { dirname } from "node:path";
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
-import { downloadMetadataJson, listFolderFileNames, uploadMetadataJson } from "./graph.js";
+import { downloadMetadataJson, fetchItemMeta, listFolderFileNames, uploadMetadataJson } from "./graph.js";
 import { env } from "./env.js";
 import { markDirty, markSynced } from "./syncStore.js";
 
@@ -111,6 +111,48 @@ export async function saveHomeIndex(token: string, file: HomeIndexFile): Promise
   await writeLocalCompact(HOME_FILE, file);
   await uploadMetadataJson(token, env.metadataFolder, HOME_FILE, file);
   return Buffer.byteLength(JSON.stringify(file));
+}
+
+/**
+ * A shard for a **write** path: the mirror when it is provably safe, Graph otherwise.
+ *
+ * `loadShard` downloads from OneDrive every time, which is the right default —
+ * a mirror can be stale. But on a whole-library analyze, 913 photos spread over
+ * 80 months cost 80 downloads *and* 80 uploads of shards holding one or two
+ * changed photos, and that I/O dwarfs the model calls. This keeps the safety of
+ * the Graph path while paying a fraction of it:
+ *
+ *   - no mirror copy, or no remote copy → Graph (nothing to trust);
+ *   - remote `lastModifiedDateTime` **after** the mirror's own mtime → someone
+ *     else wrote it, so Graph (this is the single-writer check that makes the
+ *     shortcut safe);
+ *   - otherwise the mirror is the newest copy and is used as-is.
+ *
+ * One small metadata request replaces one full download. Uploads still go to
+ * Graph, so the remote stays authoritative.
+ */
+export async function loadShardForWriting(token: string, month: string): Promise<PhotoShard> {
+  const local = await readLocal<PhotoShard>(shardFile(month));
+  if (!local) return loadShard(token, month);
+
+  const meta = await fetchItemMeta(token, env.metadataFolder, shardFile(month));
+  // Gone from OneDrive, or never uploaded: the mirror is all there is.
+  if (!meta) return local;
+
+  const localMtime = await fileMtime(shardFile(month));
+  const remote = meta.lastModifiedDateTime ? Date.parse(meta.lastModifiedDateTime) : 0;
+  // Clock skew of a few seconds is normal; only a clear newer remote wins.
+  if (!localMtime || remote > localMtime + 5000) return loadShard(token, month);
+  return local;
+}
+
+/** The mirror file's own modification time, ms since epoch, or null when absent. */
+async function fileMtime(fileName: string): Promise<number | null> {
+  try {
+    return (await stat(dataFile(fileName))).mtimeMs;
+  } catch {
+    return null;
+  }
 }
 
 /** One month's photo records. Returns an empty shard if that month has never been scanned. */
