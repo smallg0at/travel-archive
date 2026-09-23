@@ -272,6 +272,20 @@ export async function loadShardForReading(token: string, month: string): Promise
   return local ?? (await loadShard(token, month));
 }
 
+/**
+ * The mirror's copy of a shard, or null — **never** a Graph round trip.
+ *
+ * For the planning step of a pass, which runs over every month before any work
+ * starts. `loadShardForReading` falls back to OneDrive, so a pass whose mirror
+ * is cold fires one request per month while it is only trying to *count* — 123
+ * of them for a whole library, enough to earn a 429 for no useful data. A month
+ * with no mirror copy is one this machine has never written, so its captions
+ * are not the ones the plan needs anyway.
+ */
+export async function readShardMirror(month: string): Promise<PhotoShard | null> {
+  return readLocal<PhotoShard>(shardFile(month));
+}
+
 /** Read-only index load: the mirror if it has it, Graph if not. */
 export async function loadIndexForReading(token: string): Promise<ArchiveIndexFile> {
   const local = await readLocal<ArchiveIndexFile>(INDEX_FILE);

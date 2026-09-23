@@ -6,9 +6,9 @@ import { env } from "../env.js";
 import {
   emptyTranslations,
   loadIndexForReading,
-  loadShardForReading,
   loadTranslations,
   loadTranslationsForReading,
+  readShardMirror,
   readTranslationsLocal,
   saveTranslations,
   translationParts,
@@ -203,11 +203,17 @@ export async function planTranslate(opts: TranslateOptions): Promise<TranslatePl
 
   if (opts.scope !== "captions") tally("index", dayTextSources(index, opts.only), indexFile);
   if (opts.scope !== "day") {
+    // Counting only, so this reads the **mirror alone** — see readShardMirror.
+    // Going out to OneDrive per month to answer "how much text is there" fired
+    // one request per month and, from a cold mirror, 123 of them in sequence
+    // before a single translation was made.
     for (const month of captionMonths(index, opts.only)) {
-      const sources = captionSources(await loadShardForReading(token, month));
+      const shard = await readShardMirror(month);
+      if (!shard) continue;
+      const sources = captionSources(shard);
       if (sources.size === 0) continue;
-      // The mirror alone: a month with no caption file yet would otherwise
-      // cost a OneDrive round trip just to learn that it is empty.
+      // The mirror alone here too: a month with no caption file yet would
+      // otherwise cost a OneDrive round trip just to learn that it is empty.
       const file = (await readTranslationsLocal(opts.lang, month)) ?? emptyTranslations(opts.lang, month);
       tally(month, sources, file);
     }
@@ -324,6 +330,12 @@ export async function runTranslate(
     // sequentially this is one Graph round trip per month before any call is
     // made, which on a slow link is the whole "Reading the archive..." wait and
     // shows no count while it happens. `pooled` preserves the month order.
+    //
+    // The shard comes from the **mirror** and nothing more: this pass exists to
+    // translate what is already here, so a month the mirror does not hold has
+    // no captions to offer, and asking OneDrive for it is a request whose only
+    // possible answer is "nothing". That is what made a cold mirror look like
+    // the app hammering Graph.
     const months = captionMonths(index, opts.only);
     const prepared: (Work | null)[] = new Array(months.length).fill(null);
     let read = 0;
@@ -332,7 +344,8 @@ export async function runTranslate(
       PREPARE_CONCURRENCY,
       async ({ month, i }) => {
         if (signal?.aborted) return;
-        const sources = captionSources(await loadShardForReading(token, month));
+        const shard = await readShardMirror(month);
+        const sources = shard ? captionSources(shard) : new Map<string, Source>();
         if (sources.size > 0) {
           const file = await loadTranslationsForReading(token, opts.lang, month);
           const missing = missingOf(sources, file);
