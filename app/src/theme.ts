@@ -15,9 +15,20 @@
 import { ui } from "./i18n";
 import { rememberPref, THEME_KEY } from "./prefs";
 
+/**
+ * Tells Electron which theme the window frame should follow.
+ *
+ * The **chosen** value is sent, not the resolved one, because
+ * `nativeTheme.themeSource` is itself three-state: setting it to light or dark
+ * pins the OS-reported colour scheme, so "system" has to arrive as "system" or
+ * the window can never go back to following the desktop. Sending the resolved
+ * value here was the bug — "Follow system" removed `data-theme` from the page
+ * (so the page did follow) while the frame stayed pinned to whatever the theme
+ * was at that moment.
+ */
 function syncElectronTheme(explicit?: Theme): void {
   try {
-    window.electronAPI?.setTheme?.(effectiveTheme(explicit));
+    window.electronAPI?.setTheme?.(explicit ?? readTheme());
   } catch {
     // Ignore outside Electron
   }

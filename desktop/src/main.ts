@@ -327,17 +327,41 @@ function createWindow(): void {
 
 /**
  * Dynamically adjust window controls overlay symbol color on theme switch.
+ *
+ * `"system"` is passed through rather than resolved here: `themeSource` going
+ * back to `"system"` is what lets the window follow the desktop again, and the
+ * symbol colour then has to be read from `shouldUseDarkColors` *after* the
+ * change rather than from the argument.
  */
-ipcMain.on("set-theme", (_event, theme: "light" | "dark") => {
+ipcMain.on("set-theme", (_event, theme: "light" | "dark" | "system") => {
   nativeTheme.themeSource = theme;
+  const dark = nativeTheme.shouldUseDarkColors;
   mainWindow?.setTitleBarOverlay({
     color: "#00000000",
-    symbolColor: theme === "light" ? "#161614" : "#ffffff",
+    symbolColor: dark ? "#ffffff" : "#161614",
     height: 36,
   });
   if (process.platform === "win32" && mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setBackgroundMaterial("mica");
   }
+});
+
+/**
+ * Re-broadcasts the resolved colour scheme as the OS changes, so a window in
+ * "system" keeps its frame in step.
+ *
+ * The page needs no equivalent listener — with `data-theme` absent the
+ * `prefers-color-scheme` media query does that work in CSS — but the native
+ * frame is drawn by Electron, not the page, so it has to be told.
+ */
+nativeTheme.on("updated", () => {
+  if (nativeTheme.themeSource !== "system") return;
+  const dark = nativeTheme.shouldUseDarkColors;
+  mainWindow?.setTitleBarOverlay({
+    color: "#00000000",
+    symbolColor: dark ? "#ffffff" : "#161614",
+    height: 36,
+  });
 });
 
 function getSystemAccentColor(): string | null {

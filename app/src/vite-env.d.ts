@@ -2,7 +2,7 @@
 
 interface ElectronAPI {
   printToPDF?(name?: string): Promise<{ ok: boolean; path?: string; error?: string }>;
-  setTheme?(theme: "light" | "dark"): void;
+  setTheme?(theme: "light" | "dark" | "system"): void;
   getSystemAccent?(): Promise<string | null>;
   onSystemAccentChanged?(cb: (color: string) => void): void;
 }
