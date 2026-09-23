@@ -266,16 +266,18 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   const analyzeForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="analyze"]')!;
 
   /**
-   * A date field's value, or null for "no bound on that end".
+   * A date field's value, or undefined for "no bound on that end".
    *
    * An empty `<input type="date">` reads as "" through FormData and would only
    * be "null" if the field were missing entirely — the string that used to be
    * sent, and read server-side as a month named "null". Empty is a real answer
-   * here: analyze without a lower bound means the whole archive.
+   * here: analyze without a lower bound means the whole archive. `undefined`
+   * so the key is dropped from the request body, which the server already reads
+   * as no bound.
    */
-  const bound = (value: FormDataEntryValue | null): string | null => {
+  const bound = (value: FormDataEntryValue | null): string | undefined => {
     const text = String(value ?? "").trim();
-    return text === "" ? null : text;
+    return text === "" ? undefined : text;
   };
 
   analyzeForm.addEventListener("submit", (event) => {
