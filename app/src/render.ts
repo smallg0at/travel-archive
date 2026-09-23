@@ -61,7 +61,11 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
     // belong with the picture, and opening a lone image threw them away at the
     // moment someone was looking closest.
     img.addEventListener("click", () => openCard(highlight, byId, i));
-    images.appendChild(img);
+    // The cell is the flex item and the positioning context, so a video's
+    // poster can carry a badge.
+    const cell = el<HTMLDivElement>(`<div class="card-cell"></div>`);
+    cell.appendChild(img);
+    images.appendChild(cell);
   }
 
   // textContent throughout: titles, descriptions and OCR are all model output.
@@ -111,7 +115,9 @@ function renderGrid(photos: PhotoRecord[]): HTMLElement {
       if (!selectionClick(event, photos, imgs, index)) openPhoto(photo, photos);
     });
     imgs.push(img);
-    grid.appendChild(img);
+    const cell = el<HTMLDivElement>(`<div class="grid-cell"></div>`);
+    cell.appendChild(img);
+    grid.appendChild(cell);
   }
   return grid;
 }

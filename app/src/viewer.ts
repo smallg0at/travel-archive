@@ -395,6 +395,9 @@ async function show(index: number): Promise<void> {
 
   const { img, spinner, strip } = dom();
   setZoom(1);
+  // Zoom/Fit act on the image only, so they are meaningless over a video — hide
+  // them for any video, poster fallback included.
+  dom().zoom.hidden = Boolean(photo.video);
   renderPhotoPanel(photo);
   strip.querySelectorAll("img").forEach((t, i) => {
     t.classList.toggle("current", i === index);
@@ -550,6 +553,7 @@ export function openLightbox(url: string): void {
   dom().strip.hidden = true;
   img.src = url;
   img.classList.remove("preview");
+  dom().zoom.hidden = false;
   spinner.hidden = true;
   lightbox.hidden = false;
   openObjectUrl = url;

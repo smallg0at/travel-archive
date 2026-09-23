@@ -826,9 +826,9 @@ html.desktop-shell .nav-year:hover {
 
 /* A video's poster frame is a still photograph to the eye, so a cell needs a
    mark to say so. A CSS triangle, not a glyph, so it does not depend on a font
-   that may not carry "▶". Only cells that are positioned can host it, which is
-   why `.album-cell` is relative — see its rule above. */
-.album-cell:has(img[data-video])::after {
+   that may not carry "▶". The three positioned cell wrappers are the album
+   grid, the stop grid and a card's image strip. */
+:is(.album-cell, .grid-cell, .card-cell):has(img[data-video])::after {
   content: "";
   position: absolute;
   right: 6px;
@@ -1153,9 +1153,13 @@ html.desktop-shell .nav-year:hover {
      same rule bites `#main-column` for the same reason. */
   min-height: 0;
 }
-.card-images img {
+.card-cell {
   flex: 1;
   min-width: 0;
+  position: relative;
+}
+.card-images img {
+  width: 100%;
   height: 100%;
   object-fit: cover;
   cursor: zoom-in;
@@ -1244,6 +1248,9 @@ html.desktop-shell .nav-year:hover {
   grid-template-columns: repeat(auto-fill, minmax(var(--album-cell, 120px), 1fr));
   gap: 4px;
   margin-top: 8px;
+}
+.grid-cell {
+  position: relative;
 }
 .stop-grid img {
   width: 100%;
