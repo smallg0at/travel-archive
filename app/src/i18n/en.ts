@@ -321,7 +321,7 @@ export const en = {
     tripAllowMissing: "Write it anyway if most days have no summary yet",
 
     analyzeNoteHtml:
-      "Captions every photo in the range that has never been looked at, one model call each. <strong>This is the step that costs money</strong> — check the estimate first. Re-running is safe: photos that already have a caption are skipped.",
+      "Captions every photo in the range that has never been looked at, one model call each. <strong>This is the step that costs money</strong> — check the estimate first. Re-running is safe: photos that already have a caption are skipped. <em>Leave a date blank to leave that end open</em> — both blank means the whole archive.",
     estimateCost: "Estimate cost",
     analyze: "Analyze",
     nothingToAnalyze:

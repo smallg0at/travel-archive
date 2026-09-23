@@ -208,8 +208,12 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     // date row to fill — and its scope row is not one.
     const row = form.querySelector(".job-row:not(.job-scope)");
     if (!row) continue;
-    row.appendChild(field(ui.common.from, `<input type="date" name="from" required />`));
-    row.appendChild(field(ui.common.to, `<input type="date" name="to" required />`));
+    // A trip needs both ends. Analyze does not: leaving one blank means "open
+    // that end", so an empty field is a real answer and `required` was forcing
+    // a fake one — a typed-out 0001-01-01 just to satisfy the browser.
+    const rangeRequired = form.dataset.mode === "trip" ? " required" : "";
+    row.appendChild(field(ui.common.from, `<input type="date" name="from"${rangeRequired} />`));
+    row.appendChild(field(ui.common.to, `<input type="date" name="to"${rangeRequired} />`));
     if (form.dataset.mode === "trip") {
       row.appendChild(field(ui.generate.name, `<input type="text" name="name" />`));
     }
@@ -260,11 +264,25 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   });
 
   const analyzeForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="analyze"]')!;
+
+  /**
+   * A date field's value, or null for "no bound on that end".
+   *
+   * An empty `<input type="date">` reads as "" through FormData and would only
+   * be "null" if the field were missing entirely — the string that used to be
+   * sent, and read server-side as a month named "null". Empty is a real answer
+   * here: analyze without a lower bound means the whole archive.
+   */
+  const bound = (value: FormDataEntryValue | null): string | null => {
+    const text = String(value ?? "").trim();
+    return text === "" ? null : text;
+  };
+
   analyzeForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(analyzeForm);
     void start(() =>
-      startAnalyze({ from: String(data.get("from")), to: String(data.get("to")), batch: data.get("batch") === "on" }),
+      startAnalyze({ from: bound(data.get("from")), to: bound(data.get("to")), batch: data.get("batch") === "on" }),
     );
   });
 
@@ -304,7 +322,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     const data = new FormData(analyzeForm);
     const note = analyzeForm.querySelector(".job-note")!;
     try {
-      const plan = await planAnalyze({ from: String(data.get("from")), to: String(data.get("to")) });
+      const plan = await planAnalyze({ from: bound(data.get("from")), to: bound(data.get("to")) });
       const batch = data.get("batch") === "on";
       note.textContent =
         plan.total === 0

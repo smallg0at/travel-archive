@@ -312,7 +312,7 @@ export const zhHans: Messages = {
     tripAllowMissing: "即使大部分日期尚未生成摘要，仍继续撰写",
 
     analyzeNoteHtml:
-      "为范围内所有尚未处理的照片生成说明，每张照片调用一次模型。<strong>此步骤会产生 API 费用</strong>——请先查看费用估算。重复运行是安全的：已有说明的照片会被自动跳过。",
+      "为范围内所有尚未处理的照片生成说明，每张照片调用一次模型。<strong>此步骤会产生 API 费用</strong>——请先查看费用估算。重复运行是安全的：已有说明的照片会被自动跳过。<em>日期留空即表示该端不限</em>——两端都留空就是全库。",
     estimateCost: "估算费用",
     analyze: "分析",
     nothingToAnalyze: "该日期范围内没有需要分析的照片——均已完成分析，或已被作为重复照片和隐藏截图过滤。",
