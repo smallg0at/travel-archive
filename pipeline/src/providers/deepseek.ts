@@ -136,7 +136,16 @@ async function chat(messages: ChatMessage[], opts: { maxTokens: number }): Promi
       usage?: Record<string, unknown>;
     };
     const text = body.choices?.[0]?.message?.content ?? "";
-    if (!text) throw new Error("DeepSeek returned an empty message");
+    // JSON mode "may occasionally return empty content" (DeepSeek's own note).
+    // That is a reason to ask again, not to fail a photo, so it retries like a
+    // 5xx rather than throwing.
+    if (!text) {
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(backoffMs(attempt, null));
+        continue;
+      }
+      throw new Error("DeepSeek returned an empty message");
+    }
     return { text, usage: usageOf(body) };
   }
 }
@@ -175,7 +184,7 @@ async function captionPhoto(input: CaptionPhotoInput): Promise<CaptionResult> {
         ],
       },
     ],
-    { maxTokens: 1024 },
+    { maxTokens: 2048 },
   );
   return { ...toCaption(looseJson(text)), usage };
 }
@@ -209,7 +218,9 @@ async function captionPhotos(inputs: CaptionPhotoInput[]): Promise<CaptionResult
   ];
   for (const input of inputs) content.push({ type: "image_url", image_url: { url: dataUrl(input) } });
 
-  const { text, usage } = await chat([{ role: "user", content }], { maxTokens: Math.min(8192, 400 * inputs.length + 512) });
+  // Budget covers thinking as well as the JSON — DeepSeek bills reasoning into
+  // completion_tokens, and a truncated array is worse than a slightly larger cap.
+  const { text, usage } = await chat([{ role: "user", content }], { maxTokens: Math.min(8192, 500 * inputs.length + 1024) });
   const parsed = looseJson(text) as { results?: unknown[] };
   const results = Array.isArray(parsed.results) ? parsed.results : [];
   // Charged once, on the first result; the rest carry none, so a caller summing
