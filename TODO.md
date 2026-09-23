@@ -16,12 +16,18 @@ defined. Generate → Translate → Estimate for what is left of the text.
 
 ## Open issues
 
-- [ ] **The video viewer keeps the image zoom controls.** Raised 2026-09-23.
-      Zoom, Fit and the percentage sit over a playing `<video>` and do nothing:
-      `setZoom`/`applyZoom` only transform `#lightbox-img`, and `showVideo`
-      returns before any of that runs. Hide `#lightbox-zoom` while a video is
-      showing and restore it on the image path — or gate it on `photo.video` in
-      the viewer's `show()`.
+- [ ] **Scan re-lists every month folder, because Graph gives no folder change
+      token.** Raised 2026-09-23. On a full scan of 143 folders the write phase
+      downloaded a shard per month even when nothing changed; the *upload* for
+      unchanged months is now skipped (f543b1e), but the download is not. The
+      obvious fix — a per-folder `cTag` — does not exist: on personal OneDrive a
+      folder returns `eTag` and no `cTag` (verified 2026-09-23 against
+      图片/本机照片/2009/05: `$select=cTag` comes back empty), and a folder's
+      `eTag` is documented *not* to change for properties derived from its
+      children (childCount, lastModifiedDateTime). The reliable signal is the
+      **delta** endpoint (`/me/drive/root/delta?token=…`), which reports what
+      was added, changed or deleted since a cursor — a rebuild of `scan`'s
+      listing around a delta cursor, not a tag comparison.
 
 - [ ] **Confirm the phone's sign-in now survives a hard kill.** Raised
       2026-09-20 by the phone session. The key that unlocks MSAL's kept
