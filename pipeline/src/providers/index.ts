@@ -6,10 +6,10 @@ import type { AiProvider } from "./types.js";
 /**
  * Which model backend the AI layer talks to. Gemini is the default and the
  * reference; DeepSeek exists for the bulk caption passes, where its price and
- * its batched multi-image call matter more than anything else. Add another by
+ * its batched multi-image call matter more than anything else. Both now cover
+ * captioning, day and trip summaries, and translation. Add another by
  * implementing AiProvider (see types.ts) and wiring a case here.
- */
-export function getProvider(): AiProvider {
+ */export function getProvider(): AiProvider {
   switch (env.aiProvider) {
     case "gemini":
       return geminiProvider;

@@ -13,6 +13,7 @@ import type {
 import { env } from "../env.js";
 import { captionContextBlock } from "./captionContext.js";
 import { translatePrompt } from "./translatePrompt.js";
+import { DAY_JSON_SHAPE, TRIP_JSON_SHAPE, dayPrompt, parseDaySummary, parseTripSummary, tripPrompt } from "./summarise.js";
 
 /**
  * DeepSeek, over its OpenAI-compatible Chat Completions API.
@@ -242,11 +243,21 @@ async function translate(input: TranslateInput): Promise<TranslateResult> {
   return { items: parsed.items ?? [], usage };
 }
 
-function notPorted(what: string): never {
-  throw new Error(
-    `The deepseek provider does not implement ${what} yet — it covers captioning and translation. ` +
-      `Set AI_PROVIDER=gemini for organize/trip, or port the prompt.`,
+/** Day and trip summaries: no images, just the shared prompts plus a JSON shape the model is told to follow. */
+async function summarizeDay(input: SummarizeDayInput): Promise<DaySummaryResult> {
+  const { text } = await chat(
+    [{ role: "user", content: `${dayPrompt(input)}\n\nReply with ONE JSON object:\n${DAY_JSON_SHAPE}` }],
+    { maxTokens: 8192 },
   );
+  return parseDaySummary(input, looseJson(text));
+}
+
+async function summarizeTrip(input: SummarizeTripInput): Promise<TripSummaryResult> {
+  const { text, usage } = await chat(
+    [{ role: "user", content: `${tripPrompt(input)}\n\nReply with ONE JSON object:\n${TRIP_JSON_SHAPE}` }],
+    { maxTokens: 8192 },
+  );
+  return { ...parseTripSummary(input, looseJson(text)), usage };
 }
 
 export const deepseekProvider: AiProvider = {
@@ -254,7 +265,7 @@ export const deepseekProvider: AiProvider = {
   captionPhotos,
   /** Keep a retry's blast radius small and alignment obvious. */
   batchSize: 12,
-  summarizeDay: (_input: SummarizeDayInput): Promise<DaySummaryResult> => notPorted("day summaries"),
-  summarizeTrip: (_input: SummarizeTripInput): Promise<TripSummaryResult> => notPorted("trip summaries"),
+  summarizeDay,
+  summarizeTrip,
   translate,
 };
