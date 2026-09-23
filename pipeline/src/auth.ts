@@ -40,6 +40,22 @@ async function getCachedAccount(): Promise<AccountInfo | null> {
 }
 
 /**
+ * Whether an account is in the token cache, **without any network call**.
+ *
+ * For `/health`, which must answer even while a job is busy: reading the cache
+ * is local, whereas `getCachedAccessToken` performs a silent token request that
+ * can take a moment. "Signed in" here means "has an account we could use", which
+ * is what the app's banner needs to know.
+ */
+export async function hasCachedAccount(): Promise<boolean> {
+  try {
+    return (await pca.getTokenCache().getAllAccounts()).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * A token if one can be had without asking the user anything, else null.
  *
  * `getAccessToken` falls through to the device-code flow, which prints a code

@@ -15,7 +15,7 @@ import {
 import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { readPrefs, writePrefs } from "./prefsStore.js";
 import { env } from "./env.js";
-import { getCachedAccessToken } from "./auth.js";
+import { getCachedAccessToken, hasCachedAccount } from "./auth.js";
 import { loadIndex } from "./archiveStore.js";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { initProxyDispatcher } from "./proxy.js";
@@ -334,14 +334,18 @@ const routes: [RegExp, string, Handler][] = [
     /^\/health$/,
     "GET",
     async (_req, res) => {
-      const token = await getCachedAccessToken();
-      json(res, 200, {
+      // The cheap half first, and deliberately so: this is the endpoint the
+      // app's banner polls, and it must answer even while a job is hogging the
+      // loop — a pause in answering read as "the server died" during a shard
+      // upload. Nothing here touches Graph, so it can come back immediately.
+      const body = {
         ok: true,
-        signedIn: token !== null,
+        signedIn: await hasCachedAccount(),
         running: jobs.runningJob(),
         lastFinished: jobs.lastFinished(),
         warming: warmingStatus(),
-      });
+      };
+      json(res, 200, body);
     },
   ],
   [/^\/archive\/status$/, "GET", async (_req, res) => json(res, 200, await archiveStatus())],

@@ -1380,35 +1380,64 @@ html.desktop-shell .nav-year:hover {
 /* The local server is away (serverStatus.ts). Amber rather than the sign-in
    banner's neutral grey: this is a state that costs the reader time on every
    click, not a one-off prompt. */
+/* A Fluent-style toast: floating at the bottom, centred, clear of the content.
+   It used to be a full-width bar pinned to the very top (`display: flex` with
+   no positioning), which sat behind the window's title-bar overlay and read as
+   "in the wrong place". A toast is also the right shape for what this is — a
+   transient note about the local server, not a page-level chrome element. */
 .server-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 60;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 14px;
-  background: color-mix(in srgb, #d9a21b 18%, var(--bg));
-  border-bottom: 1px solid color-mix(in srgb, #d9a21b 45%, var(--border));
-  font-size: 12.5px;
-  line-height: 1.45;
+  gap: 12px;
+  max-width: min(680px, calc(100vw - 48px));
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg);
   color: var(--text);
+  box-shadow: var(--shadow-16);
+  font-size: 13px;
+  line-height: 1.45;
+  animation: server-toast-in 0.18s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+@keyframes server-toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .server-banner { animation: none; }
 }
 .server-banner[hidden] { display: none; }
 .server-banner-text { flex: 1; }
 .server-banner button {
   font: inherit;
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: var(--radius-m);
+  font-size: 12.5px;
+  padding: 4px 12px;
+  border-radius: var(--radius-s);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
   cursor: pointer;
 }
+.server-banner button:hover { background: var(--bg-muted); }
 .server-banner-close {
   border: 0 !important;
   background: none !important;
   font-size: 16px !important;
   line-height: 1;
+  padding: 4px 6px !important;
   color: var(--text-secondary) !important;
+}
+/* On the phone the tab bar owns the bottom of the screen, so the toast sits
+   above it rather than on top of it. */
+body.m .server-banner {
+  bottom: calc(var(--tab-h, 52px) + var(--safe-bottom, 0px) + 16px);
+  z-index: 40;
 }
 
 /* --- Lightbox -------------------------------------------------------- */

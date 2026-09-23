@@ -26,7 +26,16 @@ import type {
 const BACKEND = import.meta.env.VITE_PIPELINE_URL || "http://127.0.0.1:18419";
 
 /** Short: an absent backend is the normal case, and must not stall first paint. */
-const HEALTH_TIMEOUT_MS = 1500;
+/**
+ * How long `/health` may take before the app calls the server gone.
+ *
+ * 1.5s was too tight once jobs began writing shards: the server is one Node
+ * process, and a month-end shard upload to OneDrive can occupy its event loop
+ * for seconds — long enough for the poll to time out and show "the local server
+ * stopped responding" while it was working perfectly. The banner is meant for a
+ * server that is *gone*, so the question has to survive a busy one.
+ */
+const HEALTH_TIMEOUT_MS = 8000;
 
 /** The latest thumbnail warm, as `/health` reports it. */
 export interface ThumbWarming {
