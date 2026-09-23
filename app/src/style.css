@@ -2908,7 +2908,6 @@ body.map-expanded::after {
   bottom: 28px;
   transform: translateX(-50%);
   z-index: 90;
-  display: flex;
   align-items: center;
   gap: 12px;
   padding: 9px 16px;
@@ -2918,6 +2917,13 @@ body.map-expanded::after {
   color: var(--text);
   font-size: 12px;
   box-shadow: var(--shadow-16);
+}
+/* Same bug class as `.signin-banner` and `.lightbox`: an unconditional
+   `display: flex` outranks the browser's `[hidden] { display: none }`, so the
+   toast stayed on screen after "Saving the PDF…" whatever the code set
+   `hidden` to. The display has to be expressed through the attribute. */
+#print-progress:not([hidden]) {
+  display: flex;
 }
 /* The way out of a long export — see overlay() in print.ts. */
 #print-progress .print-cancel {
