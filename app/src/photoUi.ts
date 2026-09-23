@@ -141,11 +141,13 @@ const HYDRATE_CONCURRENCY = 8;
 export async function hydrateAll(
   images: HTMLImageElement[],
   onProgress?: (done: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   let next = 0;
   let done = 0;
   const worker = async () => {
     while (next < images.length) {
+      if (signal?.aborted) return;
       await hydrate(images[next++]);
       onProgress?.(++done, images.length);
     }

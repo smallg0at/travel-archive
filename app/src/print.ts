@@ -180,15 +180,36 @@ function rasterise(img: HTMLImageElement, sourceBytes: number | undefined): stri
   return encoded;
 }
 
-function overlay(): HTMLElement {
+/**
+ * The progress toast, with a way out of it.
+ *
+ * Preparing a large export encodes every photograph and can run for tens of
+ * seconds; there was no way to stop it once started — the toast was a bare text
+ * node and nothing in the loops ever looked for an interruption. It carries a
+ * cancel button now, whose signal the loops check.
+ */
+function overlay(onCancel: () => void): { box: HTMLElement; setText: (text: string) => void } {
   let node = document.getElementById(OVERLAY_ID);
   if (!node) {
     node = document.createElement("div");
     node.id = OVERLAY_ID;
     document.body.appendChild(node);
   }
+  node.replaceChildren();
+  const text = document.createElement("span");
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "print-cancel";
+  cancel.textContent = ui.common.cancel;
+  cancel.addEventListener("click", onCancel);
+  node.append(text, cancel);
   node.hidden = false;
-  return node;
+  return {
+    box: node,
+    setText: (value: string) => {
+      text.textContent = value;
+    },
+  };
 }
 
 /**
@@ -233,6 +254,7 @@ interface Swapped {
 async function rasteriseAll(
   images: HTMLImageElement[],
   onProgress: (done: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<Swapped[]> {
   const swapped: Swapped[] = [];
 
@@ -255,6 +277,7 @@ async function rasteriseAll(
       );
 
   for (const [i, img] of images.entries()) {
+    if (signal?.aborted) break;
     const printUrl = rasterise(img, sizes.get(img.dataset.photoId!));
     if (printUrl) {
       swapped.push({ img, original: img.src });
@@ -283,28 +306,34 @@ function restore(swapped: Swapped[]): void {
 
 export async function printView(name?: string): Promise<void> {
   const images = exportableImages();
-  const box = overlay();
+  const controller = new AbortController();
+  const { box, setText } = overlay(() => controller.abort());
+  const signal = controller.signal;
 
   const label = (line: (done: number, total: number) => string) => (done: number, total: number) => {
-    box.textContent = line(done, total);
+    setText(line(done, total));
   };
   label(ui.print.preparing)(0, images.length);
 
-  await hydrateAll(images, label(ui.print.preparing));
-
-  // Downscaling before printing, not after: Chrome embeds whatever is in the
-  // DOM when the dialog opens.
-  const swapped = await rasteriseAll(images, label(ui.print.sizing));
-
-  box.textContent = window.electronAPI ? ui.print.savingPdf : ui.print.openingPrint;
-  // Two frames: one for the last decode to be painted, one for the layout it
-  // changes to settle. Printing before this leaves the final cards blank.
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-  // Hidden rather than removed, so a second export reuses the node — and so it
-  // cannot appear in the printed output even if the stylesheet missed it.
-  box.hidden = true;
+  let swapped: Swapped[] = [];
   try {
+    await hydrateAll(images, label(ui.print.preparing), signal);
+    if (signal.aborted) return;
+
+    // Downscaling before printing, not after: Chrome embeds whatever is in the
+    // DOM when the dialog opens.
+    swapped = await rasteriseAll(images, label(ui.print.sizing), signal);
+    if (signal.aborted) return;
+
+    setText(window.electronAPI ? ui.print.savingPdf : ui.print.openingPrint);
+    // Two frames: one for the last decode to be painted, one for the layout it
+    // changes to settle. Printing before this leaves the final cards blank.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (signal.aborted) return;
+
+    // Hidden rather than removed, so a second export reuses the node — and so it
+    // cannot appear in the printed output even if the stylesheet missed it.
+    box.hidden = true;
     if (window.electronAPI?.printToPDF) {
       // The desktop shell: main process rasterises the same page straight to
       // a PDF file, with no dialog and no header/footer band. Awaited, same
@@ -313,7 +342,7 @@ export async function printView(name?: string): Promise<void> {
       const result = await window.electronAPI.printToPDF(name);
       if (!result.ok && result.error !== "cancelled") {
         box.hidden = false;
-        box.textContent = ui.print.exportFailed(result.error ?? ui.edit.unknownError);
+        setText(ui.print.exportFailed(result.error ?? ui.edit.unknownError));
         await new Promise((resolve) => setTimeout(resolve, 3000));
       }
     } else {
@@ -325,5 +354,6 @@ export async function printView(name?: string): Promise<void> {
     // In `finally` so a cancelled or failed print still leaves the page as it
     // was found, rather than showing print-resolution images from then on.
     restore(swapped);
+    box.hidden = true;
   }
 }

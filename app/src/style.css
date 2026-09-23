@@ -2908,6 +2908,9 @@ body.map-expanded::after {
   bottom: 28px;
   transform: translateX(-50%);
   z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 9px 16px;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -2916,6 +2919,18 @@ body.map-expanded::after {
   font-size: 12px;
   box-shadow: var(--shadow-16);
 }
+/* The way out of a long export — see overlay() in print.ts. */
+#print-progress .print-cancel {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+#print-progress .print-cancel:hover { background: var(--bg-muted); }
 
 @media print {
   /* The screen palette follows the reader's OS, and this one is set to dark.
