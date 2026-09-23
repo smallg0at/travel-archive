@@ -6,6 +6,7 @@ import type {
   TripSummaryResult,
 } from "./types.js";
 import { altInstructions, nativeText } from "./altLanguage.js";
+import { LANGUAGE_NAMES } from "./translatePrompt.js";
 
 /**
  * The day- and trip-summary prompts, and the parsing of what comes back.
@@ -162,10 +163,68 @@ ${tripDayLines(input)}${tripContext(input)}${altInstructions(input.alsoIn)}`;
 }
 
 /** The shape both providers' day responses must have; Gemini via responseSchema, DeepSeek via the prompt. */
+/**
+ * The JSON shape the model is asked to follow, with `_alt` twins when a second
+ * language is wanted.
+ *
+ * The twins have to be **listed here**, not merely described in prose. Gemini
+ * gets them from `withAltFields`, which adds a real `_alt` property beside each
+ * text field in the schema; on this path the only place the fields exist is the
+ * shape below, so a model told "every text field has a twin" without ever
+ * seeing one simply does not write them — which is exactly what happened.
+ */
+function altShape(shape: string, lang: string | null | undefined, fields: string[]): string {
+  if (!lang) return shape;
+  const name = LANGUAGE_NAMES[lang] ?? lang;
+  // Each pair is inserted right after the English field it mirrors.
+  let out = shape;
+  for (const field of fields) {
+    const marker = `"${field}":`;
+    const at = out.indexOf(marker);
+    if (at < 0) continue;
+    // Find the end of this field's value (string or array), then insert.
+    const end = fieldEnd(out, at + marker.length);
+    if (end < 0) continue;
+    const value = out.slice(at + marker.length, end);
+    out = `${out.slice(0, end)},${JSON.stringify(`${field}_alt`)}:${value.replace(/"([^"]*)"/, (_m, inner) => JSON.stringify(`${inner} (in ${name})`))}${out.slice(end)}`;
+  }
+  return out;
+}
+
+/** The index just past a JSON value that starts at `from`, or -1. */
+function fieldEnd(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && text[i] === " ") i++;
+  if (text[i] === '"') {
+    i++;
+    while (i < text.length && !(text[i] === '"' && text[i - 1] !== "\\")) i++;
+    return i + 1;
+  }
+  if (text[i] === "[") {
+    let depth = 0;
+    for (; i < text.length; i++) {
+      if (text[i] === "[") depth++;
+      else if (text[i] === "]") {
+        depth--;
+        if (depth === 0) return i + 1;
+      }
+    }
+  }
+  // Number, boolean or null: to the next comma or brace.
+  while (i < text.length && text[i] !== "," && text[i] !== "}") i++;
+  return i;
+}
+
 export const DAY_JSON_SHAPE = `{"summary":"2-4 sentence prose summary of the whole day, no headings or bullets","segments":[{"id":"the stop id, exactly as given","title":"venue or place, 1-4 words; for transit say how it moved","summary":"1-3 sentences, or null for transit","highlights":[{"size":"full|half|normal","title":"what it is","description":"1-2 sentences or null","photo_ids":["1-3 ids of the thing itself"],"document_photo_ids":["ids of its placard/menu/sign, or []"],"document_translation":"what the placards say in English, or null"}]}]}`;
 
 /** Likewise for the trip response. */
 export const TRIP_JSON_SHAPE = `{"name":"short trip name, 2-5 words","narrative":"3-6 paragraphs separated by a blank line, prose only","places":["cities or regions actually visited, in order"]}`;
+
+export const dayJsonShape = (lang: string | null | undefined): string =>
+  altShape(DAY_JSON_SHAPE, lang, ["summary", "title", "description", "document_translation"]);
+
+export const tripJsonShape = (lang: string | null | undefined): string =>
+  altShape(TRIP_JSON_SHAPE, lang, ["name", "narrative"]);
 
 /**
  * Validates and normalizes a day response. Every photo id is checked against

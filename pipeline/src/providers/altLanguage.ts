@@ -57,7 +57,11 @@ export function altInstructions(lang: string | null | undefined): string {
   const name = LANGUAGE_NAMES[lang] ?? lang;
   return `
 
-ALSO IN ${name.toUpperCase()}: every text field has a twin whose name ends in "_alt". Fill each twin with the same content written in ${name} — the same facts, the same names and about the same length. It is the same page in a second language, not a second, different summary. Use the established ${name} name for a place or a thing where one exists. For document_translation_alt, render the placard itself in ${name}, not the English rendering of it.`;
+ALSO IN ${name.toUpperCase()}: every text field has a twin whose name ends in "_alt". **Write the twin directly in ${name}, as a native speaker would** — not as a translation of the English beside it. Same facts, same names, roughly the same length, but its own sentences.
+- Compose in ${name}. Do not mirror the English word order or its rhetorical shapes.
+- In Chinese, drop subjects a diary does not need rather than repeating 我 every sentence, and avoid translationese such as "以其……迎接了我", "为……画上圆满的句号", "生动展现了", "进行了参观".
+- Use the established ${name} name for a place or a thing where one exists.
+- For document_translation_alt, render the placard itself in ${name}, not the English rendering of it.`;
 }
 
 function pushPair(pairs: [string, string][], original: string, alt: string): void {

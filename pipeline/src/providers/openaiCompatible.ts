@@ -12,7 +12,7 @@ import type {
 } from "./types.js";
 import { captionContextBlock } from "./captionContext.js";
 import { translatePrompt } from "./translatePrompt.js";
-import { DAY_JSON_SHAPE, TRIP_JSON_SHAPE, dayPrompt, parseDaySummary, parseTripSummary, tripPrompt } from "./summarise.js";
+import { DAY_JSON_SHAPE, TRIP_JSON_SHAPE, dayJsonShape, tripJsonShape, dayPrompt, parseDaySummary, parseTripSummary, tripPrompt } from "./summarise.js";
 
 /**
  * Any OpenAI-compatible Chat Completions endpoint — see `createOpenAiCompatProvider`
@@ -377,7 +377,7 @@ async function translate(cfg: OpenAiCompatConfig, input: TranslateInput): Promis
 async function summarizeDay(cfg: OpenAiCompatConfig, input: SummarizeDayInput): Promise<DaySummaryResult> {
   const { text } = await chat(
     cfg,
-    [{ role: "user", content: `${dayPrompt(input)}\n\nReply with ONE JSON object:\n${DAY_JSON_SHAPE}` }],
+    [{ role: "user", content: `${dayPrompt(input)}\n\nReply with ONE JSON object:\n${dayJsonShape(input.alsoIn)}` }],
     { maxTokens: MAX_OUTPUT.day },
   );
   try {
@@ -404,7 +404,7 @@ async function summarizeDay(cfg: OpenAiCompatConfig, input: SummarizeDayInput): 
 async function summarizeTrip(cfg: OpenAiCompatConfig, input: SummarizeTripInput): Promise<TripSummaryResult> {
   const { text, usage } = await chat(
     cfg,
-    [{ role: "user", content: `${tripPrompt(input)}\n\nReply with ONE JSON object:\n${TRIP_JSON_SHAPE}` }],
+    [{ role: "user", content: `${tripPrompt(input)}\n\nReply with ONE JSON object:\n${tripJsonShape(input.alsoIn)}` }],
     { maxTokens: MAX_OUTPUT.trip },
   );
   return { ...parseTripSummary(input, looseJson(text)), usage };
