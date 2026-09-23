@@ -6,7 +6,7 @@ import type {
   PhotoShard,
   TripRecord,
 } from "@travel-archive/shared";
-import type { CaptionContext } from "../providers/types.js";
+import type { CaptionPhotoInput, CaptionResult, CaptionContext } from "../providers/types.js";
 import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
 import { offlinePlace, placeString } from "../geocodeOffline.js";
@@ -421,51 +421,85 @@ export async function runAnalyze(
       await pending;
     };
 
-    await pooled(batch, env.analyzeConcurrency, async (record) => {
-      // Checked per photo rather than per month: a cancel during a 4,998-photo
-      // month should stop in seconds, and everything already captioned is kept
-      // by the save below.
-      if (signal?.aborted) return;
-      try {
-        const image = await downloadThumbnailBuffer(token, record.id);
-        if (!image) {
-          result.failed++;
-          onProgress({ message: `no thumbnail: ${record.fileName}` });
-          return;
-        }
-
-        // The shard's copy, not the target list's: geocoding has since given it
-        // a place, which both the prompt and the saved record need.
-        const current = shard.photos[record.id] ?? record;
-        const caption = await provider.captionPhoto({
-          imageBase64: image.toString("base64"),
-          mediaType: mediaTypeFor(record.fileName),
-          context: captionContextFor(current, sources),
-        });
-
-        const updated: PhotoRecord = {
-          ...current,
-          analyzedAt: new Date().toISOString(),
-          contentType: caption.contentType,
-          caption: caption.caption,
-          tags: caption.tags,
-          extractedText: caption.extractedText,
-          notable: caption.notable,
-        };
-        shard.photos[record.id] = updated;
-        analyzed.push(updated);
-        result.inherited += inheritToDuplicates(shard, updated);
-
-        result.analyzed++;
-        if (result.analyzed % 5 === 0 || result.analyzed === total) {
-          onProgress({ phase: "analyzing", done: result.analyzed, total });
-        }
-        if (++sinceSave >= SAVE_EVERY) await checkpoint();
-      } catch (err) {
-        result.failed++;
-        onProgress({ message: `failed ${record.fileName}: ${(err as Error).message}` });
+    /** Writes one caption onto the shard and its records, and checkpoints every so often. */
+    const applyCaption = async (
+      s: { record: PhotoRecord; current: PhotoRecord },
+      caption: CaptionResult,
+    ): Promise<void> => {
+      const updated: PhotoRecord = {
+        ...s.current,
+        analyzedAt: new Date().toISOString(),
+        contentType: caption.contentType,
+        caption: caption.caption,
+        tags: caption.tags,
+        extractedText: caption.extractedText,
+        notable: caption.notable,
+      };
+      shard.photos[s.record.id] = updated;
+      analyzed.push(updated);
+      result.inherited += inheritToDuplicates(shard, updated);
+      result.analyzed++;
+      if (result.analyzed % 5 === 0 || result.analyzed === total) {
+        onProgress({ phase: "analyzing", done: result.analyzed, total });
       }
-    });
+      if (++sinceSave >= SAVE_EVERY) await checkpoint();
+    };
+
+    /**
+     * One caption call's worth of photos, downloaded and context-resolved.
+     * `captionPhotos` sends them in a single request; a provider without it
+     * falls back to one at a time. Results come back in order; a slot the model
+     * omitted is skipped and its photo is left for the next run.
+     */
+    const captionChunk = async (records: PhotoRecord[]): Promise<void> => {
+      const settled: { record: PhotoRecord; current: PhotoRecord; image: Buffer; context: CaptionPhotoInput["context"] }[] = [];
+      for (const record of records) {
+        if (signal?.aborted) return;
+        try {
+          const image = await downloadThumbnailBuffer(token, record.id);
+          if (!image) {
+            result.failed++;
+            onProgress({ message: `no thumbnail: ${record.fileName}` });
+            continue;
+          }
+          // The shard's copy, not the target list's: geocoding has since given
+          // it a place, which both the prompt and the saved record need.
+          const current = shard.photos[record.id] ?? record;
+          settled.push({ record, current, image, context: captionContextFor(current, sources) });
+        } catch (err) {
+          result.failed++;
+          onProgress({ message: `failed ${record.fileName}: ${(err as Error).message}` });
+        }
+      }
+      if (settled.length === 0) return;
+
+      if (!provider.captionPhotos) {
+        await pooled(settled, env.analyzeConcurrency, async (s) => {
+          await applyCaption(s, await provider.captionPhoto({ imageBase64: s.image.toString("base64"), mediaType: mediaTypeFor(s.record.fileName), context: s.context }));
+        });
+        return;
+      }
+
+      let captions: CaptionResult[];
+      try {
+        captions = await provider.captionPhotos(
+          settled.map((s) => ({ imageBase64: s.image.toString("base64"), mediaType: mediaTypeFor(s.record.fileName), context: s.context })),
+        );
+      } catch (err) {
+        result.failed += settled.length;
+        onProgress({ message: `batch failed (${settled.length}): ${(err as Error).message}` });
+        return;
+      }
+      for (const [i, s] of settled.entries()) if (captions[i]) await applyCaption(s, captions[i]);
+    };
+
+    // Chunk within the month so a chunk never mixes shards, and chunks run
+    // through the same concurrency pool as the old per-photo path.
+    const chunkSize = provider.captionPhotos ? Math.max(1, provider.batchSize ?? 1) : 1;
+    const chunks: PhotoRecord[][] = [];
+    for (let i = 0; i < batch.length; i += chunkSize) chunks.push(batch.slice(i, i + chunkSize));
+
+    await pooled(chunks, env.analyzeConcurrency, (records) => captionChunk(records));
 
     if (analyzed.length === 0) continue;
 
