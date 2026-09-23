@@ -147,8 +147,18 @@ export function renderDensityControl(): HTMLElement {
  * rendered. Living in the heading, it cannot exist before the content it
  * exports does, because this is called after the page is built.
  */
+/**
+ * The Save-as-PDF button.
+ *
+ * **Created unconditionally, then removed if the page ends up with nothing to
+ * print.** It used to begin with `if (!canPrint()) return`, and `canPrint()`
+ * counts the photographs in the DOM — but this runs while the header is being
+ * built, before a single photograph has been appended. The count was always
+ * zero, so the button never appeared on any page: the export had looked removed
+ * for as long as the check had been there. Whether there is content is only
+ * knowable after the view renders, hence the deferred re-check.
+ */
 function addExportButton(container: HTMLElement): void {
-  if (!canPrint()) return;
   const button = el<HTMLButtonElement>(`
     <button class="btn-action btn-export page-export" type="button" title="${ui.nav.savePdf}">
       <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
@@ -157,8 +167,27 @@ function addExportButton(container: HTMLElement): void {
       <span>${ui.nav.savePdf}</span>
     </button>
   `);
-  button.addEventListener("click", () => void printView(pageTitle));
+  button.addEventListener("click", () => {
+    // Checked again on click, because a page can be emptied after it painted
+    // (a month with no photos loads its shards asynchronously).
+    if (!canPrint()) return;
+    void printView(pageTitle);
+  });
   container.appendChild(button);
+  // The view is still being assembled at this point, and its photographs arrive
+  // asynchronously (shards load, thumbnails attach). Look again over the next
+  // moment and take the button away only if the page really has no pictures.
+  let checks = 0;
+  const verify = () => {
+    if (!button.isConnected) return;
+    if (canPrint()) return;
+    if (++checks >= 5) {
+      button.remove();
+      return;
+    }
+    setTimeout(verify, 400);
+  };
+  setTimeout(verify, 400);
 }
 
 /** A placeholder line. Text, not markup: it can carry a trip's model-written name. */
