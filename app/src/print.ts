@@ -74,6 +74,9 @@ const PRINT_QUALITY = 0.7;
 
 const PX_PER_MM = PRINT_DPI / 25.4;
 
+/** The printed content width, from the `@media print` block — the card table and the grid fallback both scale against it. */
+const CONTENT_WIDTH_MM = 186;
+
 /**
  * The printed size of one image, in mm, from the card it belongs to.
  *
@@ -82,22 +85,34 @@ const PX_PER_MM = PRINT_DPI / 25.4;
  * between however many photos the card holds.
  */
 const CARD_SLOT_MM: Record<string, { w: number; h: number }> = {
-  "card-full": { w: 186, h: 85 },
+  "card-full": { w: CONTENT_WIDTH_MM, h: 85 },
   "card-half": { w: 90, h: 52 },
   "card-normal": { w: 58, h: 34 },
 };
 
 function slotPxFor(img: HTMLImageElement): { w: number; h: number } | null {
   const card = img.closest(".card");
-  if (!card) return null;
-  const size = [...card.classList].find((c) => c in CARD_SLOT_MM);
-  if (!size) return null;
+  if (card) {
+    const size = [...card.classList].find((c) => c in CARD_SLOT_MM);
+    if (!size) return null;
 
-  const slot = CARD_SLOT_MM[size];
-  const siblings = card.querySelectorAll(".card-images img").length || 1;
-  // The 2px flex gap is a rounding error at print scale; treated as 0.5mm.
-  const widthMm = (slot.w - 0.5 * (siblings - 1)) / siblings;
-  return { w: Math.round(widthMm * PX_PER_MM), h: Math.round(slot.h * PX_PER_MM) };
+    const slot = CARD_SLOT_MM[size];
+    const siblings = card.querySelectorAll(".card-images img").length || 1;
+    // The 2px flex gap is a rounding error at print scale; treated as 0.5mm.
+    const widthMm = (slot.w - 0.5 * (siblings - 1)) / siblings;
+    return { w: Math.round(widthMm * PX_PER_MM), h: Math.round(slot.h * PX_PER_MM) };
+  }
+
+  // A grid layout — a month or a day — where the photograph's printed size is
+  // whatever the on-screen cell is. Measured rather than assumed: the album's
+  // cell size is a preference (`--album-cell`) and the grid is fluid, so no
+  // table of millimetres can be written down for it. The print stylesheet keeps
+  // the same cell aspect, so scaling the measured box by the content width is
+  // the whole conversion.
+  const rect = img.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return null;
+  const scale = CONTENT_WIDTH_MM / rect.width;
+  return { w: Math.round(rect.width * scale * PX_PER_MM), h: Math.round(rect.height * scale * PX_PER_MM) };
 }
 
 /**
@@ -183,8 +198,21 @@ function overlay(): HTMLElement {
  * progress count matches what is being prepared, and so a print never spends
  * hundreds of Graph calls fetching photos it is about to hide.
  */
+/**
+ * Every photograph on the page worth exporting.
+ *
+ * **Not just the cards any more.** This looked only inside `.card-images`, which
+ * is the trip page's layout — so on a month or a day, whose photographs sit in
+ * `.album-grid`/`.stop-grid`, the list came back empty, `canPrint()` said no, and
+ * the Save-as-PDF button silently never appeared. That is why the export had
+ * "gone missing": the button was gated on a layout the reader was not looking at.
+ */
 function exportableImages(): HTMLImageElement[] {
-  return [...document.querySelectorAll<HTMLImageElement>("#content .card-images img[data-photo-id]")];
+  return [
+    ...document.querySelectorAll<HTMLImageElement>(
+      "#content :is(.card-images, .album-grid, .stop-grid) img[data-photo-id]",
+    ),
+  ];
 }
 
 /** True when the current view has something worth exporting. */
