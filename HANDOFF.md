@@ -187,6 +187,14 @@ and `app/android/app/src/main/assets/public/assets`, and against the
 stylesheet the running app reports. Prefer `npm run --workspace app
 android:apk`, which starts from `build:mobile`.
 
+**And `app/dist` itself is built, not served from source.** Editing `app/src`
+changes nothing the running app can see — the shell serves the built bundle, so
+Ctrl+R re-fetches the same old code. Both of these have now cost a debugging
+session: `pipeline/dist` must be rebuilt (and the shell restarted) after a
+pipeline change, `app/dist` must be rebuilt after an app change, and "it is in
+the source but not on screen" is the symptom of forgetting either. Check the
+timestamp on `dist/assets/*.js` before believing the fix is broken.
+
 **The phone keeps its own sign-in.** msal-browser encrypts the tokens it keeps
 in `localStorage` with a key held in a *session* cookie, and an Android WebView
 ends that session whenever the process dies — an update, a swipe away, Android
