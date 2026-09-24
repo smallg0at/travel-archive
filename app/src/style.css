@@ -2967,13 +2967,20 @@ body.map-expanded::after {
 /* Same rule as `.signin-banner`: a bare `display` would outrank `[hidden]`. */
 .search-bar:not([hidden]) { display: flex; }
 .search-bar-icon { flex: none; opacity: 0.7; }
-.search-bar input {
+/* The `:focus` rule for the old embedded input (`.search-input:focus`) would
+   otherwise win on specificity and draw its 2px accent outline — the box the
+   new bar's input sits in is already what shows focus (`.is-active`), so the
+   input itself draws nothing. */
+.search-bar input,
+.search-bar input:focus,
+.search-bar input:focus-visible {
   flex: 1;
   min-width: 0;
   font: inherit;
   font-size: 12.5px;
   border: 0;
   outline: none;
+  box-shadow: none;
   background: none;
   color: var(--text);
 }
@@ -2996,17 +3003,19 @@ body.map-expanded::after {
 }
 .search-bar-clear[hidden] { display: none; }
 
-/* Results float over the page — Task Manager's dropdown, not a page change. */
+/* Results float over the page — Task Manager's dropdown, not a page change.
+   Same width and left edge as the bar it hangs from: a panel wider than its
+   input reads as a separate window rather than as that input's suggestions. */
 .search-results {
   position: fixed;
-  top: 36px;
+  top: 34px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 44;
-  width: min(760px, 72vw);
+  width: min(460px, 42vw);
   max-height: min(70vh, 640px);
   overflow-y: auto;
-  padding: 10px 12px 12px;
+  padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   background: var(--bg);
@@ -3328,11 +3337,30 @@ body.map-expanded::after {
   line-height: 1.55;
   color: var(--text-secondary);
 }
-.search-day-photos {
+.search-day-photos,
+/* The title-bar panel's name for the same row. */
+.search-thumbs {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   padding: 0 8px;
+}
+/* The panel is narrower than a page, so its previews are too — a 96px thumb in
+   a 460px dropdown left room for four. */
+.search-results .search-thumb {
+  width: 64px;
+  height: 64px;
+}
+/* The count line above the days. */
+.search-count {
+  padding: 6px 8px 2px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.search-trip-meta {
+  padding: 0 8px 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
 }
 .search-cell {
   position: relative;
