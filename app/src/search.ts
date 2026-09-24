@@ -39,6 +39,17 @@ function matches(text: string, terms: string[]): boolean {
   return true;
 }
 
+/**
+ * A photo row's text and tags, from either schema version.
+ *
+ * v1 stored `caption + tags + place` as one string, so its fourth element is
+ * absent and the tags are unseen — the row still searches as it always did, and
+ * a rebuilt index supplies the chips.
+ */
+function rowParts(row: SearchIndexFile["photos"][number]): { text: string; tags: string } {
+  return { text: row[2] ?? "", tags: row[3] ?? "" };
+}
+
 function search(index: SearchIndexFile, query: string): { days: DayHit[]; trips: SearchIndexFile["trips"]; total: number } {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return { days: [], trips: [], total: 0 };
@@ -51,10 +62,12 @@ function search(index: SearchIndexFile, query: string): { days: DayHit[]; trips:
   };
 
   let total = 0;
-  for (const [id, date, text] of index.photos) {
-    if (!matches(text, terms)) continue;
+  for (const row of index.photos) {
+    const { text, tags } = rowParts(row);
+    if (!matches(`${text} ${tags}`, terms)) continue;
     total++;
-    if (date) hit(date).photos.push(index.idPrefix + id);
+    const cap = index.idPrefix + row[0];
+    if (row[1]) hit(row[1]).photos.push(cap);
   }
   for (const [date, text] of index.days) {
     if (matches(text, terms)) hit(date).summaryMatched = true;
@@ -245,6 +258,19 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
     window.clearTimeout(timer);
     timer = window.setTimeout(() => void render(input.value), DEBOUNCE_MS);
   });
+
+  /**
+   * Run a query from outside — how a tag chip in the viewer searches.
+   *
+   * Exposed on the element rather than kept in module state, because the search
+   * box is embedded in the home page and there is exactly one of it: whoever
+   * mounted it holds the handle. Setting `value` as well as rendering is the
+   * point — the reader has to see what is being searched for.
+   */
+  (page as HTMLElement & { runQuery?: (query: string) => void }).runQuery = (query: string) => {
+    input.value = query;
+    void render(query);
+  };
   return page;
 }
 

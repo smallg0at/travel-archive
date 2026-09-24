@@ -286,7 +286,7 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
   const index = await loadIndex(token);
 
   const allDays = index.sections.flatMap((s) => s.days);
-  const inRange = allDays
+  let inRange = allDays
     .filter((d) => d.date >= opts.startDate && d.date <= opts.endDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -319,13 +319,24 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
       onProgress,
       signal,
     );
-    // Read back: the run wrote summaries onto the index.
+    // Reload the index, and **rebuild the day list from it**. The run above
+    // wrote its summaries through `saveIndex`; carrying on with the copy read
+    // before it would lose them twice over — the narrative would be written
+    // from the empty days, and `bucketDays` at the end would write those empty
+    // days back over what was just paid for. (Observed: "1 day summarized",
+    // and the day still had no summary afterwards.)
     const refreshed = await loadIndex(token);
-    const byDate = new Map(refreshed.sections.flatMap((s) => s.days).map((d) => [d.date, d] as const));
-    for (const [i, day] of inRange.entries()) {
-      const now = byDate.get(day.date);
-      if (now) inRange[i] = now;
-    }
+    const freshDays = refreshed.sections.flatMap((s) => s.days);
+    // `inRange` is `let` for this: it is the same three days, with what the run
+    // above filled in.
+    inRange = freshDays
+      .filter((d) => d.date >= opts.startDate && d.date <= opts.endDate)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    // The end of this function re-sorts every day, so it has to see the new
+    // ones too.
+    allDays.length = 0;
+    allDays.push(...freshDays);
+
     const stillMissing = inRange.filter((d) => !d.summary).length;
     if (stillMissing > 0 && stillMissing * 2 > inRange.length && !opts.allowMissingSummaries) {
       throw new Error(

@@ -1,6 +1,6 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, loadVideoUrl, releaseFullPhoto } from "./graphPhoto";
-import { el, transcript, transcriptOriginal } from "./photoUi";
+import { el, tagChip, transcript, transcriptOriginal } from "./photoUi";
 import { addPhotoTimeControl } from "./dayEdit";
 import { loc } from "./contentLang";
 import { fmtDateTime, ui } from "./i18n";
@@ -144,6 +144,21 @@ function renderPhotoPanel(photo: PhotoRecord): void {
     line.className = "viewer-meta";
     line.textContent = meta;
     photoPanel.appendChild(line);
+  }
+
+  // The photo's tags, as chips. Each one searches for itself, which is the only
+  // thing a tag is for — "show me the other Elizabeth line pictures" was
+  // otherwise a query the reader had to type from the tag they could not see.
+  if (photo.tags?.length) {
+    const block = document.createElement("div");
+    block.className = "viewer-block viewer-tags";
+    const label = document.createElement("h4");
+    label.textContent = ui.viewer.tags;
+    const list = document.createElement("div");
+    list.className = "tag-list";
+    for (const tag of photo.tags) list.appendChild(tagChip(tag));
+    block.append(label, list);
+    photoPanel.appendChild(block);
   }
 
   // Re-render this panel rather than the whole archive: a correction is one
@@ -531,6 +546,18 @@ function step(delta: number): void {
 
 document.getElementById("lightbox")?.addEventListener("click", close);
 document.getElementById("lightbox-back")?.addEventListener("click", close);
+
+/**
+ * A tag was clicked; get out of the way so the search can be seen.
+ *
+ * The chip is inside the lightbox and the search box is on the page behind it,
+ * so the viewer closes itself and lets the event carry on to the home page's
+ * listener. Listening here rather than routing through the caller is what keeps
+ * `tagChip` in `photoUi.ts` free of any knowledge of the viewer.
+ */
+document.addEventListener("tag-search", () => {
+  if (!document.getElementById("lightbox")?.hidden) close();
+});
 // The figure fills the screen, so clicking inside it must not dismiss — beside
 // a portrait photo is still "inside".
 document.querySelector(".lightbox-figure")?.addEventListener("click", (e) => e.stopPropagation());

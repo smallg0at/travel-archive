@@ -81,6 +81,7 @@ export const en = {
   viewer: {
     thisPhoto: "This photo",
     transcribed: "Transcribed text",
+    tags: "Tags",
     loadingFull: "Loading full resolution…",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",

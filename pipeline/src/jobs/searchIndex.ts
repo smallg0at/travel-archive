@@ -22,7 +22,12 @@ import type { ProgressFn } from "./analyze.js";
  * of reading them back.
  */
 
-export const SEARCH_SCHEMA = 1;
+/**
+ * Bumped to 2 when the row grew a tags field. The app tolerates v1 rows (a
+ * missing fourth element reads as no tags) so an old index still searches; it
+ * just has no chips to show until the next `organize` rebuilds it.
+ */
+export const SEARCH_SCHEMA = 2;
 
 /** Text is stored lowercased: every query lowercases too, so neither side does it per keystroke. */
 const clean = (parts: (string | null | undefined)[]): string =>
@@ -65,10 +70,11 @@ export async function buildSearchIndex(
   for (const shard of all.values()) {
     for (const photo of Object.values(shard.photos)) {
       if (!mayBeAnalyzed(photo) || withheldFromSummaries(photo)) continue;
-      const text = clean([photo.caption, photo.tags?.join(" "), photo.place, photo.placeNames?.en, photo.placeNames?.zh]);
-      if (!text) continue;
+      const text = clean([photo.caption, photo.place, photo.placeNames?.en, photo.placeNames?.zh]);
+      const tags = clean([...(photo.tags ?? [])]);
+      if (!text && !tags) continue;
       const id = photo.id.startsWith(idPrefix) ? photo.id.slice(idPrefix.length) : photo.id;
-      photos.push([id, photo.takenAt?.slice(0, 10) ?? "", text]);
+      photos.push([id, photo.takenAt?.slice(0, 10) ?? "", text, tags]);
     }
   }
 

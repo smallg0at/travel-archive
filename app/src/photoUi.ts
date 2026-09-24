@@ -11,6 +11,27 @@ export function el<T extends HTMLElement>(html: string): T {
 }
 
 /**
+ * One tag, as a button that searches for itself.
+ *
+ * A tag exists to be followed — "show me the other Elizabeth line pictures" —
+ * so it is a control rather than decoration. It does not search directly: the
+ * search box lives on the home page and this chip is usually inside the
+ * lightbox, so it raises an event the app routes (`tag-search`) instead of
+ * reaching across modules. Closing the viewer and focusing the query is the
+ * caller's job, since only it knows what is open.
+ */
+export function tagChip(tag: string): HTMLButtonElement {
+  const chip = el<HTMLButtonElement>(`<button type="button" class="tag-chip"></button>`);
+  chip.textContent = tag;
+  chip.title = tag;
+  chip.addEventListener("click", (event) => {
+    event.stopPropagation();
+    document.dispatchEvent(new CustomEvent("tag-search", { detail: tag }));
+  });
+  return chip;
+}
+
+/**
  * A photograph's transcript in the reader's language, with the verbatim kept.
  *
  * The text inside a photo — a label, a menu, a note — is evidence, so the

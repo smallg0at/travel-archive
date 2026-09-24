@@ -745,8 +745,16 @@ export interface SearchIndexFile {
   builtAt: string;
   /** Every photo id starts with the drive's own id; stored once. */
   idPrefix: string;
-  /** [id without the prefix, date or "", caption + tags + place, lowercased]. */
-  photos: [string, string, string][];
+  /**
+   * `[id, date, text, tags]` — the fourth field is the photo's tags, joined.
+   *
+   * **Separate from `text` since v2**, because they answer different
+   * questions: `text` is what the photo *says* and `tags` is what it *is*, and
+   * a tag is meant to be clicked. Search still matches both — the behaviour is
+   * unchanged — but a tag hit can now be told from a caption hit, and the row
+   * is what a tag chip reads from.
+   */
+  photos: [string, string, string, string][];
   /** [date, day summary + stop titles and summaries + place, lowercased]. */
   days: [string, string][];
   /** [section id, name, first date, last date]. */

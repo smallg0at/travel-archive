@@ -133,6 +133,31 @@ export async function showHome(): Promise<void> {
   page.querySelector(".home-search")!.replaceWith(search);
   content.replaceChildren(page);
 
+  /**
+   * A tag clicked in the viewer searches here.
+   *
+   * The viewer is a lightbox over whatever page is showing, and the search box
+   * only exists on this one — so following a tag means coming back here, which
+   * is what this listener does. It runs the query rather than filling the box,
+   * so the reader sees the whole search in one step.
+   */
+  const onTagSearch = (event: Event) => {
+    // The page may have been replaced while this listener lived — the search
+    // handle would then belong to a detached element. `isConnected` is the
+    // check; without it a second visit to the home page searches the first
+    // one's, invisibly.
+    if (!search.isConnected) {
+      document.removeEventListener("tag-search", onTagSearch);
+      return;
+    }
+    const tag = (event as CustomEvent<string>).detail;
+    if (typeof tag === "string" && tag) {
+      (search as HTMLElement & { runQuery?: (q: string) => void }).runQuery?.(tag);
+      search.querySelector<HTMLInputElement>(".search-input")?.focus();
+    }
+  };
+  document.addEventListener("tag-search", onTagSearch);
+
   const [index, home] = await Promise.all([loadIndex().catch(() => null), loadHomeIndex()]);
   if (!index || !page.isConnected) return;
 

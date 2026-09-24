@@ -2938,6 +2938,32 @@ body.map-expanded::after {
 }
 #print-progress .print-cancel:hover { background: var(--bg-muted); }
 
+/* --- Tags ---------------------------------------------------------------- */
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+/* A tag is a button, not a label: clicking one searches for it. Deliberately
+   understated — a photo carries 3-6 of them and they are not the content. */
+.tag-chip {
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.5;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.tag-chip:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.viewer-tags > .tag-list { margin-top: 2px; }
+
 @media print {
   /* The screen palette follows the reader's OS, and this one is set to dark.
      Paper is white either way, so force the light tokens rather than printing

@@ -77,6 +77,7 @@ export const zhHans: Messages = {
   viewer: {
     thisPhoto: "当前照片",
     transcribed: "识别文字",
+    tags: "标签",
     loadingFull: "正在加载原图…",
     zoomIn: "放大",
     zoomOut: "缩小",
