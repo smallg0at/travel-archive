@@ -100,11 +100,6 @@ function search(
   return { days, trips, total };
 }
 
-/** The photos of one day, as ids and the month to load them from. */
-function shardFor(photoId: string): string {
-  return photoId.slice(0, 7);
-}
-
 function hidePanel(): void {
   const { panel } = dom();
   panel.hidden = true;
@@ -191,7 +186,11 @@ async function render(query: string): Promise<void> {
     const host = el<HTMLDivElement>(`<div class="search-thumbs"></div>`);
     const images = await Promise.all(
       day.photoIds.slice(0, MAX_PHOTOS_PER_DAY).map(async (id) => {
-        const shard = await loadMonth(shardFor(id)).catch(() => null);
+        // The month comes from the **date**, not from the id. A photo id is
+        // `<driveId>!<number>` and its first characters are the drive id, so
+        // slicing it yielded "2EDA5BB" — a month shard that does not exist,
+        // which is why every result row was empty of pictures.
+        const shard = await loadMonth(day.date.slice(0, 7)).catch(() => null);
         const photo = shard?.photos[id];
         if (!photo) return null;
         const thumb = lazyImg(photo, "medium", "search-thumb");
