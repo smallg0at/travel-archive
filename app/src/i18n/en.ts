@@ -428,6 +428,10 @@ export const en = {
     found: (photos: number, days: number, ms: number) =>
       `${num(photos)} ${photos === 1 ? "photo" : "photos"} across ${num(days)} ${days === 1 ? "day" : "days"} · ${num(ms)}ms`,
     photosMatched: (n: number) => `${num(n)} matching`,
+    none: "Nothing matched.",
+    count: (photos: number, days: number) =>
+      `${num(photos)} ${photos === 1 ? "photo" : "photos"} across ${num(days)} ${days === 1 ? "day" : "days"}`,
+    inSummary: "in the day's summary",
   },
 
   activity: {

@@ -19,6 +19,7 @@ import { readTheme, showTheme } from "./theme";
 import { checkHealth } from "./backend";
 import { localServerSource, setThumbnailSource } from "./photoSource";
 import { initServerStatus } from "./serverStatus";
+import { initSearch, runSearch } from "./searchBar";
 
 let panelMounted = false;
 
@@ -155,6 +156,14 @@ async function main() {
   initSidebarResize();
   initSidebarNav();
   initServerStatus(health?.ok === true);
+
+  // The title-bar search, on every view, and the one handler for a tag clicked
+  // anywhere — including from the lightbox, which is what closes it.
+  initSearch();
+  document.addEventListener("tag-search", (event) => {
+    const tag = (event as CustomEvent<string>).detail;
+    if (typeof tag === "string" && tag) runSearch(tag);
+  });
 
   // Photo/shard loads that hit an expired session ask for a re-auth click
   // via this event rather than popping a popup themselves — browsers block

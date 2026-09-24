@@ -5,19 +5,17 @@ import { ui } from "./i18n";
 import { openDay } from "./album";
 import { drawPlaceMap, loadBasemap } from "./tripMap";
 import { homeMapOptions, homeMapPoints, homePlaceLabel } from "./homeMap";
-import { mountSearch } from "./search";
 import { openPhoto } from "./viewer";
 
 /**
- * The front page: search, everywhere this library has been, and what happened
- * on this date in other years.
+ * The front page: everywhere this library has been, and what happened on this
+ * date in earlier years.
  *
  * The map answers "where have we been", which nothing else in the app could
  * show — the album is organised by time, so a place visited four times over
  * six years appears in four places and nowhere together. "On this day"
  * answers the one a photo library is uniquely able to: it surfaces days
- * nobody would have gone looking for. Search sits above both because it is
- * the other way in when you do know what you are looking for.
+ * nobody would have gone looking for.
  *
  * The map is the trip map's renderer (`drawPlaceMap`), not a copy of it. The
  * first version was a copy and had none of that map's zoom, pan, labels or
@@ -107,7 +105,6 @@ export async function showHome(): Promise<void> {
         <h1 class="home-title"></h1>
         <p class="home-totals"></p>
       </header>
-      <div class="home-search"></div>
       <div class="home-body">
         <div class="home-map-slot"></div>
         <div class="home-place" hidden></div>
@@ -119,44 +116,7 @@ export async function showHome(): Promise<void> {
     </div>
   `);
   page.querySelector(".home-title")!.textContent = ui.home.title;
-  const body = page.querySelector<HTMLElement>(".home-body")!;
-
-  // Results replace the page rather than stacking under the map, where a
-  // reader who has just typed would have to scroll past the world to see them.
-  const search = mountSearch({
-    lazy: true,
-    onActive: (active) => (body.hidden = active),
-    onOpenDay: (date, section) => void openDay(date, section),
-    onOpenPhoto: openPhoto,
-  });
-  search.classList.add("is-embedded");
-  page.querySelector(".home-search")!.replaceWith(search);
   content.replaceChildren(page);
-
-  /**
-   * A tag clicked in the viewer searches here.
-   *
-   * The viewer is a lightbox over whatever page is showing, and the search box
-   * only exists on this one — so following a tag means coming back here, which
-   * is what this listener does. It runs the query rather than filling the box,
-   * so the reader sees the whole search in one step.
-   */
-  const onTagSearch = (event: Event) => {
-    // The page may have been replaced while this listener lived — the search
-    // handle would then belong to a detached element. `isConnected` is the
-    // check; without it a second visit to the home page searches the first
-    // one's, invisibly.
-    if (!search.isConnected) {
-      document.removeEventListener("tag-search", onTagSearch);
-      return;
-    }
-    const tag = (event as CustomEvent<string>).detail;
-    if (typeof tag === "string" && tag) {
-      (search as HTMLElement & { runQuery?: (q: string) => void }).runQuery?.(tag);
-      search.querySelector<HTMLInputElement>(".search-input")?.focus();
-    }
-  };
-  document.addEventListener("tag-search", onTagSearch);
 
   const [index, home] = await Promise.all([loadIndex().catch(() => null), loadHomeIndex()]);
   if (!index || !page.isConnected) return;

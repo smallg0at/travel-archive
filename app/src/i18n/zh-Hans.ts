@@ -415,6 +415,9 @@ export const zhHans: Messages = {
     ready: (photos, days) => `${num(photos)} 张照片、${num(days)} 天记录已可供搜索。`,
     found: (photos, days, ms) => `${num(photos)} 张照片，分布于 ${num(days)} 天 · ${num(ms)} 毫秒`,
     photosMatched: (n) => `匹配 ${num(n)} 张`,
+    none: "没有匹配项。",
+    count: (photos, days) => `${num(photos)} 张照片，分布于 ${num(days)} 天`,
+    inSummary: "出现在当天摘要中",
   },
 
   activity: {
