@@ -76,7 +76,10 @@ export const zhHans: Messages = {
   day: {
     morePhotos: (n) => `还有 ${num(n)} 张照片`,
     originalText: "原文",
-    fromPlacards: (n) => (n === 1 ? "说明牌原文" : `${num(n)} 处说明牌原文`),
+    // 「说明牌」,而不是「说明牌原文」:这个标签只在**没有译文**时出现(有译文时
+    // 走上面的 originalText),所以它引出的内容恰恰是译文,不是原文 —— 见
+    // render.ts 里那处三元判断。
+    fromPlacards: (n) => (n === 1 ? "说明牌" : `${num(n)} 处说明牌`),
   },
 
   viewer: {

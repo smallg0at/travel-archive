@@ -2033,6 +2033,20 @@ html.desktop-shell .lightbox-header {
   border-top: 1px solid rgb(241 239 232 / 0.14);
   padding-top: 9px;
 }
+/*
+ * Tags are as tall as their content, never shorter.
+ *
+ * This block is the one that wraps: five or six tags need two rows in this
+ * column, and a chip long enough to fill a row puts the rest on a second. With
+ * the default `flex: 0 1 auto` the block was compressed instead of the
+ * transcript yielding, so the second row was clipped — the chips sat half-cut
+ * against the next section's rule. `0 0 auto` says the layout may not shrink
+ * it, which leaves `.viewer-transcript`'s `flex: 1 1 auto` as the only thing
+ * that gives, and that one scrolls internally by design.
+ */
+.viewer-tags {
+  flex: 0 0 auto;
+}
 .viewer-block h4 {
   flex: 0 0 auto;
   margin: 0 0 6px;
