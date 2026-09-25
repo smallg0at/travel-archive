@@ -41,6 +41,22 @@
   --surface-hover: color-mix(in srgb, var(--text) 8%, transparent);
   --surface-selected: color-mix(in srgb, var(--accent) 8%, transparent);
 
+  /* The shell's title-bar band, in one place.
+   *
+   * The window is frameless (`titleBarStyle: "hidden"`) and Electron draws its
+   * own caption buttons over a strip this tall — `titleBarOverlay.height` in
+   * desktop/src/main.ts. Everything below that strip has to start exactly here
+   * or the app slides under the buttons, and the search field has to be
+   * vertically centred in it or it reads as a stray strip.
+   *
+   * It is a variable because it was 36px in five separate places (the two
+   * headers, #main-column's offset, #sidebar-resize's, and the search field's
+   * `top`) and raising it meant finding all five. It is 48px now: Win11's own
+   * title bar height, and enough room for a 32px search field with 8px around
+   * it rather than the 24px field that looked pasted onto the content edge. */
+  --titlebar-height: 48px;
+  --searchbar-height: 32px;
+
   /* Three of Fluent's radii — Medium, Large, XLarge from `@fluentui/tokens`'s
      borderRadius scale — standing in for what had been 21 separate
      `border-radius` declarations across the file at exactly 4px, 6px or 8px,
@@ -225,7 +241,7 @@ html.desktop-shell body {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: var(--titlebar-height);
   padding: 0 8px;
   font-size: 12px;
   font-weight: 600;
@@ -256,7 +272,7 @@ html.desktop-shell .sidebar-header {
   display: none;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: var(--titlebar-height);
   padding: 0 8px;
   font-size: 12px;
   font-weight: 600;
@@ -314,7 +330,7 @@ html.desktop-shell .nav-toggle-btn {
 }
 #sidebar-resize:hover { background: var(--accent); }
 html.desktop-shell #sidebar-resize {
-  margin-top: 36px;
+  margin-top: var(--titlebar-height);
   background: transparent;
   border-left: none;
   border-right: none;
@@ -331,7 +347,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 html.desktop-shell #main-column {
   background: var(--bg);
-  margin-top: 36px;
+  margin-top: var(--titlebar-height);
   border-top-left-radius: 8px;
   border-top: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
   border-left: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
@@ -339,6 +355,27 @@ html.desktop-shell #main-column {
   -webkit-app-region: no-drag;
   position: relative;
   overflow: hidden;
+}
+
+/*
+ * The same clearance in a browser, where there is no shell to provide it.
+ *
+ * The search field is `position: fixed` against the viewport in both cases, so
+ * raising the title bar moved it down in both — but only the shell reserved the
+ * band, and in a plain browser the page heading then sat under the field. The
+ * field floats over the page deliberately; the content simply must not start
+ * beneath it.
+ *
+ * A padding on the scrolling column rather than a margin, so the first thing in
+ * the page scrolls up to the top of the band when the reader scrolls, instead
+ * of leaving a permanent gap.
+ *
+ * `#content` is the desktop page's own element — the phone app is a separate
+ * entry with its own DOM and never renders one — but the `:not(.m)` guard says
+ * so rather than relying on that.
+ */
+html:not(.desktop-shell) body:not(.m) #content {
+  padding-top: calc(var(--titlebar-height) + 8px);
 }
 
 /* Wide screen collapsed state */
@@ -2942,11 +2979,15 @@ body.map-expanded::after {
 /* --- The title-bar search ------------------------------------------------ */
 
 /* Centred in the title bar, over the app rather than in it: it belongs to the
-   window, not to whatever page is showing. `top: 6px` clears the 36px title-bar
-   overlay; the shell's drag region is why it must be no-drag. */
+   window, not to whatever page is showing. The offset and the height come from
+   the two title-bar variables so it stays centred in the band whatever that
+   band is — at 36px with a 24px field there was 6px above and 6px below, and
+   against the content card's top border it read as a strip resting on a line
+   rather than a control in a title bar. The shell's drag region is why it must
+   be no-drag. */
 .search-bar {
   position: fixed;
-  top: 6px;
+  top: calc((var(--titlebar-height) - var(--searchbar-height)) / 2);
   left: 50%;
   transform: translateX(-50%);
   z-index: 45;
@@ -2954,8 +2995,8 @@ body.map-expanded::after {
   align-items: center;
   gap: 8px;
   width: min(460px, 42vw);
-  height: 24px;
-  padding: 0 10px;
+  height: var(--searchbar-height);
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 72%, transparent);
@@ -3009,7 +3050,10 @@ body.map-expanded::after {
    input reads as a separate window rather than as that input's suggestions. */
 .search-results {
   position: fixed;
-  top: 34px;
+  /* Directly under the search field, 4px clear of it. Derived from the same two
+     variables as the field, so the two cannot drift apart — at the old fixed
+     `34px` a taller title bar would have left the panel overlapping the field. */
+  top: calc((var(--titlebar-height) - var(--searchbar-height)) / 2 + var(--searchbar-height) + 4px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 44;

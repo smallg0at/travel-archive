@@ -265,7 +265,17 @@ function createWindow(): void {
     titleBarOverlay: {
       color: "#00000000",
       symbolColor: initialDark ? "#ffffff" : "#161614",
-      height: 36,
+      /*
+       * 48px, not 36px: the standard Win11 title bar height, and what Windows
+       * Explorer uses. At 36px the search field had room to be only 24px tall
+       * and sat in the middle of the band with the content card's top border
+       * 6px under it, so it read as a floating strip resting on a line rather
+       * than as part of the title bar. The app's own headers and the search
+       * bar's offset are kept in step with this number in style.css —
+       * `--titlebar-height`, and `html.desktop-shell #main-column`,
+       * `#sidebar-resize`, `.search-bar`.
+       */
+      height: 48,
     },
     icon: join(__dirname, "../build/icon.png"),
     backgroundColor: "#00000000",

@@ -228,6 +228,11 @@ async function render(query: string): Promise<void> {
 export function initSearch(): void {
   const { bar, input, clear } = dom();
   bar.hidden = false;
+  // The clear button belongs to a non-empty query, but nothing renders until
+  // the first keystroke — so on a fresh page it appeared beside the magnifier
+  // with nothing to clear, which a reader took for the search field's normal
+  // state. `render()` maintains it from here on.
+  clear.hidden = input.value.length === 0;
 
   input.addEventListener("input", () => {
     window.clearTimeout(timer);
