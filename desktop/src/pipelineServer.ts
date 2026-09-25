@@ -44,6 +44,8 @@ export interface StartOptions {
    * where the pipeline's own default is already the right place.
    */
   archiveHome: string | null;
+  /** Where the job server should listen — see `ARCHIVE_HOST` in main.ts. */
+  archiveHost: string | undefined;
   port: number;
   onOutput: (line: string) => void;
 }
@@ -85,6 +87,11 @@ export async function startPipelineServer(opts: StartOptions): Promise<PipelineS
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       ...(opts.archiveHome ? { ARCHIVE_HOME: opts.archiveHome } : {}),
+      // Passed through explicitly rather than left to the child's own `.env`
+      // reading: the shell and the server must agree on where they listen, and
+      // one of them reading the file while the other inherits an environment is
+      // how they end up disagreeing.
+      ...(opts.archiveHost ? { ARCHIVE_HOST: opts.archiveHost } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,

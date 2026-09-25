@@ -165,8 +165,8 @@ export type ServeResult =
  * owner as their archive. It is now asked for the page first, and only adopted
  * if what comes back is this app.
  */
-export async function serveApp(root: string, port: number): Promise<ServeResult> {
-  const started = await listen(root, port);
+export async function serveApp(root: string, port: number, host = "127.0.0.1"): Promise<ServeResult> {
+  const started = await listen(root, port, host);
   if (started) return { kind: "serving", server: started };
   return (await servesThisApp(port)) ? { kind: "adopted" } : { kind: "occupied", by: await describe(port) };
 }
@@ -195,7 +195,7 @@ async function describe(port: number): Promise<string> {
   }
 }
 
-function listen(root: string, port: number): Promise<Server | null> {
+function listen(root: string, port: number, host: string): Promise<Server | null> {
   const rootPath = resolve(root);
 
   const server = createServer(async (req, res) => {
@@ -231,7 +231,6 @@ function listen(root: string, port: number): Promise<Server | null> {
     // archive: the page has to be served from somewhere they can reach, and the
     // job server at 18419 is only an API. What a remote reader may *do* is
     // decided per request by the job server (access.ts), not here.
-    const host = process.env.ARCHIVE_HOST || "127.0.0.1";
     server.listen(port, host, () => resolvePromise(server));
   });
 }

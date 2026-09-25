@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell, systemPreferences } from "electron";
 import type { Server } from "node:http";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -121,6 +121,51 @@ const PIPELINE_ENTRY = PACKAGED
  * working from source.
  */
 const ARCHIVE_HOME = PACKAGED ? app.getPath("userData") : null;
+
+/**
+ * The pipeline's `.env`, read here for the few settings the *shell* needs.
+ *
+ * The pipeline reads `.env` itself (via dotenv, in `pipeline/src/env.ts`), but
+ * the shell binds its own static server before the child exists — and
+ * `ARCHIVE_HOST` decides where that server listens. Without this the two would
+ * disagree in exactly the confusing way: `ARCHIVE_HOST=0.0.0.0` in `.env` would
+ * put the job server on the network while the page stayed on loopback, so a
+ * family member would load nothing and the reason would be invisible.
+ *
+ * Deliberately tiny — `KEY=value`, `#` comments, optional quotes — because the
+ * alternative is shipping a dotenv parser in the shell for two variables. The
+ * same file is read by the real parser on the other side; anything this misses
+ * is a setting the shell does not use.
+ */
+function readEnvFile(): Record<string, string> {
+  const home = ARCHIVE_HOME ?? PIPELINE_DIR;
+  const path = join(home, ".env");
+  if (!existsSync(path)) return {};
+  const out: Record<string, string> = {};
+  try {
+    for (const line of readFileSync(path, "utf-8").split(/\r?\n/)) {
+      const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+      if (!match) continue;
+      const value = match[2].trim().replace(/^(['"])(.*)\1$/, "$2");
+      if (value) out[match[1]] = value;
+    }
+  } catch {
+    // An unreadable `.env` is the pipeline's problem to report, not the shell's.
+  }
+  return out;
+}
+
+const ENV_FILE = readEnvFile();
+
+/** A setting the shell needs: the real environment first, then `.env`. */
+const setting = (name: string): string | undefined => process.env[name] || ENV_FILE[name];
+
+/**
+ * Where both servers listen. `0.0.0.0` is what lets the family read the archive
+ * over the home network; loopback stays the default, and the password that gates
+ * remote reading is the pipeline's business (pipeline/src/access.ts).
+ */
+const ARCHIVE_HOST = setting("ARCHIVE_HOST") ?? "127.0.0.1";
 
 const APP_URL = `http://localhost:${APP_PORT}`;
 const LOGIN_ORIGIN = "https://login.microsoftonline.com";
@@ -485,7 +530,7 @@ async function startup(): Promise<void> {
   // than the normal path. What is there is adopted only if it answers with
   // this app; anything else is reported, because showing the owner a
   // stranger's page as their archive is worse than not starting.
-  const served = await serveApp(APP_DIST, APP_PORT);
+  const served = await serveApp(APP_DIST, APP_PORT, ARCHIVE_HOST);
   staticServer = served.kind === "serving" ? served.server : null;
   if (served.kind === "occupied") {
     dialog.showErrorBox(
@@ -523,6 +568,7 @@ async function startup(): Promise<void> {
         cwd: ARCHIVE_HOME ?? PIPELINE_DIR,
         entry: PIPELINE_ENTRY,
         archiveHome: ARCHIVE_HOME,
+        archiveHost: ARCHIVE_HOST,
         port: PIPELINE_PORT,
         onOutput: log,
       });
