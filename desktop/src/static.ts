@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import { networkInterfaces } from "node:os";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
@@ -101,50 +102,61 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
  *   iframe, and without this the session would die silently after an hour.
  */
 /**
- * Private-network origins for the CSP, or empty when bound to loopback.
+ * The origins this machine can be reached at over the network.
  *
- * The app talks to the job server on the same host it was loaded from, so a
- * device reading over the home network needs `http://192.168.x.y:<port>` in
- * `img-src` and `connect-src` — and a CSP cannot express a range, so the host is
- * interpolated. Only private ranges are ever added: a public origin in this list
- * would be a public page allowed to fetch the archive.
+ * **Enumerated, not patterned.** A CSP source cannot express a range or a
+ * wildcard in the middle of a host: `http://192.168.*:*` is not valid and the
+ * browser discards it, which left the policy with the loopback origins only and
+ * every request from the LAN refused — an empty archive with no error the reader
+ * could see. There is also no CIDR syntax. So the machine's own private IPv4
+ * addresses are listed one at a time, and a CSP source can be a literal.
  *
- * Loopback stays regardless, because that is where the owner's own window stands.
+ * Read at listen time rather than at import: the address can change between
+ * launches (DHCP), and a stale list is the same failure again.
  */
-function networkOrigins(): string[] {
-  const host = process.env.ARCHIVE_HOST;
-  if (!host || host === "127.0.0.1" || host === "localhost" || host === "::1") return [];
-  // `0.0.0.0` is "every interface", which in a CSP means every address the
-  // machine has — listed by shape rather than enumerated. The middle octet of a
-  // 172.16/12 address runs 16-31, which a CSP cannot express either.
-  const ranges = ["192.168.*", "10.*", ...Array.from({ length: 16 }, (_, i) => `172.${16 + i}.*`)];
+function networkOrigins(exposed: boolean): string[] {
+  if (!exposed) return [];
   const out: string[] = [];
-  for (const range of ranges) out.push(`http://${range}`, `http://${range}:*`);
+  for (const addresses of Object.values(networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family !== "IPv4" || address.internal) continue;
+      // Private ranges only, so a public address in the policy cannot happen
+      // even if this host is somehow reachable from outside.
+      if (!/^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\./.test(address.address)) continue;
+      out.push(`http://${address.address}`, `http://${address.address}:*`);
+    }
+  }
   return out;
 }
 
-const NET = networkOrigins();
-const EXTRA = NET.length ? ` ${NET.join(" ")}` : "";
+/** Whether this server answers beyond loopback — what the CSP's extra origins depend on. */
+function isExposed(host: string): boolean {
+  return host !== "127.0.0.1" && host !== "localhost" && host !== "::1";
+}
 
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:*${EXTRA}`,
-  /*
-   * `media-src` is separate from `img-src` and has no fallback of its own —
-   * without it the `<video>` fell back to `default-src 'self'` and every video
-   * was refused with a CSP error. It needs the same two origins as images: the
-   * job server on loopback, which 302s the request, and `https:` for the
-   * OneDrive CDN host it redirects to.
-   */
-  `media-src 'self' blob: https: http://127.0.0.1:* http://localhost:*${EXTRA}`,
-  "font-src 'self' data:",
-  `connect-src 'self' http://127.0.0.1:* http://localhost:*${EXTRA} https://graph.microsoft.com https://login.microsoftonline.com`,
-  "frame-src https://login.microsoftonline.com",
-  "object-src 'none'",
-  "base-uri 'none'",
-].join("; ");
+/** The policy for one server, given whether it is reachable beyond loopback. */
+function contentSecurityPolicy(exposed: boolean): string {
+  const extra = networkOrigins(exposed).map((o) => ` ${o}`).join("");
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:*${extra}`,
+    /*
+     * `media-src` is separate from `img-src` and has no fallback of its own —
+     * without it the `<video>` fell back to `default-src 'self'` and every video
+     * was refused with a CSP error. It needs the same two origins as images: the
+     * job server on loopback, which 302s the request, and `https:` for the
+     * OneDrive CDN host it redirects to.
+     */
+    `media-src 'self' blob: https: http://127.0.0.1:* http://localhost:*${extra}`,
+    "font-src 'self' data:",
+    `connect-src 'self' http://127.0.0.1:* http://localhost:*${extra} https://graph.microsoft.com https://login.microsoftonline.com`,
+    "frame-src https://login.microsoftonline.com",
+    "object-src 'none'",
+    "base-uri 'none'",
+  ].join("; ");
+}
 
 /** What `serveApp` found: the server it started, or what already held the port. */
 export type ServeResult =
@@ -197,6 +209,9 @@ async function describe(port: number): Promise<string> {
 
 function listen(root: string, port: number, host: string): Promise<Server | null> {
   const rootPath = resolve(root);
+  // Decided once per server: whether this one answers beyond loopback, which is
+  // what the policy's extra origins depend on.
+  const csp = contentSecurityPolicy(isExposed(host));
 
   const server = createServer(async (req, res) => {
     try {
@@ -207,7 +222,7 @@ function listen(root: string, port: number, host: string): Promise<Server | null
       }
       res.writeHead(200, {
         "Content-Type": MIME[extname(target).toLowerCase()] ?? "application/octet-stream",
-        "Content-Security-Policy": CSP,
+        "Content-Security-Policy": csp,
         // The shell serves a build that changes whenever the app is rebuilt,
         // and a cached index.html would keep loading stale asset hashes.
         "Cache-Control": "no-cache",
