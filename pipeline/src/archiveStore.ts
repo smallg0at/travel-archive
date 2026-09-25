@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { downloadMetadataJson, fetchItemMeta, listFolderFileNames, uploadMetadataJson } from "./graph.js";
+import { assertNotShrinking, indexRecords, shardRecords } from "./writeGuard.js";
 import { env } from "./env.js";
 import { markDirty, markSynced } from "./syncStore.js";
 
@@ -85,6 +86,9 @@ export async function loadIndex(token: string): Promise<ArchiveIndexFile> {
 export async function saveIndex(token: string, index: ArchiveIndexFile): Promise<void> {
   index.schemaVersion = SCHEMA_VERSION;
   index.generatedAt = new Date().toISOString();
+  // Before anything is written: a body of records that suddenly shrank is a bug,
+  // not an edit. See writeGuard.ts.
+  await assertNotShrinking(INDEX_FILE, indexRecords(index), indexRecords);
   await writeLocal(INDEX_FILE, index);
   // Local first, then upload, then record. If the upload throws, `dirty` is
   // left set and the next sync knows the replica holds something OneDrive does
@@ -172,6 +176,9 @@ export async function loadShard(token: string, month: string): Promise<PhotoShar
  */
 export async function saveShard(token: string, shard: PhotoShard, opts: { upload?: boolean } = {}): Promise<void> {
   shard.generatedAt = new Date().toISOString();
+  // Same circuit breaker as the index: a month that loses most of its photos in
+  // one write is a bug. See writeGuard.ts.
+  await assertNotShrinking(shardFile(shard.month), shardRecords(shard), shardRecords);
   await writeLocal(shardFile(shard.month), shard);
   if (opts.upload === false) return;
   await uploadMetadataJson(token, env.metadataFolder, shardFile(shard.month), shard);
