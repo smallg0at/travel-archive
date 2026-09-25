@@ -16,17 +16,41 @@ import {
 } from "@azure/msal-browser";
 import { msalConfig, SCOPES } from "./msalConfig";
 
-const msalInstance = new PublicClientApplication(msalConfig);
+/**
+ * MSAL is constructed on **first use**, never on import.
+ *
+ * `new PublicClientApplication(...)` needs `window.crypto.subtle`, which a
+ * browser provides only in a secure context: https, localhost, 127.0.0.1. A
+ * family member reading the archive at `http://192.168.x.y:17923` is in none
+ * of those, so the constructor throws `crypto_nonexistent`.
+ *
+ * At module scope that exception is fatal to the whole page: this module is
+ * imported statically by `archiveData`, `graphPhoto` and `main`, so the
+ * throw happened while the bundle was still evaluating — the shell and its
+ * stylesheet rendered and nothing else ever ran, which looks like an empty app
+ * rather than an authentication problem.
+ *
+ * Lazy construction means a remote reader can import this freely and never
+ * touch MSAL, because it never calls into it: the job server holds the session
+ * and serves the data. On the owner's machine nothing changes but the moment
+ * the client is built.
+ */
+let msalInstance: PublicClientApplication | null = null;
+
+function msal(): PublicClientApplication {
+  if (!msalInstance) msalInstance = new PublicClientApplication(msalConfig);
+  return msalInstance;
+}
 
 let initPromise: Promise<void> | null = null;
 function ensureInitialized(): Promise<void> {
-  if (!initPromise) initPromise = msalInstance.initialize();
+  if (!initPromise) initPromise = msal().initialize();
   return initPromise;
 }
 
 export async function getActiveAccount(): Promise<AccountInfo | null> {
   await ensureInitialized();
-  return msalInstance.getAllAccounts()[0] ?? null;
+  return msal().getAllAccounts()[0] ?? null;
 }
 
 /**
@@ -65,7 +89,7 @@ function clearStaleInteractionLock(): void {
 export async function signIn(): Promise<AccountInfo> {
   await ensureInitialized();
 
-  const popup = async () => (await msalInstance.loginPopup({ scopes: SCOPES })).account;
+  const popup = async () => (await msal().loginPopup({ scopes: SCOPES })).account;
 
   try {
     return await popup();
@@ -75,7 +99,7 @@ export async function signIn(): Promise<AccountInfo> {
       return await popup();
     }
     if (err instanceof BrowserAuthError && err.errorCode === "popup_window_error") {
-      await msalInstance.loginRedirect({ scopes: SCOPES });
+      await msal().loginRedirect({ scopes: SCOPES });
       return await new Promise<AccountInfo>(() => {});
     }
     throw err;
@@ -108,11 +132,11 @@ export class TokenRenewalError extends Error {
  */
 export async function getAccessToken(): Promise<string> {
   await ensureInitialized();
-  const account = msalInstance.getAllAccounts()[0];
+  const account = msal().getAllAccounts()[0];
   if (!account) throw new Error("SIGN_IN_REQUIRED");
 
   try {
-    const result = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account });
+    const result = await msal().acquireTokenSilent({ scopes: SCOPES, account });
     return result.accessToken;
   } catch (err) {
     // Only these two mean the reader has to sign in again. `interaction_in_
@@ -138,7 +162,7 @@ export async function getAccessToken(): Promise<string> {
  */
 export async function signInRedirect(): Promise<void> {
   await ensureInitialized();
-  await msalInstance.loginRedirect({ scopes: SCOPES });
+  await msal().loginRedirect({ scopes: SCOPES });
 }
 
 /**
@@ -152,5 +176,5 @@ export async function signInRedirect(): Promise<void> {
  */
 export async function completeRedirect(): Promise<void> {
   await ensureInitialized();
-  await msalInstance.handleRedirectPromise();
+  await msal().handleRedirectPromise();
 }
