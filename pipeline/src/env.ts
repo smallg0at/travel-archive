@@ -84,6 +84,19 @@ function readEnv() {
     servePort: Number(fromEnv("SERVE_PORT") ?? 18419),
 
     /**
+     * Where the job server listens. **Loopback unless asked otherwise.**
+     *
+     * `0.0.0.0` is the whole of "let the family read this from their own
+     * computers": the app is self-contained, so a phone or laptop on the same
+     * network gets the same archive with no server of its own. What it also
+     * needs is `ARCHIVE_PASSWORD` — see access.ts — or the startup line will
+     * say, loudly, that the archive is open to anything on the network.
+     */
+    archiveHost: fromEnv("ARCHIVE_HOST") ?? "127.0.0.1",
+    /** The shared password a remote reader types once. Unset means no gate. */
+    archivePassword: fromEnv("ARCHIVE_PASSWORD"),
+
+    /**
      * How many photos `analyze` captions at once.
      *
      * 4 was measured at ~37 photos/min against gemini-3.7-flash, which is far

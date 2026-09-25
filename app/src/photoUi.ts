@@ -1,6 +1,7 @@
 import type { PhotoRecord } from "@travel-archive/shared";
 import { loadThumbnail, loadLarge } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
+import { isLocalMachine } from "./backend";
 import { loc } from "./contentLang";
 
 /** Builds an element from an HTML string. Used everywhere in place of a template engine. */
@@ -221,7 +222,9 @@ export function lazyImg(photo: PhotoRecord, size: "medium" | "large" = "medium",
   // A video's poster is a still, so the grids cannot tell it from a photo
   // without a mark. Set here rather than at each call site, so every grid that
   // wraps its images in a positioned cell gets the badge from one CSS rule.
-  if (photo.video) img.dataset.video = "";
+  // Not on another machine, where the server will not play it: a badge promising
+  // video that opens a still is worse than no badge.
+  if (photo.video && isLocalMachine) img.dataset.video = "";
   if (size === "large") img.dataset.loader = "large";
   if (className) img.className = className;
   thumbObserver.observe(img);

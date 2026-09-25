@@ -100,11 +100,37 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
  * - `frame-src` is the sign-in host alone: MSAL renews tokens in a hidden
  *   iframe, and without this the session would die silently after an hour.
  */
+/**
+ * Private-network origins for the CSP, or empty when bound to loopback.
+ *
+ * The app talks to the job server on the same host it was loaded from, so a
+ * device reading over the home network needs `http://192.168.x.y:<port>` in
+ * `img-src` and `connect-src` — and a CSP cannot express a range, so the host is
+ * interpolated. Only private ranges are ever added: a public origin in this list
+ * would be a public page allowed to fetch the archive.
+ *
+ * Loopback stays regardless, because that is where the owner's own window stands.
+ */
+function networkOrigins(): string[] {
+  const host = process.env.ARCHIVE_HOST;
+  if (!host || host === "127.0.0.1" || host === "localhost" || host === "::1") return [];
+  // `0.0.0.0` is "every interface", which in a CSP means every address the
+  // machine has — listed by shape rather than enumerated. The middle octet of a
+  // 172.16/12 address runs 16-31, which a CSP cannot express either.
+  const ranges = ["192.168.*", "10.*", ...Array.from({ length: 16 }, (_, i) => `172.${16 + i}.*`)];
+  const out: string[] = [];
+  for (const range of ranges) out.push(`http://${range}`, `http://${range}:*`);
+  return out;
+}
+
+const NET = networkOrigins();
+const EXTRA = NET.length ? ` ${NET.join(" ")}` : "";
+
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:*",
+  `img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:*${EXTRA}`,
   /*
    * `media-src` is separate from `img-src` and has no fallback of its own —
    * without it the `<video>` fell back to `default-src 'self'` and every video
@@ -112,9 +138,9 @@ const CSP = [
    * job server on loopback, which 302s the request, and `https:` for the
    * OneDrive CDN host it redirects to.
    */
-  "media-src 'self' blob: https: http://127.0.0.1:* http://localhost:*",
+  `media-src 'self' blob: https: http://127.0.0.1:* http://localhost:*${EXTRA}`,
   "font-src 'self' data:",
-  "connect-src 'self' http://127.0.0.1:* http://localhost:* https://graph.microsoft.com https://login.microsoftonline.com",
+  `connect-src 'self' http://127.0.0.1:* http://localhost:*${EXTRA} https://graph.microsoft.com https://login.microsoftonline.com`,
   "frame-src https://login.microsoftonline.com",
   "object-src 'none'",
   "base-uri 'none'",
@@ -198,9 +224,14 @@ function listen(root: string, port: number): Promise<Server | null> {
       if (err.code === "EADDRINUSE") return resolvePromise(null);
       reject(err);
     });
-    // 127.0.0.1, not 0.0.0.0: this serves the owner's archive viewer and has no
-    // business being reachable from the LAN, for the same reason the job server
-    // binds loopback only.
-    server.listen(port, "127.0.0.1", () => resolvePromise(server));
+    // Loopback by default: this serves the built app and has no business being
+    // reachable from the LAN — the same reason the job server binds loopback.
+    //
+    // `ARCHIVE_HOST=0.0.0.0` is the other half of letting the family read the
+    // archive: the page has to be served from somewhere they can reach, and the
+    // job server at 18419 is only an API. What a remote reader may *do* is
+    // decided per request by the job server (access.ts), not here.
+    const host = process.env.ARCHIVE_HOST || "127.0.0.1";
+    server.listen(port, host, () => resolvePromise(server));
   });
 }

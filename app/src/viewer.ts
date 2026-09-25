@@ -1,5 +1,6 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, loadVideoUrl, releaseFullPhoto } from "./graphPhoto";
+import { isLocalMachine } from "./backend";
 import { el, tagChip, transcript, transcriptOriginal } from "./photoUi";
 import { addPhotoTimeControl } from "./dayEdit";
 import { loc } from "./contentLang";
@@ -346,9 +347,16 @@ function initZoomControls(): void {
 
 // --- Showing one photo -----------------------------------------------------
 
-/** Whether this build can decode the video's codec — HEVC needs the platform decoder. */
+/**
+ * Whether this build can decode the video's codec — HEVC needs the platform
+ * decoder, and on another machine the server will not serve it at all.
+ */
 function canPlayVideo(photo: PhotoRecord): boolean {
   if (!photo.video) return false;
+  // The job server refuses /video to a remote reader — see backend.ts. Falling
+  // back to the poster frame is what the caller already does for a codec this
+  // build cannot decode, so an unreachable video takes the same path.
+  if (!isLocalMachine) return false;
   const probe = document.createElement("video");
   const fourCC = (photo.video.fourCC ?? "").toUpperCase();
   const codecs =

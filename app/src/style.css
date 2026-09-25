@@ -3025,8 +3025,63 @@ body.map-expanded::after {
 .search-results[hidden] { display: none; }
 .search-results:not([hidden]) { display: block; }
 
-/* --- The title-bar search --------------------------------------------- */
+/* --- The shared-password gate -------------------------------------------- */
 
+/* A whole screen, not a banner: until the password is given the server answers
+   401 to every request, so there is no archive to show behind it. */
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  -webkit-app-region: no-drag;
+}
+.gate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 48px));
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg-muted);
+  box-shadow: var(--shadow-16);
+}
+.gate-title { margin: 0; font-size: 18px; }
+.gate-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.gate-input {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg);
+  color: var(--text);
+}
+.gate-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.gate-submit {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-l);
+  background: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+}
+.gate-submit:disabled { opacity: 0.6; cursor: default; }
+.gate-error { margin: 0; font-size: 12.5px; }
+
+/* --- Tags ---------------------------------------------------------------- */
 
 .tag-list {
   display: flex;

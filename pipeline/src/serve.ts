@@ -16,6 +16,7 @@ import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@trav
 import { readPrefs, writePrefs } from "./prefsStore.js";
 import { env } from "./env.js";
 import { getCachedAccessToken, hasCachedAccount } from "./auth.js";
+import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { initProxyDispatcher } from "./proxy.js";
@@ -72,6 +73,21 @@ const ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1:17923",
 ]);
 
+/**
+ * The same origins as seen from another machine on the home network.
+ *
+ * The shell's port is fixed, but the *host* is whatever address the reading
+ * device used — which cannot be known when this file is written and is not
+ * stable across networks anyway. So the private ranges are matched by shape.
+ * Only private addresses: a public origin is not a household member, and
+ * allowing it would let any page that sets an Origin talk to this server.
+ */
+const PRIVATE_ORIGIN = /^http:\/\/(?:192\.168|10\.|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}:(?:4173|5173|17923)$/;
+
+function originAllowed(origin: string): boolean {
+  return ALLOWED_ORIGINS.has(origin) || PRIVATE_ORIGIN.test(origin);
+}
+
 type Handler = (req: IncomingMessage, res: ServerResponse, params: string[]) => Promise<void> | void;
 
 function cors(req: IncomingMessage, res: ServerResponse): void {
@@ -87,9 +103,12 @@ function cors(req: IncomingMessage, res: ServerResponse): void {
   // browser's.
   res.setHeader("Vary", "Origin");
   const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
+  if (origin && originAllowed(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
+  // The session cookie has to be allowed through for a remote reader, who signs
+  // in on the shell's origin and then fetches thumbnails from this one.
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
@@ -538,6 +557,12 @@ const routes: [RegExp, string, Handler][] = [
     /^\/video\/(.+)$/,
     "GET",
     async (_req, res, [encodedId]) => {
+      // A remote reader does not get video. It is the one route that hands out a
+      // pre-authenticated OneDrive URL rather than fetching the bytes itself, so
+      // the traffic is the owner's and the URL is a capability for anyone who
+      // sees it; and the app hides its own video affordances on a remote
+      // connection to match. Nothing here is worth that.
+      if (!access.isLocal(_req)) return json(res, 404, { error: "No such route" });
       const itemId = decodeURIComponent(encodedId);
       const token = await getCachedAccessToken();
       if (!token) return json(res, 404, { error: "Not signed in" });
@@ -1081,6 +1106,32 @@ const server = createServer(async (req, res) => {
 
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
 
+  /**
+   * Who is asking, and what may they do.
+   *
+   * The rules are kinds, not accounts — see access.ts. Writes are this machine's
+   * alone; reads need the shared password when the server is exposed and one is
+   * set. The two sign-in routes are answered before the check, since they are
+   * how a remote reader gets a cookie in the first place.
+   */
+  if (path === "/access") {
+    if (req.method === "GET") {
+      return json(res, 200, { gated: access.gated, exposed: access.gated, signedIn: access.canRead(req) });
+    }
+    if (req.method === "POST") {
+      const body = await readJsonBody<{ password?: string }>(req);
+      if (!access.signIn(res, body.password)) return json(res, 401, { error: "Wrong password" });
+      return json(res, 200, { ok: true });
+    }
+  }
+
+  if (!access.canRead(req)) {
+    return json(res, 401, { error: "Sign in first", signIn: "/access" });
+  }
+  if (req.method !== "GET" && !access.canWrite(req)) {
+    return json(res, 403, { error: "This archive is read-only from another machine." });
+  }
+
   // Path first, then method — and keep looking. Bailing out with 405 on the
   // first path match meant two routes could never share a pattern, so
   // `GET /sync/pins` shadowed `POST /sync/pins` entirely and the POST answered
@@ -1115,8 +1166,29 @@ setProtectedProvider(protectedPaths);
 // Initialize proxy dispatcher for global fetch (AI Provider / Graph)
 initProxyDispatcher();
 
-server.listen(env.servePort, "127.0.0.1", () => {
-  console.log(`pipeline serve — http://127.0.0.1:${env.servePort} (loopback only)`);
+/**
+ * The host the server listens on, and who it lets in.
+ *
+ * **Loopback by default.** `ARCHIVE_HOST=0.0.0.0` puts the archive on the
+ * network so the family can read it; `ARCHIVE_PASSWORD` is the shared password
+ * that then gates reading, and writes stay this machine's alone either way.
+ * Exposing without a password is allowed and said out loud at startup, because
+ * a silent open server is the failure worth preventing.
+ */
+const HOST = env.archiveHost;
+const exposed = HOST !== "127.0.0.1" && HOST !== "localhost" && HOST !== "::1";
+const access = makeAccess({ password: env.archivePassword ?? null, exposed });
+
+server.listen(env.servePort, HOST, () => {
+  const where = exposed ? `http://${HOST}:${env.servePort}` : `http://127.0.0.1:${env.servePort} (loopback only)`;
+  console.log(`pipeline serve — ${where}`);
+  if (exposed) {
+    console.log(
+      access.gated
+        ? `  reachable on the network; reading needs the shared password, writing is local only`
+        : `  !! reachable on the network with NO PASSWORD — anyone on it can read the archive`,
+    );
+  }
   console.log(`  GET  /health`);
   console.log(`  GET  /archive/status`);
   console.log(`  GET  /config              generation settings; never returns keys`);

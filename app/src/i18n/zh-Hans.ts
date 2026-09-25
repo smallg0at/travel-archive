@@ -152,6 +152,13 @@ export const zhHans: Messages = {
     reload: "刷新",
   },
 
+  gate: {
+    title: "照片档案",
+    note: "此档案正在家庭网络内共享。请输入口令以查看。仅可浏览——本设备无法对档案做任何修改。",
+    placeholder: "共享口令",
+    submit: "进入",
+  },
+
   home: {
     inView: (photos: number, places: number) => `当前视野内 ${num(places)} 个地点，共 ${num(photos)} 张照片`,
     openDay: "查看当天",

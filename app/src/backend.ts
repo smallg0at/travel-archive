@@ -23,7 +23,20 @@ import type {
  * separate build, no separate code path, just a failed health check.
  */
 
-const BACKEND = import.meta.env.VITE_PIPELINE_URL || "http://127.0.0.1:18419";
+/**
+ * Where the job server is.
+ *
+ * Defaults to loopback — but **the same host the page was served from**, not a
+ * literal `127.0.0.1`. That distinction is the whole of remote reading: a family
+ * member opens `http://192.168.x.y:17923`, and `127.0.0.1` would then point at
+ * *their* machine, where no server exists. The shell serves the page and the job
+ * server sits on the same box, so the hostname is the answer in both cases.
+ *
+ * `VITE_PIPELINE_URL` still wins, for a setup where the two are separated.
+ */
+const BACKEND =
+  import.meta.env.VITE_PIPELINE_URL ||
+  `${location.protocol === "https:" ? "https:" : "http:"}//${location.hostname || "127.0.0.1"}:18419`;
 
 /** Short: an absent backend is the normal case, and must not stall first paint. */
 /**
@@ -56,8 +69,24 @@ export interface Health {
   warming?: ThumbWarming | null;
 }
 
+/**
+ * Every request to the job server, with the session cookie attached.
+ *
+ * `credentials: "include"` is what lets a remote reader's sign-in cookie travel:
+ * the page is served from the shell's origin and the data comes from the job
+ * server's, so a default `same-origin` fetch would drop it and every thumbnail
+ * would 401. On loopback it changes nothing — there is no cookie and the request
+ * is local anyway.
+ *
+ * One wrapper rather than `credentials` at each of a dozen call sites, so a new
+ * endpoint cannot quietly forget it.
+ */
+export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`${BACKEND}${path}`, { ...init, credentials: "include" });
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BACKEND}${path}`, {
+  const res = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -68,12 +97,43 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 /**
+ * Whether this browser is on the machine the archive lives on.
+ *
+ * The job server refuses `/video/...` to anyone else (see serve.ts), and the app
+ * should not offer what it cannot play: a video tile that opens a black player
+ * reads as broken, while a grid without them reads as a photo archive. The
+ * hostname is the test — served from `localhost`/`127.0.0.1` this is the owner's
+ * own window; served from a LAN address it is somebody else's.
+ */
+export const isLocalMachine = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname || "localhost");
+
+/** Whether the server wants a password, and whether this browser has given it. */
+export interface AccessStatus {
+  gated: boolean;
+  signedIn: boolean;
+}
+
+export async function accessStatus(): Promise<AccessStatus | null> {
+  try {
+    const res = await apiFetch("/access", { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
+    return res.ok ? ((await res.json()) as AccessStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Offers the shared password. Throws with the server's wording when it is wrong. */
+export async function signInShared(password: string): Promise<void> {
+  await post<{ ok: boolean }>("/access", { password });
+}
+
+/**
  * Whether a backend is listening. Never throws: callers treat null as "no
  * backend", which is a supported state rather than an error.
  */
 export async function checkHealth(): Promise<Health | null> {
   try {
-    const res = await fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
+    const res = await apiFetch(`/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
     return res.ok ? ((await res.json()) as Health) : null;
   } catch {
     return null;
@@ -129,7 +189,7 @@ export function localVideoUrl(itemId: string): string {
  */
 export async function syncStatus(opts: { cached?: boolean } = {}): Promise<SyncStatus | null> {
   try {
-    const res = await fetch(`${BACKEND}/sync/status${opts.cached ? "?cached=1" : ""}`);
+    const res = await apiFetch(`/sync/status${opts.cached ? "?cached=1" : ""}`);
     return res.ok ? ((await res.json()) as SyncStatus) : null;
   } catch {
     return null;
@@ -166,7 +226,7 @@ export function saveSyncSettings(body: {
  */
 export async function localArchiveJson<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${BACKEND}/archive/${path}`, {
+    const res = await apiFetch(`/archive/${path}`, {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
       // The mirror is rewritten by every job, and the server sends `no-cache`
       // with no validator — which the browser was answering from its own disk
@@ -211,7 +271,7 @@ export async function localThumbSizes(
 
 export async function archiveStatus(): Promise<ArchiveStatus | null> {
   try {
-    const res = await fetch(`${BACKEND}/archive/status`);
+    const res = await apiFetch(`/archive/status`);
     return res.ok ? ((await res.json()) as ArchiveStatus) : null;
   } catch {
     return null;
@@ -236,7 +296,7 @@ export function planAnalyze(body: { from?: string; to?: string; limit?: number }
  */
 export async function getConfig(): Promise<ConfigStatus | null> {
   try {
-    const res = await fetch(`${BACKEND}/config`);
+    const res = await apiFetch(`/config`);
     return res.ok ? ((await res.json()) as ConfigStatus) : null;
   } catch {
     return null;
@@ -260,7 +320,7 @@ export function saveConfig(patch: Record<string, string>): Promise<ConfigStatus>
  */
 export async function getPrefs(): Promise<AppPrefs | null> {
   try {
-    const res = await fetch(`${BACKEND}/prefs`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS), cache: "no-store" });
+    const res = await apiFetch(`/prefs`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS), cache: "no-store" });
     return res.ok ? ((await res.json()) as AppPrefs) : null;
   } catch {
     return null;
@@ -275,7 +335,7 @@ export async function getPrefs(): Promise<AppPrefs | null> {
  * mid-flight and the language would be the one setting that never persisted.
  */
 export function savePrefs(patch: Partial<AppPrefs>): void {
-  void fetch(`${BACKEND}/prefs`, {
+  void apiFetch(`/prefs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -300,7 +360,7 @@ export function startAnalyze(body: { from?: string; to?: string; limit?: number;
 /** Submitted caption batches, newest last. Null with no backend. */
 export async function listBatches(): Promise<AnalyzeBatchStatus[] | null> {
   try {
-    const res = await fetch(`${BACKEND}/jobs/analyze/batches`);
+    const res = await apiFetch(`/jobs/analyze/batches`);
     return res.ok ? ((await res.json()) as AnalyzeBatchStatus[]) : null;
   } catch {
     return null;
@@ -315,7 +375,7 @@ export function startCollect(): Promise<JobRecord> {
 /** Whether the server is submitting caption batches by itself, one at a time. Null when off, or with no backend. */
 export async function autoSubmitStatus(): Promise<import("@travel-archive/shared").AutoSubmitStatus | null> {
   try {
-    const res = await fetch(`${BACKEND}/jobs/analyze/auto`);
+    const res = await apiFetch(`/jobs/analyze/auto`);
     return res.ok ? ((await res.json()) as import("@travel-archive/shared").AutoSubmitStatus | null) : null;
   } catch {
     return null;
@@ -330,7 +390,7 @@ export function stopAutoSubmit(): Promise<{ ok: boolean }> {
 /** Jobs newest first, including those from before the server last restarted. Null with no backend. */
 export async function jobHistory(): Promise<JobRecord[] | null> {
   try {
-    const res = await fetch(`${BACKEND}/jobs/history`);
+    const res = await apiFetch(`/jobs/history`);
     return res.ok ? ((await res.json()) as JobRecord[]) : null;
   } catch {
     return null;
@@ -464,7 +524,7 @@ export interface TripSuggestion {
 /** Null when the server is too old to suggest, or unreachable. */
 export async function tripSuggestions(): Promise<TripSuggestion[] | null> {
   try {
-    const res = await fetch(`${BACKEND}/trips/suggestions`);
+    const res = await apiFetch(`/trips/suggestions`);
     return res.ok ? ((await res.json()) as TripSuggestion[]) : null;
   } catch {
     return null;
@@ -507,7 +567,7 @@ export function cancelJob(id: string): Promise<JobRecord> {
 
 export async function getJob(id: string): Promise<JobRecord | null> {
   try {
-    const res = await fetch(`${BACKEND}/jobs/${id}`);
+    const res = await apiFetch(`/jobs/${id}`);
     return res.ok ? ((await res.json()) as JobRecord) : null;
   } catch {
     return null;

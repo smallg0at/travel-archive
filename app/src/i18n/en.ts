@@ -158,6 +158,13 @@ export const en = {
     reload: "Reload",
   },
 
+  gate: {
+    title: "Photo Archive",
+    note: "This archive is shared on the home network. Enter the password to read it. Viewing only — nothing here can be changed from this device.",
+    placeholder: "Shared password",
+    submit: "Open",
+  },
+
   home: {
     inView: (photos: number, places: number) => `${count(photos, "photo", "photos")} in ${count(places, "place", "places")} in view`,
     openDay: "Open this day",
@@ -421,8 +428,7 @@ export const en = {
   },
 
   search: {
-    placeholder: "Search captions, places and summaries",
-    loading: "Loading the search index…",
+    placeholder: "Search captions, places and summaries",    loading: "Loading the search index…",
     unavailable: "Nothing to search yet — run Analyze and Day summaries first.",
     ready: (photos: number, days: number) => `${num(photos)} photos and ${num(days)} days ready to search.`,
     found: (photos: number, days: number, ms: number) =>

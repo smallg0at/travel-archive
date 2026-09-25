@@ -20,6 +20,7 @@ import { checkHealth } from "./backend";
 import { localServerSource, setThumbnailSource } from "./photoSource";
 import { initServerStatus } from "./serverStatus";
 import { initSearch, runSearch } from "./searchBar";
+import { requireAccess } from "./gate";
 
 let panelMounted = false;
 
@@ -134,6 +135,10 @@ async function main() {
   const [restored, health] = await Promise.all([restorePrefs(), checkHealth()]);
   if (restored.theme) showTheme(readTheme());
   if (restored.density) refreshDensity();
+
+  // Before the first render: a gated server answers 401 to everything, so
+  // anything drawn earlier would be an app whose photographs cannot load.
+  await requireAccess();
 
   /**
    * Where photos come from, decided before the first render rather than after
