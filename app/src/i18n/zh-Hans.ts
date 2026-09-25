@@ -63,7 +63,12 @@ export const zhHans: Messages = {
     dayOutFar: (km: string) => `距家 ${km} 公里`,
     dayMode: { label: "这一天的显示方式", trip: "行程", gallery: "相册" },
     undated: "无日期",
-    thumbnailSize: "缩略图大小",
+    /**
+     * 名实相符：它调的是网格的松紧，不是缩略图的尺寸。每个网格缩略图一律取
+     * Graph 的 `large`（800px），这个设置只改格子边长，图片再被 `object-fit:
+     * cover` 裁进去——见 album.ts。
+     */
+    gridDensity: "网格密度",
     contents: "目录",
     density: { compact: "小", comfortable: "中", spacious: "大" },
   },

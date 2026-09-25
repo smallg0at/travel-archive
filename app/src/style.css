@@ -800,10 +800,11 @@ html.desktop-shell .nav-year:hover {
 
 /* --- Album grid ------------------------------------------------------ */
 
-/* Cell size is driven by the density control (album.ts), which sets
-   --album-cell on :root. Changing it reflows the existing grid without
-   refetching anything, since thumbnails are always fetched at Graph's
-   `large` size. */
+/* Cell size is the grid density control (album.ts), which sets --album-cell on
+   :root. Changing it reflows the existing grid without refetching anything,
+   since thumbnails are always fetched at Graph's `large` size. Only the two
+   pure grids below read it; the card layout, the search results and the day
+   hero size themselves. */
 .album-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--album-cell, 120px), 1fr));

@@ -4,7 +4,7 @@ Open items, and nothing else. Everything closed — with the measurements that
 closed it — lives in `docs/TODO-history.md`: a verbatim archive of this file
 as of 2026-09-22, kept for the record and no longer maintained.
 
-**18 open.** The list grows because each session surfaces defects that were
+**20 open.** The list grows because each session surfaces defects that were
 previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the
 phone app, the basemap's China worldview, and an editor agent on the desktop
@@ -15,6 +15,34 @@ photos over 123 months**, ~29,300 captioned, ~340 days written up, 15 trips
 defined. Generate → Translate → Estimate for what is left of the text.
 
 ## Open issues
+
+- [ ] **The job server keeps no request log, so a failure on someone else's
+      machine leaves no trace.** Raised 2026-09-25 after an iPad on the home
+      network stopped loading pages while every other device was fine. The
+      server prints a startup banner and a handful of handler messages, writes
+      nothing to disk, and the shell discards the child's stdout, so there was
+      nothing to read afterwards — not even whether the requests arrived. The
+      four cases that need telling apart are "the request never reached the
+      server", "it arrived and 500'd", "it was refused by the access gate" and
+      "every step was 200 and the fault is in the page", and with no log there
+      is no way to distinguish them. A `LOG_REQUESTS=1` switch (off by default,
+      since it is noise for the owner's own window) writing `method path status
+      remoteAddress` would answer all four. The iPad issue is intermittent and
+      shelved until it recurs; turn this on first when it does.
+
+- [ ] **"Thumbnail size" is a misnomer, and it governs one view.** Raised by
+      the owner 2026-09-25, looking at the three buttons and asking whether they
+      did anything. They do: `--album-cell` is set to 78/120/190px and reflows
+      the grid. But that is all it does — it never changes which thumbnail is
+      fetched, since `album.ts` states every grid thumbnail comes back at
+      Graph's `large` (800px) regardless, and `object-fit: cover` then crops it
+      into the cell. And `--album-cell` is read by exactly two grids,
+      `.album-grid` and `.stop-grid`; the card layout, the search results and
+      the day-view hero all size themselves and ignore it, so on a month
+      rendered as cards the control does nothing at all. Either rename it to
+      what it is ("grid density") or make it mean what it says by extending it
+      to the card layout — the first is honest and cheap, the second is a
+      feature.
 
 - [ ] **Scan re-lists every month folder, because Graph gives no folder change
       token.** Raised 2026-09-23. On a full scan of 143 folders the write phase

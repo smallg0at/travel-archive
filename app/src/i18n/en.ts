@@ -67,7 +67,12 @@ export const en = {
     /** Reading a day out: its written page, or the plain grid every other day shows. */
     dayMode: { label: "How to show this day", trip: "Trip", gallery: "Gallery" },
     undated: "Undated",
-    thumbnailSize: "Thumbnail size",
+    /**
+     * Named for what it does. It sets the grid's spacing, not the size of a
+     * thumbnail: every grid thumbnail is fetched at Graph's `large` (800px)
+     * regardless, and only the cell is sized — see album.ts.
+     */
+    gridDensity: "Grid density",
     contents: "Contents",
     density: { compact: "Small", comfortable: "Medium", spacious: "Large" },
   },

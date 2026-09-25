@@ -73,9 +73,17 @@ function lookAhead(photoIds: string[]): void {
 const UNDATED = "undated";
 
 /**
- * Grid density. Purely a CSS variable, so changing it reflows the existing
- * grid without refetching a single image — which only works because every
- * grid thumbnail is fetched at Graph's `large` size regardless of density.
+ * Grid density — how tightly the grid packs, from the control in Settings.
+ *
+ * Purely a CSS variable, so changing it reflows the existing grid without
+ * refetching a single image — which only works because every grid thumbnail is
+ * fetched at Graph's `large` size regardless of density.
+ *
+ * **This is not a thumbnail size.** It never changes which image is fetched;
+ * it changes the cell, and `object-fit: cover` crops into it. It is named for
+ * the spacing for that reason — it was called "thumbnail size" until
+ * 2026-09-25, which promised a clarity and a bandwidth saving it has never
+ * had.
  *
  * `medium` isn't viable here even for the compact setting: it bounds the
  * *longest* edge at 176px, so a tall phone screenshot comes back 79px wide,
@@ -117,7 +125,7 @@ export function refreshDensity(): void {
 }
 
 export function renderDensityControl(): HTMLElement {
-  const wrap = el<HTMLDivElement>(`<div class="density-control" role="group" aria-label="${ui.album.thumbnailSize}"></div>`);
+  const wrap = el<HTMLDivElement>(`<div class="density-control" role="group" aria-label="${ui.album.gridDensity}"></div>`);
   for (const option of ["compact", "comfortable", "spacious"] as Density[]) {
     const button = el<HTMLButtonElement>(`<button type="button"></button>`);
     button.textContent = DENSITY_LABEL[option];

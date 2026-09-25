@@ -858,7 +858,7 @@ function appearanceSection(): HTMLElement {
   theme.appendChild(renderThemeControl());
   body.appendChild(theme);
 
-  const density = el<HTMLDivElement>(`<div class="set-row"><span>${ui.album.thumbnailSize}</span></div>`);
+  const density = el<HTMLDivElement>(`<div class="set-row"><span>${ui.album.gridDensity}</span></div>`);
   density.appendChild(renderDensityControl());
   body.appendChild(density);
 
