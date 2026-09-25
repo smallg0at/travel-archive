@@ -1,5 +1,6 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "../graphPhoto";
+import { thumbnailSource } from "../photoSource";
 import { el, transcript, transcriptOriginal } from "../photoUi";
 import { contentLanguage, loc } from "../contentLang";
 import { fmtDateTime, ui } from "../i18n";
@@ -24,6 +25,21 @@ import { deviceFullUrl } from "./devicePhotos";
  * layer: the desktop viewer went that way first and got compositing seams
  * (see commit db914ff, "Zoom by resizing the photo, not by scaling a layer").
  */
+
+/**
+ * Point a slide's image at a job-server URL with the session attached.
+ *
+ * The mobile app is served by the same shell that serves the desktop page, so
+ * its viewer talks to the job server on a second port — a different origin, and
+ * a plain `<img src>` sends no cookie across origins. On the owner's machine
+ * loopback is admitted without one; a family member over the network would see
+ * broken images. See the desktop viewer's `setSource`, which is the same fix.
+ */
+function setSource(img: HTMLImageElement, url: string): void {
+  const crossOrigin = thumbnailSource()?.crossOrigin;
+  if (crossOrigin) img.crossOrigin = crossOrigin;
+  img.src = url;
+}
 
 /** What the photos are pictures *of*, when they came from a card. */
 export interface CardContext {
@@ -103,7 +119,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     if (!img || img.dataset.state === "full") return;
     const url = deviceFullUrl(photos[i].id);
     if (!url) return;
-    img.src = url;
+    setSource(img, url);
     img.dataset.state = "full";
     if (i === current) hd.hidden = true;
   }
@@ -116,7 +132,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       // Full resolution may have landed first on a fast connection; do not
       // replace it with the smaller copy.
       if (url && img.dataset.state === "loading") {
-        img.src = url;
+        setSource(img, url);
         img.dataset.state = "large";
       }
     });
@@ -300,7 +316,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     fullUrls.set(i, url);
     const img = slides[i].querySelector("img")!;
     img.dataset.state = "full";
-    img.src = url;
+    setSource(img, url);
     if (i === current) hd.hidden = true;
   });
 

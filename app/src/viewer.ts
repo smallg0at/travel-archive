@@ -1,6 +1,7 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, loadVideoUrl, releaseFullPhoto } from "./graphPhoto";
 import { isLocalMachine } from "./backend";
+import { thumbnailSource } from "./photoSource";
 import { el, tagChip, transcript, transcriptOriginal } from "./photoUi";
 import { addPhotoTimeControl } from "./dayEdit";
 import { loc } from "./contentLang";
@@ -21,6 +22,29 @@ import { fmtDateTime, ui } from "./i18n";
  */
 
 const BLANK = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+/**
+ * Point an image at a job-server URL, with the credentials the gate requires.
+ *
+ * The lightbox is a **different origin** from the page — the shell serves the
+ * app on one port and the job server answers on another — so an ordinary
+ * `<img src>` sends no cookie: cross-origin image requests default to
+ * `same-origin` credentials. On the owner's machine the request is loopback and
+ * `isLocal` admits it anyway, so this was invisible until a family member opened
+ * the archive over the network and got a grid, then a viewer, of broken images
+ * with nothing on screen to explain them.
+ *
+ * `use-credentials` is the only value that both sends the cookie and keeps the
+ * response CORS-clean, which the print export's canvas still needs.
+ *
+ * **Before `src`, always** — setting it afterwards has no effect on a load
+ * already under way.
+ */
+function setSource(img: HTMLImageElement, url: string): void {
+  const crossOrigin = thumbnailSource()?.crossOrigin;
+  if (crossOrigin) img.crossOrigin = crossOrigin;
+  img.src = url;
+}
 
 /** Bumped on every open and every switch, so a slow load cannot paint over what replaced it. */
 let token = 0;
@@ -196,7 +220,7 @@ function renderStrip(): void {
     thumb.alt = loc(photo.caption) ?? "";
     thumb.className = i === session.index ? "current" : "";
     void loadLarge(photo.id).then((url) => {
-      if (url) thumb.src = url;
+      if (url) setSource(thumb, url);
     });
     thumb.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -391,7 +415,7 @@ async function showVideo(photo: PhotoRecord, mine: number): Promise<void> {
     video.hidden = true;
     img.hidden = false;
     void loadLarge(photo.id).then((url) => {
-      if (mine === token && url) img.src = url;
+      if (mine === token && url) setSource(img, url);
     });
   };
 
@@ -404,6 +428,11 @@ async function showVideo(photo: PhotoRecord, mine: number): Promise<void> {
   if (mine !== token) return;
   if (!url) return showPoster();
 
+  // The video route is loopback-only today, so no session is needed — but the
+  // element carries the same cross-origin trap as the images if that ever
+  // changes, and setting it costs nothing.
+  const videoCrossOrigin = thumbnailSource()?.crossOrigin;
+  if (videoCrossOrigin) video.crossOrigin = videoCrossOrigin;
   video.src = url;
   void video.play().catch(() => {
     /* Autoplay may be refused; the controls are there. */
@@ -445,7 +474,7 @@ async function show(index: number): Promise<void> {
   const preview = await loadLarge(photo.id);
   if (mine !== token) return;
   if (preview) {
-    img.src = preview;
+    setSource(img, preview);
     img.classList.add("preview");
     await img.decode().catch(() => {});
     if (mine !== token) return;
@@ -468,7 +497,7 @@ async function show(index: number): Promise<void> {
     "load",
     () => {
       if (mine !== token) return;
-      img.src = url;
+      setSource(img, url);
       img.dataset.full = "1";
       img.classList.remove("preview");
       spinner.hidden = true;
@@ -481,6 +510,10 @@ async function show(index: number): Promise<void> {
   loader.addEventListener("error", () => {
     if (mine === token) spinner.hidden = true;
   });
+  // The loader only decodes; assigning its src has to carry the session too, or
+  // this probe request is the one that 401s and the preview never swaps.
+  const crossOrigin = thumbnailSource()?.crossOrigin;
+  if (crossOrigin) loader.crossOrigin = crossOrigin;
   loader.src = url;
   openObjectUrl = url;
 }
@@ -586,7 +619,7 @@ export function openLightbox(url: string): void {
   renderCardPanel(null, {});
   dom().photoPanel.replaceChildren();
   dom().strip.hidden = true;
-  img.src = url;
+  setSource(img, url);
   img.classList.remove("preview");
   dom().zoom.hidden = false;
   spinner.hidden = true;

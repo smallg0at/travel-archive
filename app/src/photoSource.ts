@@ -57,18 +57,27 @@ export interface ThumbnailSource {
    * Set on the `<img>` before its `src`, when this source's URLs are
    * cross-origin *and* answer with CORS headers.
    *
-   * The PDF export draws every thumbnail onto a canvas and calls `toDataURL`.
-   * A cross-origin image loaded without this taints the canvas and that throws
-   * `SecurityError`, which is exactly what happened once thumbnails moved from
-   * same-origin `blob:` URLs onto the local server's own origin — the export
-   * stopped at "Preparing" with an unhandled rejection.
+   * **`use-credentials`, not `anonymous`.** Both make the response CORS-clean
+   * so the PDF export's canvas is not tainted — that was the original reason
+   * this exists, after thumbnails moved from same-origin `blob:` URLs onto the
+   * job server's own port. But `anonymous` means *without credentials*, and the
+   * job server gates reading on a session cookie: on the owner's machine the
+   * request is loopback and passes anyway, while over the home network every
+   * thumbnail came back **401 with no cookie attached**. The reader saw a grid
+   * of broken images and no error, because an `<img>` that fails has nowhere to
+   * report it.
+   *
+   * A cross-origin image request defaults to `same-origin` credentials, so this
+   * attribute is the only thing that can make the cookie travel; the server
+   * already answers with `Access-Control-Allow-Credentials: true` and echoes
+   * the private origin.
    *
    * **Opt-in per source, never blanket.** Setting it on a source whose host
    * does not send `Access-Control-Allow-Origin` makes the image fail to load
    * outright, so the Graph path — whose CDN links are not ours to guarantee —
    * deliberately leaves it unset.
    */
-  readonly crossOrigin?: "anonymous";
+  readonly crossOrigin?: "use-credentials";
 }
 
 /**
@@ -78,10 +87,12 @@ export interface ThumbnailSource {
  */
 export const localServerSource: ThumbnailSource = {
   name: "local server",
-  // Loopback, but a different origin from the page (port 18419 against the
-  // app's own), so canvas export needs the opt-in. serve.ts already answers
-  // with Access-Control-Allow-Origin for every registered app origin.
-  crossOrigin: "anonymous",
+  // A different origin from the page (port 18419 against the app's own), so the
+  // canvas export needs the opt-in and a remote reader needs the cookie to go
+  // with it — `use-credentials` is the one value that does both. serve.ts
+  // answers with Access-Control-Allow-Origin for the page's origin and
+  // Access-Control-Allow-Credentials: true.
+  crossOrigin: "use-credentials",
   url: async (itemId, size) => localThumbUrl(itemId, size),
   sizes: (ids, size) => localThumbSizes(ids, size),
   fullUrl: (itemId) => localThumbUrl(itemId, "full"),

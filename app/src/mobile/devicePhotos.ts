@@ -1,7 +1,7 @@
 import type { PhotoRecord } from "@travel-archive/shared";
 import { registerPlugin } from "@capacitor/core";
 import { App } from "@capacitor/app";
-import { setThumbnailSource, type ThumbnailSource } from "../photoSource";
+import { setThumbnailSource, thumbnailSource, type ThumbnailSource } from "../photoSource";
 import { loadLarge, loadThumbnail } from "../graphPhoto";
 import { isNative } from "./native";
 
@@ -158,7 +158,13 @@ function listenForChanges(): void {
       keys.delete(itemId);
       const size = img.dataset.loader === "large" ? loadLarge : loadThumbnail;
       void size(itemId).then((url) => {
-        if (url) img.src = url;
+        if (!url) return;
+        // The fallback is a job-server URL, cross-origin from the page, so it
+        // needs the session attached before it is assigned — see viewer.ts's
+        // setSource.
+        const crossOrigin = thumbnailSource()?.crossOrigin;
+        if (crossOrigin) img.crossOrigin = crossOrigin;
+        img.src = url;
       });
     },
     true, // capture: an <img> error does not bubble
