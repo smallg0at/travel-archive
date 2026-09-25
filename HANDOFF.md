@@ -118,6 +118,70 @@ resolves from `ARCHIVE_HOME`; read-only config that ships with the build
 resolves from the module. Get this wrong and an installed app writes into a
 read-only directory, or reads a config file that is not there.
 
+**Reading over the home network is gated; writing is local-only.** Set
+`ARCHIVE_HOST=0.0.0.0` and `ARCHIVE_PASSWORD` to expose the archive to the
+family (`pipeline/src/access.ts`). Read is the whole product and is gated by a
+signed cookie; **write is a rule about kind, not about accounts** — anything
+that is not a GET is refused to everyone but loopback, because there are no
+users, roles or session store and a photo archive does not need them. Video is
+deliberately **404 to remote readers**: `/video/:id` is the one route that hands
+out a pre-authenticated OneDrive URL, and the family does not need it. The cookie
+secret is regenerated at every start, so a restart signs everyone out; that is
+the honest behaviour for a token nobody can revoke.
+
+**A loopback request is not a test of anything.** This is the single most
+expensive lesson in the file — **five** separate failures shipped that only
+appeared on a second device, and every one of them was invisible from the owner's
+own machine, because loopback short-circuits authentication, CORS and CSP alike.
+Found in one session, all self-inflicted:
+
+- **The shell did not read `.env`.** `ARCHIVE_HOST` reached the job server but
+  not the static server, so the page was served on loopback while the server
+  listened on `0.0.0.0`. Fix: `main.ts` parses `.env` once
+  (`f82e80e`).
+- **MSAL was constructed at module scope.** `new PublicClientApplication(...)`
+  needs `window.crypto.subtle`, which only exists in a secure context — https,
+  localhost, `127.0.0.1`. A LAN address is none of those, so the constructor
+  threw `crypto_nonexistent` **while the bundle was still evaluating**, killing
+  every module imported after it. The symptom was a rendered shell and nothing
+  else, which reads as an empty app rather than an auth problem. Fix: construct
+  on first use (`msal()`), never on import (`0e17ac4`). A remote reader imports
+  `msAuth` freely and never calls into it.
+- **The CSP used a wildcard, which a source cannot contain.**
+  `http://192.168.*:*` is not a valid host-source — the browser **discards it
+  silently** and the policy kept only its loopback origins, so every request from
+  the family's laptop was refused with no error on screen. There is no CIDR
+  syntax either. Fix: read the machine's own private IPv4 addresses from
+  `os.networkInterfaces()` **at listen time** and emit literal hosts
+  (`d007dc1`). Enumerated, not patterned; current, not remembered across a DHCP
+  lease.
+- **Cross-origin images sent no cookie.** The page is on one port and the job
+  server on another, so they are different origins, and a cross-origin `<img>`
+  sends no credentials by default. The grid set `crossOrigin="anonymous"` —
+  which asks for none *explicitly* — while the lightbox set nothing at all, so
+  **one failed and the other looked fine on any given machine**. Fix:
+  `use-credentials` on every image the job server serves, which both sends the
+  cookie and keeps the response CORS-clean for the print export's canvas
+  (`c969262`).
+
+**The remote smoke test, to run before believing a guest-access change works.**
+Open the archive on a **non-loopback origin** — `http://<lan-ip>:17923`, never
+`localhost` — and check all five, because each fails independently and each is
+invisible locally:
+
+1. The page shows content, not just its shell → the index loaded (MSAL, CSP).
+2. The **grid** shows images → static assets, CORS, cookie.
+3. The **lightbox** shows images → the same, plus `full`.
+4. **Video is absent** → the gate rule still holds.
+5. `GET /access` returns `{"gated":true,"exposed":true,"signedIn":true}`.
+
+`Invoke-WebRequest` cannot reproduce 2 or 3 faithfully: it does not enforce CORS
+or CSP, so it will report 200 for a request a browser refuses. Verify the
+credentialed request directly instead — an `Origin` header matching the page
+**plus** the `archive_access` cookie, and check that `Access-Control-Allow-Origin`
+**echoes that origin** (never `*`, which `use-credentials` rejects) alongside
+`Access-Control-Allow-Credentials: true`.
+
 **The app must load over `http://localhost` on a registered port.** MSAL derives
 its redirect URI from `window.location.origin`, and it has to match a URI
 registered under Azure's *Single-page application* platform. `file://` has a
