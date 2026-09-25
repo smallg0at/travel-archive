@@ -474,6 +474,33 @@ has been reported on the strength of such a reading. If a measurement says
 nothing loaded, check that a *fresh* observer fires on an element you can see
 before believing it.
 
+## The shell has no node, and that is not a broken install
+
+**Every command an agent runs goes through `pwsh -NoLogo -NoProfile
+-NonInteractive -Command …`.** `-NoProfile` means the PowerShell profile is never
+read, and the profile is where `fnm env` puts node and npm on `PATH`. So inside
+this harness `npm` is not a command, and it looks exactly like a machine where
+node was never installed — it was, and versions are installed, and `fnm` itself
+*is* on `PATH`.
+
+Check `fnm list` before concluding anything. Either prefix a command with the
+selected version's directory (what the earlier sessions did, and it silently
+breaks when the version changes), or set it up per command the way the profile
+does:
+
+```powershell
+fnm env --shell powershell | Out-String | Invoke-Expression; npm run --workspace app build
+```
+
+**In a terminal a person opened, none of this applies** — the profile runs and
+`npm` works. The asymmetry is the confusing part: "it works for me" and "npm is
+not recognised" are both true of the same machine.
+
+The profile (`~/OneDrive/Documents/PowerShell/profile.ps1`) has the `fnm env`
+block as of 2026-09-25; before that it had only conda, so nobody's shell had
+node either. If a future machine reports `npm` missing with no `-NoProfile`
+involved, that block is what to check.
+
 **Verify in the browser, not in the diff.** Chrome is driven through the
 `claude-in-chrome` tools; the desktop shell can be inspected with
 `--remote-debugging-port=9222` and a ~40-line CDP client, since it is not Chrome
