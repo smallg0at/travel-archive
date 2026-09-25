@@ -1,6 +1,7 @@
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken, TokenRenewalError } from "./msAuth";
+import { isLocalMachine } from "./backend";
 import { localArchiveJson } from "./backend";
 import type { TranslationFile } from "@travel-archive/shared";
 import { contentLanguage, translatedMonths, useIndexTranslations, useMonthTranslations } from "./contentLang";
@@ -48,6 +49,18 @@ async function fetchMetadataJson<T>(fileName: string, localPath: string): Promis
   // phone's normal path and costs nothing.
   const local = await localArchiveJson<T>(localPath);
   if (local) return local;
+
+  // Another machine has no way to read this from OneDrive: MSAL cannot
+  // initialise without `crypto.subtle`, which `http://192.168.x.y` does not
+  // have, so the attempt would fail as `crypto_nonexistent` rather than as a
+  // sign-in prompt. Say the true thing instead — the server this page came from
+  // is the only source, and it is not answering.
+  if (!isLocalMachine) {
+    throw new Error(
+      `The archive server at ${location.hostname} did not answer for ${fileName}. ` +
+        `This device reads the archive through it, so it has to be running.`,
+    );
+  }
 
   const path = encodeURI(`${METADATA_FOLDER}/${fileName}`);
 

@@ -9,6 +9,7 @@ import {
   SignInRequiredError,
 } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
+import { isLocalMachine } from "./backend";
 import { initGeneration } from "./tripMode";
 import { initSidebarNav, initSidebarResize } from "./chrome";
 import { setArchiveRefresh } from "./dayEdit";
@@ -201,8 +202,17 @@ async function main() {
   // a file and was never affected. Anything that genuinely still needs Graph
   // — a month with no mirror — raises SignInRequiredError and the banner
   // appears then.
-  const serverHasGraph = health?.ok === true && health.signedIn;
-  if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
+  //
+  // **On another machine this is not a question at all.** MSAL cannot even
+  // initialise there: it needs `crypto.subtle`, which browsers only provide in
+  // a secure context, and `http://192.168.x.y` is not one — the failure is
+  // `crypto_nonexistent` before anything is asked. It does not need to: a
+  // remote reader is served by a signed-in job server and never talks to Graph,
+  // so the Microsoft session is neither available nor wanted.
+  if (isLocalMachine) {
+    const serverHasGraph = health?.ok === true && health.signedIn;
+    if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
+  }
 
   await loadAndRender();
 }
