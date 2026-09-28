@@ -157,6 +157,7 @@ export const zhHans: Messages = {
     offline: "本地服务器未运行——当前处于降级模式，直接从 OneDrive 读取，速度会变慢很多。请使用 npm run desktop 启动。",
     back: "本地服务器已恢复运行。刷新页面即可正常使用。",
     lost: "本地服务器已停止响应。刷新页面可切换至降级模式。",
+    gated: "本地服务器需要重新输入访问口令。刷新以输入。",
     reload: "刷新",
   },
 
@@ -427,6 +428,10 @@ export const zhHans: Messages = {
     placeholder: "搜索说明、地点与摘要",
     loading: "正在加载搜索索引…",
     unavailable: "暂无可搜索内容——请先运行“分析”与“当天摘要”。",
+    signIn: "请先登录，再搜索档案。",
+    serverDown: "档案服务器没有响应——这台设备经由它读取档案。",
+    offline: "已离线——搜索索引首次联网时获取，之后会保留。",
+    retry: "暂时取不到搜索索引，稍后重试。",
     ready: (photos, days) => `${num(photos)} 张照片、${num(days)} 天记录已可供搜索。`,
     found: (photos, days, ms) => `${num(photos)} 张照片，分布于 ${num(days)} 天 · ${num(ms)} 毫秒`,
     photosMatched: (n) => `匹配 ${num(n)} 张`,

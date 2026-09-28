@@ -18,6 +18,7 @@ import { env } from "./env.js";
 import { getCachedAccessToken, hasCachedAccount } from "./auth.js";
 import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { initProxyDispatcher } from "./proxy.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
@@ -1289,6 +1290,31 @@ for (const event of ["uncaughtException", "unhandledRejection"] as const) {
     }
   });
 }
+
+/**
+ * Names what blocked the event loop, if anything did.
+ *
+ * The reader's banner calls the server "gone" when `/health` takes longer than
+ * `HEALTH_TIMEOUT_MS`, and until now there was no way to tell a job that sat
+ * on the loop from a packet lost on the Wi-Fi — "the cause is unclear" was the
+ * end of it. This is the other half: an integer sample every 20ms, built into
+ * Node (`perf_hooks`), no dependency and no I/O, and the histogram is reset
+ * each time so the line names the *window* in which it stalled.
+ *
+ * Thresholded at 500ms because that is already large enough to be felt, small
+ * enough to catch the stall before it reaches the 8s timeout that made the
+ * banner say the server was dead.
+ */
+const loopLag = monitorEventLoopDelay({ resolution: 20 });
+loopLag.enable();
+const LAG_WARN_MS = 500;
+setInterval(() => {
+  const maxMs = loopLag.max / 1e6;
+  loopLag.reset();
+  if (!Number.isFinite(maxMs) || maxMs < LAG_WARN_MS) return;
+  const job = jobs.runningJob();
+  console.warn(`  event loop lagged ${Math.round(maxMs)}ms — ${job ? `${job.kind} job ${job.id}` : "no job running"}`);
+}, 5_000);
 
 setInterval(() => void collectIfReady(), COLLECT_EVERY_MS);
 setTimeout(() => void collectIfReady(), 30_000);

@@ -1,4 +1,4 @@
-import { checkHealth } from "./backend";
+import { healthResult, type HealthFailure } from "./backend";
 import { ui } from "./i18n";
 
 /**
@@ -25,6 +25,9 @@ const POLL_MS = 30_000;
 const DISMISSED_KEY = "server-banner-dismissed";
 
 type State = "online" | "offline";
+
+/** Whether a failed probe was the password rather than the server. */
+const isAuth = (failure: HealthFailure | null): boolean => failure === "auth";
 
 let banner: HTMLElement | null = null;
 
@@ -73,14 +76,44 @@ function show(text: string, action: { label: string; run: () => void } | null): 
  * Starts watching. `online` is the answer `main.ts` already got at startup, so
  * the first paint needs no second request.
  */
-export function initServerStatus(online: boolean): void {
+export function initServerStatus(online: boolean, failure: HealthFailure | null = null): void {
   const startedAs: State = online ? "online" : "offline";
   let current = startedAs;
 
-  if (!online && !dismissed()) show(ui.server.offline, null);
+  // A 401 at startup *is* the gate being shown — its own explanation. A banner
+  // underneath it (z-index 60 under the gate's 100) added nothing but a false
+  // claim that the server was not running.
+  if (!online && !isAuth(failure) && !dismissed()) show(ui.server.offline, null);
+
+  /**
+   * One failed probe is not a dead server.
+   *
+   * The job server is one Node process, and writing the index is a
+   * multi-megabyte `JSON.stringify` that holds its event loop — long enough
+   * for `/health` to exceed `HEALTH_TIMEOUT_MS`, which is why that timeout was
+   * raised to 8s (see backend.ts). It can still lose that race, and the reader
+   * then saw "stopped responding" over a server that was busy working. Two
+   * misses in a row, a minute apart, is a server that is actually gone.
+   *
+   * Recovery is never delayed: one success is proof it is back.
+   */
+  let misses = 0;
+  /** What the failed probe said, kept for the message if it does go offline. */
+  let lastFailure: HealthFailure | null = null;
 
   setInterval(async () => {
-    const next: State = (await checkHealth())?.ok ? "online" : "offline";
+    const result = await healthResult();
+    let next: State;
+    if (result.ok) {
+      misses = 0;
+      lastFailure = null;
+      next = "online";
+    } else if (++misses < 2) {
+      return;
+    } else {
+      lastFailure = result.failure;
+      next = "offline";
+    }
     if (next === current) return;
     current = next;
     // A change is news even if the old state was dismissed.
@@ -90,14 +123,17 @@ export function initServerStatus(online: boolean): void {
       /* ignore */
     }
     const reload = { label: ui.server.reload, run: () => location.reload() };
+    // The password having lapsed says so; otherwise the page says the state it
+    // was built for (offline) or that it lost a server it had (lost).
+    const offlineText = isAuth(lastFailure) ? ui.server.gated : next === startedAs ? ui.server.offline : ui.server.lost;
     if (next === startedAs) {
       // Back to what the page was built for: nothing to do.
       if (banner) banner.hidden = next === "online";
-      if (next === "offline") show(ui.server.offline, null);
+      if (next === "offline") show(offlineText, null);
     } else if (next === "online") {
       show(ui.server.back, reload);
     } else {
-      show(ui.server.lost, reload);
+      show(offlineText, reload);
     }
   }, POLL_MS);
 }

@@ -156,11 +156,42 @@ export async function signInShared(password: string): Promise<void> {
  * backend", which is a supported state rather than an error.
  */
 export async function checkHealth(): Promise<Health | null> {
+  const result = await healthResult();
+  return result.ok ? result.health : null;
+}
+
+/** Why a health probe failed. Three cases, three different remedies. */
+export type HealthFailure =
+  /** 401/403: the shared-password session lapsed — the fix is typing it again. */
+  | "auth"
+  /** Timed out: listening, but did not answer in HEALTH_TIMEOUT_MS — gone, or busy. */
+  | "no-answer"
+  /** Anything else — connection refused, DNS, an aborted request. */
+  | "error";
+
+export type HealthResult = { ok: true; health: Health } | { ok: false; failure: HealthFailure };
+
+/**
+ * `/health`, saying *why* it failed when it did.
+ *
+ * `checkHealth` collapses all three to `null`, which is why the banner called
+ * every one of them "stopped responding": a server that is gone, one whose
+ * job has held the loop longer than `HEALTH_TIMEOUT_MS`, and one whose session
+ * has merely expired all looked identical — and only the third is fixed by
+ * typing the password rather than waiting. `serverStatus.ts` needs the
+ * difference; everything else can keep using `checkHealth`.
+ */
+export async function healthResult(): Promise<HealthResult> {
   try {
     const res = await apiFetch(`/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
-    return res.ok ? ((await res.json()) as Health) : null;
-  } catch {
-    return null;
+    if (res.ok) return { ok: true, health: (await res.json()) as Health };
+    return { ok: false, failure: res.status === 401 || res.status === 403 ? "auth" : "error" };
+  } catch (err) {
+    // `AbortSignal.timeout` rejects with `TimeoutError`; a refused socket comes
+    // through as a TypeError. Only the first means "was listening, didn't
+    // answer", which is the case a busy job and a lost packet share.
+    const timeout = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    return { ok: false, failure: timeout ? "no-answer" : "error" };
   }
 }
 

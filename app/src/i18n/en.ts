@@ -160,6 +160,7 @@ export const en = {
       "Local server is offline — running in fallback mode, reading straight from OneDrive. Everything will be much slower. Start it with npm run desktop.",
     back: "The local server is running again. Reload to use it.",
     lost: "The local server stopped responding. Reload to switch to fallback mode.",
+    gated: "The archive server needs the access password again. Reload to enter it.",
     reload: "Reload",
   },
 
@@ -435,6 +436,10 @@ export const en = {
   search: {
     placeholder: "Search captions, places and summaries",    loading: "Loading the search index…",
     unavailable: "Nothing to search yet — run Analyze and Day summaries first.",
+    signIn: "Sign in to search the archive.",
+    serverDown: "The archive server is not answering — this device reads through it.",
+    offline: "Offline — the search index is fetched once and kept from then on.",
+    retry: "Couldn't fetch the search index — try again in a moment.",
     ready: (photos: number, days: number) => `${num(photos)} photos and ${num(days)} days ready to search.`,
     found: (photos: number, days: number, ms: number) =>
       `${num(photos)} ${photos === 1 ? "photo" : "photos"} across ${num(days)} ${days === 1 ? "day" : "days"} · ${num(ms)}ms`,

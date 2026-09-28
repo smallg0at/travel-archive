@@ -149,6 +149,19 @@ export async function getAccessToken(): Promise<string> {
     if (err instanceof BrowserAuthError && err.errorCode === "interaction_in_progress") {
       throw new Error("SIGN_IN_REQUIRED");
     }
+    // The cause is the whole diagnosis: `network_error`, `monitor_window_
+    // timeout`, `iframe_closed_error` and `invalid_grant` are all folded into
+    // this one "could not renew" by the time it reaches a view, and only the
+    // first is a network problem. Without this line the phone's silent
+    // renewal failing every time was indistinguishable from a bad connection.
+    const e = err as { name?: string; errorCode?: string; subError?: string } | null;
+    console.error("[msal] silent renewal failed:", {
+      name: e?.name,
+      errorCode: e?.errorCode,
+      subError: e?.subError,
+      message: err instanceof Error ? err.message : String(err),
+      cause: err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined,
+    });
     throw new TokenRenewalError(err);
   }
 }

@@ -17,7 +17,7 @@ import { setActivityRefresh } from "./activity";
 import { ui } from "./i18n";
 import { restorePrefs } from "./prefs";
 import { readTheme, showTheme } from "./theme";
-import { checkHealth } from "./backend";
+import { healthResult } from "./backend";
 import { localServerSource, setThumbnailSource } from "./photoSource";
 import { initServerStatus } from "./serverStatus";
 import { initSearch, runSearch } from "./searchBar";
@@ -133,7 +133,7 @@ async function main() {
   // are requests to a server that is usually not there, and an absent one that
   // *drops* rather than refuses costs the full 1.5s timeout each. Neither
   // needs the other.
-  const [restored, health] = await Promise.all([restorePrefs(), checkHealth()]);
+  const [restored, health] = await Promise.all([restorePrefs(), healthResult()]);
   if (restored.theme) showTheme(readTheme());
   if (restored.density) refreshDensity();
 
@@ -156,12 +156,12 @@ async function main() {
    * same machine, and sharing this one would mean attaching to a snapshot of
    * the running job taken before the archive had even loaded.
    */
-  if (health?.ok) setThumbnailSource(localServerSource);
+  if (health.ok) setThumbnailSource(localServerSource);
 
   localiseShell();
   initSidebarResize();
   initSidebarNav();
-  initServerStatus(health?.ok === true);
+  initServerStatus(health.ok, health.ok ? null : health.failure);
 
   // The title-bar search, on every view, and the one handler for a tag clicked
   // anywhere — including from the lightbox, which is what closes it.
@@ -210,7 +210,7 @@ async function main() {
   // remote reader is served by a signed-in job server and never talks to Graph,
   // so the Microsoft session is neither available nor wanted.
   if (isLocalMachine) {
-    const serverHasGraph = health?.ok === true && health.signedIn;
+    const serverHasGraph = health.ok && health.health.signedIn;
     if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
   }
 

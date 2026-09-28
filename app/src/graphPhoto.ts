@@ -1,6 +1,6 @@
-import { getAccessToken, TokenRenewalError } from "./msAuth";
+import { getAccessToken } from "./msAuth";
 import { getCached, putThumb, releaseObjectUrls } from "./thumbCache";
-import { thumbnailSource } from "./photoSource";
+import { localServerSource, thumbnailSource } from "./photoSource";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
@@ -81,12 +81,19 @@ async function flush(): Promise<void> {
     let token: string;
     try {
       token = await getAccessToken();
-    } catch (err) {
-      // Only a session that really has ended raises the banner. Thumbnails
-      // are the app's most frequent Graph request by far, so a renewal that
-      // merely timed out used to announce an expired session several times a
-      // browsing session; the pictures simply stay blank instead.
-      if (!(err instanceof TokenRenewalError)) signInRequired();
+    } catch {
+      // Always say so — including when the *renewal* is what failed. Holding
+      // that back meant a session that had really died produced blank
+      // thumbnails and no banner at all, so the reader had no way to learn they
+      // were signed out (it was reported as "unavailable" instead). Repeating
+      // it costs nothing: the banner only shows when one is not already up.
+      //
+      // **Except when the archive's own job server is the source.** That is the
+      // desktop, and every remote reader over the home network — their bytes
+      // come from that server, a Graph failure here is not about their
+      // sign-in, and a remote reader cannot sign in at all. The phone, which
+      // has no server, is the case this banner exists for.
+      if (thumbnailSource() !== localServerSource) signInRequired();
       for (const entry of batch) entry.resolve(null);
       return;
     }
@@ -225,8 +232,9 @@ export async function loadFullPhoto(itemId: string): Promise<string | null> {
   let token: string;
   try {
     token = await getAccessToken();
-  } catch (err) {
-    if (!(err instanceof TokenRenewalError)) signInRequired();
+  } catch {
+    // Say so even when it is the renewal that failed — see the batch flush above.
+    signInRequired();
     return null;
   }
 
@@ -256,8 +264,9 @@ export async function loadVideoUrl(itemId: string): Promise<string | null> {
   let token: string;
   try {
     token = await getAccessToken();
-  } catch (err) {
-    if (!(err instanceof TokenRenewalError)) signInRequired();
+  } catch {
+    // Say so even when it is the renewal that failed — see the batch flush above.
+    signInRequired();
     return null;
   }
 
