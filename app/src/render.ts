@@ -127,7 +127,7 @@ function renderGrid(photos: PhotoRecord[]): HTMLElement {
  * the day — a third of this archive's travel days are shot from trains — but
  * they are not a place, so they do not get a heading of their own.
  */
-function renderTransit(segment: DaySegment, byId: Record<string, PhotoRecord>): HTMLElement {
+function renderTransit(segment: DaySegment, byId: Record<string, PhotoRecord>, open = false): HTMLElement {
   const photos = segment.photoIds.map((id) => byId[id]).filter(Boolean);
   const wrap = el<HTMLElement>(`
     <section class="transit">
@@ -139,6 +139,16 @@ function renderTransit(segment: DaySegment, byId: Record<string, PhotoRecord>): 
   wrap.querySelector(".transit-title")!.textContent = loc(segment.title);
   wrap.querySelector(".transit-meta")!.textContent = `${timeRange(segment)} · ${ui.common.photos(photos.length)}`;
   wrap.querySelector("details")!.appendChild(renderGrid(photos));
+  // Open when the transit *is* the day — a day with no place stop would
+  // otherwise be a summary and a lone collapsed line, every photograph behind
+  // it. With a place stop present the strip stays collapsed, which is the point
+  // of it: most of a travel day's frames are shot from the train.
+  wrap.querySelector("details")!.open = open;
+  // Marked for the print stylesheet, which otherwise drops every transit strip
+  // as part of the unreviewed roll (@media print in style.css). A transit-only
+  // day has nothing else to print, so this one is let through rather than
+  // exporting the day with no pictures at all.
+  if (open) wrap.classList.add("is-the-day");
   return wrap;
 }
 
@@ -199,9 +209,14 @@ function renderPlace(segment: DaySegment, byId: Record<string, PhotoRecord>, dat
 export function renderDayBody(day: DayRecord, photos: Record<string, PhotoRecord>): DocumentFragment {
   const frag = document.createDocumentFragment();
 
+  // A day whose only segment is transit has no place stop to carry the page, so
+  // its strip opens: otherwise the whole day is a summary and one collapsed
+  // line. A day with a place stop keeps its transit collapsed.
+  const transitIsTheDay = !day.segments.some((segment) => segment.kind === "place");
+
   for (const segment of day.segments) {
     frag.appendChild(
-      segment.kind === "transit" ? renderTransit(segment, photos) : renderPlace(segment, photos, day.date),
+      segment.kind === "transit" ? renderTransit(segment, photos, transitIsTheDay) : renderPlace(segment, photos, day.date),
     );
   }
   return frag;

@@ -162,12 +162,15 @@ function renderStop(segment: DaySegment, byId: Record<string, PhotoRecord>, date
   return section;
 }
 
-function renderTransit(segment: DaySegment, byId: Record<string, PhotoRecord>, date: string): HTMLElement {
+function renderTransit(segment: DaySegment, byId: Record<string, PhotoRecord>, date: string, open: boolean): HTMLElement {
   const photos = segment.photoIds.map((id) => byId[id]).filter(Boolean);
   const label = el<HTMLSpanElement>(`<span class="m-transit-label">${ICONS.transit}<span class="m-transit-title"></span><span class="m-transit-meta"></span></span>`);
   label.querySelector(".m-transit-title")!.textContent = segment.title;
   label.querySelector(".m-transit-meta")!.textContent = `${timeRange(segment)} · ${ui.common.photos(photos.length)}`;
-  const details = disclosure(label, () => lazyGrid(photos));
+  // Open when the transit is the whole day — see renderDayBody on the desktop.
+  // A day with no place stop would otherwise be a summary and one collapsed
+  // line with every photograph behind it.
+  const details = disclosure(label, () => lazyGrid(photos), open);
   details.classList.add("m-transit");
   details.id = anchorFor(date, segment.id);
   return details;
@@ -314,8 +317,11 @@ async function fill(page: HTMLElement, date: string, stop: string | undefined, f
       body.appendChild(chips);
     }
     const followed: { chip: HTMLElement; section: HTMLElement }[] = [];
+    // A day with no place stop has nothing but its transit to show, so the
+    // strip opens rather than collapsing the day to one hidden line.
+    const transitIsTheDay = !day.segments.some((segment) => segment.kind === "place");
     for (const segment of day.segments) {
-      const section = segment.kind === "transit" ? renderTransit(segment, shard, date) : renderStop(segment, shard, date);
+      const section = segment.kind === "transit" ? renderTransit(segment, shard, date, transitIsTheDay) : renderStop(segment, shard, date);
       body.appendChild(section);
       const chip = chipFor.get(segment.id);
       if (chip) followed.push({ chip, section });

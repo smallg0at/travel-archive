@@ -3273,14 +3273,33 @@ body.map-expanded::after {
     display: none !important;
   }
 
+  /* The search box is a window control, not part of the document: the title-bar
+     pill, its results panel, and the phone's own search page all sit *over*
+     whatever view happens to be exported, so in a PDF they land on the first
+     page beside the trip's title. Nothing here is content worth printing. */
+  .search-bar,
+  #search-results,
+  .search-page {
+    display: none !important;
+  }
+
   /* The sharing rule, enforced structurally: the unreviewed roll never leaves
      the machine. `.stop-more` is the "N more photos" grid and `.transit` the
      journey strips — between them they hold 114 of this trip's 125 screenshots,
      none of which anyone has read. Hidden regardless of whether the reader
-     happened to expand one before printing. */
+     happened to expand one before printing.
+
+     The exception is a transit that is the *whole* day (`.is-the-day`, set by
+     render.ts when the day has no place stop): there is no card to carry the
+     page, so hiding it would print a summary with no pictures at all. That
+     strip prints open; the summary line above it prints too, since it is the
+     only thing naming where the day was. */
   .stop-more,
-  .transit {
+  .transit:not(.is-the-day) {
     display: none !important;
+  }
+  .transit.is-the-day details > summary {
+    display: flex;
   }
 
   /* A placard's English rendering is prose and prints. The verbatim transcript
