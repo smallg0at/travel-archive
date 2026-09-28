@@ -26,8 +26,39 @@ export class SignInRequiredError extends Error {
   }
 }
 
+/**
+ * This device reads the archive through the local job server, and the server
+ * did not answer. The message is kept as a type so a view can report it as
+ * itself — reporting it as "nothing to search yet" would send the reader to go
+ * run Analyze while their archive sits full of text on a machine that is off.
+ */
+export class ServerUnavailableError extends Error {
+  constructor(fileName: string) {
+    super(
+      `The archive server at ${location.hostname} did not answer for ${fileName}. ` +
+        `This device reads the archive through it, so it has to be running.`,
+    );
+  }
+}
+
 const MAX_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 5000;
+
+/**
+ * Whether an error means "this reader is signed out" — no account, or MSAL
+ * saying the session is unusable and interactive sign-in is needed.
+ *
+ * **Deliberately narrow.** A renewal that merely *failed* — a renewal iframe
+ * that timed out, a throttled endpoint, no network — is `TokenRenewalError`,
+ * and the code that produced it (`fetchMetadataJson`'s "could not renew") is
+ * explicit that signing in again would not help. Telling a reader who is still
+ * signed in to sign in again sends them to do something pointless: it did,
+ * exactly that, on the phone while the account was perfectly fine. Those
+ * failures are a "try again", which is what `ui.search.retry` says.
+ */
+export function needsSignIn(err: unknown): boolean {
+  return err instanceof SignInRequiredError;
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -56,10 +87,7 @@ async function fetchMetadataJson<T>(fileName: string, localPath: string): Promis
   // sign-in prompt. Say the true thing instead — the server this page came from
   // is the only source, and it is not answering.
   if (!isLocalMachine) {
-    throw new Error(
-      `The archive server at ${location.hostname} did not answer for ${fileName}. ` +
-        `This device reads the archive through it, so it has to be running.`,
-    );
+    throw new ServerUnavailableError(fileName);
   }
 
   const path = encodeURI(`${METADATA_FOLDER}/${fileName}`);
@@ -108,6 +136,20 @@ async function fetchMetadataJson<T>(fileName: string, localPath: string): Promis
  */
 let indexPromise: Promise<ArchiveIndexFile> | null = null;
 
+/** Where `index.json` is read from when the Graph fetch cannot be made; null for the plain fetch. */
+let indexFallback: (() => Promise<ArchiveIndexFile | null>) | null = null;
+
+/**
+ * A layer that keeps its own copy of `index.json` for when there is no
+ * signal. The phone does — see `mobile/cache.ts` — and without it the archive
+ * it painted from at launch was unreadable by anything that asks `loadIndex`
+ * directly (the search box, for one), so search failed offline even though the
+ * data was in hand.
+ */
+export function setIndexFallback(fallback: (() => Promise<ArchiveIndexFile | null>) | null): void {
+  indexFallback = fallback;
+}
+
 export function loadIndex(): Promise<ArchiveIndexFile> {
   if (!indexPromise) {
     const pending = fetchIndex();
@@ -127,7 +169,17 @@ export function forgetIndex(): void {
 }
 
 async function fetchIndex(): Promise<ArchiveIndexFile> {
-  const index = await fetchMetadataJson<ArchiveIndexFile>("index.json", "index");
+  let index: ArchiveIndexFile | null;
+  try {
+    index = await fetchMetadataJson<ArchiveIndexFile>("index.json", "index");
+  } catch (err) {
+    // A layer that keeps its own copy — the phone does (mobile/cache.ts). No
+    // signal is not the same as no archive: the copy it painted from at launch
+    // is right here, and search cannot ask any question without an index.
+    const kept = indexFallback ? await indexFallback().catch(() => null) : null;
+    if (!kept) throw err;
+    index = kept;
+  }
   if (!index) {
     throw new Error(
       `No index.json in OneDrive:/${METADATA_FOLDER}. Run "npm run --workspace pipeline scan" to build it.`,
@@ -187,9 +239,36 @@ export function forgetMonths(months: string[]): void {
  */
 let searchIndex: Promise<SearchIndexFile | null> | null = null;
 
+/** Where `search.json` comes from when a layer keeps its own copy; null for the plain Graph fetch. */
+let searchIndexSource: (() => Promise<SearchIndexFile | null>) | null = null;
 export function loadSearchIndex(): Promise<SearchIndexFile | null> {
-  searchIndex ??= fetchMetadataJson<SearchIndexFile>("search.json", "search").catch(() => null);
+  if (searchIndex) return searchIndex;
+  const load = searchIndexSource ?? (() => fetchMetadataJson<SearchIndexFile>("search.json", "search"));
+  // Everything is propagated rather than swallowed. `fetchMetadataJson` returns
+  // null only for a missing file — "never organized", which is the one thing
+  // worth calling a wrong answer; a failure to fetch has a *cause* the view can
+  // name (signed out, offline, this server down, or "not right now"), and
+  // every one of those was being reported as "run Analyze first".
+  const pending = load();
+  searchIndex = pending;
+  // A rejection is not kept: the usual cause is a token that failed to renew,
+  // and a retry after signing in has to reach this promise again.
+  pending.catch(() => {
+    if (searchIndex === pending) searchIndex = null;
+  });
   return searchIndex;
+}
+
+/**
+ * A layer that keeps its own copy of `search.json`.
+ *
+ * The phone does — see `mobile/cache.ts`: the file is 6.5MB over Graph, and a
+ * reader who opens Search on a phone wants the answer in milliseconds and with
+ * no signal, not a download that costs the same as the photo bytes they came
+ * for. Set before the view mounts; nothing else changes.
+ */
+export function setSearchIndexSource(source: (() => Promise<SearchIndexFile | null>) | null): void {
+  searchIndexSource = source;
 }
 
 /** After a job that rewrote captions or summaries. */

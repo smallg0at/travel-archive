@@ -1,4 +1,4 @@
-import { loadIndex, SignInRequiredError } from "../archiveData";
+import { loadIndex, setIndexFallback, setSearchIndexSource, SignInRequiredError } from "../archiveData";
 import { completeRedirect, getActiveAccount, signIn, signInRedirect } from "../msAuth";
 import { checkHealth } from "../backend";
 import { localServerSource, setThumbnailSource } from "../photoSource";
@@ -13,7 +13,17 @@ import { renderDay } from "./day";
 import { renderLibrary, renderMonth } from "./library";
 import { renderSearch, renderSettings } from "./more";
 import { ICONS, setArchive, spinner } from "./ui";
-import { applyTranslationsKept, applyTranslationsKeptLocal, currentEtag, keepIndex, keptIndex, refreshTranslations } from "./cache";
+import {
+  applyTranslationsKept,
+  applyTranslationsKeptLocal,
+  currentEtag,
+  fillMonthTranslations,
+  keepIndex,
+  keptIndex,
+  loadSearchKept,
+  ensureSearchKept,
+  refreshTranslations,
+} from "./cache";
 import { followThemeInSystemBars, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
 import { initDevicePhotos } from "./devicePhotos";
 import { allMonths, initOfflineResume, startAutoCache, syncAndRefresh } from "./offline";
@@ -170,7 +180,9 @@ async function start(): Promise<void> {
     // in Chinese, and a slow link cannot hold it up. The fresh copy is fetched
     // in the background for the next launch.
     await applyTranslationsKeptLocal().catch(() => {});
-    void refreshTranslations();
+    // The fresh index translation in the background, then the caption files it
+    // says are missing — neither delays the first screen.
+    void refreshTranslations().then(fillMonthTranslations);
     setArchive(kept.index);
     void revalidate(kept.etag);
     // The kept copy opens without asking Microsoft anything, so a lost sign-in
@@ -217,6 +229,12 @@ async function main(): Promise<void> {
   // Photographs this phone already holds are served from it. Only when the
   // reader has allowed it in Settings; nothing is asked for here.
   void initDevicePhotos();
+  // Search reads `search.json` through the phone's kept copy (cache.ts): 6.5MB
+  // over Graph otherwise, and no search at all with no signal. The same for the
+  // index itself: the copy the first screen painted from is what search asks
+  // for when it cannot reach OneDrive.
+  setSearchIndexSource(loadSearchKept);
+  setIndexFallback(async () => (await keptIndex().catch(() => null))?.index ?? null);
   initBackButton();
   followThemeInSystemBars();
   window.addEventListener("signin-required", showSessionBanner);
@@ -246,6 +264,11 @@ async function main(): Promise<void> {
   // list OneDrive with.
   if (started && useKept) {
     void syncAndRefresh();
+    // The search index, kept before anyone asks for it — see
+    // ensureSearchKept. Without it, Search only ever fetched on first use, so
+    // a reader who had never opened that tab was asked to sign in again even
+    // when the session was fine.
+    void ensureSearchKept();
     startAutoCache(allMonths());
     // And again whenever the app comes back or the network does, since a
     // backgrounded WebView stops the pass it started.

@@ -1,5 +1,6 @@
 import type { ArchiveIndexFile, PhotoRecord, SearchIndexFile } from "@travel-archive/shared";
-import { dayMeta, loadIndex, loadMonth, loadSearchIndex } from "./archiveData";
+import { ServerUnavailableError, dayMeta, loadIndex, loadMonth, loadSearchIndex, needsSignIn } from "./archiveData";
+import { localizedDayText, loc } from "./contentLang";
 import { el, hydrateAll, lazyImg } from "./photoUi";
 import { ui } from "./i18n";
 
@@ -50,7 +51,7 @@ function rowParts(row: SearchIndexFile["photos"][number]): { text: string; tags:
   return { text: row[2] ?? "", tags: row[3] ?? "" };
 }
 
-function search(index: SearchIndexFile, query: string): { days: DayHit[]; trips: SearchIndexFile["trips"]; total: number } {
+function search(index: SearchIndexFile, archive: ArchiveIndexFile, query: string): { days: DayHit[]; trips: SearchIndexFile["trips"]; total: number } {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return { days: [], trips: [], total: 0 };
 
@@ -72,7 +73,13 @@ function search(index: SearchIndexFile, query: string): { days: DayHit[]; trips:
   for (const [date, text] of index.days) {
     if (matches(text, terms)) hit(date).summaryMatched = true;
   }
-  const trips = index.trips.filter(([, name]) => matches(name.toLowerCase(), terms));
+  // The search index holds only the English text, so a query in the reader's
+  // language has to be matched against the translation too — otherwise a
+  // Chinese search finds nothing in a day summary it is actually reading.
+  for (const day of archive.sections.flatMap((section) => section.days)) {
+    if (matches(localizedDayText(day), terms)) hit(day.date).summaryMatched = true;
+  }
+  const trips = index.trips.filter(([, name]) => matches(loc(name).toLowerCase(), terms));
 
   // Newest first, like every other list in the app.
   const days = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
@@ -150,17 +157,52 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
   input.setAttribute("aria-label", ui.search.placeholder);
 
   let loaded: Promise<{ index: SearchIndexFile; archive: ArchiveIndexFile } | null> | null = null;
-  const load = () =>
-    (loaded ??= (async () => {
+  const load = () => {
+    if (loaded) return loaded;
+    const pending = (async () => {
       status.textContent = ui.search.loading;
-      const [index, archive] = await Promise.all([loadSearchIndex(), loadIndex().catch(() => null)]);
+      let index: SearchIndexFile | null;
+      let archive: ArchiveIndexFile | null;
+      try {
+        [index, archive] = await Promise.all([loadSearchIndex(), loadIndex()]);
+      } catch (err) {
+        console.error("[search] load failed:", err);
+        // The truth, not "nothing to search yet": a signed-out reader has an
+        // archive full of text, and telling them to run Analyze sends them off
+        // to do something pointless. Same for a reader whose local job server
+        // is asleep — the archive is fine, the machine serving it is not. The
+        // banner offers the sign-in itself.
+        const signedOut = needsSignIn(err);
+        status.textContent =
+          err instanceof ServerUnavailableError
+            ? ui.search.serverDown
+            : !navigator.onLine
+              ? ui.search.offline
+              : signedOut
+                ? ui.search.signIn
+                // A fetch that failed for a reason we cannot name (a renewal
+                // that gave up, a 5xx) — say that, not "run Analyze first".
+                : ui.search.retry;
+        if (signedOut) window.dispatchEvent(new CustomEvent("signin-required"));
+        return null;
+      }
       if (!index || !archive) {
+        console.warn("[search] loaded without a usable file", { index: !!index, archive: !!archive });
         status.textContent = ui.search.unavailable;
         return null;
       }
       status.textContent = ui.search.ready(index.photos.length, index.days.length);
       return { index, archive };
-    })());
+    })();
+    loaded = pending;
+    // Not kept when it failed. A rejection here is almost always a token that
+    // could not be renewed, and the next attempt after signing in has to make
+    // a fresh one — caching it would strand this box until the tab is remounted.
+    pending.then((data) => {
+      if (!data && loaded === pending) loaded = null;
+    });
+    return loaded;
+  };
   if (opts.lazy) input.addEventListener("focus", () => void load(), { once: true });
   else void load();
 
@@ -178,7 +220,7 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
       return;
     }
     const started = performance.now();
-    const { days, trips, total } = search(index, query);
+    const { days, trips, total } = search(index, archive, query);
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     status.textContent = ui.search.found(total, days.length, Math.max(1, Math.round(performance.now() - started)));
 
@@ -214,7 +256,10 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
         .filter(Boolean)
         .join(" · ");
       const summary = block.querySelector<HTMLElement>(".search-day-summary")!;
-      const text = day.summaryMatched ? snippet(meta.summary, terms) : null;
+      // The snippet is in the reader's language: the term they typed is the
+      // translated word, and showing them the English around it reads as a
+      // different day.
+      const text = day.summaryMatched ? snippet(loc(meta.summary), terms) : null;
       if (text) summary.textContent = text;
       else summary.remove();
       if (meta.section) block.querySelector(".search-day-head")!.addEventListener("click", () => opts.onOpenDay(day.date, meta.section!));

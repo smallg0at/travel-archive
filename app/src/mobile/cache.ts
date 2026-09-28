@@ -1,4 +1,4 @@
-import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, TranslationFile } from "@travel-archive/shared";
+import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { loadHomeIndex, loadMonth } from "../archiveData";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "../msAuth";
@@ -217,19 +217,38 @@ async function remoteShardEtag(month: string): Promise<string | null> {
   }
 }
 
-/**
- * A month's captions in the reader's language, from the copy kept last time.
- *
- * Kept on the phone so an offline month reads in the reader's language rather
- * than falling back to English — the captions `loadMonth` fetches online are
- * not otherwise persisted.
- */
-export async function applyMonthTranslationKept(month: string): Promise<void> {
+/** A month's kept caption file in the reader's language, or null. */
+async function readMonthTranslation(month: string): Promise<TranslationFile | null> {
   const lang = contentLanguage();
-  if (lang === "en") return;
-  const file = await run<TranslationFile | undefined>("readonly", (s) => s.get(`i18n/${lang}/photos/${month}`)).catch(
-    () => undefined,
+  if (lang === "en") return null;
+  return (
+    (await run<TranslationFile | undefined>("readonly", (s) => s.get(`i18n/${lang}/photos/${month}`)).catch(
+      () => undefined,
+    )) ?? null
   );
+}
+
+/**
+ * A month's captions in the reader's language: the kept copy when there is one,
+ * a fetch and a keep when there is not.
+ *
+ * The kept copy is what an offline month reads from; this is what fills it. It
+ * runs whenever a month is opened rather than only in the background pass, so a
+ * month opened by hand gets its captions even though the pass never reached it,
+ * and a language chosen after the library was cached still reads in that
+ * language — the pass skips a month whose shard is current, so it would never
+ * have fetched the captions at all.
+ */
+async function ensureMonthTranslation(month: string): Promise<void> {
+  const kept = await readMonthTranslation(month);
+  if (kept) {
+    useMonthTranslations(month, kept);
+    return;
+  }
+  if (!translatedMonths().includes(month)) return;
+  const token = await graphToken().catch(() => null);
+  if (!token) return;
+  const file = await fetchMonthTranslation(month, token);
   if (file) useMonthTranslations(month, file);
 }
 
@@ -244,13 +263,13 @@ export async function applyMonthTranslationKept(month: string): Promise<void> {
  * network, and a failure there is a real failure — there is nothing to fall
  * back to.
  *
- * The captions in the reader's language are applied from their kept copy
- * first; `loadMonth` replaces them with fresh ones when it succeeds.
+ * The captions in the reader's language are ensured alongside: the kept copy
+ * when there is one, a fetch and a keep when there is not.
  */
 export async function loadMonthKept(month: string): Promise<PhotoShard> {
   const kept = await readKeptShard(month);
   if (kept) {
-    await applyMonthTranslationKept(month);
+    await ensureMonthTranslation(month);
     rememberPhotos(Object.values(kept.photos));
     return kept;
   }
@@ -265,6 +284,10 @@ export async function loadMonthKept(month: string): Promise<PhotoShard> {
       const etag = await remoteShardEtag(month);
       if (etag) await writeShardMeta(month, { etag, bytes: size, generatedAt: shard.generatedAt });
     });
+    // And the captions, which `loadMonth` fetched for this session only. Without
+    // this the next open — the kept one, which is the normal one — reads
+    // English.
+    void ensureMonthTranslation(month);
   }
   rememberPhotos(Object.values(shard.photos));
   return shard;
@@ -407,7 +430,7 @@ export async function cacheAllMonths(
     const shard = await graphShard(month, etag, token);
     if (shard) {
       progress.kept++;
-      await cacheMonthTranslation(month, token);
+      await fetchMonthTranslation(month, token);
     } else {
       progress.failed++;
     }
@@ -417,20 +440,22 @@ export async function cacheAllMonths(
   return progress;
 }
 
-/** Keeps a month's caption file for the reader's language, when it has one. */
-async function cacheMonthTranslation(month: string, token: string): Promise<void> {
+/** Fetches a month's caption file in the reader's language and keeps it. Null when there is none, or with no network. */
+async function fetchMonthTranslation(month: string, token: string): Promise<TranslationFile | null> {
   const lang = contentLanguage();
-  if (lang === "en" || !translatedMonths().includes(month)) return;
+  if (lang === "en") return null;
   try {
     const path = encodeURI(`${METADATA_FOLDER}/i18n/${lang}/photos/${month}.json`);
     const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return;
+    if (!res.ok) return null;
     const file = (await res.json()) as TranslationFile;
     await run("readwrite", (s) => s.put(file, `i18n/${lang}/photos/${month}`)).catch(() => {});
+    return file;
   } catch {
     // Captions fall back to English; the month's records are kept regardless.
+    return null;
   }
 }
 
@@ -502,17 +527,104 @@ export async function loadHomeKept(): Promise<HomeIndexFile | null> {
 }
 
 /**
+ * `search.json`, kept between launches like the shards.
+ *
+ * The file is ~6.5MB over Graph — the whole archive's searchable text — and
+ * Search is a read, so a copy from last time answers the same question almost
+ * always. Without this the phone downloaded it every time the Search tab was
+ * opened, on mobile data, and could not search at all offline.
+ *
+ * Network first, because a summarize or analyze run rewrites it and the kept
+ * copy would go stale; kept when the network has nothing, which is what makes
+ * an offline phone able to search what it holds.
+ */
+/** This phone's copy of `search.json`, or null. */
+async function readKeptSearch(): Promise<SearchIndexFile | null> {
+  return (
+    (await run<SearchIndexFile | undefined>("readonly", (s) => s.get("search.json")).catch(() => undefined)) ?? null
+  );
+}
+
+export async function loadSearchKept(): Promise<SearchIndexFile | null> {
+  let fresh: SearchIndexFile | null = null;
+  let failure: unknown = null;
+  try {
+    fresh = await graphJson<SearchIndexFile>("search.json");
+  } catch (err) {
+    failure = err;
+  }
+  if (fresh) {
+    const file = fresh;
+    void run("readwrite", (s) => s.put(file, "search.json")).catch(() => {});
+    return fresh;
+  }
+  const kept = await readKeptSearch();
+  if (kept) return kept;
+  // Nothing to read, so the reason is the only honest answer. Propagating *any*
+  // failure here — not only "signed out" — is what lets the view distinguish
+  // "try again in a moment" from "this archive has no search index".
+  if (failure) throw failure;
+  return null;
+}
+
+/**
+ * Keeps `search.json` the moment a session makes it available.
+ *
+ * It was fetched only when the reader first opened Search, so a phone that had
+ * never opened that tab had no copy — and every attempt afterwards, offline or
+ * with a renewal failing, was told to sign in to a session it may well have
+ * had. Runs in the background at launch and only when there is nothing to
+ * read: one 6.5MB fetch for the life of an install, then Search's own load
+ * keeps it fresh whenever it can.
+ */
+export async function ensureSearchKept(): Promise<void> {
+  try {
+    if (await readKeptSearch()) return;
+  } catch {
+    // Storage unreadable: the fetch below is harmless, and Search falls back
+    // to whatever the network gives it.
+  }
+  await loadSearchKept().catch(() => {});
+}
+
+/**
+ * Pulls any caption file in the reader's language this phone is missing.
+ *
+ * The background cache pass keeps a month's captions when it downloads the
+ * month, which covers a fresh phone or a fresh language. It does not cover a
+ * language chosen after the library was already cached: that pass skips every
+ * month whose records are current, so it never looks at the captions at all.
+ * This closes that gap — one range read to see what is missing, then one fetch
+ * each, once.
+ */
+export async function fillMonthTranslations(): Promise<void> {
+  const lang = contentLanguage();
+  if (lang === "en") return;
+  const months = translatedMonths();
+  if (!months.length) return;
+  const prefix = `i18n/${lang}/photos/`;
+  const kept = new Set(await keysInRange(prefix));
+  const missing = months.filter((month) => !kept.has(`${prefix}${month}`));
+  if (!missing.length) return;
+  const token = await graphToken().catch(() => null);
+  if (!token) return;
+  for (const month of missing) await fetchMonthTranslation(month, token);
+}
+
+/**
  * The reader's language for the archive's own words — trip names, places, day
  * summaries — applied from the copy kept last time when OneDrive cannot be
- * reached.
+ * reached, refreshed from OneDrive, and then the month captions that are still
+ * missing are fetched.
  *
  * Without this, a phone opening offline read half in Chinese: the interface
  * is compiled into the app and the archive's text is not, so the buttons
- * translated and the trips did not. Month captions still need the network
- * (see `loadMonthKept`); this is the index, which is what every list, heading
- * and card is drawn from.
+ * translated and the trips did not. Month captions are the other half — see
+ * `fillMonthTranslations` — and the index has to be in hand first, because
+ * `translatedMonths()` is what says which months even have a caption file.
  */
 export async function applyTranslationsKept(): Promise<void> {
   await applyTranslationsKeptLocal();
   await refreshTranslations();
+  await fillMonthTranslations();
 }

@@ -139,6 +139,22 @@ export function locTrip(trip: TripRecord): TripRecord {
   };
 }
 
+/**
+ * A day's searchable text in the reader's language: summary, place, note and
+ * every stop, each through `loc` — which returns it unchanged when there is no
+ * translation, so English behaves exactly as before.
+ *
+ * The pipeline builds one English blob per day (`jobs/searchIndex.ts`) and the
+ * search index only ever holds that, so a query typed in the reader's language
+ * has to be matched against the translation as well. Both search boxes — the
+ * phone's page and the desktop's title-bar bar — do it through this, so the two
+ * cannot drift apart on what counts as a match.
+ */
+export function localizedDayText(day: DayRecord): string {
+  const segments = (day.segments ?? []).flatMap((seg) => [loc(seg.title), loc(seg.summary)]);
+  return [loc(day.summary), loc(day.place), day.note, ...segments].filter(Boolean).join(" ").toLowerCase();
+}
+
 /** `label` from the caller, which may import `i18n/` where this module may not. */
 export function renderContentLanguageControl(label: string): HTMLElement {
   const select = document.createElement("select");

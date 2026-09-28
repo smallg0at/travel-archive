@@ -3061,8 +3061,14 @@ body.map-expanded::after {
 
 /* Results float over the page — Task Manager's dropdown, not a page change.
    Same width and left edge as the bar it hangs from: a panel wider than its
-   input reads as a separate window rather than as that input's suggestions. */
-.search-results {
+   input reads as a separate window rather than as that input's suggestions.
+
+   Selected by `#search-results`, the title-bar panel's id, not the class:
+   `search.ts` mounts the phone's embedded search under the same
+   `.search-results` class (the phone build loads this stylesheet — see
+   mobile/index.html), and styling the class would turn the phone's in-page
+   results into a fixed 460px panel floating over it. */
+#search-results {
   position: fixed;
   /* Directly under the search field, 4px clear of it. Derived from the same two
      variables as the field, so the two cannot drift apart — at the old fixed
@@ -3081,8 +3087,8 @@ body.map-expanded::after {
   box-shadow: var(--shadow-64);
   -webkit-app-region: no-drag;
 }
-.search-results[hidden] { display: none; }
-.search-results:not([hidden]) { display: block; }
+#search-results[hidden] { display: none; }
+#search-results:not([hidden]) { display: block; }
 
 /* --- The shared-password gate -------------------------------------------- */
 
@@ -3461,7 +3467,7 @@ body.map-expanded::after {
 }
 /* The panel is narrower than a page, so its previews are too — a 96px thumb in
    a 460px dropdown left room for four. */
-.search-results .search-thumb {
+#search-results .search-thumb {
   width: 64px;
   height: 64px;
 }

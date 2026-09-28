@@ -1,7 +1,7 @@
 import type { ArchiveIndexFile, SearchIndexFile } from "@travel-archive/shared";
-import { dayMeta, loadIndex, loadMonth, loadSearchIndex } from "./archiveData";
+import { ServerUnavailableError, dayMeta, loadIndex, loadMonth, loadSearchIndex, needsSignIn } from "./archiveData";
 import { el, hydrateAll, lazyImg } from "./photoUi";
-import { loc } from "./contentLang";
+import { localizedDayText, loc } from "./contentLang";
 import { ui } from "./i18n";
 import { openPhoto } from "./viewer";
 import { openDay } from "./album";
@@ -69,6 +69,7 @@ function rowParts(row: SearchIndexFile["photos"][number]): { text: string; tags:
 
 function search(
   index: SearchIndexFile,
+  archive: ArchiveIndexFile | null,
   query: string,
 ): { days: { date: string; photoIds: string[]; summaryMatched: boolean }[]; trips: SearchIndexFile["trips"]; total: number } {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -91,7 +92,13 @@ function search(
   for (const [date, text] of index.days) {
     if (matches(text, terms)) hit(date).summaryMatched = true;
   }
-  const trips = index.trips.filter(([, name]) => matches(name.toLowerCase(), terms));
+  // The search index holds only the English text, so a query in the reader's
+  // language has to be matched against the translation too — otherwise a
+  // Chinese search finds nothing in a day summary it is actually reading.
+  for (const day of archive?.sections.flatMap((section) => section.days) ?? []) {
+    if (matches(localizedDayText(day), terms)) hit(day.date).summaryMatched = true;
+  }
+  const trips = index.trips.filter(([, name]) => matches(loc(name).toLowerCase(), terms));
 
   const days = [...byDate.values()]
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -144,19 +151,38 @@ async function render(query: string): Promise<void> {
     return;
   }
 
-  loaded =
-    loaded ??
-    Promise.all([loadSearchIndex(), loadIndex().catch(() => null)]).then(([index, archive]) =>
+  if (!loaded) {
+    const pending = Promise.all([loadSearchIndex(), loadIndex()]).then(([index, archive]) =>
       index ? { index, archive } : null,
     );
-  const data = await loaded;
+    loaded = pending;
+    // Not kept when it failed: the usual cause is a token that could not be
+    // renewed, and the next attempt has to make a fresh one rather than keep
+    // handing back the failure.
+    pending.then((data) => {
+      if (!data && loaded === pending) loaded = null;
+    });
+  }
+  let data: Awaited<typeof loaded> = null;
+  try {
+    data = await loaded;
+  } catch (err) {
+    // The truth, not "nothing to search yet" — a signed-out reader has an
+    // archive full of text. The banner offers the sign-in itself.
+    if (mine !== run) return;
+    const signedOut = needsSignIn(err);
+    const message = err instanceof ServerUnavailableError ? ui.search.serverDown : !navigator.onLine ? ui.search.offline : signedOut ? ui.search.signIn : ui.search.retry;
+    showPanel([el(`<div class="loading">${message}</div>`)]);
+    if (signedOut) window.dispatchEvent(new CustomEvent("signin-required"));
+    return;
+  }
   if (mine !== run) return;
   if (!data) {
     showPanel([el(`<div class="loading">${ui.search.unavailable}</div>`)]);
     return;
   }
 
-  const { days, trips, total } = search(data.index, query);
+  const { days, trips, total } = search(data.index, data.archive, query);
   if (mine !== run) return;
 
   if (!days.length && !trips.length) {
