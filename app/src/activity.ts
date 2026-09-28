@@ -3,6 +3,7 @@ import {
   autoSubmitStatus,
   stopAutoSubmit,
   cancelJob,
+  canWrite,
   checkHealth,
   jobHistory,
   listBatches,
@@ -183,11 +184,17 @@ function renderNow(host: HTMLElement, job: JobRecord | null): void {
     </div>
   `);
   const cancel = box.querySelector<HTMLButtonElement>(".job-cancel")!;
-  cancel.textContent = ui.common.cancel;
-  cancel.addEventListener("click", () => {
-    cancel.disabled = true;
-    void cancelJob(job.id).finally(() => (cancel.disabled = false));
-  });
+  if (canWrite()) {
+    cancel.textContent = ui.common.cancel;
+    cancel.addEventListener("click", () => {
+      cancel.disabled = true;
+      void cancelJob(job.id).finally(() => (cancel.disabled = false));
+    });
+  } else {
+    // Watching is a read; stopping is not. Removed rather than hidden so no
+    // reader is offered a control that would answer 403.
+    cancel.remove();
+  }
 
   const paint = (j: JobRecord) => {
     const { phase, done, total } = j.progress;
@@ -338,11 +345,13 @@ export async function showActivity(): Promise<void> {
   releaseActivity();
   content.replaceChildren(el(`<div class="loading">${ui.activity.loading}</div>`));
 
+  const writable = canWrite();
   const [health, batches, history, auto] = await Promise.all([
     checkHealth(),
-    listBatches(),
-    jobHistory(),
-    autoSubmitStatus(),
+    // Nothing to draw for a reader, so nothing to ask for either.
+    writable ? listBatches() : null,
+    writable ? jobHistory() : null,
+    writable ? autoSubmitStatus() : null,
   ]);
   // The reader may have gone elsewhere while those were in flight.
   if (location.hash !== "#activity") return;
@@ -360,7 +369,10 @@ export async function showActivity(): Promise<void> {
   now.node.appendChild(warm);
   const batchSection = section(ui.activity.batches);
   const past = section(ui.activity.history);
-  frag.append(now.node, batchSection.node, past.node);
+  // A reader may watch what is running — that is the point of this page for
+  // them — while the queue and the history are the owner's, and so is the
+  // cancel button (a cancel from here would be refused server-side anyway).
+  if (writable) frag.append(batchSection.node, past.node);
   content.replaceChildren(frag);
 
   nowHost = now.body;
@@ -368,9 +380,12 @@ export async function showActivity(): Promise<void> {
   lastBatches = batches ?? [];
   renderNow(now.body, health.running ?? null);
   renderWarming(warm, health.warming);
-  renderBatches(batchSection.body, batches, auto);
-  renderHistory(past.body, history);
+  if (writable) {
+    renderBatches(batchSection.body, batches, auto);
+    renderHistory(past.body, history);
+  }
   refreshLists = () => {
+    if (!writable) return;
     void Promise.all([listBatches(), jobHistory(), autoSubmitStatus()]).then(([b, h, a]) => {
       if (!batchSection.node.isConnected) return;
       lastBatches = b ?? [];

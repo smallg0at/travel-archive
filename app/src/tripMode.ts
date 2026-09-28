@@ -2,6 +2,7 @@ import type { JobRecord } from "@travel-archive/shared";
 import { el } from "./photoUi";
 import { localServerSource, setThumbnailSource } from "./photoSource";
 import {
+  canWrite,
   cancelJob,
   checkHealth,
   forgetJob,
@@ -536,13 +537,19 @@ export async function initGeneration(refresh: Refresh): Promise<void> {
     // in use.
     setThumbnailSource(localServerSource);
 
-    panel = renderJobPanel(refresh);
+    // Build the panel only where this client may write. A remote reader is
+    // served by the same server, so `health.ok` is true for them too — and
+    // every control in this panel would answer 403. `showGenerate` treats a
+    // missing panel as "no Generate page", which is the truth for them. The
+    // image source above is set regardless: reading *is* served by that
+    // server, that is the whole of remote reading.
+    panel = canWrite() ? renderJobPanel(refresh) : null;
 
     const running = health.running ?? (await (async () => {
       const id = rememberedJob();
       return id ? await getJob(id) : null;
     })());
-    if (running) attach(panel, running);
+    if (running && panel) attach(panel, running);
   } finally {
     markReady(panel !== null);
   }

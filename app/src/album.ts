@@ -9,7 +9,7 @@ import { contentLanguage, loc, locDay, locTrip } from "./contentLang";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
-import { checkHealth, setPin as savePin, syncStatus } from "./backend";
+import { canWrite, checkHealth, setPin as savePin, syncStatus } from "./backend";
 import { releaseSettings, showSettings } from "./settings";
 import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
@@ -909,7 +909,11 @@ function renderNavTools(index: ArchiveIndexFile): void {
     setTitle(ui.nav.generate);
     showGenerate();
   });
-  tools.appendChild(generate);
+  // A remote reader is not offered Generate at all — never appended, rather
+  // than appended and then hidden. `revealBackendTools` would hide it anyway,
+  // but that runs after this and after a health check; building the sidebar as
+  // it should be for this client leaves no window where it exists.
+  if (canWrite()) tools.appendChild(generate);
 
   const home = el<HTMLButtonElement>(
     `<button class="month-link nav-tool" id="nav-home" type="button">
@@ -1102,9 +1106,16 @@ function addPinControl(container: HTMLElement, kind: "trip" | "month", id: strin
  */
 async function revealBackendTools(): Promise<void> {
   if (!(await checkHealth())) return;
-  setDayEditingAvailable(true);
+  // The server answering is not the same as *this* browser being allowed to
+  // write to it: a remote reader is served by the very same server, and for
+  // them every one of these controls would answer 403. `canWrite` is the
+  // server's own answer (see backend.ts); the 403 stays as the backstop.
+  const writable = canWrite();
+  setDayEditingAvailable(writable);
   const generate = document.getElementById("nav-generate");
-  if (generate) generate.hidden = false;
+  if (generate) generate.hidden = !writable;
+  // Activity stays — a reader may watch the job — but it is trimmed inside
+  // (history, batches, the cancel button): see activity.ts.
   const activity = document.getElementById("nav-activity");
   if (activity) {
     activity.hidden = false;

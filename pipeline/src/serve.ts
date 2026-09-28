@@ -1116,7 +1116,16 @@ const server = createServer(async (req, res) => {
    */
   if (path === "/access") {
     if (req.method === "GET") {
-      return json(res, 200, { gated: access.gated, exposed: access.gated, signedIn: access.canRead(req) });
+      return json(res, 200, {
+        gated: access.gated,
+        exposed: access.gated,
+        signedIn: access.canRead(req),
+        // The server's own answer to "may this client write", so the UI can
+        // offer nothing it would then 403 on. Decided here, where the socket
+        // address is authoritative, rather than guessed from the page's
+        // hostname.
+        canWrite: access.canWrite(req),
+      });
     }
     if (req.method === "POST") {
       const body = await readJsonBody<{ password?: string }>(req);

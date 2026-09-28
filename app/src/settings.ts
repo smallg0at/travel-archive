@@ -8,6 +8,7 @@ import type {
 } from "@travel-archive/shared";
 import {
   archiveStatus,
+  canWrite,
   checkHealth,
   getConfig,
   clearCache,
@@ -252,14 +253,21 @@ export async function showSettings(): Promise<void> {
     return;
   }
 
+  const writable = canWrite();
   frag.appendChild(librarySection(archive));
-  frag.appendChild(scanSection(sync));
-  frag.appendChild(generationSection());
-  frag.appendChild(proxySection());
-  frag.appendChild(syncSection(sync));
-  frag.appendChild(offlineSection(sync));
-  frag.appendChild(storageSection(sync));
-  frag.appendChild(appearanceSection());
+  // The rest is this machine's: scanning and syncing the archive, running
+  // jobs, the proxy and storage behind them. A remote reader is shown only the
+  // archive it is reading and how this window looks — the server would refuse
+  // every control in these sections anyway.
+  if (writable) {
+    frag.appendChild(scanSection(sync));
+    frag.appendChild(generationSection());
+    frag.appendChild(proxySection());
+    frag.appendChild(syncSection(sync));
+    frag.appendChild(offlineSection(sync));
+    frag.appendChild(storageSection(sync));
+  }
+  frag.appendChild(appearanceSection(writable));
   // GeoNames is CC BY 4.0, which asks for credit "as suitable for your medium".
   // Natural Earth is public domain and needs none, but naming it costs a line.
   frag.appendChild(el(`<p class="set-credits"></p>`)).textContent = ui.settings.dataCredits;
@@ -850,7 +858,7 @@ function offlineSection(status: SyncStatus): HTMLElement {
   return s;
 }
 
-function appearanceSection(): HTMLElement {
+function appearanceSection(writable = true): HTMLElement {
   const s = section(ui.settings.appearance);
   const body = s.querySelector(".set-body")!;
 
@@ -865,9 +873,14 @@ function appearanceSection(): HTMLElement {
   // One setting for the interface and the archive's own text — captions, day
   // pages, trips. That text needs translating from Generate first; anything
   // without a translation shows as written.
-  const language = el<HTMLDivElement>(`<div class="set-row"><span>${ui.language.label}</span></div>`);
-  language.appendChild(renderContentLanguageControl(ui.language.label));
-  body.appendChild(language);
+  // TODO: choose it from the browser's language on first launch instead, which
+  // would make this row — and the question of whose language it is — go away
+  // for every reader rather than being withheld from remote ones.
+  if (writable) {
+    const language = el<HTMLDivElement>(`<div class="set-row"><span>${ui.language.label}</span></div>`);
+    language.appendChild(renderContentLanguageControl(ui.language.label));
+    body.appendChild(language);
+  }
 
   const sidebar = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.sidebarWidth}</span></div>`);
   sidebar.appendChild(button(ui.common.reset, resetSidebarWidth));

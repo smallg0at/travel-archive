@@ -111,15 +111,39 @@ export const isLocalMachine = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(locatio
 export interface AccessStatus {
   gated: boolean;
   signedIn: boolean;
+  /** Whether the *server* allows this client to write — `canWrite(req)`, not a guess from the hostname. */
+  canWrite: boolean;
 }
+
+let access: AccessStatus | null = null;
 
 export async function accessStatus(): Promise<AccessStatus | null> {
   try {
     const res = await apiFetch("/access", { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
-    return res.ok ? ((await res.json()) as AccessStatus) : null;
+    if (!res.ok) return null;
+    const status = (await res.json()) as AccessStatus;
+    access = status;
+    return status;
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether this browser may write — asked once, at startup, from `/access`.
+ *
+ * Everything the app lets a reader do to the archive (the day, trip and place
+ * editors, the photo-time control, Generate, cancelling a job) is keyed on this
+ * so that a remote reader is never offered a control that answers 403. The
+ * server still refuses regardless — this only decides what is drawn.
+ *
+ * Before `/access` has answered, it falls back to the hostname: `isLocalMachine`
+ * is the same answer for a server that has not started, and it keeps the
+ * owner's own window from painting its own tools hidden for a few milliseconds.
+ */
+export function canWrite(): boolean {
+  if (access) return access.canWrite;
+  return isLocalMachine;
 }
 
 /** Offers the shared password. Throws with the server's wording when it is wrong. */
