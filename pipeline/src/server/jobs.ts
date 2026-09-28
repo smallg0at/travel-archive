@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dataFile } from "../paths.js";
 import { withArchiveLock } from "../lock.js";
 import { randomUUID } from "node:crypto";
+import { GraphError } from "../graph.js";
 import type { JobKind, JobProgress, JobRecord } from "@travel-archive/shared";
 
 /**
@@ -243,8 +244,13 @@ export function start<R extends object>(opts: StartOptions<R>): JobRecord {
       record.status = job.controller.signal.aborted ? "cancelled" : "done";
     } catch (err) {
       record.status = "failed";
+      // The reader sees `record.error` in the app's day editor and activity
+      // list, so it holds the short message (`Graph API 401 Unauthorized — …`).
+      // The full request — URL and response body — goes to the log, which is
+      // where it is worth reading.
       record.error = (err as Error).message;
       record.log.push(`error: ${record.error}`);
+      if (err instanceof GraphError) record.log.push(`graph: ${err.status} ${err.url} — ${err.body}`);
     } finally {
       record.finishedAt = new Date().toISOString();
       // This emit carries the terminal status, which is what tells each SSE

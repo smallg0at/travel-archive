@@ -5,6 +5,75 @@ import { getAccessToken } from "./auth.js";
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
 /**
+ * CI / test safety latch — the only OneDrive write path goes through this
+ * module, so guard it here rather than in every caller.
+ *
+ * Fresh CI checkouts have no `.env` / `token-cache.json` (both gitignored),
+ * but a leaked secret or a copied home dir could still point a test run at
+ * the real library. Fail closed: any Graph call under CI/Vitest throws
+ * unless `ALLOW_LIVE_ONEDRIVE=1` is set explicitly for a hand-run integration
+ * pass. Pure-function tests never touch this module, so they are unaffected.
+ */
+/** Thrown by guardLiveGraph. A distinct class so the degrade-to-null catches
+ * below can rethrow it instead of swallowing it like a network failure. */
+export class LiveGuardError extends Error {
+  constructor() {
+    super(
+      "Refusing live Graph call in CI/test (ALLOW_LIVE_ONEDRIVE!=1). " +
+        "Unit tests must use fixtures; run integration by hand with a bounded --from/--to.",
+    );
+  }
+}
+
+function guardLiveGraph(): void {
+  if (
+    (process.env.CI || process.env.GITHUB_ACTIONS || process.env.VITEST) &&
+    process.env.ALLOW_LIVE_ONEDRIVE !== "1"
+  ) {
+    throw new LiveGuardError();
+  }
+}
+
+/**
+ * A non-2xx from Graph, with the status, URL and body kept as fields rather
+ * than folded into `message`.
+ *
+ * The message reaches a reader: a failed job's `error` is shown in the app's
+ * day editor and its activity list. It used to be the whole request —
+ * `https://graph.microsoft.com/…` plus the raw response body on one line —
+ * which is both unreadable and longer than the panel it lands in. The fields
+ * keep the detail for the job log; the message says what Graph said, without
+ * the URL or the JSON around it.
+ */
+export class GraphError extends Error {
+  constructor(
+    readonly status: number,
+    readonly statusText: string,
+    readonly url: string,
+    readonly body: string,
+  ) {
+    super(`Graph API ${status} ${statusText}${detailOf(status, body)}`);
+    this.name = "GraphError";
+  }
+}
+
+/** Graph's own explanation for a failure, or a hint when the body is not JSON. */
+function detailOf(status: number, body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: { code?: string; message?: string } };
+    const message = parsed.error?.message;
+    if (message) return ` — ${parsed.error?.code ? `${parsed.error.code}: ` : ""}${message}`;
+  } catch {
+    // Not a JSON error body; fall through to the status hint.
+  }
+  if (status === 401) return " — the OneDrive sign-in has expired; sign in again";
+  if (status === 403) return " — OneDrive refused this request";
+  if (status === 404) return " — the file or folder was not found";
+  return "";
+}
+
+
+/**
  * Facets Graph returns on an image driveItem. These are the reason the scan
  * pass is cheap: capture date, GPS and pixel dimensions all come back on the
  * *listing* response, so indexing a 10k-photo library downloads zero photo
@@ -56,6 +125,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * penalty has left far better than any fixed guess.
  */
 async function graphFetchUrl(initialToken: string, url: string, init: RequestInit = {}): Promise<Response> {
+  guardLiveGraph();
   let token = initialToken;
   for (let attempt = 1; ; attempt++) {
     let res: Response;
@@ -90,7 +160,7 @@ async function graphFetchUrl(initialToken: string, url: string, init: RequestIni
       await sleep(Number.isFinite(after) && after > 0 ? after * 1000 : DEFAULT_BACKOFF_MS * attempt);
       continue;
     }
-    throw new Error(`Graph API ${url} failed: ${res.status} ${res.statusText} — ${await res.text()}`);
+    throw new GraphError(res.status, res.statusText, url, await res.text().catch(() => ""));
   }
 }
 
@@ -386,7 +456,8 @@ export async function fetchItemHashes(token: string, itemId: string): Promise<It
       sha1: h.sha1Hash,
       quickXor: h.quickXorHash,
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof LiveGuardError) throw err;
     return null;
   }
 }
@@ -466,7 +537,8 @@ export async function fetchItemMeta(
     );
     const item = (await res.json()) as { eTag?: string; lastModifiedDateTime?: string };
     return { eTag: item.eTag ?? null, lastModifiedDateTime: item.lastModifiedDateTime ?? null };
-  } catch {
+  } catch (err) {
+    if (err instanceof LiveGuardError) throw err;
     return null;
   }
 }
@@ -477,7 +549,8 @@ export async function downloadMetadataJson<T>(token: string, metadataFolder: str
   try {
     const res = await graphFetch(token, `/me/drive/root:/${encodeURI(path)}:/content`);
     return (await res.json()) as T;
-  } catch {
+  } catch (err) {
+    if (err instanceof LiveGuardError) throw err;
     return null;
   }
 }
