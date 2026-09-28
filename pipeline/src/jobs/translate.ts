@@ -6,8 +6,8 @@ import { env } from "../env.js";
 import {
   emptyTranslations,
   loadIndexForReading,
-  loadTranslations,
   loadTranslationsForReading,
+  loadTranslationsForWriting,
   readShardMirror,
   readTranslationsLocal,
   saveTranslations,
@@ -256,7 +256,7 @@ export async function saveNativeText(
 ): Promise<number> {
   if (pairs.length === 0) return 0;
   try {
-    const file = await loadTranslations(token, lang, "index");
+    const file = await loadTranslationsForWriting(token, lang, "index");
     file.parts ??= [];
     file.owner ??= {};
     for (const [original, text] of pairs) file.entries[textKey(original)] = { t: text, via: "native" };

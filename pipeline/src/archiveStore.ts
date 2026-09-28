@@ -138,15 +138,53 @@ export async function saveHomeIndex(token: string, file: HomeIndexFile): Promise
 export async function loadShardForWriting(token: string, month: string): Promise<PhotoShard> {
   const local = await readLocal<PhotoShard>(shardFile(month));
   if (!local) return loadShard(token, month);
+  if (!(await mirrorIsFresh(token, shardFile(month)))) return loadShard(token, month);
+  return local;
+}
 
-  const meta = await fetchItemMeta(token, env.metadataFolder, shardFile(month));
-  // Gone from OneDrive, or never uploaded: the mirror is all there is.
-  if (!meta) return local;
-
-  const localMtime = await fileMtime(shardFile(month));
+/**
+ * Whether the mirror's copy of `fileName` is provably current: OneDrive has not
+ * moved since it was written.
+ *
+ * This is the single-writer check the mirror-first write loads rest on, and it
+ * costs one small metadata request rather than a full download. True also when
+ * the remote cannot be asked about — a file never uploaded, or gone: the mirror
+ * is then all there is. False when there is no mirror time to compare, or the
+ * remote is *clearly* newer (a few seconds of clock skew is normal).
+ */
+async function mirrorIsFresh(token: string, fileName: string): Promise<boolean> {
+  const meta = await fetchItemMeta(token, env.metadataFolder, fileName);
+  if (!meta) return true;
+  const localMtime = await fileMtime(fileName);
   const remote = meta.lastModifiedDateTime ? Date.parse(meta.lastModifiedDateTime) : 0;
-  // Clock skew of a few seconds is normal; only a clear newer remote wins.
-  if (!localMtime || remote > localMtime + 5000) return loadShard(token, month);
+  return !!localMtime && remote <= localMtime + 5000;
+}
+
+/**
+ * The index for a **write** path: the mirror when it is provably safe, Graph
+ * otherwise. The index counterpart of `loadShardForWriting`, and for the same
+ * reason.
+ *
+ * `loadIndex` downloads the whole of `index.json` — several MB, measured
+ * 1–3s — and a write then uploads it again. So every interactive single-day
+ * write (rewrite this day, correct a note, rename a stop) paid a full round
+ * trip down *and* up to change one field, while this server was the only writer
+ * and held the identical bytes in the mirror.
+ *
+ * The safety is exactly `loadShardForWriting`'s: the mirror is trusted only
+ * when OneDrive has not moved since it was written. If another machine wrote in
+ * the meantime, the remote is clearly newer and the full download happens as
+ * before; the upload still goes to Graph, so the remote stays authoritative.
+ *
+ * A mirror from an older schema is not trusted either: it is `loadIndex`'s
+ * `migrate` that knows how to bring one forward, and writing it as-is would
+ * skip that.
+ */
+export async function loadIndexForWriting(token: string): Promise<ArchiveIndexFile> {
+  const local = await readLocal<ArchiveIndexFile>(INDEX_FILE);
+  if (!local) return loadIndex(token);
+  if (local.schemaVersion !== SCHEMA_VERSION) return loadIndex(token);
+  if (!(await mirrorIsFresh(token, INDEX_FILE))) return loadIndex(token);
   return local;
 }
 
@@ -231,6 +269,26 @@ export async function readTranslationsLocal(lang: string, part: string): Promise
 /** Read-only load: the mirror if it has it, Graph if not. */
 export async function loadTranslationsForReading(token: string, lang: string, part: string): Promise<TranslationFile> {
   return (await readTranslationsLocal(lang, part)) ?? (await loadTranslations(token, lang, part));
+}
+
+/**
+ * A translation file for a **write** path, mirror-first, on the same terms as
+ * `loadIndexForWriting`.
+ *
+ * `saveNativeText` runs at the end of every organize — including a single-day
+ * rewrite — and `editDay` on every save, and each loaded the whole file from
+ * Graph and uploaded it back. Against a provably current mirror that download
+ * was pure waste; the upload still happens, because the file is changing.
+ */
+export async function loadTranslationsForWriting(
+  token: string,
+  lang: string,
+  part: string,
+): Promise<TranslationFile> {
+  const local = await readTranslationsLocal(lang, part);
+  if (!local) return loadTranslations(token, lang, part);
+  if (!(await mirrorIsFresh(token, translationFile(lang, part)))) return loadTranslations(token, lang, part);
+  return local;
 }
 
 /** Local first, then upload — the same order as `saveShard`, so the mirror is never behind OneDrive. */

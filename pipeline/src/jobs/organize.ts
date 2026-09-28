@@ -2,7 +2,7 @@ import type { DayEdits, DayRecord, DaySegment, OrganizePlan, PhotoRecord } from 
 import { CARD_BUDGET, SUMMARY_MIN_PHOTOS, applyEdits } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { getProvider } from "../providers/index.js";
-import { loadAllShards, loadIndex, loadIndexForReading, saveIndex } from "../archiveStore.js";
+import { loadAllShards, loadIndexForReading, loadIndexForWriting, saveIndex } from "../archiveStore.js";
 import { dayKey, sameIds } from "../util.js";
 import { findTripFor, loadTripDefinitions } from "../tripDefs.js";
 import { bucketDays } from "./sections.js";
@@ -360,7 +360,11 @@ export async function runOrganize(
   const token = await getAccessToken();
 
   onProgress({ phase: "loading", message: "Loading index..." });
-  const index = await loadIndex(token);
+  // The mirror when it is provably current, Graph otherwise — see
+  // `loadIndexForWriting`. A single-day rewrite runs this on every press, and a
+  // full index download (plus the upload that follows) per press is what made
+  // it look like it was hammering OneDrive.
+  const index = await loadIndexForWriting(token);
 
   onProgress({ phase: "loading", message: `Loading ${index.months.length} month shard(s)...` });
   const shards = await loadAllShards(token, index);

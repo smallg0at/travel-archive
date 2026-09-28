@@ -1,6 +1,6 @@
 import type { ArchiveIndexFile, DayEdits, DayRecord, StopEdit } from "@travel-archive/shared";
 import { CONTENT_LANGUAGES } from "@travel-archive/shared";
-import { loadIndex, loadTranslations, saveIndex, saveTranslations } from "../archiveStore.js";
+import { loadIndexForWriting, loadTranslationsForWriting, saveIndex, saveTranslations } from "../archiveStore.js";
 import { getAccessToken } from "../auth.js";
 import { withArchiveLock } from "../lock.js";
 
@@ -114,11 +114,11 @@ export async function editDay(date: string, patch: DayPatch): Promise<DayEditRes
   }
 
   return withArchiveLock("edit day", async () => {
-    // The Graph copy, not the mirror: this is a write path, and a mirror gone
-    // stale on another machine would be merged onto and uploaded over the
-    // newer index (HANDOFF.md, "A read-only path must read the mirror").
+    // The mirror when it is provably current, Graph otherwise — see
+    // `loadIndexForWriting`. A save is one field, and it used to pay a full
+    // download of the index to read the record it was about to change.
     const token = await getAccessToken();
-    const index = await loadIndex(token);
+    const index = await loadIndexForWriting(token);
     const day = findDay(index, date);
     if (!day) throw new Error(`No day ${date} in the archive. Run organize for it first.`);
 
@@ -143,7 +143,7 @@ export async function editDay(date: string, patch: DayPatch): Promise<DayEditRes
     if (touchesText && lang) {
       // Another language's edits: its own file, loaded from Graph for the same
       // reason as the index. The day record is not touched.
-      const file = await loadTranslations(token, lang, "index");
+      const file = await loadTranslationsForWriting(token, lang, "index");
       file.parts ??= [];
       file.owner ??= {};
       const next = copyEdits(file.owner[date]);
