@@ -16,6 +16,25 @@ defined. Generate → Translate → Estimate for what is left of the text.
 
 ## Open issues
 
+- [ ] **A remote reader's Activity page stops updating job progress.** Raised
+      by the owner 2026-10-04: on the home network the 进行中 box shows the job
+      as it was when the page loaded, and the phase, bar and log then stay
+      there. Three mechanisms meet here and only one was checked while fixing
+      the missing section (5240d58): live updates come *solely* from
+      `watchJob`, an SSE stream to `/jobs/:id/events`; the sidebar indicator's
+      15s tick deliberately repaints only when `liveJobId === null`, leaving an
+      attached job to its stream; and `refreshLists` early-returns when
+      `canWrite()` is false, so a read-only client has no poller behind the
+      stream either. A stream that silently drops — LAN, a sleeping page, a
+      proxy that times out — is then never noticed or re-established, and
+      nothing falls back. Establish first **whether the SSE frame reaches a LAN
+      origin at all**, and whether the owner's own window still updates (not
+      re-checked while writing this; if it does not, this is not a
+      remote-access issue at all). If the frame does arrive, the cheap fix is a
+      fallback: the indicator tick already fetches `health`, so repainting from
+      it when the stream has been silent for N seconds costs one call every
+      quarter of a minute. Shelved as ugly but not wrong.
+
 - [ ] **The job server keeps no request log, so a failure on someone else's
       machine leaves no trace.** Raised 2026-09-25 after an iPad on the home
       network stopped loading pages while every other device was fine. The
