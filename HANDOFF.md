@@ -444,6 +444,50 @@ Nominatim took 40 minutes. Street-level detail ("The Quay, a coastal suburb")
 was dropped with the move: measured on this archive it reached 9% of captions,
 and street names 0.1%, for a second request per photo.
 
+### Street level and POI names: investigated, decided against (2026-10-04)
+
+`photo.near` (`{venue, street}`) has had **no writer since `2ffeefe`**, the
+Nominatim → GeoNames move, so both fields are always null and the two places
+that would use them — `captionContext.ts:23-24` and `analyze.ts:288-289` — are
+dead code. The fields and the prompt lines are kept rather than deleted:
+reviving the feature costs one writer plus a backfill, and the read end is
+already built.
+
+Four ways to fill it were examined. The evidence says none of them pays:
+
+| Evidence | Figure |
+|---|---|
+| street names in captions | **0.1%** |
+| street/venue words reaching a day summary | **2.00%** (41/2,048) |
+| a neighbouring hint naming the subject | **0 of 20** (the railway museum, `types.ts:17-22`) |
+| venue-hint A/B run in `scripts/bench-providers.mjs` | 0/6 and 1/6 — six photos at two places, half the calls never reaching the model |
+
+- **GeoNames, extended to class S (spot) and R (road)** — the cheapest: CC BY
+  4.0 stays and only `build-geo.mjs` changes. Not the same files, though —
+  `cities500.txt` is class P only, so it needs the per-country `XX.zip`
+  downloads. Density in China is unmeasured.
+- **OSM extraction** — data-side fine, download-side awkward. The footprint is
+  nine countries in disconnected clusters (see the 足迹 map), and Geofabrik
+  slices by administration: China 1.5GB whole, 25–163MB a province, Europe
+  32.5GB — gigabytes bought for a few hundred square kilometres of interest.
+  ODbL is workable (build `poi.tsv` locally, never commit it, credit line in
+  Settings); the public Overpass instance has the same fair-use problem that
+  killed Nominatim, so an OSM route means a file download, not an API.
+- **Photon, self-hosted** — ruled out on size rather than licence: the planet
+  database dump is **62.8GB** (JSON dump 26.9GB) and wants Java 21, OpenSearch
+  and — per its own README — 64GB of RAM. Against a "tens of MB, loaded once
+  at startup" target that is three orders of magnitude away. Photon's
+  *regional JSON dumps* remain a reasonable way to obtain OSM data without
+  running Photon.
+- **Text extraction from the archive's own OCR** — zero new data and zero
+  licence, and rejected on precision: what OCR reads is a departure board, a
+  ticket, a menu or a map, and those name the destination rather than the
+  place. A name being *in* the image is not the image being *of* it, and that
+  failure mode would be quiet.
+
+Standing gap, unrelated to POIs: **9,817 of 32,700 photos have no place at
+all** — a settlement lookup miss, not a venue miss.
+
 ---
 
 ## Past regressions, now fixed
@@ -644,9 +688,12 @@ is no model work left in the archive; what remains is a **local decode** for tho
 ### How captioning works, for when it is needed again
 
 - **Context.** The prompt carries the camera's clock in words, the trip, the
-  town, a street-level venue and street (Nominatim `zoom=18`, looked up
-  *before* captioning and cached on disk in `data/geocode-cache.json`) and the
-  owner's note for the day. Measured: a real place name added to 6 of 24
+  town, and the owner's note for the day. The town is looked up *before*
+  captioning from the local gazetteer (`geocodeBeforeCaptioning` — no network,
+  and no `data/geocode-cache.json`: that file was Nominatim's). `venue` and
+  `street` are still declared on `CaptionContext` but always null, because
+  nothing writes `photo.near` — see "Street level and POI names: investigated,
+  decided against". Measured: a real place name added to 6 of 24
   captions, nothing invented (TODO.md, "Photo captions are written with no
   context"). The name of a museum still first appears in the stop title.
 - **Low image resolution** (`CAPTION_RESOLUTION`, `gemini.ts`) — ~600 input
