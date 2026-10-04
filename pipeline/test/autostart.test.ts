@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
 import { launcherSource, registeredValue, runtimePath, wrapperSource } from "../src/autostart.js";
 
 /**
@@ -12,6 +13,9 @@ import { launcherSource, registeredValue, runtimePath, wrapperSource } from "../
  * fnm will clean up all fail silently, days later, with nobody watching.
  */
 const ENTRY = "C:\\Code\\proj\\pipeline\\dist\\serve.js";
+
+/** What `autostart.ts` does to a value for PowerShell's single-quoted strings. */
+const psQuote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
 
 describe("registered value", () => {
   it("runs the wrapper through wscript, quoted", () => {
@@ -88,11 +92,20 @@ describe("launcher", () => {
 
   it("carries ARCHIVE_HOME through when the shell set one", () => {
     const previous = process.env.ARCHIVE_HOME;
-    process.env.ARCHIVE_HOME = "C:\\Users\\O'Brien\\Photo Archive";
+    // Two different values go in: the variable is used verbatim for
+    // `$env:ARCHIVE_HOME`, and `archiveHome()` *resolves* it for
+    // `Set-Location`. Those are the same string on Windows, where this feature
+    // exists, and not the same on POSIX, where `C:\...` is a relative path —
+    // which is what CI caught: a Windows-shaped literal asserted against a
+    // resolved one passes on the developer's machine and nowhere else.
+    const win = process.platform === "win32";
+    const home = win ? "C:\\Users\\O'Brien\\Photo Archive" : "/home/O'Brien/Photo Archive";
+    const located = resolve(home);
+    process.env.ARCHIVE_HOME = home;
     try {
       const packaged = launcherSource(ENTRY, 18419);
-      expect(packaged).toContain("$env:ARCHIVE_HOME = 'C:\\Users\\O''Brien\\Photo Archive'");
-      expect(packaged).toContain("Set-Location 'C:\\Users\\O''Brien\\Photo Archive'");
+      expect(packaged).toContain(`$env:ARCHIVE_HOME = ${psQuote(home)}`);
+      expect(packaged).toContain(`Set-Location ${psQuote(located)}`);
     } finally {
       if (previous === undefined) delete process.env.ARCHIVE_HOME;
       else process.env.ARCHIVE_HOME = previous;
