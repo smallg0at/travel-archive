@@ -743,6 +743,34 @@ export interface AutostartStatus {
 }
 
 /**
+ * Who can reach the job server, as it is running and as it is saved.
+ *
+ * The two halves exist separately because they genuinely differ: `makeAccess`
+ * and `server.listen` take their answer from `.env` **at startup**, so a value
+ * saved now is not the server's answer now. The form saves; a restart applies
+ * — and `restartNeeded` is what says so, rather than leaving the reader to
+ * wonder why their new password was refused.
+ *
+ * `hasPassword` is set-or-not, like every other secret across this boundary:
+ * the password is never read back out, only written.
+ */
+export interface RemoteAccessStatus {
+  /** The host the server is listening on as it runs. */
+  host: string;
+  /** Whether it is reachable beyond loopback as it runs. */
+  exposed: boolean;
+  /** Whether reading is gated by a password as it runs. */
+  hasPassword: boolean;
+  /** What `.env` holds for the next start. */
+  savedHost: string;
+  savedHasPassword: boolean;
+  /** The saved `savedHost` read as exposed-or-not, so no client redoes the test. */
+  savedExposed: boolean;
+  /** The saved values differ from the running ones — restart to apply them. */
+  restartNeeded: boolean;
+}
+
+/**
  * What an `organize` run would do, without doing any of it.
  *
  * Exists because "0 day(s) summarized" is the same message whether nothing

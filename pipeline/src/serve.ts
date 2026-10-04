@@ -2,7 +2,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
 import { readFile } from "node:fs/promises";
-import { dataFile } from "./paths.js";
+import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { get } from "node:http";
+import { isAbsolute } from "node:path";
+import { archiveHome, dataFile } from "./paths.js";
+import { mirrorOutputToLog } from "./logFile.js";
 import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl } from "./graph.js";
 import {
   invalidateCacheStats,
@@ -20,7 +25,8 @@ import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
-import { autostartStatus, setAutostart } from "./autostart.js";
+import { autostartStatus, runtimePath, setAutostart, warmAutostartCache } from "./autostart.js";
+import { remoteAccessStatus, runningExposed, runningHost, runningPassword, setRemoteAccess } from "./remoteAccess.js";
 import { initProxyDispatcher } from "./proxy.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import {
@@ -350,6 +356,158 @@ function imageType(bytes: Buffer): string {
   return "image/jpeg";
 }
 
+/**
+ * Whether this server's own health endpoint answers, without going through
+ * the proxy layer.
+ *
+ * A plain `fetch` would be handed to the global dispatcher that
+ * `initProxyDispatcher` installed for AI and Graph traffic, and a loopback URL
+ * asking a system proxy to loop back is a question with two answers. `http.get`
+ * touches neither, and this is the one probe that must not be clever.
+ */
+function answersHealth(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = get(`http://127.0.0.1:${port}/health`, (res) => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    });
+    req.setTimeout(1200, () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.on("error", () => resolve(false));
+  });
+}
+
+type RestartPlan = { ok: true; entry: string } | { ok: false; error: string };
+
+/**
+ * Whether a restart may happen, and what to start in this one's place.
+ *
+ * Refuses on a running job rather than killing it: a job stopped mid-write
+ * leaves the archive lock held by a process that will never release it, and
+ * that failure surfaces as "nothing works" at the next launch with no line on
+ * screen to explain it.
+ */
+async function planRestart(): Promise<RestartPlan> {
+  const running = jobs.runningJob();
+  if (running) {
+    return { ok: false, error: `A ${running.kind} job is running (${running.id}); wait for it or cancel it first.` };
+  }
+  const entry = process.argv[1];
+  if (!entry || !isAbsolute(entry) || !existsSync(entry)) {
+    return {
+      ok: false,
+      error:
+        `This server was not started from a file on disk (${entry ?? "no entry point"}), ` +
+        `so there is nothing to start again.`,
+    };
+  }
+  return { ok: true, entry };
+}
+
+/**
+ * Start a replacement and leave — only once it is answering.
+ *
+ * The order is the whole design:
+ *
+ *   1. **Close the listener first.** On Windows a replacement binding while
+ *      this one still listens gets EADDRINUSE and dies, which would be a
+ *      restart that removes the server. The port has to be free *before* the
+ *      new process starts, not when it tries.
+ *   2. **Spawn detached, from the same entry and env**, so it does not care
+ *      whether it was the desktop shell, the sign-in launcher or a terminal
+ *      that started this one. No supervisor is introduced — the dying process
+ *      is the only thing that has to work, and it works the same in the
+ *      background case where there is no shell to fall back on.
+ *   3. **Wait for /health, up to 20 seconds, before exiting.** A replacement
+ *      that failed to start must be followed by this one coming back up, not
+ *      by nothing.
+ *
+ * The response has already been written by then: readers see a couple of
+ * seconds in which `/health` does not answer, which the app's two-consecutive-
+ * misses rule absorbs without drawing the offline banner.
+ */
+async function handOver(entry: string): Promise<void> {
+  console.log(`restart: handing over to ${entry}`);
+
+  // Wait for the listener to be *gone*, not merely closing. `server.close()`
+  // releases the port only once its connections are finished, and on Windows a
+  // replacement that binds before then gets EADDRINUSE — which is exactly what
+  // the first attempt did, with the child's own error line lost along with it
+  // because it died before a pipe flushed.
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  server.closeIdleConnections?.();
+  const stragglers = setTimeout(() => server.closeAllConnections?.(), 1200);
+  await Promise.race([closed, new Promise<void>((r) => setTimeout(r, 4000))]);
+  clearTimeout(stragglers);
+
+  let child: ReturnType<typeof spawn> | null = null;
+  try {
+    child = spawn(runtimePath(), [entry], {
+      cwd: archiveHome(),
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      detached: true,
+      // Not this process's stdout: the replacement writes `data/serve.log`
+      // itself (logFile.ts), and handing it our stream as well would put every
+      // line in twice — once through the launcher's redirect, once through
+      // its own mirror.
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    child.on("error", (err) => console.error(`restart: could not start the replacement: ${err.message}`));
+    child.unref();
+  } catch (err) {
+    console.error(`restart: failed to spawn the replacement: ${(err as Error).message}`);
+  }
+
+  if (child) {
+    // A replacement that dies must be reported now, not after twenty seconds
+    // of polling a port nobody is going to answer on.
+    let died: string | null = null;
+    child.once("exit", (code, signal) => {
+      died = code !== null && code !== undefined ? String(code) : String(signal ?? "unknown");
+    });
+
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await new Promise((r) => setTimeout(r, 500));
+      if (died !== null) {
+        console.error(`restart: the replacement exited (${died}) before it answered`);
+        break;
+      }
+      if (await answersHealth(env.servePort)) {
+        console.log("restart: replacement is answering - exiting");
+        // Not `process.exit` straight away: this process's stdout is a pipe
+        // (the launcher redirects it), and a synchronous exit drops whatever
+        // the pipe has not flushed - which is how the first attempt's report
+        // went missing.
+        setTimeout(() => process.exit(0), 150);
+        return;
+      }
+    }
+  }
+
+  // Nothing came up. Take the listener back rather than leave the port held by
+  // a process that is about to stop listening and then sit there.
+  console.error("restart: no replacement answered within 20s - taking the listener back");
+  server.listen(env.servePort, HOST, () => {
+    console.log(`pipeline serve - back up on ${HOST} after a restart that did not complete`);
+  });
+}
+
+/**
+ * Everything this process prints is also written to `data/serve.log` — the
+ * banner, a job's error, and the reason a restart did or did not work. Called
+ * before anything else runs, because a mirror installed after the first line
+ * would miss the first line.
+ */
+mirrorOutputToLog();
+
+// The Run key is read through `reg.exe`, so asking it once here — before
+// anyone opens Settings — keeps that off the control's init path. See the
+// cache in autostart.ts: populating a checkbox should not spawn a process.
+warmAutostartCache();
+
 const routes: [RegExp, string, Handler][] = [
   [
     /^\/health$/,
@@ -428,6 +586,60 @@ const routes: [RegExp, string, Handler][] = [
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }
+    },
+  ],
+
+  /**
+   * Who may reach this server, as it is running and as it is saved.
+   *
+   * Readable by anyone who can read the archive — it says whether a password
+   * exists, never what it is — and writable only by this machine, like every
+   * other setting that changes what the server does. The password travels one
+   * way: `null` or an empty string clears it, and neither is ever sent back.
+   */
+  [/^\/settings\/remote$/, "GET", async (_req, res) => json(res, 200, await remoteAccessStatus())],
+  [
+    /^\/settings\/remote$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ exposed?: unknown; password?: unknown }>(req);
+      if (body.exposed !== undefined && typeof body.exposed !== "boolean") {
+        return json(res, 400, { error: "exposed must be true or false" });
+      }
+      if (body.password !== undefined && body.password !== null && typeof body.password !== "string") {
+        return json(res, 400, { error: "password must be a string, null to clear, or absent to leave alone" });
+      }
+      // An empty box is the same intent as the clear button, not a password
+      // nobody could type.
+      const password = body.password === "" ? null : body.password;
+      try {
+        json(
+          res,
+          200,
+          await setRemoteAccess({ exposed: body.exposed as boolean | undefined, password: password as string | null | undefined }),
+        );
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+
+  /**
+   * Restart — the only way a saved remote-access change, or a wedged server,
+   * can be applied from where the reader is standing.
+   *
+   * Answered *before* anything closes: the response has to get out while the
+   * listener is still listening, and the handover that follows is allowed to
+   * take up to twenty seconds without the client waiting on it.
+   */
+  [
+    /^\/server\/restart$/,
+    "POST",
+    async (_req, res) => {
+      const plan = await planRestart();
+      if (!plan.ok) return json(res, 409, plan);
+      json(res, 200, { ok: true, restarting: true });
+      setTimeout(() => void handOver(plan.entry), 300);
     },
   ],
 
@@ -1214,10 +1426,14 @@ initProxyDispatcher();
  * that then gates reading, and writes stay this machine's alone either way.
  * Exposing without a password is allowed and said out loud at startup, because
  * a silent open server is the failure worth preventing.
+ *
+ * All three come from `remoteAccess.ts`, which reads them once at startup —
+ * that is what `makeAccess` and `listen` do, and what makes a saved-but-not-
+ * restarted change reportable rather than half applied.
  */
-const HOST = env.archiveHost;
-const exposed = HOST !== "127.0.0.1" && HOST !== "localhost" && HOST !== "::1";
-const access = makeAccess({ password: env.archivePassword ?? null, exposed });
+const HOST = runningHost;
+const exposed = runningExposed;
+const access = makeAccess({ password: runningPassword ?? null, exposed });
 
 server.listen(env.servePort, HOST, () => {
   const where = exposed ? `http://${HOST}:${env.servePort}` : `http://127.0.0.1:${env.servePort} (loopback only)`;

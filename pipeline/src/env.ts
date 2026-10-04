@@ -77,10 +77,9 @@ function readEnv() {
     scanFrom: fromEnv("SCAN_MONTH_FROM") || null,
     scanTo: fromEnv("SCAN_MONTH_TO") || null,
 
-    // `pipeline serve` binds this port on 127.0.0.1 only — it holds OneDrive
-    // credentials, so it must not be reachable from the LAN. That is also why
-    // the phone is a read-only client: it talks to OneDrive directly, never to
-    // this server.
+    // The port the job server binds. Where it binds is `ARCHIVE_HOST`, below.
+    // 18419 sits outside the usual dev range on purpose: the shell is on
+    // 17923 and a preview on 4173, so all three can run at once.
     servePort: Number(fromEnv("SERVE_PORT") ?? 18419),
 
     /**
@@ -91,6 +90,12 @@ function readEnv() {
      * network gets the same archive with no server of its own. What it also
      * needs is `ARCHIVE_PASSWORD` — see access.ts — or the startup line will
      * say, loudly, that the archive is open to anything on the network.
+     *
+     * Both are editable from Settings now (remoteAccess.ts), and both are
+     * decided here at startup: a saved value waits for a restart. The phone
+     * reads through this server as well as through OneDrive — see
+     * `ServerUnavailableError` in the app — so reachable-or-not is a choice,
+     * not an assumption.
      */
     archiveHost: fromEnv("ARCHIVE_HOST") ?? "127.0.0.1",
     /** The shared password a remote reader types once. Unset means no gate. */

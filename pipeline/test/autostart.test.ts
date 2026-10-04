@@ -67,11 +67,16 @@ describe("launcher", () => {
     expect(src).toContain("if ($health.StatusCode -eq 200) { exit 0 }");
   });
 
-  it("runs the entry with the runtime that started it, redirected to a log", () => {
-    expect(src).toContain(`& '${runtimePath()}' '${ENTRY}' *>> $log`);
+  it("runs the entry with the real runtime, leaving the log to the server", () => {
+    // No redirect: the server mirrors both streams itself (logFile.ts), and a
+    // second path into the same file would double every line. Worse, the
+    // launcher's own `$ErrorActionPreference = 'SilentlyContinue'` discards
+    // native stderr under redirection — measured — which is how the reason a
+    // restart failed went missing.
+    expect(src).toContain(`& '${runtimePath()}' '${ENTRY}'`);
+    expect(src).not.toContain(">>");
     expect(src).toContain("ELECTRON_RUN_AS_NODE = '1'");
-    expect(src).toContain("serve.log");
-    expect(src).toContain("New-Item -ItemType Directory -Force");
+    expect(src).toContain("data\\serve.log");
   });
 
   it("pins the real runtime, not the per-shell shim it was started through", () => {

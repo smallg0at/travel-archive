@@ -103,16 +103,19 @@ function quoteForCmd(arg: string): string {
  */
 export function launcherSource(entry: string, port: number): string {
   const home = archiveHome();
-  const log = join(dataDir(), "serve.log");
   const archiveHomeVar = process.env.ARCHIVE_HOME?.trim();
   return `# Written by Photo Archive when "start at sign-in" was turned on.
 # Everything that runs at sign-in is this file. The path to the runtime is
 # pinned as it was at that moment: if Node moves or is upgraded, point line 1
-# at the new one. Its output goes to data\\serve.log beside it.
+# at the new one.
+#
+# Output is deliberately NOT redirected here: the server mirrors both of its
+# streams into data\\serve.log itself (logFile.ts). Redirecting as well would
+# put every line in twice - and PowerShell's $ErrorActionPreference, set below
+# to keep a hidden window quiet, discards a native command's stderr under
+# redirection, which is how the reason a restart failed went missing.
 $ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference = 'SilentlyContinue'
-$log = ${ps(log)}
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
 
 # Already serving - the desktop shell started it, or an earlier login's copy is
 # still up. A second one could only lose the bind and log a stack trace.
@@ -124,7 +127,7 @@ try {
 $env:ELECTRON_RUN_AS_NODE = '1'
 ${archiveHomeVar ? `$env:ARCHIVE_HOME = ${ps(archiveHomeVar)}` : "# No ARCHIVE_HOME: running from a checkout, where paths.ts falls back on the code's own directory."}
 Set-Location ${ps(home)}
-& ${ps(runtimePath())} ${ps(entry)} *>> $log
+& ${ps(runtimePath())} ${ps(entry)}
 `;
 }
 
@@ -153,15 +156,46 @@ shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Fi
 `;
 }
 
+/** `reg.exe`, hidden. */
+const reg = (args: string[]) => exec("reg", args, { windowsHide: true });
+
+/**
+ * What the Run key holds, as this process last knew it.
+ *
+ * **Read once, then maintained here** — and that difference is between two
+ * kinds of caller, which is why it is worth the state. Populating the control
+ * is a *read*: a query on every Settings page, one `reg.exe` per open, for a
+ * value the server itself wrote. Applying a change is a *write*, which needs
+ * the process anyway.
+ *
+ * The read is also the one that opened a terminal: after a restart the server
+ * runs with `stdio: 'ignore'` and so has no console of its own, and a console
+ * child of a console-less parent gets a fresh, *visible* window — `windowsHide`
+ * on the spawn covers that, and caching means it happens at most once, at
+ * start-up (`warmAutostartCache`), where nothing is looking.
+ *
+ * Trusting the cache is deliberate: this is the server's own record, corrected
+ * by the next save if someone edits the key by hand outside it.
+ */
+let registration: boolean | null = null;
+
 /** Whether the Run key holds our value. Any query failure reads as "not registered". */
 async function registered(): Promise<boolean> {
   if (!supported) return false;
+  if (registration !== null) return registration;
   try {
-    await exec("reg", ["query", RUN_KEY, "/v", VALUE]);
+    await reg(["query", RUN_KEY, "/v", VALUE]);
+    registration = true;
     return true;
   } catch {
+    registration = false;
     return false;
   }
+}
+
+/** Asks once, at start-up, so the first Settings page does not have to. */
+export function warmAutostartCache(): void {
+  void registered();
 }
 
 export async function autostartStatus(): Promise<AutostartStatus> {
@@ -203,23 +237,15 @@ export async function setAutostart(enabled: boolean): Promise<AutostartStatus> {
     // it is written plain and built to stay ASCII.
     await writeFile(homeFile(LAUNCHER), `\uFEFF${launcherSource(entry, env.servePort)}`, "utf-8");
     await writeFile(homeFile(WRAPPER), wrapperSource(), "ascii");
-    await exec("reg", [
-      "add",
-      RUN_KEY,
-      "/v",
-      VALUE,
-      "/t",
-      "REG_SZ",
-      "/d",
-      registeredValue(),
-      "/f",
-    ]);
+    await reg(["add", RUN_KEY, "/v", VALUE, "/t", "REG_SZ", "/d", registeredValue(), "/f"]);
+    registration = true;
     return autostartStatus();
   }
 
   if (await registered()) {
-    await exec("reg", ["delete", RUN_KEY, "/v", VALUE, "/f"]);
+    await reg(["delete", RUN_KEY, "/v", VALUE, "/f"]);
   }
+  registration = false;
   await Promise.all([rm(homeFile(LAUNCHER), { force: true }), rm(homeFile(WRAPPER), { force: true })]);
   return autostartStatus();
 }

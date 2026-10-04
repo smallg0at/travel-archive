@@ -63,6 +63,16 @@ const WRITABLE = [
   "ONEDRIVE_PHOTOS_FOLDER",
   "ONEDRIVE_METADATA_FOLDER",
   "GEOCODE_CONTACT_EMAIL",
+  // Remote access: whether the server is reachable beyond this machine, and
+  // the shared password that then gates reading. Both are decided at startup
+  // (server.listen and makeAccess), which is why saving them reports
+  // "restart to apply" rather than taking effect — see remoteAccess.ts.
+  //
+  // ARCHIVE_HOST is not free-form here: a value `server.listen` cannot bind
+  // leaves a server that never starts again, discovered at the next sign-in.
+  // The two states the form offers are the two this accepts.
+  "ARCHIVE_HOST",
+  "ARCHIVE_PASSWORD",
   "PROXY_SYSTEM_ENABLED",
   "PROXY_AI_MODE",
   "PROXY_AI_URL",
@@ -126,18 +136,38 @@ function serialize(key: string, value: string): string {
 }
 
 /**
- * Merges values into `.env`, preserving the rest of the file.
+ * The hosts this accepts for `ARCHIVE_HOST`.
+ *
+ * Not free form: `server.listen` binds whatever it is given, and a value it
+ * cannot bind is a server that never starts again — that failure arrives at
+ * the next sign-in with nothing on screen to explain it. `0.0.0.0` is the
+ * whole of "let the family read this"; the two loopbacks are the private
+ * default. Anything else stays available to someone editing `.env` by hand.
+ */
+const HOST_VALUES = ["127.0.0.1", "localhost", "0.0.0.0"] as const;
+
+/**
+ * Merges values into `.env`, preserving the rest of the file; `null` removes
+ * the line.
  *
  * Rewrites the line for a key that is already present and appends the ones that
  * are not, so comments and any hand-written settings survive — this file is
- * still meant to be editable by hand.
+ * still meant to be editable by hand. Removal is a first-class operation
+ * rather than an empty string: `ARCHIVE_PASSWORD=""` would leave the gate on
+ * with a password nobody could type.
  */
-export async function saveConfig(patch: Partial<Record<WritableKey, string>>): Promise<ConfigStatus> {
+export async function saveConfig(patch: Partial<Record<WritableKey, string | null>>): Promise<ConfigStatus> {
   const entries = Object.entries(patch).filter(([k, v]) => WRITABLE.includes(k as WritableKey) && v !== undefined) as [
     WritableKey,
-    string,
+    string | null,
   ][];
   if (entries.length === 0) return configStatus();
+
+  for (const [key, value] of entries) {
+    if (key === "ARCHIVE_HOST" && value !== null && !(HOST_VALUES as readonly string[]).includes(value)) {
+      throw new Error(`${value} is not a host this server can bind; use one of ${HOST_VALUES.join(", ")}`);
+    }
+  }
 
   const path = homeFile(".env");
   let lines: string[] = [];
@@ -148,8 +178,12 @@ export async function saveConfig(patch: Partial<Record<WritableKey, string>>): P
   }
 
   for (const [key, value] of entries) {
-    const rendered = serialize(key, value);
     const at = lines.findIndex((line) => new RegExp(`^\s*${key}\s*=`).test(line));
+    if (value === null) {
+      if (at >= 0) lines.splice(at, 1);
+      continue;
+    }
+    const rendered = serialize(key, value);
     if (at >= 0) lines[at] = rendered;
     else lines.push(rendered);
   }
@@ -161,11 +195,42 @@ export async function saveConfig(patch: Partial<Record<WritableKey, string>>): P
   // "nothing happened" the form is meant to avoid. Setting `process.env` and
   // then reloading also preserves the normal precedence, where a real
   // environment variable beats the file.
-  for (const [key, value] of entries) process.env[key] = value;
+  //
+  // For remote access this is deliberately *not* the server's answer: listen
+  // and makeAccess take theirs from `.env` at startup, and `remoteAccess.ts`
+  // keeps that first reading so the form can say "saved, restart to apply"
+  // rather than claiming a change that has not happened.
+  for (const [key, value] of entries) {
+    if (value === null) delete process.env[key];
+    else process.env[key] = value;
+  }
   reloadEnv();
   updateProxyDispatcher();
 
   return configStatus();
+}
+
+/**
+ * What `.env` holds, for a status that has to compare *saved* against
+ * *running*. Quotes come off the way `serialize` put them on; a key the file
+ * does not mention comes back absent, meaning its default applies next start.
+ */
+export async function readSavedEnv(): Promise<Partial<Record<WritableKey, string>>> {
+  let text = "";
+  try {
+    text = await readFile(homeFile(".env"), "utf-8");
+  } catch {
+    return {};
+  }
+  const out: Partial<Record<WritableKey, string>> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    const key = match[1] as WritableKey;
+    if (!WRITABLE.includes(key)) continue;
+    out[key] = match[2].trim().replace(/^(['"])(.*)\1$/, "$2");
+  }
+  return out;
 }
 
 /** Names this will accept, for the route to validate against. */
