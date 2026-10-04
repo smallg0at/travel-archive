@@ -609,7 +609,25 @@ const routes: [RegExp, string, Handler][] = [
    * launcher is written before the key is registered, so if `reg add` fails the
    * files are there and the key is not, and the status says so.
    */
-  [/^\/settings\/autostart$/, "GET", async (_req, res) => json(res, 200, await autostartStatus())],
+  /**
+   * Sign-in start-up is asked only by the machine it applies to.
+   *
+   * The write was already local (`canWrite`); the read answered anyone holding
+   * the shared password with absolute paths under the owner's home directory —
+   * harmless, and none of a family reader's business. The UI never asks
+   * remotely: the section lives in the writable block, so a remote Settings
+   * page does not fetch this at all.
+   */
+  [
+    /^\/settings\/autostart$/,
+    "GET",
+    async (req, res) => {
+      if (!access.isLocal(req)) {
+        return json(res, 403, { error: "Sign-in start-up belongs to the machine the server is running on" });
+      }
+      json(res, 200, await autostartStatus());
+    },
+  ],
   [
     /^\/settings\/autostart$/,
     "POST",
@@ -634,7 +652,11 @@ const routes: [RegExp, string, Handler][] = [
    * other setting that changes what the server does. The password travels one
    * way: `null` or an empty string clears it, and neither is ever sent back.
    */
-  [/^\/settings\/remote$/, "GET", async (_req, res) => json(res, 200, await remoteAccessStatus())],
+  [
+    /^\/settings\/remote$/,
+    "GET",
+    async (req, res) => json(res, 200, await remoteAccessStatus(access.isLocal(req))),
+  ],
   [
     /^\/settings\/remote$/,
     "POST",

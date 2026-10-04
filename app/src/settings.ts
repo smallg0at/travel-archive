@@ -938,9 +938,14 @@ function remoteSection(): HTMLElement {
 
   const hostRow = row(ui.settings.remoteHost, "—");
   const passRow = row(ui.settings.remotePassword, "—");
+  // The file, not its contents: a failed restart says "look in data\serve.log"
+  // and this is the path worth copying. Hidden until the server sends one —
+  // it sends null to anyone but the machine running it.
+  const logRow = row(ui.settings.remoteLogFile, "");
+  logRow.hidden = true;
   const openWarn = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden>${ui.settings.remoteOpen}</p>`);
   const savedWarn = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden>${ui.settings.remoteSaved}</p>`);
-  body.append(hostRow, passRow, openWarn, savedWarn);
+  body.append(hostRow, passRow, logRow, openWarn, savedWarn);
 
   const exposedLabel = el<HTMLLabelElement>(
     `<label class="set-check" hidden><input type="checkbox"><span>${ui.settings.remoteExpose}</span></label>`,
@@ -970,6 +975,8 @@ function remoteSection(): HTMLElement {
     if (!status) return;
     setRowValue(hostRow, status.host);
     setRowValue(passRow, status.hasPassword ? ui.settings.remotePasswordSet : ui.settings.remotePasswordUnset);
+    logRow.hidden = !status.logFile;
+    if (status.logFile) setRowValue(logRow, status.logFile);
     // The checkbox shows what is *saved*, because that is what ticking it
     // changes; the running answer is the row above, and `restartNeeded` is the
     // line between them.

@@ -768,6 +768,13 @@ export interface RemoteAccessStatus {
   savedExposed: boolean;
   /** The saved values differ from the running ones — restart to apply them. */
   restartNeeded: boolean;
+  /**
+   * Where this server writes its own output — the file to open when a restart
+   * or a job fails. `null` for anyone but this machine: like the launcher's
+   * path, it is a directory under the owner's home and nobody reading the
+   * archive needs it.
+   */
+  logFile: string | null;
 }
 
 /**

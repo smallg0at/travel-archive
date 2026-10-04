@@ -234,6 +234,7 @@ export const zhHans: Messages = {
     remoteNote: "档案服务器当前的监听方式。局域网读取需要访问口令；无论怎么设置，写入都只限本机。保存后需重启生效。",
     remoteHost: "监听地址",
     remotePassword: "访问口令",
+    remoteLogFile: "日志文件",
     remotePasswordSet: "已设置",
     remotePasswordUnset: "未设置",
     remoteExpose: "允许本机网络读取档案",

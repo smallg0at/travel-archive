@@ -241,6 +241,7 @@ export const en = {
       "What the job server is bound to. Reading elsewhere needs the shared password; writing is this machine's either way. Saved changes wait for a restart.",
     remoteHost: "Listening on",
     remotePassword: "Shared password",
+    remoteLogFile: "Log file",
     remotePasswordSet: "Set",
     remotePasswordUnset: "Not set",
     remoteExpose: "Let this network read the archive",

@@ -1,5 +1,6 @@
 import type { RemoteAccessStatus } from "@travel-archive/shared";
 import { env } from "./env.js";
+import { dataFile } from "./paths.js";
 import { readSavedEnv, saveConfig } from "./configStore.js";
 
 /**
@@ -33,7 +34,7 @@ export const runningHost = RUNNING.host;
 export const runningExposed = isExposed(RUNNING.host);
 export const runningPassword = RUNNING.password;
 
-export async function remoteAccessStatus(): Promise<RemoteAccessStatus> {
+export async function remoteAccessStatus(local = true): Promise<RemoteAccessStatus> {
   const saved = await readSavedEnv();
   // Absent means the default applies on the next start, not "cleared".
   const savedHost = saved.ARCHIVE_HOST ?? "127.0.0.1";
@@ -46,6 +47,11 @@ export async function remoteAccessStatus(): Promise<RemoteAccessStatus> {
     savedHasPassword: Boolean(savedPassword),
     savedExposed: isExposed(savedHost),
     restartNeeded: savedHost !== RUNNING.host || Boolean(savedPassword) !== Boolean(RUNNING.password),
+    // The log's path is where a failed restart says why — and a path under the
+    // owner's home is this machine's to know. `local` is the *requester*, which
+    // only the route can see, so the redaction lives here rather than at the
+    // call site where a later caller could forget it.
+    logFile: local ? dataFile("serve.log") : null,
   };
 }
 
