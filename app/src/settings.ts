@@ -4,6 +4,7 @@ import type {
   ConfigStatus,
   JobRecord,
   ProviderOption,
+  RemoteAccessStatus,
   SyncState,
   SyncStatus,
 } from "@travel-archive/shared";
@@ -14,8 +15,11 @@ import {
   checkHealth,
   getConfig,
   clearCache,
+  remoteAccessStatus,
+  restartServer,
   saveSyncSettings,
   setAutostart,
+  setRemoteAccess,
   setPin,
   saveConfig,
   startSync,
@@ -265,6 +269,7 @@ export async function showSettings(): Promise<void> {
   if (writable) {
     frag.appendChild(scanSection(sync));
     frag.appendChild(backgroundSection());
+    frag.appendChild(remoteSection());
     frag.appendChild(generationSection());
     frag.appendChild(proxySection());
     frag.appendChild(syncSection(sync));
@@ -911,6 +916,128 @@ function appearanceSection(writable = true): HTMLElement {
  * machine — and unknown until it says. Until then the row stays hidden, so a
  * control that cannot work is never drawn (the same rule as `canWrite`).
  */
+/**
+ * Who may reach the job server — and the button that restarts it.
+ *
+ * Two values are shown at once, deliberately: what the server is doing *now*
+ * (makeAccess and server.listen took their answers from `.env` at startup) and
+ * what is saved for next time, with `restartNeeded` between them. Showing only
+ * the saved value would claim a change that has not happened; showing only the
+ * running one would make a successful save look like a refusal.
+ *
+ * Restart belongs here rather than behind a second "apply" button: this is the
+ * section whose changes need it, and a server that simply wants restarting is
+ * the same button.
+ */
+function remoteSection(): HTMLElement {
+  const s = section(ui.settings.remote);
+  const body = s.querySelector(".set-body")!;
+  body.appendChild(el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.remoteNote}</p>`));
+
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+  const hostRow = row(ui.settings.remoteHost, "—");
+  const passRow = row(ui.settings.remotePassword, "—");
+  const openWarn = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden>${ui.settings.remoteOpen}</p>`);
+  const savedWarn = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden>${ui.settings.remoteSaved}</p>`);
+  body.append(hostRow, passRow, openWarn, savedWarn);
+
+  const exposedLabel = el<HTMLLabelElement>(
+    `<label class="set-check" hidden><input type="checkbox"><span>${ui.settings.remoteExpose}</span></label>`,
+  );
+  const exposed = exposedLabel.querySelector("input") as HTMLInputElement;
+
+  const keyField = labelledInput(
+    ui.settings.remoteNewPassword,
+    `<input type="password" name="remote-password" autocomplete="new-password" spellcheck="false" />`,
+  );
+  const keyInput = keyField.querySelector("input") as HTMLInputElement;
+
+  const keyActions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  const saveKey = button(ui.settings.remoteSetPassword, () => void save({ password: keyInput.value }));
+  const clearKey = button(ui.settings.remoteClearPassword, () => void save({ password: null }));
+  keyActions.append(saveKey, clearKey);
+
+  const restartActions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  const restart = button(ui.settings.restart, () => void restartNow(), "primary");
+  restartActions.appendChild(restart);
+
+  const progress = el<HTMLParagraphElement>(`<p class="set-note" hidden></p>`);
+  const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
+  body.append(exposedLabel, keyField, keyActions, restartActions, progress, problem);
+
+  const apply = (status: RemoteAccessStatus | null) => {
+    if (!status) return;
+    setRowValue(hostRow, status.host);
+    setRowValue(passRow, status.hasPassword ? ui.settings.remotePasswordSet : ui.settings.remotePasswordUnset);
+    // The checkbox shows what is *saved*, because that is what ticking it
+    // changes; the running answer is the row above, and `restartNeeded` is the
+    // line between them.
+    exposedLabel.hidden = false;
+    exposed.checked = status.savedExposed;
+    openWarn.hidden = !(
+      (status.exposed && !status.hasPassword) ||
+      (status.savedExposed && !status.savedHasPassword)
+    );
+    savedWarn.hidden = !status.restartNeeded;
+    clearKey.hidden = !(status.hasPassword || status.savedHasPassword);
+  };
+
+  const save = async (patch: { exposed?: boolean; password?: string | null }) => {
+    problem.hidden = true;
+    try {
+      apply(await setRemoteAccess(patch));
+      keyInput.value = "";
+    } catch (err) {
+      // The server's own wording: "not a host this server can bind" is the
+      // useful half of an invalid answer, and it is not this side's to improve.
+      problem.textContent = (err as Error).message;
+      problem.hidden = false;
+      void remoteAccessStatus().then(apply);
+    }
+  };
+
+  exposed.addEventListener("change", () => void save({ exposed: exposed.checked }));
+
+  /** Waits for a server that has been asked to replace itself. */
+  const waitForServer = async (): Promise<boolean> => {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      if (await checkHealth()) return true;
+      await sleep(500);
+    }
+    return false;
+  };
+
+  const restartNow = async () => {
+    problem.hidden = true;
+    restart.disabled = true;
+    progress.textContent = ui.settings.restarting;
+    progress.hidden = false;
+    try {
+      await restartServer();
+      // The handover starts ~300ms after this answer and closes the listener;
+      // asking sooner would reach the server that is on its way out and reload
+      // straight into the gap it leaves.
+      await sleep(1500);
+      if (await waitForServer()) {
+        location.reload();
+        return;
+      }
+      progress.textContent = ui.settings.restartFailed;
+    } catch (err) {
+      // Most likely a running job, which the server refuses on purpose.
+      progress.hidden = true;
+      problem.textContent = (err as Error).message;
+      problem.hidden = false;
+    } finally {
+      restart.disabled = false;
+    }
+  };
+
+  void remoteAccessStatus().then(apply);
+  return s;
+}
+
 function backgroundSection(): HTMLElement {
   const s = section(ui.settings.background);
   const body = s.querySelector(".set-body")!;

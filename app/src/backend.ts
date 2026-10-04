@@ -9,6 +9,7 @@ import type {
   OrganizePlan,
   Pin,
   PhotoRecord,
+  RemoteAccessStatus,
   SyncStatus,
 } from "@travel-archive/shared";
 
@@ -394,6 +395,43 @@ export async function autostartStatus(): Promise<AutostartStatus | null> {
  */
 export function setAutostart(enabled: boolean): Promise<AutostartStatus> {
   return post<AutostartStatus>("/settings/autostart", { enabled });
+}
+
+/**
+ * Who may reach the job server — as it runs and as it is saved
+ * (pipeline/src/remoteAccess.ts). Null where there is no server to ask, which
+ * is the same case that hides this section from Settings entirely.
+ *
+ * The password is never in here: the status says set-or-not, like every other
+ * secret across this boundary.
+ */
+export async function remoteAccessStatus(): Promise<RemoteAccessStatus | null> {
+  try {
+    const res = await apiFetch("/settings/remote", { cache: "no-store" });
+    return res.ok ? ((await res.json()) as RemoteAccessStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Saves who may reach the server. **Nothing changes until it restarts** — the
+ * returned `restartNeeded` says so, which is the form's job rather than the
+ * reader's to work out when their new password is refused.
+ */
+export function setRemoteAccess(patch: { exposed?: boolean; password?: string | null }): Promise<RemoteAccessStatus> {
+  return post<RemoteAccessStatus>("/settings/remote", patch);
+}
+
+/**
+ * Asks the server to replace itself.
+ *
+ * The answer arrives *before* the handover begins, so `ok: true` means
+ * accepted rather than done: the server is unreachable for a couple of seconds
+ * afterwards, which is what the caller waits through.
+ */
+export function restartServer(): Promise<{ ok: boolean; restarting: boolean }> {
+  return post<{ ok: boolean; restarting: boolean }>("/server/restart", {});
 }
 
 /**

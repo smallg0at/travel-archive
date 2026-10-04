@@ -236,6 +236,22 @@ export const en = {
     backgroundUnsupported: "Sign-in start-up is only available on Windows.",
     backgroundOn: "Start the job server when I sign in",
     backgroundScript: "Startup script",
+    remote: "Remote access",
+    remoteNote:
+      "What the job server is bound to. Reading elsewhere needs the shared password; writing is this machine's either way. Saved changes wait for a restart.",
+    remoteHost: "Listening on",
+    remotePassword: "Shared password",
+    remotePasswordSet: "Set",
+    remotePasswordUnset: "Not set",
+    remoteExpose: "Let this network read the archive",
+    remoteOpen: "Open to the network with no password — anyone on it can read the archive.",
+    remoteSaved: "Saved. Restart the server to apply it.",
+    remoteNewPassword: "New password",
+    remoteSetPassword: "Save password",
+    remoteClearPassword: "Clear password",
+    restart: "Restart the server",
+    restarting: "Restarting — the page reconnects on its own.",
+    restartFailed: "The server did not come back. Its output is in data\\serve.log.",
     noServer:
       "No local server is running, so the archive is being read directly from OneDrive and images are cached in this browser only. Sync, pinning and generation need the desktop app.",
 
