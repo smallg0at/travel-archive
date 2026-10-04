@@ -127,17 +127,54 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+/**
+ * A request the server understands well enough to refuse precisely.
+ *
+ * Distinct from a failure: this is the caller's answer, and it has to reach
+ * them as a 400 rather than being caught by the generic handler below and
+ * reported as the server's own fault — which is what happened to the
+ * content-type check on its first outing.
+ */
+class BadRequest extends Error {}
+
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
     // Nothing this API accepts is large; a body this big is a mistake or an abuse.
-    if (size > 1_000_000) throw new Error("Request body too large");
+    if (size > 1_000_000) throw new BadRequest("Request body too large");
     chunks.push(chunk as Buffer);
   }
   if (chunks.length === 0) return {} as T;
-  return JSON.parse(Buffer.concat(chunks).toString("utf-8")) as T;
+
+  /**
+   * The content type is the check, not a formality.
+   *
+   * `application/json` makes the browser preflight, and a preflight is where
+   * `cors()` refuses an origin it does not know — so a page on the internet
+   * cannot deliver a body at all. `text/plain` and the form types are "simple"
+   * requests: sent without asking, answered without the attacker seeing the
+   * answer, and **executed all the same**. Parsing whatever arrived meant the
+   * origin rule protected the response and not the write.
+   *
+   * `canWrite` does not help: it is the socket address, and a browser reaching
+   * 127.0.0.1 from any page *is* 127.0.0.1.
+   *
+   * An empty body is exempt — with nothing to parse there is nothing to do —
+   * which keeps a bare `POST /jobs/analyze/collect` from a shell working.
+   */
+  const type = (req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+  if (type !== "application/json") {
+    throw new BadRequest(`Expected Content-Type: application/json, got ${type || "none"}`);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf-8")) as T;
+  } catch (err) {
+    // The caller's body, so the caller's 400 — with the parser's own position,
+    // which is the only part of the message worth having.
+    throw new BadRequest(`Body is not valid JSON: ${(err as Error).message}`);
+  }
 }
 
 /** Refuses a second job rather than letting two writers race over index.json. */
@@ -1347,6 +1384,25 @@ const server = createServer(async (req, res) => {
     return res.end();
   }
 
+  /**
+   * A write may only come from a page this server would answer anyway.
+   *
+   * `cors()` refuses an origin by withholding `Access-Control-Allow-Origin`,
+   * which stops a preflighted request and stops the attacker *reading* — not a
+   * "simple" request (`text/plain`, form), which the browser sends without
+   * asking and which `readJsonBody` used to parse regardless. This is the
+   * other half: an origin we do not know may not write, whatever content type
+   * it picked.
+   *
+   * Requests with no `Origin` — this machine, a shell script, the tests — are
+   * not a browser and are left to the checks below. And `canWrite` still has
+   * to pass: this refuses a *page*, not a *person*, and a page has an origin.
+   */
+  const origin = req.headers.origin;
+  if (req.method !== "GET" && origin && !originAllowed(origin)) {
+    return json(res, 403, { error: `Origin ${origin} may not write to this server` });
+  }
+
   const path = new URL(req.url ?? "/", "http://localhost").pathname;
 
   /**
@@ -1400,7 +1456,10 @@ const server = createServer(async (req, res) => {
     try {
       await handler(req, res, match.slice(1));
     } catch (err) {
-      if (!res.headersSent) json(res, 500, { error: (err as Error).message });
+      // A `BadRequest` is the caller's own mistake — a body we refused to
+      // parse, a content type we asked for and did not get — and reporting
+      // that as a 500 says the server broke when it did not.
+      if (!res.headersSent) json(res, err instanceof BadRequest ? 400 : 500, { error: (err as Error).message });
     }
     return;
   }
