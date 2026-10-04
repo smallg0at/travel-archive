@@ -295,9 +295,10 @@ function createWindow(): void {
   // white before the app's own theme applies.
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
-    if (!PACKAGED && mainWindow) {
-      setTimeout(() => captureDevScreenshot(mainWindow!), 2500);
-    }
+    // No automatic capture here any more: it ran 2.5s after every development
+    // launch and said so, which is a line of noise in the shell output next to
+    // the ones that matter (adopted, healthy, lagged). F9 still takes one when
+    // there is something to look at — see the dev shortcuts below.
   });
 
   // Windows 11 DWM workaround: re-apply background material when regaining focus or restoring
