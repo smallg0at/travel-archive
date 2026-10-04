@@ -369,6 +369,16 @@ export async function showActivity(): Promise<void> {
   now.node.appendChild(warm);
   const batchSection = section(ui.activity.batches);
   const past = section(ui.activity.history);
+  // The running job is attached for **every** reader — watching is a read —
+  // and it goes first, above the batches and the history, because it is the
+  // only thing on this page that is happening now.
+  //
+  // It was dropped from here when the writable sections were made
+  // conditional, and the loss was quiet: `nowHost` still pointed at a body
+  // that existed but was never in the document, so `renderNow` painted into
+  // it, the indicator's `nowHost?.isConnected` guard never fired, and the page
+  // showed batches while a job ran.
+  frag.appendChild(now.node);
   // A reader may watch what is running — that is the point of this page for
   // them — while the queue and the history are the owner's, and so is the
   // cancel button (a cancel from here would be refused server-side anyway).
