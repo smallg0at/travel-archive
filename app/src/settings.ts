@@ -1,5 +1,6 @@
 import type {
   ArchiveStatus,
+  AutostartStatus,
   ConfigStatus,
   JobRecord,
   ProviderOption,
@@ -8,11 +9,13 @@ import type {
 } from "@travel-archive/shared";
 import {
   archiveStatus,
+  autostartStatus,
   canWrite,
   checkHealth,
   getConfig,
   clearCache,
   saveSyncSettings,
+  setAutostart,
   setPin,
   saveConfig,
   startSync,
@@ -261,6 +264,7 @@ export async function showSettings(): Promise<void> {
   // every control in these sections anyway.
   if (writable) {
     frag.appendChild(scanSection(sync));
+    frag.appendChild(backgroundSection());
     frag.appendChild(generationSection());
     frag.appendChild(proxySection());
     frag.appendChild(syncSection(sync));
@@ -885,6 +889,83 @@ function appearanceSection(writable = true): HTMLElement {
   const sidebar = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.sidebarWidth}</span></div>`);
   sidebar.appendChild(button(ui.common.reset, resetSidebarWidth));
   body.appendChild(sidebar);
+  return s;
+}
+
+/**
+ * Starting the job server at sign-in.
+ *
+ * The whole reason this switch exists is one machine: the server every reader
+ * depends on currently exists only while the desktop window does, so closing
+ * the window takes the archive away from the phone and from everyone on the
+ * home network, with nothing on screen to say why. Registered at sign-in, the
+ * server outlives the window — and the window becomes just another client of
+ * it, because `startPipelineServer` adopts a healthy server rather than
+ * starting a second copy.
+ *
+ * In the writable block for the same reason as every other switch here: it
+ * writes a Run key and two files under the archive home, and the server
+ * refuses that from anything but this machine regardless.
+ *
+ * Fetched rather than known, because the answer is a fact about the server's
+ * machine — and unknown until it says. Until then the row stays hidden, so a
+ * control that cannot work is never drawn (the same rule as `canWrite`).
+ */
+function backgroundSection(): HTMLElement {
+  const s = section(ui.settings.background);
+  const body = s.querySelector(".set-body")!;
+
+  const note = el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.backgroundNote}</p>`);
+  const control = el<HTMLLabelElement>(
+    `<label class="set-check" hidden><input type="checkbox"><span>${ui.settings.backgroundOn}</span></label>`,
+  );
+  const box = control.querySelector("input") as HTMLInputElement;
+  const script = row(ui.settings.backgroundScript, "");
+  const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
+  body.append(note, control, script, problem);
+
+  const apply = (status: AutostartStatus | null) => {
+    // No answer at all: keep the explanation and draw nothing — a checkbox
+    // that would fail on click is worse than an absent one.
+    if (!status) {
+      note.textContent = ui.settings.backgroundNote;
+      control.hidden = true;
+      script.hidden = true;
+      return;
+    }
+    if (!status.supported) {
+      note.textContent = ui.settings.backgroundUnsupported;
+      control.hidden = true;
+      script.hidden = true;
+      return;
+    }
+    note.textContent = ui.settings.backgroundNote;
+    control.hidden = false;
+    box.checked = status.enabled;
+    // The launcher only exists while it is registered, so the path is shown
+    // when there is a file to open — it is the thing to edit if Node moves.
+    script.hidden = !status.enabled;
+    if (status.enabled) setRowValue(script, status.script);
+  };
+
+  box.addEventListener("change", () => {
+    const want = box.checked;
+    problem.hidden = true;
+    box.disabled = true;
+    void setAutostart(want)
+      .then(apply)
+      .catch((err: Error) => {
+        // Back to what the server says it is, not what the click hoped for.
+        box.checked = !want;
+        problem.textContent = err.message;
+        problem.hidden = false;
+      })
+      .finally(() => {
+        box.disabled = false;
+      });
+  });
+
+  void autostartStatus().then(apply);
   return s;
 }
 

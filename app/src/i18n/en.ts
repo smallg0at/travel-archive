@@ -230,6 +230,12 @@ export const en = {
     finished: "Finished.",
 
     localServer: "Local server",
+    background: "Start at sign-in",
+    backgroundNote:
+      "Runs the job server in the background from the moment you sign in, with no window of its own. The desktop app finds it already running and uses it rather than starting a second copy — so closing the window no longer takes the archive away from the phone, or from anyone on the home network. Its output goes to data\\serve.log beside it.",
+    backgroundUnsupported: "Sign-in start-up is only available on Windows.",
+    backgroundOn: "Start the job server when I sign in",
+    backgroundScript: "Startup script",
     noServer:
       "No local server is running, so the archive is being read directly from OneDrive and images are cached in this browser only. Sync, pinning and generation need the desktop app.",
 

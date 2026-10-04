@@ -21,6 +21,13 @@ dist-mobile/
 # over the account, not just the archive.
 token-cache.json
 
+# The sign-in launcher written when Settings > 开机启动 is turned on
+# (pipeline/src/autostart.ts). Like `.env` it is written per machine: it pins
+# this machine's runtime path and archive home, neither of which is anyone
+# else's.
+serve-at-login.ps1
+serve-at-login.vbs
+
 # The archive itself: index.json plus photos/<yyyy-mm>.json. ~22MB here, and
 # every record carries a filename, a OneDrive path, GPS coordinates, an AI
 # caption and any transcribed text — so it is a searchable location history of

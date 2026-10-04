@@ -20,6 +20,7 @@ import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
+import { autostartStatus, setAutostart } from "./autostart.js";
 import { initProxyDispatcher } from "./proxy.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import {
@@ -395,6 +396,35 @@ const routes: [RegExp, string, Handler][] = [
       }
       try {
         json(res, 200, await saveConfig(patch));
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+
+  /**
+   * Starting the job server at sign-in — the fact, and the switch.
+   *
+   * Reachable by anyone who can read, changed only by this machine: the write
+   * check below is the socket address, and this writes a Run key and two files
+   * under the archive home, which is exactly the kind of thing a remote reader
+   * must not be able to do (the same rule `canWrite` applies to every editor).
+   *
+   * A failure to *enable* comes back as 400 rather than a half-done state: the
+   * launcher is written before the key is registered, so if `reg add` fails the
+   * files are there and the key is not, and the status says so.
+   */
+  [/^\/settings\/autostart$/, "GET", async (_req, res) => json(res, 200, await autostartStatus())],
+  [
+    /^\/settings\/autostart$/,
+    "POST",
+    async (req, res) => {
+      const body = await readJsonBody<{ enabled?: unknown }>(req);
+      if (typeof body.enabled !== "boolean") {
+        return json(res, 400, { error: "enabled must be true or false" });
+      }
+      try {
+        json(res, 200, await setAutostart(body.enabled));
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }

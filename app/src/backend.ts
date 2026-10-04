@@ -3,6 +3,7 @@ import type {
   AnalyzePlan,
   AppPrefs,
   ArchiveStatus,
+  AutostartStatus,
   ConfigStatus,
   JobRecord,
   OrganizePlan,
@@ -366,6 +367,33 @@ export async function getConfig(): Promise<ConfigStatus | null> {
  */
 export function saveConfig(patch: Record<string, string>): Promise<ConfigStatus> {
   return post<ConfigStatus>("/config", patch);
+}
+
+/**
+ * Whether the job server starts itself at sign-in (pipeline/src/autostart.ts).
+ *
+ * Null when there is no server to ask — the phone, or a browser — which is the
+ * same case that hides this row from Settings entirely.
+ */
+export async function autostartStatus(): Promise<AutostartStatus | null> {
+  try {
+    const res = await apiFetch("/settings/autostart", { cache: "no-store" });
+    return res.ok ? ((await res.json()) as AutostartStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turns sign-in start-up on or off.
+ *
+ * The server's own wording comes through in the rejection, because the one
+ * failure that matters here is specific: "this server was not started from a
+ * file on disk, so there is nothing to register" is not a message this side
+ * could improve on.
+ */
+export function setAutostart(enabled: boolean): Promise<AutostartStatus> {
+  return post<AutostartStatus>("/settings/autostart", { enabled });
 }
 
 /**

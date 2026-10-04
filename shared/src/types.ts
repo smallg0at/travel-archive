@@ -720,6 +720,29 @@ export interface ConfigStatus {
 }
 
 /**
+ * Whether the job server starts itself at sign-in, as reported by the server.
+ *
+ * This is a fact about *the machine the server runs on* — the value lives in
+ * this user's `HKCU\...\Run` key and the launcher it points at is written next
+ * to `.env` — so it can be read by anyone who can read the archive and changed
+ * only by this machine, the same rule as every other write.
+ *
+ * `command` is what is (or would be) registered, not a promise about what
+ * Windows will do with it; `script` is the file to open if it ever stops
+ * working, which on a machine where Node has moved is the fastest fix.
+ */
+export interface AutostartStatus {
+  /** False off Windows, where there is no Run key to write. */
+  supported: boolean;
+  /** Whether the value is registered now. */
+  enabled: boolean;
+  /** The launcher's path, so the UI can name the file rather than describe it. */
+  script: string;
+  /** What is registered — shown, so an empty setting is not mistaken for a broken one. */
+  command: string;
+}
+
+/**
  * What an `organize` run would do, without doing any of it.
  *
  * Exists because "0 day(s) summarized" is the same message whether nothing
