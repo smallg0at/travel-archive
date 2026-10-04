@@ -45,6 +45,15 @@ describe("wrapper", () => {
     expect(src).toMatch(/^[\x20-\x7E\r\n]+$/);
     expect(src).not.toContain("\\Code\\proj");
   });
+
+  it("records that it ran, before anything that can fail", () => {
+    // The chain has no other witness: the server writes nothing until it is
+    // up, and the window is hidden. A run that died at the probe, or never
+    // started, would otherwise look identical - which is exactly what the
+    // first sign-in after a reboot looked like.
+    expect(src).toContain("serve-at-login.trace");
+    expect(src).toContain("vbs started");
+  });
 });
 
 describe("launcher", () => {
@@ -64,7 +73,18 @@ describe("launcher", () => {
     expect(probe).toBeGreaterThan(0);
     expect(start).toBeGreaterThan(probe);
     expect(src).toContain("http://127.0.0.1:18419/health");
-    expect(src).toContain("if ($health.StatusCode -eq 200) { exit 0 }");
+    expect(src).toContain("if ($health.StatusCode -eq 200)");
+    expect(src).toContain("exit 0");
+  });
+
+  it("records that it ran before it probes", () => {
+    // Written first, so the trace answers "did the chain start at all" even
+    // when the probe below is what went wrong - or when nothing after this
+    // line ever ran.
+    const trace = src.indexOf("Add-Content");
+    expect(trace).toBeGreaterThan(0);
+    expect(trace).toBeLessThan(src.indexOf("Invoke-WebRequest"));
+    expect(src).toContain("serve-at-login.trace");
   });
 
   it("runs the entry with the real runtime, leaving the log to the server", () => {

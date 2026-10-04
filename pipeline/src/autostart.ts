@@ -117,11 +117,25 @@ export function launcherSource(entry: string, port: number): string {
 $ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference = 'SilentlyContinue'
 
+# The first line of evidence, written before anything that can fail: whether
+# this ran, and when. The server writes nothing until it is running, so a
+# chain that dies here would otherwise leave the same silence as a chain that
+# never started - which is what a sign-in that produced no log looked like.
+# Beside this file, one line per run, so it answers the question at the next
+# sign-in rather than the one after.
+try {
+  "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ps1 started (pid $PID)" |
+    Add-Content -LiteralPath (Join-Path $PSScriptRoot 'serve-at-login.trace')
+} catch {}
+
 # Already serving - the desktop shell started it, or an earlier login's copy is
 # still up. A second one could only lose the bind and log a stack trace.
 try {
   $health = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 ${ps(`http://127.0.0.1:${port}/health`)}
-  if ($health.StatusCode -eq 200) { exit 0 }
+  if ($health.StatusCode -eq 200) {
+    try { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ps1 exited: already serving" | Add-Content -LiteralPath (Join-Path $PSScriptRoot 'serve-at-login.trace') } catch {}
+    exit 0
+  }
 } catch {}
 
 $env:ELECTRON_RUN_AS_NODE = '1'
@@ -148,10 +162,16 @@ export function wrapperSource(): string {
   return `' Written by Photo Archive when "start at sign-in" was turned on.
 ' Starts serve-at-login.ps1 with no window; the Run key alone would show a console.
 Option Explicit
-Dim shell, folder, launcher
+Dim shell, folder, launcher, fso, traceFile
+On Error Resume Next
 Set shell = CreateObject("WScript.Shell")
 folder = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
 launcher = folder & "\\${LAUNCHER}"
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set traceFile = fso.OpenTextFile(folder & "\\serve-at-login.trace", 8, True)
+traceFile.WriteLine Now & " vbs started"
+traceFile.Close
+On Error GoTo 0
 shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File """ & launcher & """", 0, False
 `;
 }

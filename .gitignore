@@ -28,6 +28,10 @@ token-cache.json
 serve-at-login.ps1
 serve-at-login.vbs
 
+# What the launcher wrote to say it ran, and how far it got. Machine-local like
+# the two above, and worthless anywhere else.
+serve-at-login.trace
+
 # The archive itself: index.json plus photos/<yyyy-mm>.json. ~22MB here, and
 # every record carries a filename, a OneDrive path, GPS coordinates, an AI
 # caption and any transcribed text — so it is a searchable location history of
