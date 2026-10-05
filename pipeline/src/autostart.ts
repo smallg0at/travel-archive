@@ -140,8 +140,27 @@ try {
 
 $env:ELECTRON_RUN_AS_NODE = '1'
 ${archiveHomeVar ? `$env:ARCHIVE_HOME = ${ps(archiveHomeVar)}` : "# No ARCHIVE_HOME: running from a checkout, where paths.ts falls back on the code's own directory."}
-Set-Location ${ps(home)}
-& ${ps(runtimePath())} ${ps(entry)}
+# Detached, and this script must not wait on it. It used to block here, so the
+# wrapper stayed alive - 51MB - for as long as the server ran, for two seconds
+# of CPU a day. Nothing is lost by not holding its output: the server writes
+# data\\serve.log itself.
+Start-Process -WindowStyle Hidden -FilePath ${ps(runtimePath())} -ArgumentList ${ps('"' + entry + '"')} -WorkingDirectory ${ps(home)}
+
+# Say whether it answered. The probe above could not - it ran *before* this
+# line - and a sign-in that produced no server is otherwise indistinguishable
+# from a sign-in that never ran. Bounded at 30s, past the 11s cold start this
+# server has measured.
+$deadline = [DateTime]::UtcNow.AddSeconds(30)
+while ([DateTime]::UtcNow -lt $deadline) {
+  Start-Sleep -Milliseconds 500
+  try {
+    if ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 ${ps(`http://127.0.0.1:${port}/health`)}).StatusCode -eq 200) {
+      try { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ps1 exited: server answering" | Add-Content -LiteralPath (Join-Path $PSScriptRoot 'serve-at-login.trace') } catch {}
+      exit 0
+    }
+  } catch {}
+}
+try { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ps1 exited: no answer within 30s" | Add-Content -LiteralPath (Join-Path $PSScriptRoot 'serve-at-login.trace') } catch {}
 `;
 }
 

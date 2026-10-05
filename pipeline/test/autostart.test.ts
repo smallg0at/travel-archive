@@ -69,7 +69,7 @@ describe("launcher", () => {
 
   it("probes for a server before starting one", () => {
     const probe = src.indexOf("Invoke-WebRequest");
-    const start = src.indexOf("& '");
+    const start = src.indexOf("Start-Process");
     expect(probe).toBeGreaterThan(0);
     expect(start).toBeGreaterThan(probe);
     expect(src).toContain("http://127.0.0.1:18419/health");
@@ -87,16 +87,31 @@ describe("launcher", () => {
     expect(src).toContain("serve-at-login.trace");
   });
 
-  it("runs the entry with the real runtime, leaving the log to the server", () => {
+  it("runs the entry with the real runtime, detached and unredirected", () => {
+    // Detached: the script used to block on `& node`, and the wrapper stayed
+    // alive (51MB) for as long as the server did - two seconds of CPU a day
+    // paid for by a permanent process.
+    expect(src).toContain(
+      `Start-Process -WindowStyle Hidden -FilePath '${runtimePath()}' -ArgumentList '"${ENTRY}"' -WorkingDirectory`,
+    );
+    expect(src).not.toMatch(/^& /m);
     // No redirect: the server mirrors both streams itself (logFile.ts), and a
     // second path into the same file would double every line. Worse, the
     // launcher's own `$ErrorActionPreference = 'SilentlyContinue'` discards
-    // native stderr under redirection — measured — which is how the reason a
+    // native stderr under redirection - measured - which is how the reason a
     // restart failed went missing.
-    expect(src).toContain(`& '${runtimePath()}' '${ENTRY}'`);
     expect(src).not.toContain(">>");
     expect(src).toContain("ELECTRON_RUN_AS_NODE = '1'");
     expect(src).toContain("data\\serve.log");
+  });
+
+  it("says whether the detached copy came up", () => {
+    // The last thing this script can know, and the only thing that tells a
+    // sign-in which failed from one that never ran.
+    expect(src).toContain("server answering");
+    expect(src).toContain("no answer within 30s");
+    // ...bounded, so the wrapper never lingers: 30s at sign-in, not forever.
+    expect(src).toContain("AddSeconds(30)");
   });
 
   it("pins the real runtime, not the per-shell shim it was started through", () => {
@@ -112,17 +127,19 @@ describe("launcher", () => {
 
   it("doubles a single quote rather than ending the string", () => {
     const awkward = launcherSource("C:\\it's\\serve.js", 18419);
-    expect(awkward).toContain("'C:\\it''s\\serve.js'");
+    // The entry now sits inside ArgumentList's own quotes; what matters is that
+    // the apostrophe doubled instead of closing the string.
+    expect(awkward).toContain("C:\\it''s\\serve.js");
   });
 
   it("carries ARCHIVE_HOME through when the shell set one", () => {
     const previous = process.env.ARCHIVE_HOME;
     // Two different values go in: the variable is used verbatim for
-    // `$env:ARCHIVE_HOME`, and `archiveHome()` *resolves* it for
-    // `Set-Location`. Those are the same string on Windows, where this feature
-    // exists, and not the same on POSIX, where `C:\...` is a relative path —
-    // which is what CI caught: a Windows-shaped literal asserted against a
-    // resolved one passes on the developer's machine and nowhere else.
+    // `$env:ARCHIVE_HOME`, and `archiveHome()` *resolves* it for the child's
+    // working directory. Those are the same string on Windows, where this
+    // feature exists, and not the same on POSIX, where `C:\...` is a relative
+    // path - which is what CI caught: a Windows-shaped literal asserted against
+    // a resolved one passes on the developer's machine and nowhere else.
     const win = process.platform === "win32";
     const home = win ? "C:\\Users\\O'Brien\\Photo Archive" : "/home/O'Brien/Photo Archive";
     const located = resolve(home);
@@ -130,7 +147,7 @@ describe("launcher", () => {
     try {
       const packaged = launcherSource(ENTRY, 18419);
       expect(packaged).toContain(`$env:ARCHIVE_HOME = ${psQuote(home)}`);
-      expect(packaged).toContain(`Set-Location ${psQuote(located)}`);
+      expect(packaged).toContain(`-WorkingDirectory ${psQuote(located)}`);
     } finally {
       if (previous === undefined) delete process.env.ARCHIVE_HOME;
       else process.env.ARCHIVE_HOME = previous;

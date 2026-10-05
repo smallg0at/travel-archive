@@ -45,12 +45,21 @@ describe("applyEdits", () => {
 });
 
 describe("live-data guard", () => {
-  it("refuses Graph calls in CI without explicit opt-in", async () => {
-    const { downloadMetadataJson } = await import("../src/graph.js");
-    await expect(downloadMetadataJson("tok", "CI-FAKE-FOLDER-NEVER-USE", "index.json")).rejects.toThrow(
-      /Refusing live Graph call/,
-    );
-  });
+  // 20s, not the 5s default: what this costs is importing graph.ts, which pulls
+  // in MSAL's client and token cache, and on a busy machine that alone has
+  // taken over five seconds — failing a test whose subject is the guard, not
+  // the import's speed. It has timed out locally while a build ran; it has
+  // never been wrong.
+  it(
+    "refuses Graph calls in CI without explicit opt-in",
+    async () => {
+      const { downloadMetadataJson } = await import("../src/graph.js");
+      await expect(downloadMetadataJson("tok", "CI-FAKE-FOLDER-NEVER-USE", "index.json")).rejects.toThrow(
+        /Refusing live Graph call/,
+      );
+    },
+    20_000,
+  );
 
   it("uses an isolated ARCHIVE_HOME, not the real checkout", async () => {
     const { archiveHome } = await import("../src/paths.js");
