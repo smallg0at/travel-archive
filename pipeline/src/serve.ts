@@ -8,6 +8,7 @@ import { get } from "node:http";
 import { isAbsolute } from "node:path";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
+import { originAllowed } from "./originCheck.js";
 import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl } from "./graph.js";
 import {
   invalidateCacheStats,
@@ -67,34 +68,15 @@ import * as jobs from "./server/jobs.js";
  * page reloaded mid-run reattaches by polling once and then subscribing.
  */
 
-const ALLOWED_ORIGINS = new Set([
-  // Vite dev and preview.
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:4173",
-  "http://127.0.0.1:4173",
-  // The desktop shell, which serves the built app on its own port so it does
-  // not compete with a preview server. Without this the window loads and the
-  // archive renders from OneDrive, but every job request fails CORS and
-  // generation silently looks unavailable.
-  "http://localhost:17923",
-  "http://127.0.0.1:17923",
-]);
-
 /**
- * The same origins as seen from another machine on the home network.
+ * Which origins may talk to this server, and which may write to it.
  *
- * The shell's port is fixed, but the *host* is whatever address the reading
- * device used — which cannot be known when this file is written and is not
- * stable across networks anyway. So the private ranges are matched by shape.
- * Only private addresses: a public origin is not a household member, and
- * allowing it would let any page that sets an Origin talk to this server.
+ * The rule itself lives in `originCheck.ts`: it is a security decision, so it
+ * sits where it can be tested on its own. What used to be here matched private
+ * *IP literals* against three ports — which quietly excluded every reader who
+ * reached the machine by name instead of by address (`http://nas:17923`,
+ * `http://desktop.local:17923`), for CORS on a read and a 403 on a write.
  */
-const PRIVATE_ORIGIN = /^http:\/\/(?:192\.168|10\.|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}:(?:4173|5173|17923)$/;
-
-function originAllowed(origin: string): boolean {
-  return ALLOWED_ORIGINS.has(origin) || PRIVATE_ORIGIN.test(origin);
-}
 
 type Handler = (req: IncomingMessage, res: ServerResponse, params: string[]) => Promise<void> | void;
 
@@ -111,7 +93,7 @@ function cors(req: IncomingMessage, res: ServerResponse): void {
   // browser's.
   res.setHeader("Vary", "Origin");
   const origin = req.headers.origin;
-  if (origin && originAllowed(origin)) {
+  if (origin && originAllowed(origin, { exposed })) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
   // The session cookie has to be allowed through for a remote reader, who signs
@@ -1421,7 +1403,7 @@ const server = createServer(async (req, res) => {
    * to pass: this refuses a *page*, not a *person*, and a page has an origin.
    */
   const origin = req.headers.origin;
-  if (req.method !== "GET" && origin && !originAllowed(origin)) {
+  if (req.method !== "GET" && origin && !originAllowed(origin, { exposed })) {
     return json(res, 403, { error: `Origin ${origin} may not write to this server` });
   }
 
