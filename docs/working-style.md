@@ -47,6 +47,17 @@ has been reported on the strength of such a reading. If a measurement says
 nothing loaded, check that a *fresh* observer fires on an element you can see
 before believing it.
 
+Driven past that point: in a hidden tab `requestAnimationFrame` never runs
+either (60s with zero frames), so grid thumbnails hydrate *never* — measured
+0 of 31, repeatedly. The lever is the app's own **导出 PDF** button:
+`printView` calls `hydrateAll` directly and skips the observer, loading every
+image on the page whatever the tab's visibility. **Stub `window.print` first**
+(`window.print = () => {}`) or the export reaches the real dialog and, with a
+"Microsoft Print to PDF" default printer, drops a file in Downloads as the
+side effect of a measurement. And `/thumb` is `immutable` for a year *in the
+browser too*: a test that needs a 404 after a 200 has to change origin (or
+bump `THUMB_CACHE_VERSION`), because the old bytes are still valid there.
+
 ---
 
 ## Method, learned the hard way
