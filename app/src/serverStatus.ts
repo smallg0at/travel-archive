@@ -31,6 +31,21 @@ const isAuth = (failure: HealthFailure | null): boolean => failure === "auth";
 
 let banner: HTMLElement | null = null;
 
+/**
+ * The stack both transient notes live in (`#toasts`, in index.html).
+ *
+ * Created here when absent rather than assumed: the phone's page has no static
+ * shell, and `serverStatus` is the module that needs it either way.
+ */
+function toastHost(): HTMLElement {
+  const existing = document.getElementById("toasts");
+  if (existing) return existing;
+  const made = document.createElement("div");
+  made.id = "toasts";
+  document.body.appendChild(made);
+  return made;
+}
+
 function ensureBanner(): HTMLElement {
   if (banner) return banner;
   banner = document.createElement("div");
@@ -48,7 +63,7 @@ function ensureBanner(): HTMLElement {
       /* the banner simply comes back next time */
     }
   });
-  document.body.prepend(banner);
+  toastHost().appendChild(banner);
   return banner;
 }
 

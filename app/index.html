@@ -20,9 +20,16 @@
     </script>
   </head>
   <body>
-    <div id="signin-banner" class="signin-banner" hidden>
-      <span>Sign in to load your photos.</span>
-      <button id="signin-button" type="button">Sign in with Microsoft</button>
+    <!-- Transient notes, stacked in one place: the sign-in prompt and the
+         local server's state (serverStatus.ts). One host so two of them at
+         once — the common case, server away *and* reader signed out — stack
+         instead of covering each other, and so neither can land in the title
+         band under the fixed search field. -->
+    <div id="toasts">
+      <div id="signin-banner" class="signin-banner" hidden>
+        <span>Sign in to load your photos.</span>
+        <button id="signin-button" type="button">Sign in with Microsoft</button>
+      </div>
     </div>
 
     <div id="app">
