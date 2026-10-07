@@ -8,12 +8,14 @@ built as four workspaces: `shared/` (schema), `pipeline/` (jobs + local server),
 
 This file is the short entry point; the depth lives in the repo:
 
-- **`HANDOFF.md`** — required reading. The invariants, and especially
-  **"How to work on this"** (the most useful section in this repo).
+- **`HANDOFF.md`** — the front door: how to run it, the shape, and a map of the rest.
 - **`TODO.md`** — the live checklist; the only trustworthy source of what is
   outstanding.
-- `README.md` — how the pipeline works. `docs/design-brief.md` — what the
-  product is. `MOBILE-BRIEF.md` — the phone app.
+- **`docs/invariants.md`** — the rules this codebase punishes you for forgetting;
+  read it before changing the pipeline.
+- The rest is in `docs/`: `working-style.md`, `architecture.md`, `environment.md`,
+  `history.md`. `README.md` is how the pipeline works; `docs/design-brief.md` is
+  what the product is; `MOBILE-BRIEF.md` is the phone app.
 
 Keep this file short; don't restate what those already cover.
 

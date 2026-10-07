@@ -14,6 +14,36 @@ What the library is, so the entries have a scale to read against: **~31,700
 photos over 123 months**, ~29,300 captioned, ~340 days written up, 15 trips
 defined. Generate → Translate → Estimate for what is left of the text.
 
+## Index
+
+| # | open item | area |
+|---|-----------|------|
+| 1 | Concurrent local vision crashes the LM Studio engine — 2 streams, not 4 | analyze / models |
+| 2 | `parseDaySummary` throws when a reply omits `summary`/`title` | summarize |
+| 3 | A local day summary overflows the loaded context; `organize` sends the whole day | summarize / models |
+| 4 | The OpenAI-compatible path has no `json_schema` mode | providers |
+| 5 | A remote reader's Activity page stops updating job progress | remote access |
+| 6 | The job server keeps no request log | server |
+| 7 | "Thumbnail size" is a misnomer and governs one view | UI |
+| 8 | Scan re-lists every month folder — Graph gives no folder change token | scan / sync |
+| 9 | Confirm the phone's sign-in survives a hard kill | phone |
+| 10 | The upload phase reports no progress | analyzeBatch |
+| 11 | No incremental refresh — every change reloads the archive | app |
+| 12 | A month emptied on OneDrive leaves a ghost month | scan |
+| 13 | The mirror is trusted without checking OneDrive | sync |
+| 14 | Tell the summarizer things, and correct what it wrote | summarize |
+| 15 | Day summaries are written in isolation | summarize |
+| 16 | Label suppression is aggressive (7 of 23 at the fitted view) | map |
+| 17 | Confirm `appId` `com.travelarchive.photos` | phone |
+| 18 | iOS is not added | phone |
+| 19 | A trip's dates cannot be edited | trips |
+| 20 | An old job server silently strips new fields from `home.json` | server |
+| 21 | The print margin is 5%, not the 13% q0.70 was chosen for | print |
+| 22 | 45MB clears AI Studio but not mail | print |
+| 23 | A text export for feeding Gemini | print |
+| 24 | `window.print()` freezes the renderer | print |
+| 25 | Desktop: no code signing and no auto-update | desktop |
+
 ## Open issues
 
 - [ ] **Concurrent local vision crashes the LM Studio engine and silently
