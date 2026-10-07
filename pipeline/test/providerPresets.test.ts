@@ -32,4 +32,11 @@ describe("the local LM Studio preset", () => {
     expect(presetById("ollama")!.jsonMode).toBeUndefined();
     expect(PRESETS.filter((p) => p.id === "lmstudio")).toHaveLength(1);
   });
+
+  it("no longer advertises LM Studio on the Ollama row", () => {
+    // The label used to read "Local (Ollama / LM Studio)", which invited a
+    // reader to select a row that would fail on LM Studio. The server label is
+    // the fallback for an untranslated id; the desktop translates it by id.
+    expect(presetById("ollama")!.label).not.toMatch(/LM Studio/);
+  });
 });

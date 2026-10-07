@@ -302,6 +302,23 @@ export const en = {
     providerBatchOk: "Batch available (half price, within a day)",
     providerNoBatch: "No batch — captions run immediately",
     providerOpenAiHint: "Any OpenAI-compatible endpoint works here.",
+    /**
+     * Provider display names, keyed by the preset id the server reports. This is
+     * the one place a provider name is translated; the server's `label` stays
+     * English and is the fallback for an id this map does not know yet, so a new
+     * backend added to `PRESETS` still renders before its name is translated.
+     */
+    providers: {
+      deepseek: "DeepSeek",
+      gemini: "Google Gemini",
+      siliconflow: "SiliconFlow (硅基流动)",
+      dashscope: "Alibaba DashScope (Qwen)",
+      zhipu: "Zhipu (智谱 GLM)",
+      moonshot: "Moonshot (Kimi)",
+      openrouter: "OpenRouter",
+      ollama: "Local (Ollama)",
+      lmstudio: "Local (LM Studio)",
+    },
 
     proxy: "Network proxy",
     proxySystem: "System proxy",

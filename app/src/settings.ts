@@ -107,6 +107,18 @@ function labelledInput(label: string, control: string): HTMLLabelElement {
 }
 
 /**
+ * A provider's name in the reader's language.
+ *
+ * The server sends a `label` with every option and it is the fallback, so a
+ * backend added to `PRESETS` before its name is translated still renders. The
+ * map is keyed by the preset `id`, which is stable, not by the label, which is
+ * prose that may change.
+ */
+function providerName(option: ProviderOption): string {
+  return (ui.settings.providers as Record<string, string>)[option.id] ?? option.label;
+}
+
+/**
  * The conflict resolver.
  *
  * Two choices, each named for what it does to the data rather than which side
@@ -495,7 +507,7 @@ function generationSection(): HTMLElement {
       button: useButton,
       paint(option, active) {
         row.id = option.id;
-        name.textContent = option.label;
+        name.textContent = providerName(option);
         badge.textContent = active ? ui.settings.providerActive : "";
         badge.hidden = !active;
         badge.classList.toggle("tone-ok", active);
@@ -530,7 +542,7 @@ function generationSection(): HTMLElement {
     }
     const active = latest.providers.find((p) => p.id === latest!.provider);
     state.textContent = active?.hasKey
-      ? `${active.label} · ${ui.settings.ready}`
+      ? `${providerName(active)} · ${ui.settings.ready}`
       : ui.settings.noKey;
     state.className = `set-sync-state tone-${active?.hasKey ? "ok" : "warn"}`;
 

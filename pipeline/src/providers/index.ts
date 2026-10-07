@@ -102,7 +102,7 @@ export const PRESETS: ProviderPreset[] = [
   },
   {
     id: "ollama",
-    label: "Local (Ollama / LM Studio)",
+    label: "Local (Ollama)",
     kind: "openai",
     baseUrl: "http://127.0.0.1:11434/v1",
     model: "gemma4:e4b",

@@ -295,6 +295,18 @@ export const zhHans: Messages = {
     providerBatchOk: "支持批量任务（半价，24 小时内）",
     providerNoBatch: "不支持批量——立即执行",
     providerOpenAiHint: "任何 OpenAI 兼容接口都可以填在这里。",
+    /** 服务商显示名，按服务端的 preset id 查；查不到就回落到服务端的英文 label。 */
+    providers: {
+      deepseek: "DeepSeek",
+      gemini: "Google Gemini",
+      siliconflow: "SiliconFlow（硅基流动）",
+      dashscope: "阿里云 DashScope（Qwen）",
+      zhipu: "智谱 GLM",
+      moonshot: "Moonshot（Kimi）",
+      openrouter: "OpenRouter",
+      ollama: "本地（Ollama）",
+      lmstudio: "本地（LM Studio）",
+    },
 
     proxy: "网络代理",
     proxySystem: "系统代理",
