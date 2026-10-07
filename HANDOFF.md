@@ -774,7 +774,13 @@ raw JSON under `data/bakeoff/local-2026-10-07{,-ctx12k}/` (gitignored).
    failed at 8,192; **16,384 would not load at all** on this 8 GiB card
    (`llama-server` died at 38% — measured 7,156 MiB at 12,288 and
    7,349–7,461 MiB at 8,192). 93 of 357 written days (26%; median day 3,371
-   tokens, p90 15,056) do not fit 8,192.
+   tokens, p90 15,056) do not fit 8,192. Buying context with CPU offload does
+   not work either: 32,768 loads only at `--gpu 0.5`, where generation fell to
+   ~7 t/s (17 W on a 115 W card — CPU-bound) and the largest day (345 photos)
+   died with `fetch failed` after **25.7 minutes**. The route that does work is
+   the smaller model: `gemma4-e2b` at 65,536 in full offload (6,225 MiB)
+   summarised that same day in **45.6 s**, register-clean though less specific
+   than the cloud. On this card, longer context means a smaller model.
 
 Optional knobs written to `.env` for the run and their final value:
 `AI_PROVIDER` (set to `lmstudio`, **restored to `deepseek`**), and

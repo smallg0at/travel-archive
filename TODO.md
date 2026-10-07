@@ -29,30 +29,38 @@ defined. Generate → Translate → Estimate for what is left of the text.
 - [ ] **A local day summary overflows the loaded context, and `organize` sends
       the whole day.** Measured 2026-10-07 against LM Studio
       (`google/gemma-4-e4b`): a day whose prompt is ~13,160 tokens is refused
-      with `exceed_context_size_error`, because LM Studio JIT-loads the model
-      at **8,192** tokens by default even though the model's ceiling is
-      131,072 (`lms load -c` can raise it; 32,768 estimates 7.85 GiB against a
-      card that has 8 GiB with ~0.6 GiB already spent on the desktop). The
-      8,192 load captioned single images and a six-image batch without trouble;
-      it is the day that breaks. `summarizeDay` builds one prompt from every
-      stop's every caption, so a day of more than a hundred captioned photos
-      cannot fit, and the overflow is a hard 400 — not in `RETRYABLE`, so the
-      "retry without cards" fallback never runs. The fix belongs in the input,
-      not the load: a token budget on the day (drop captions, or shard stops)
-      works on any machine; at minimum the requirement should be documented for
-      local providers.
+      with `exceed_context_size_error`, because LM Studio JIT-loads the model at
+      **8,192** tokens by default even though the model's ceiling is 131,072.
+      Raising the load only helps so far: 12,288 fits in full offload and
+      rescues the 8k–12k band (a a city day, 91 s), 16,384 **crashes** the
+      runtime at load, and 32,768 loads only at `--gpu 0.5`, where `tg ≈ 7 t/s`
+      and the largest day (345 photos, ~22.6k tokens) died after **25.7
+      minutes** with `fetch failed`. CPU offload is not a way to buy context on
+      this 8 GiB card. Shrinking the model is: `gemma4-e2b` at 65,536 in full
+      offload (6,225 MiB) summarised the same 345-photo day in **45.6 s**,
+      register-clean though less specific than the cloud — so long context here
+      means a smaller model, not a bigger load. The 8,192 load captions single
+      images and a six-image
+      batch without trouble; it is the day that breaks. `summarizeDay` builds
+      one prompt from every stop's every caption, so a day of more than a
+      hundred captioned photos cannot fit, and the overflow is a hard 400 — not
+      in `RETRYABLE`, so the "retry without cards" fallback never runs. The fix
+      belongs in the input, not the load: a token budget on the day (drop
+      captions, or shard stops) works on any machine; at minimum the
+      requirement should be documented for local providers.
 
-- [ ] **The `ollama` preset still advertises LM Studio, and would fail on it.**
-      Raised 2026-10-07 while adding a dedicated `lmstudio` row. The `ollama`
-      entry's label reads "Local (Ollama / LM Studio)" and points at
-      `127.0.0.1:11434`, and its unset `jsonMode` makes `openaiCompatible.ts`
-      send `response_format:{"type":"json_object"}` — which LM Studio answers
-      **400** to (it accepts only `json_schema` or `text`). Anyone who picks
-      that row for LM Studio, as its label invites, gets a provider that cannot
-      make a single call. The dedicated row is correct (`jsonMode: "prompt"`);
-      the label should stop claiming LM Studio. Worth considering beside it: a
-      `json_schema` mode for OpenAI-compatible providers, which LM Studio does
-      enforce and which would be stronger than asking in prose.
+- [ ] **The OpenAI-compatible path has no `json_schema` mode.** Raised
+      2026-10-07. Every non-Gemini provider asks for JSON in prose and repairs
+      the reply afterwards (`looseJson`), while LM Studio can enforce a real
+      `json_schema` — the constraint is why Gemini's day pages are reliable, and
+      a local 4B model dropping a segment `title` is exactly the failure a
+      schema would have caught before it cost a 90–195-second call (see the
+      `parseDaySummary` entry above). Worth a third `jsonMode` beside
+      `response_format` and `prompt`; the per-call shapes already exist for
+      Gemini's `responseSchema`. (The `ollama` row's label read "Local (Ollama /
+      LM Studio)" until this date and now reads "Local (Ollama)"; the row still
+      sends `json_object`, which LM Studio rejects, but it no longer claims to
+      be for LM Studio.)
 
 - [ ] **A remote reader's Activity page stops updating job progress.** Raised
       by the owner 2026-10-04: on the home network the 进行中 box shows the job
