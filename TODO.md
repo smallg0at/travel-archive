@@ -4,7 +4,7 @@ Open items, and nothing else. Everything closed — with the measurements that
 closed it — lives in `docs/TODO-history.md`: a verbatim archive of this file
 as of 2026-09-22, kept for the record and no longer maintained.
 
-**20 open.** The list grows because each session surfaces defects that were
+**24 open.** The list grows because each session surfaces defects that were
 previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the
 phone app, the basemap's China worldview, and an editor agent on the desktop
@@ -15,6 +15,44 @@ photos over 123 months**, ~29,300 captioned, ~340 days written up, 15 trips
 defined. Generate → Translate → Estimate for what is left of the text.
 
 ## Open issues
+
+- [ ] **`parseDaySummary` throws on a reply that omits `summary` or a segment
+      `title`, and the fallback uses the same parser.** Measured 2026-10-07 on
+      a local 4B model: a a city day came back short of one of those fields and
+      was lost whole with `Cannot read properties of undefined (reading
+      'trim')` (`parseDaySummary`, `summarise.ts`). The "retry without cards"
+      fallback exists to rescue exactly this case, but it parses with the same
+      function, so it throws too. Defaulting an absent `summary`/`title` to
+      `""` would keep the day. Gemini's `responseSchema` makes the fields
+      required; the prompt-only providers do not.
+
+- [ ] **A local day summary overflows the loaded context, and `organize` sends
+      the whole day.** Measured 2026-10-07 against LM Studio
+      (`google/gemma-4-e4b`): a day whose prompt is ~13,160 tokens is refused
+      with `exceed_context_size_error`, because LM Studio JIT-loads the model
+      at **8,192** tokens by default even though the model's ceiling is
+      131,072 (`lms load -c` can raise it; 32,768 estimates 7.85 GiB against a
+      card that has 8 GiB with ~0.6 GiB already spent on the desktop). The
+      8,192 load captioned single images and a six-image batch without trouble;
+      it is the day that breaks. `summarizeDay` builds one prompt from every
+      stop's every caption, so a day of more than a hundred captioned photos
+      cannot fit, and the overflow is a hard 400 — not in `RETRYABLE`, so the
+      "retry without cards" fallback never runs. The fix belongs in the input,
+      not the load: a token budget on the day (drop captions, or shard stops)
+      works on any machine; at minimum the requirement should be documented for
+      local providers.
+
+- [ ] **The `ollama` preset still advertises LM Studio, and would fail on it.**
+      Raised 2026-10-07 while adding a dedicated `lmstudio` row. The `ollama`
+      entry's label reads "Local (Ollama / LM Studio)" and points at
+      `127.0.0.1:11434`, and its unset `jsonMode` makes `openaiCompatible.ts`
+      send `response_format:{"type":"json_object"}` — which LM Studio answers
+      **400** to (it accepts only `json_schema` or `text`). Anyone who picks
+      that row for LM Studio, as its label invites, gets a provider that cannot
+      make a single call. The dedicated row is correct (`jsonMode: "prompt"`);
+      the label should stop claiming LM Studio. Worth considering beside it: a
+      `json_schema` mode for OpenAI-compatible providers, which LM Studio does
+      enforce and which would be stronger than asking in prose.
 
 - [ ] **A remote reader's Activity page stops updating job progress.** Raised
       by the owner 2026-10-04: on the home network the 进行中 box shows the job
