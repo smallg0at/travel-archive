@@ -1,6 +1,7 @@
 import type { DateSource, GeoPoint } from "@travel-archive/shared";
 import { isNetworkError, parseDateFromFileName } from "./util.js";
 import { getAccessToken } from "./auth.js";
+import { BOX, renderImageThumbnail, renderVideoPoster } from "./localThumb.js";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
@@ -373,7 +374,8 @@ export async function listPhotosInFolder(token: string, folderPath: string, recu
  * and image token cost is set by the model's own tiling, not by how many
  * megabytes we ship, so the saving is bandwidth and latency rather than tokens.
  *
- * Returns null when Graph has no thumbnail for the item.
+ * Returns null when Graph has no thumbnail for the item — and now, before it
+ * gives up, when Graph *will not* render one. See `renderMissing` below.
  */
 export async function downloadThumbnailBuffer(
   token: string,
@@ -382,13 +384,81 @@ export async function downloadThumbnailBuffer(
 ): Promise<Buffer | null> {
   const meta = await graphFetch(token, `/me/drive/items/${itemId}/thumbnails/0/${size}`);
   const { url } = (await meta.json()) as { url?: string };
-  if (!url) return null;
 
-  // The thumbnail URL is already pre-authenticated; sending our bearer token
-  // to that host would leak it to a different origin.
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  return Buffer.from(await res.arrayBuffer());
+  if (url) {
+    // The thumbnail URL is already pre-authenticated; sending our bearer token
+    // to that host would leak it to a different origin.
+    const res = await fetch(url);
+    if (res.ok) {
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (bytes.length) return bytes;
+    }
+    // A non-ok answer here is not "still processing". For a growing list of
+    // items — HEIC, DNG, MP4, and JPEGs too — Graph hands back a transform URL
+    // and the CDN answers 406 with a failure OneDrive cached months ago
+    // (`Substitution Stream for ImageProcessingFailure found in slot`). Asking
+    // again gets the same bytes of JSON forever, so the original is rendered
+    // here instead: localThumb.ts.
+  }
+
+  return renderMissing(token, itemId, size);
+}
+
+/**
+ * How long to wait before trying to render an item locally again.
+ *
+ * Without this, one cell the decoders also fail on re-downloads its original
+ * — megabytes — on *every* request for as long as the page is open. The
+ * result is remembered rather than written to the thumb store, because a
+ * failure that outlives the process is exactly what installing ffmpeg or
+ * fixing a broken `sharp` install must be able to clear.
+ */
+const RENDER_COOLDOWN_MS = 10 * 60_000;
+const renderGaveUpAt = new Map<string, number>();
+
+/**
+ * The original, rendered here, for items OneDrive will not thumbnail.
+ *
+ * Two things this deliberately does **not** do: it never returns a placeholder
+ * (a grey tile must not reach the model as a photograph — callers counting
+ * "no thumbnail" depend on `null` meaning exactly that), and it never hides a
+ * dropped connection behind a permanent "no" (`isNetworkError` is rethrown, so
+ * the next run retries rather than recording a skip).
+ *
+ * Video takes a different route from the images: its bytes are never read into
+ * memory. The pre-authenticated download URL is handed to ffmpeg, which seeks
+ * with Range requests — a 382MB original costs one keyframe.
+ */
+async function renderMissing(token: string, itemId: string, size: "medium" | "large"): Promise<Buffer | null> {
+  const gaveUp = renderGaveUpAt.get(itemId);
+  if (gaveUp && Date.now() - gaveUp < RENDER_COOLDOWN_MS) return null;
+
+  try {
+    // No `$select`: Graph drops `@microsoft.graph.downloadUrl` whenever other
+    // fields are selected on this item — measured 2026-10-07, the same MP4
+    // returned it on a plain GET and omitted it under
+    // `$select=file,@microsoft.graph.downloadUrl`. A few dozen extra bytes on a
+    // path this rare is a cheaper trade than a second request.
+    const res = await graphFetch(token, `/me/drive/items/${itemId}`);
+    const item = (await res.json()) as { file?: { mimeType?: string }; "@microsoft.graph.downloadUrl"?: string };
+    const box = BOX[size];
+    const downloadUrl = item["@microsoft.graph.downloadUrl"] ?? null;
+
+    const bytes = (item.file?.mimeType ?? "").startsWith("video/")
+      ? downloadUrl
+        ? await renderVideoPoster(downloadUrl, box)
+        : null
+      : await renderImageThumbnail(await downloadPhotoBuffer(token, itemId), box);
+
+    if (bytes) return bytes;
+    renderGaveUpAt.set(itemId, Date.now());
+    return null;
+  } catch (err) {
+    if (err instanceof LiveGuardError) throw err;
+    if (isNetworkError(err)) throw err;
+    renderGaveUpAt.set(itemId, Date.now());
+    return null;
+  }
 }
 
 /**

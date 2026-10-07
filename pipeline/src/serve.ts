@@ -10,6 +10,7 @@ import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { originAllowed } from "./originCheck.js";
 import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl } from "./graph.js";
+import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
   readThumb,
@@ -536,12 +537,16 @@ const routes: [RegExp, string, Handler][] = [
       // app's banner polls, and it must answer even while a job is hogging the
       // loop — a pause in answering read as "the server died" during a shard
       // upload. Nothing here touches Graph, so it can come back immediately.
+      // `render` is the local thumbnail capability (sharp / heic-decode /
+      // ffmpeg): probed at most once a minute, and shown by the app so a
+      // machine without ffmpeg says so instead of leaving videos blank.
       const body = {
         ok: true,
         signedIn: await hasCachedAccount(),
         running: jobs.runningJob(),
         lastFinished: jobs.lastFinished(),
         warming: warmingStatus(),
+        render: await renderCapability(),
       };
       json(res, 200, body);
     },
