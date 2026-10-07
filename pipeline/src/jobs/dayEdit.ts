@@ -14,8 +14,8 @@ import { withArchiveLock } from "../lock.js";
  * *not* want to pay to have the day written again.
  *
  * Writes go through the server because the server is the only writer (see
- * HANDOFF.md): the app is a reader, and a second writer clobbering a shard has
- * actually happened here.
+ * docs/invariants.md): the app is a reader, and a second writer clobbering a
+ * shard has actually happened here.
  */
 
 /**

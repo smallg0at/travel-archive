@@ -93,7 +93,7 @@ function plan(record: PhotoRecord | undefined, item: BatchItem): { fileName: str
  *
  * This is the performance fix rather than a convenience. A single retime costs
  * two Graph downloads — the month's shard and the 3.4MB index, read from Graph
- * because this is a write path (HANDOFF.md) — plus the uploads, measured at 5-6
+ * because this is a write path (docs/invariants.md) — plus the uploads, measured at 5-6
  * seconds a photo. Done one at a time, the 118-photo backlog is ten minutes of
  * waiting on the same two files; batched, it is one read of each and the
  * renames, which are small and run four at a time.

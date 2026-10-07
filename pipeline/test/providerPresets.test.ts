@@ -9,7 +9,7 @@ import { isWritableKey } from "../src/configStore.js";
  * `text`. The caption and summary prompts already ask for one JSON object, so
  * the preset must opt out of the field (`jsonMode: "prompt"`). If that is ever
  * dropped the provider sends `json_object` by default and nothing generates —
- * measured 2026-10-07, see HANDOFF.md.
+ * measured 2026-10-07, see docs/history.md.
  */
 describe("the local LM Studio preset", () => {
   it("opts out of response_format, which LM Studio rejects", () => {

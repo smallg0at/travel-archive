@@ -169,7 +169,7 @@ console.log(`out: ${OUT}\n`);
  * A caption's quality and a run's speed depend on things no Chat Completions
  * response reports: the model's **quantization** (Q4_K_M here), the **context
  * it was loaded with** (8192 by default, which is what overflows a day summary,
- * and which a crash silently resets — see HANDOFF), and whether the engine had
+ * and which a crash silently resets — see docs/history.md), and whether the engine had
  * crashed and reloaded mid-run. Recording them makes a metrics file
  * self-describing months later.
  */

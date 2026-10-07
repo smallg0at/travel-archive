@@ -31,6 +31,6 @@ Keep this file short; don't restate what those already cover.
 - **Report progress.** On anything long, emit 1–3 lines per stage (roughly every
   8–10 tool calls): what you are doing, the current conclusion, any blocker.
   Never grind through dozens of tool calls in silence.
-- **Measure before asserting** — see `HANDOFF.md` → "How to work on this".
-- **Keep the docs alive.** A new durable lesson goes in `HANDOFF.md`; changed
-  outstanding work goes in `TODO.md`.
+- **Measure before asserting** — see `docs/working-style.md`.
+- **Keep the docs alive.** A new durable lesson goes in `docs/` (`invariants.md`
+  or `working-style.md`); changed outstanding work goes in `TODO.md`.

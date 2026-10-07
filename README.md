@@ -283,7 +283,7 @@ What it does differently from the desktop, and why:
   already read work offline. A launch asks OneDrive for one listing of the
   `photos` folder and pulls only the shards whose eTag moved; the index
   translations are read from their kept copy before first paint. See "The
-  phone's offline archive" in `HANDOFF.md`.
+  phone's offline archive" in `docs/architecture.md`.
 - **Sign-in is a full-page redirect inside the app's WebView**, never a popup,
   and Microsoft's login hosts are in Capacitor's `allowNavigation`. The system
   browser cannot be used: a sign-in finished there lands on
@@ -301,7 +301,7 @@ What it does differently from the desktop, and why:
   why an archive reader wants the camera folder.
 - **The sign-in survives a restart** because the key that unlocks MSAL's kept
   tokens is rewritten as a persistent cookie. See "The phone keeps its own
-  sign-in" in `HANDOFF.md` — without it the app signed out every time Android
+  sign-in" in `docs/invariants.md` — without it the app signed out every time Android
   ended its process.
 
 **Before sign-in can work on a device**, add `https://localhost/auth.html` as a
