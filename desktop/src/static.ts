@@ -97,7 +97,10 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
  *   show them without a Microsoft session of its own. Omitting loopback here
  *   while `connect-src` has it is a trap — the API calls succeed, so the server
  *   looks healthy, and only the images silently fail.
- * - `connect-src` is Graph, the sign-in host, and the job server on loopback.
+ * - `connect-src` is Graph, the sign-in host, and the job server on loopback —
+ *   plus `https:` for the host Graph's own redirect lands on, which is the same
+ *   allowance `img-src` and `media-src` already make for the same reason (see
+ *   the note at the directive).
  * - `frame-src` is the sign-in host alone: MSAL renews tokens in a hidden
  *   iframe, and without this the session would die silently after an hour.
  */
@@ -151,7 +154,22 @@ function contentSecurityPolicy(exposed: boolean): string {
      */
     `media-src 'self' blob: https: http://127.0.0.1:* http://localhost:*${extra}`,
     "font-src 'self' data:",
-    `connect-src 'self' http://127.0.0.1:* http://localhost:*${extra} https://graph.microsoft.com https://login.microsoftonline.com`,
+    /*
+     * `connect-src` has to follow Graph's own redirects: `.../content` answers
+     * with a 302 to whichever host Microsoft is serving downloads from (a
+     * personal account lands on `my.microsoftpersonalcontent.com`), and a
+     * redirect target is checked against `connect-src` like any other request.
+     * Naming today's host is a different host next year, so `https:` is allowed
+     * for the same reason `img-src` and `media-src` above already allow it —
+     * nothing becomes reachable that images were not. The explicit Graph and
+     * sign-in origins stay as documentation of where the traffic usually goes.
+     *
+     * Without this the policy was silent about the redirect, and it only bit in
+     * one state: with the job server up the renderer takes its files from the
+     * mirror, so the first time it ever fetched from Graph was the first time
+     * the server was away — the archive then failed with "Failed to fetch".
+     */
+    `connect-src 'self' http://127.0.0.1:* http://localhost:*${extra} https://graph.microsoft.com https://login.microsoftonline.com https:`,
     "frame-src https://login.microsoftonline.com",
     "object-src 'none'",
     "base-uri 'none'",

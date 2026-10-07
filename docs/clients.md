@@ -203,10 +203,14 @@ than not starting.
 The static server sends a **Content-Security-Policy** with every response
 (`desktop/src/static.ts`). Inline script is allowed, since both pages bootstrap
 the theme from an inline block before the stylesheets paint; `unsafe-eval` is
-not, which is the part Electron actually warns about. `img-src` allows `https:`
-for whichever OneDrive CDN host Graph hands out that hour, `connect-src` is
-Graph, the sign-in host and loopback, and `frame-src` is the sign-in host alone
-so MSAL can still renew tokens in its hidden iframe.
+not, which is the part Electron actually warns about. `img-src` and `media-src`
+allow `https:` for whichever OneDrive CDN host Graph hands out that hour, and
+`connect-src` allows the same, because `graph.microsoft.com/.../content`
+answers with a 302 to that host and a redirect target is checked like any other
+request — without it the archive cannot load at all once the job server is away,
+which is the one time the renderer fetches its files from Graph directly.
+`connect-src` also names Graph, the sign-in host and loopback, and `frame-src`
+is the sign-in host alone so MSAL can still renew tokens in its hidden iframe.
 
 `DESKTOP_PORT` and `SERVE_PORT` override the two ports.
 
