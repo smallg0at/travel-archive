@@ -575,6 +575,19 @@ async function startup(): Promise<void> {
 
   void (async () => {
     try {
+      // `npm run desktop:offline`: start the shell and deliberately not the job
+      // server — for the window when the server is being repaired and a running
+      // one would only get in the way of reproducing whatever is wrong with it.
+      //
+      // Deliberate, and the same state the catch below already produces when
+      // the server cannot start, so nothing downstream is new: `pipeline` stays
+      // unset, `stopServer` has nothing to stop, and the app reads OneDrive
+      // directly with its own banner saying so.
+      if (process.argv.includes("--no-pipeline")) {
+        log("Job server skipped (--no-pipeline); the app runs read-only from OneDrive.");
+        loadApp();
+        return;
+      }
       pipeline = await startPipelineServer({
         cwd: ARCHIVE_HOME ?? PIPELINE_DIR,
         entry: PIPELINE_ENTRY,

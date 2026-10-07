@@ -12,6 +12,7 @@
   },
   "scripts": {
     "desktop": "npm run --workspace desktop build && npm run --workspace desktop start",
+    "desktop:offline": "npm run --workspace desktop build && npm run --workspace desktop start -- --no-pipeline",
     "package": "npm run --workspace app build && npm run --workspace pipeline build && npm run --workspace desktop dist"
   }
 }
