@@ -22,6 +22,7 @@ import {
   saveShard,
 } from "../archiveStore.js";
 import { mediaTypeFor } from "../util.js";
+import { renderCapability } from "../localThumb.js";
 import { analysisTargets } from "../duplicates.js";
 import { mayBeAnalyzed } from "../screenshots.js";
 
@@ -66,8 +67,19 @@ export interface AnalyzeOptions {
 export interface AnalyzeResult {
   analyzed: number;
   failed: number;
-  /** No thumbnail at all — Graph has none, so nothing to send and nothing a retry would fix. */
+  /**
+   * No image to send — OneDrive will not render it and this machine could not
+   * either. Counted separately so `failed` means "the model or the network let
+   * us down", which is the half worth acting on.
+   */
   skipped: number;
+  /**
+   * Of those, the ones skipped only because no `ffmpeg` was found: they are a
+   * program install away from working, where the rest are OneDrive's own
+   * cached failure and nothing here can fix them. Surfaced in the job message
+   * because "40 photos had no thumbnail" hides an action the user could take.
+   */
+  needsFfmpeg: number;
   inherited: number;
   geocoded: number;
 }
@@ -363,7 +375,7 @@ export async function runAnalyze(
     opts.limit,
   );
 
-  const result: AnalyzeResult = { analyzed: 0, failed: 0, skipped: 0, inherited: 0, geocoded: 0 };
+  const result: AnalyzeResult = { analyzed: 0, failed: 0, skipped: 0, needsFfmpeg: 0, inherited: 0, geocoded: 0 };
 
   if (total === 0) {
     // Still sweep for missing places. The geocode pass is self-healing by
@@ -451,12 +463,18 @@ export async function runAnalyze(
         try {
           const image = await downloadThumbnailBuffer(token, record.id);
           if (!image) {
-            // Not a failure: Graph has no thumbnail for this item (older
-            // videos, some HEIC/DNG), and a retry would get the same answer.
-            // Counted separately so the run's `failed` means "the model or the
-            // network let us down", which is worth acting on.
+            // Not a failure: OneDrive will not render this item (a processing
+            // failure it cached years ago — see localThumb.ts), and if the
+            // local fallback came back empty the reason is worth naming. A
+            // retry would get the same answer either way, so the photo is left
+            // for the next run rather than counted against this one.
             result.skipped += 1;
-            onProgress({ message: `no thumbnail: ${record.fileName}` });
+            if (record.video && !(await renderCapability()).ffmpeg) {
+              result.needsFfmpeg += 1;
+              onProgress({ message: `no poster (ffmpeg not found): ${record.fileName}` });
+            } else {
+              onProgress({ message: `no thumbnail: ${record.fileName}` });
+            }
             continue;
           }
           // The shard's copy, not the target list's: geocoding has since given
@@ -529,6 +547,7 @@ export async function runAnalyze(
     message:
       `Analyzed ${result.analyzed} photo(s)` +
       (result.skipped ? `, ${result.skipped} had no thumbnail` : "") +
+      (result.needsFfmpeg ? ` — ${result.needsFfmpeg} of those are videos, which need ffmpeg for a frame` : "") +
       (result.failed ? `, ${result.failed} failed` : "") +
       `.`,
   });

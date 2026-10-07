@@ -10,6 +10,7 @@ import { buildHomeIndex } from "./homeIndex.js";
 import { dataFile } from "../paths.js";
 import { env } from "../env.js";
 import { isNetworkError, mediaTypeFor } from "../util.js";
+import { renderCapability } from "../localThumb.js";
 import { captionBatchRequest, geminiClient, parseCaptionJson } from "../providers/gemini.js";
 import {
   captionContextFor,
@@ -283,6 +284,8 @@ export interface BatchSubmitResult {
   batches: number;
   located: number;
   noThumbnail: number;
+  /** Of those, skipped only because no `ffmpeg` was found — see localThumb.ts. */
+  needsFfmpeg: number;
   alreadyQueued: number;
   /** 1 when it stopped at Google's queue limit and left the rest to the server's automatic submit. */
   queueFull: number;
@@ -344,7 +347,7 @@ async function submitBatches(
   onProgress: ProgressFn,
   signal?: AbortSignal,
 ): Promise<BatchSubmitResult> {
-  const result: BatchSubmitResult = { submitted: 0, batches: 0, located: 0, noThumbnail: 0, alreadyQueued: 0, queueFull: 0 };
+  const result: BatchSubmitResult = { submitted: 0, batches: 0, located: 0, noThumbnail: 0, needsFfmpeg: 0, alreadyQueued: 0, queueFull: 0 };
   const carryOn = async (message: string) => {
     state.autoSubmit = {
       from: opts.from ?? null,
@@ -501,7 +504,12 @@ async function submitBatches(
       }
       if (!image) {
         result.noThumbnail++;
-        onProgress({ message: `no thumbnail: ${target.fileName}` });
+        if (target.video && !(await renderCapability()).ffmpeg) {
+          result.needsFfmpeg++;
+          onProgress({ message: `no poster (ffmpeg not found): ${target.fileName}` });
+        } else {
+          onProgress({ message: `no thumbnail: ${target.fileName}` });
+        }
         return;
       }
       const photo = shard.photos[target.id] ?? target;
@@ -551,9 +559,14 @@ async function submitBatches(
   onProgress({
     phase: "done",
     message:
-      result.submitted > 0
+      (result.submitted > 0
         ? `Submitted ${result.submitted} photo(s) in ${result.batches} batch(es). Results are collected automatically when Google finishes — usually within hours, at most a day.`
-        : "Nothing to submit in that range.",
+        : "Nothing to submit in that range.") +
+        (result.noThumbnail
+          ? ` ${result.noThumbnail} photo(s) had no image to send` +
+            (result.needsFfmpeg ? `, ${result.needsFfmpeg} of them videos waiting on ffmpeg` : "") +
+            "."
+          : ""),
   });
   return result;
 }
