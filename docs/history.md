@@ -10,13 +10,14 @@ silently took everything in between.
 
 - **Map styling** — recovered from `c65bc5b` and verified (380px canvas, sea
   colour, 23 city markers).
-- **Settings performance** — fixed 2026-09-08. See `TODO.md`'s Resolved list
-  for the two separate causes and the numbers.
+- **Settings performance** — fixed 2026-09-08. See the Resolved list in the
+  archived TODO (`private/TODO-history.md`, not committed) for the two separate
+  causes and the numbers.
 
 The other two gaps were closed the same day: `scan` can now be triggered from
 the app (`POST /jobs/scan`, three modes in Settings), and the missing-`.env`
 dialog is now a **Settings > Generation** form that writes the key and applies
-it without a restart. Both are in `TODO.md`'s Resolved list.
+it without a restart. Both are in that same archived list.
 
 **2026-09-24 — a day of "it was already broken by the fix."** Worth reading as a
 class, because three of the four were self-inflicted within the same session:
@@ -54,7 +55,7 @@ retired and a local call costs nothing. Measured on `google/gemma-4-e4b` at
 `127.0.0.1:1234/v1` against the **stored Gemini captions and day summaries
 already in the archive**, so the comparison spent nothing — no Gemini call was
 made. Harness: `pipeline/scripts/bench-local.mjs`, read-only, seed 20261007;
-raw JSON under `data/bakeoff/local-2026-10-07{,-ctx12k}/` (gitignored).
+raw JSON under `data/bakeoff/` (gitignored).
 
 **Two defects surfaced before any quality number did.**
 
@@ -104,7 +105,7 @@ carries a word of its day's stop title (448), not the 144 the cloud missed. On
 the sample the cloud named 67% of the key words and the local model 42%: **25
 points lower, past the 10-point bar**, and of the four the cloud missed the
 local named **none**. (The key word alone is a weak name sometimes — "Making"
-from "Museum of Making" — so the any-word row is reported beside it; the gap
+out of a museum's own name — so the any-word row is reported beside it; the gap
 holds at 67% vs 92%.)
 
 Caption latency: median 20–25 s a photo, p90 ~26–29 s. A six-image
@@ -115,45 +116,44 @@ is weak: the same thumbnail twice gave an identical caption **1 of 8 times**
 photo is captioned once, fatal to a naive A/B.
 
 Day summaries: **3 of 5 attempts produced text** — one lost to the
-`parseDaySummary` crash now in TODO, one to a 195-second run that returned
-"empty message" after five tries. Every one that produced text had clean
-register (no photo counts, distances, trip name or flourish; read, not only
-grepped).
+`parseDaySummary` crash now in the private Project, one to a 195-second run that
+returned "empty message" after five tries. Every one that produced text had
+clean register (no photo counts, distances, trip name or flourish; read, not
+only grepped).
 
 ### Verdict
 
 **Caption: no-go as a stand-in for Gemini.** The schema path is solid (100%, no
 truncation, batch works), but naming is 25 points down and the document tail is
 bad: a four-language museum label came back as `Generationen` four times, and
-"Cradle to Grave" was replaced by an invented essay about the human body. It is
-a plausible *supplement* — local, free, fine for unremarkable snapshots — not a
-replacement.
+one exhibit placard was replaced by an invented essay about the human body. It
+is a plausible *supplement* — local, free, fine for unremarkable snapshots — not
+a replacement.
 
 **Day summary: no-go at the default load — and not the easier task.** The prose
 and register are good, which is what the pure-text intuition expects; what fails
 is everything around it — 26% of days do not fit the loaded context, the parse
 crashes on a reply that omits a field, and a large day can come back empty.
-Harden the parser (TODO) and budget the day input to the context and it is worth
-a second look; as shipped it cannot replace `organize`.
+Harden the parser and budget the day input to the context and it is worth a
+second look; as shipped it cannot replace `organize`.
 
 **Worst samples.**
-- `IMG_20260917_105733 1.jpg` — a German/French/Italian/English museum label;
-  local `extracted_text` was `"Generationen\nGenerationen\nGenerationen\nGenerationen"`.
-- `IMG_20230812_144804.jpg` — the "Cradle to Grave" placard; local invented
-  "God's Gift to Humanity… the human body is a marvel of engineering"
-  (word-set Jaccard 0.08).
-- `IMG_20230809_121619.jpg` — captioned "museum label" one run and "museum
-  plaque" the next, with an identical image; 7 of 8 pairs moved like that.
+- One photo of a German/French/Italian/English museum label; local
+  `extracted_text` was `"Generationen\nGenerationen\nGenerationen\nGenerationen"`.
+- An exhibit placard; local invented "God's Gift to Humanity… the human body is
+  a marvel of engineering" (word-set Jaccard 0.08).
+- One photo captioned "museum label" on one run and "museum plaque" on the
+  next, with an identical image; 7 of 8 pairs moved like that.
 
 ### Object recognition on a museum day, and the concurrency crash (2026-10-07)
 
 The follow-up question was narrower than "is it good": on a day that is mostly
 artworks, does the model name the **specific** thing — the painter, the work —
-or only describe the room? Day 2026-08-31 (a city: the palace, another museum,
-the museum Museum; 359 photos) captioned by both models and scored
-against the museum's own placards: a proper noun in a caption is *grounded* when
-it also appears in the OCR, *agreed* when it appears in the cloud caption, and
-*neither* otherwise. On the 197 photos both models completed:
+or only describe the room? A 359-photo museum day (three museums in one city),
+captioned by both models and scored against the museums' own placards: a proper
+noun in a caption is *grounded* when it also appears in the OCR, *agreed* when
+it appears in the cloud caption, and *neither* otherwise. On the 197 photos both
+models completed:
 
 | | e2b (2B) | e4b (4B) | cloud |
 |---|---|---|---|
@@ -164,13 +164,13 @@ it also appears in the OCR, *agreed* when it appears in the cloud caption, and
 | caption median latency | 12.7 s (∥4) | 15.5 s (∥2) | ~2 s |
 
 Both describe more than they name, and neither approaches the cloud, which
-names Schönbrunn, the the palace and the painter consistently. e4b is the better of
-the two — it read "Hunters in the Snow" and "Pieter the painter" off a catalogue
-page where e2b read "a group of harlots", and "U4-Station Schönbrunn" where e2b
-read "a public transport monument" — but it still leaves most artworks as "a
-painting" or "a plaque". The failure is **under-naming**, not invention (few
-proper nouns were in neither source and wrong), with the occasional garbled read
-(e2b turned "Pieter the painter the Elder" into "Pietre Brugel d. Á.").
+names the landmarks and painters consistently. e4b is the better of the two —
+it read a famous painting and its painter off a catalogue page where e2b read
+"a group of harlots", and a metro-station name where e2b read "a public
+transport monument" — but it still leaves most artworks as "a painting" or "a
+plaque". The failure is **under-naming**, not invention (few proper nouns were
+in neither source and wrong), with the occasional garbled read (e2b misspelled
+the painter's name).
 
 **The run also produced the sharpest operational finding of the day.** e2b at
 `--concurrency 4` crashed the LM Studio engine once: it logged `Channel Error`
@@ -182,9 +182,8 @@ memory or heat — though the tightness shows up elsewhere: at `--parallel 2` th
 engine logged `alloc: failed to allocate memory for prompt cache state` and cut
 the prefix cache to 2,137 MiB, which is why single calls felt slower (no prefix
 reuse). **e4b at `--concurrency 2` did not crash** (199 of 200). Batch local
-captioning should use two streams, not four; see the TODO for the pipeline
-consequences (it runs four, and a 400 carrying `fetch failed` is not retried).
+captioning should use two streams, not four; see the private Project for the
+pipeline consequences (it runs four, and a 400 carrying `fetch failed` is not
+retried).
 
-Raw JSON: `data/bakeoff/local-2026-08-31-{e2b,e4b}/` (gitignored).
-
-
+Raw JSON: under `data/bakeoff/` (gitignored).
