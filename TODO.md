@@ -4,7 +4,7 @@ Open items, and nothing else. Everything closed — with the measurements that
 closed it — lives in `docs/TODO-history.md`: a verbatim archive of this file
 as of 2026-09-22, kept for the record and no longer maintained.
 
-**24 open.** The list grows because each session surfaces defects that were
+**25 open.** The list grows because each session surfaces defects that were
 previously invisible — most of what has been closed was found by measuring
 rather than by planning. Four sessions work on this at once (this one, the
 phone app, the basemap's China worldview, and an editor agent on the desktop
@@ -15,6 +15,28 @@ photos over 123 months**, ~29,300 captioned, ~340 days written up, 15 trips
 defined. Generate → Translate → Estimate for what is left of the text.
 
 ## Open issues
+
+- [ ] **Concurrent local vision crashes the LM Studio engine and silently
+      downgrades the loaded context.** Measured 2026-10-07 captioning a
+      359-photo day (2026-08-31, a city) with `--concurrency 4` against
+      `gemma4-e2b` loaded at 65,536: the engine crashed once — LM Studio logged
+      `Channel Error` and JIT-reloaded the model at the **default 8,192** — and
+      **104 of 359 calls failed**: 91 `Engine protocol predict request failed:
+      fetch failed` (the requests in flight at the crash), 4 `Model is
+      unloaded.`, 4 `Context size has been exceeded.` (the reload left too little
+      per slot), 2 the model's own malformed JSON. VRAM was not exhausted (6.3
+      of 8.0 GB) and the GPU sat at 68 °C, so this is neither a memory nor a
+      thermal limit; it points at the parallel multimodal path. Two consequences
+      for `analyze`: it runs four `captionPhotos` requests at once
+      (`ANALYZE_CONCURRENCY`), which is the configuration that crashed; and a
+      **400 whose body says `fetch failed` is not retried** — `RETRYABLE` is
+      tested against the HTTP status, not the body — so those photos are left
+      for the next run rather than recovered. At `--parallel 2` the same
+      tightness degrades gracefully instead of crashing: the engine logs
+      `alloc: failed to allocate memory for prompt cache state`, cuts the
+      prefix cache to ~2,137 MiB and evicts continuously, so per-call latency
+      rises (no prefix reuse) but nothing is lost. Two streams, not four, is the
+      stable setting on this 8 GiB card.
 
 - [ ] **`parseDaySummary` throws on a reply that omits `summary` or a segment
       `title`, and the fallback uses the same parser.** Measured 2026-10-07 on

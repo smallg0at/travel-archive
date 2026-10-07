@@ -933,3 +933,45 @@ a second look; as shipped it cannot replace `organize`.
 - `IMG_20230809_121619.jpg` — captioned "museum label" one run and "museum
   plaque" the next, with an identical image; 7 of 8 pairs moved like that.
 
+### Object recognition on a museum day, and the concurrency crash (2026-10-07)
+
+The follow-up question was narrower than "is it good": on a day that is mostly
+artworks, does the model name the **specific** thing — the painter, the work —
+or only describe the room? Day 2026-08-31 (a city: the palace, another museum,
+the museum Museum; 359 photos) captioned by both models and scored
+against the museum's own placards: a proper noun in a caption is *grounded* when
+it also appears in the OCR, *agreed* when it appears in the cloud caption, and
+*neither* otherwise. On the 197 photos both models completed:
+
+| | e2b (2B) | e4b (4B) | cloud |
+|---|---|---|---|
+| proper noun grounded in OCR | 18 (9%) | **24 (12%)** | — |
+| proper noun agreed with cloud | 18 (9%) | **32 (16%)** | — |
+| named any specific subject | 22 (11%) | **33 (17%)** | — |
+| document word-set Jaccard (median) | 0.49 | **0.58** | — |
+| caption median latency | 12.7 s (∥4) | 15.5 s (∥2) | ~2 s |
+
+Both describe more than they name, and neither approaches the cloud, which
+names Schönbrunn, the the palace and the painter consistently. e4b is the better of
+the two — it read "Hunters in the Snow" and "Pieter the painter" off a catalogue
+page where e2b read "a group of harlots", and "U4-Station Schönbrunn" where e2b
+read "a public transport monument" — but it still leaves most artworks as "a
+painting" or "a plaque". The failure is **under-naming**, not invention (few
+proper nouns were in neither source and wrong), with the occasional garbled read
+(e2b turned "Pieter the painter the Elder" into "Pietre Brugel d. Á.").
+
+**The run also produced the sharpest operational finding of the day.** e2b at
+`--concurrency 4` crashed the LM Studio engine once: it logged `Channel Error`
+and JIT-reloaded the model at the **default 8,192**, and **104 of 359 calls
+failed** (91 `fetch failed` in flight at the crash, 4 unloaded, 4 context
+exceeded, 2 the model's own bad JSON). VRAM was not exhausted (6.3 of 8.0 GB)
+and the GPU sat at 68 °C, so it is the parallel multimodal path rather than
+memory or heat — though the tightness shows up elsewhere: at `--parallel 2` the
+engine logged `alloc: failed to allocate memory for prompt cache state` and cut
+the prefix cache to 2,137 MiB, which is why single calls felt slower (no prefix
+reuse). **e4b at `--concurrency 2` did not crash** (199 of 200). Batch local
+captioning should use two streams, not four; see the TODO for the pipeline
+consequences (it runs four, and a 400 carrying `fetch failed` is not retried).
+
+Raw JSON: `data/bakeoff/local-2026-08-31-{e2b,e4b}/` (gitignored).
+
