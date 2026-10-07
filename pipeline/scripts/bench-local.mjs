@@ -78,6 +78,15 @@ const maxContext = Number(arg("max-context", "8192"));
  */
 const concurrency = Math.max(1, Number(arg("concurrency", "1")));
 /**
+ * Original-file size cap for a candidate photo. Inherited from the bench that
+ * downloaded full originals, but this bench fetches 800px thumbnails, so the
+ * cap is only a proxy for "fetchable" and it excludes most large camera shots
+ * (8381 of ~29,300 captioned photos survived it in the recorded runs). Kept at
+ * its old default so those runs stay comparable; raise it to sample a day
+ * without the bias.
+ */
+const maxBytes = Number(arg("max-bytes", "2000000"));
+/**
  * `--dates 2026-08-31,...` pins both the caption pools and the day set to those
  * dates, so one day can be examined on its own (a museum day, say) without
  * taking whatever the seed shuffle hands out.
@@ -152,6 +161,49 @@ const provider = getProvider();
 console.log(`provider: ${providerName}  baseUrl=${baseUrl}  model=${model}`);
 console.log(`seed=${seed}  n=${nNamed}  doc=${nDoc}  random=${nRandom}  days=${nDays}  concurrency=${concurrency}  sets=${[...sets].join(",")}`);
 console.log(`out: ${OUT}\n`);
+
+/**
+ * What the local server actually has loaded — best effort, and only where it
+ * offers the native API (LM Studio serves it beside `/v1`).
+ *
+ * A caption's quality and a run's speed depend on things no Chat Completions
+ * response reports: the model's **quantization** (Q4_K_M here), the **context
+ * it was loaded with** (8192 by default, which is what overflows a day summary,
+ * and which a crash silently resets — see HANDOFF), and whether the engine had
+ * crashed and reloaded mid-run. Recording them makes a metrics file
+ * self-describing months later.
+ */
+async function readServerInfo() {
+  let origin;
+  try {
+    origin = new URL(baseUrl).origin;
+  } catch {
+    return null;
+  }
+  try {
+    const res = await fetch(`${origin}/api/v0/models`);
+    if (!res.ok) return null;
+    const body = await res.json();
+    const m = (body.data ?? []).find((x) => x.id === model) ?? (body.data ?? []).find((x) => x.state === "loaded");
+    if (!m) return null;
+    return {
+      id: m.id,
+      quantization: m.quantization ?? null,
+      arch: m.arch ?? null,
+      state: m.state ?? null,
+      maxContextLength: m.max_context_length ?? null,
+      loadedContextLength: m.loaded_context_length ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+const serverInfo = await readServerInfo();
+if (serverInfo) {
+  console.log(
+    `server: ${serverInfo.id}  quant=${serverInfo.quantization}  ctx=${serverInfo.loadedContextLength}/${serverInfo.maxContextLength}  state=${serverInfo.state}\n`,
+  );
+}
 
 /* ---------- archive, read-only ------------------------------------------- */
 
@@ -245,7 +297,7 @@ const camera = [...photos.values()].filter(
     !p.video &&
     p.caption &&
     p.takenAt &&
-    (p.bytes ?? 0) <= 2_000_000 &&
+    (p.bytes ?? 0) <= maxBytes &&
     p.screenshot !== true &&
     (!onlyDates.size || onlyDates.has(p.takenAt.slice(0, 10))),
 );
@@ -619,6 +671,20 @@ const metrics = {
   baseUrl,
   model,
   seed,
+  run: {
+    concurrency,
+    maxContext,
+    maxBytes,
+    dates: [...onlyDates],
+    n: nNamed,
+    doc: nDoc,
+    random: nRandom,
+    days: nDays,
+    determinism: detN,
+    batch: batchN,
+    sets: [...sets],
+  },
+  server: serverInfo,
   pools: { naming: namingPool.length, doc: docPool.length, random: randomPool.length },
   caption: {},
   naming: null,
