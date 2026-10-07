@@ -45,6 +45,13 @@ data/
 # See redaction-terms.example.json for the shape.
 redaction-terms.json
 
+# Notes that name real places, days and devices — evidence, not rules. They are
+# kept on disk and never committed: this is where a document goes when a public
+# reader has no business seeing it. The directory's own README is tracked so the
+# convention travels with the repo.
+/private/*
+!/private/README.md
+
 # Exported trips. `Save as PDF` writes a self-contained document with the
 # photographs embedded; one landing in the working tree must not be committed.
 *.pdf
