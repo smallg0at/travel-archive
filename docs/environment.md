@@ -112,3 +112,16 @@ app's ports — and refuses public names, including rebinding tricks such as
 goes into `ARCHIVE_EXTRA_HOSTS` in `.env`: hand-edited, read per request, no
 restart. Unknown names are configured rather than guessed, because an arbitrary
 legitimate name and an arbitrary hostile one are indistinguishable.
+
+**A push that fails while everything else works (2026-10-07).** Pushing `main`
+gave `unpack ok.` and then `ng refs/heads/main Internal Server Error`, four
+times in four minutes, while `git ls-remote` and `gh api` both answered and
+githubstatus.com still said all systems operational. One command isolated it:
+the same commits pushed one at a time to a throwaway ref
+(`git push origin <sha>:refs/heads/tmp-probe`) all succeeded, which clears the
+objects, the account and the credentials and leaves only the default branch's
+ref update. Retrying that later worked on its own. Note there is **no SSH
+fallback here** — `~/.ssh/id_ed25519` is not registered with the GitHub account
+(`Permission denied (publickey)`), so HTTPS is the only path until the key is
+added; and note that status page is not a substitute for probing, since it
+stayed green throughout.
