@@ -101,6 +101,7 @@ export function configStatus(): ConfigStatus {
     id: p.id,
     label: p.label,
     kind: p.kind,
+    scope: p.scope ?? "cloud",
     baseUrl: process.env[`${p.id.toUpperCase()}_BASE_URL`] || p.baseUrl || null,
     model: process.env[`${p.id.toUpperCase()}_MODEL`] || p.model,
     apiKeyEnv: p.apiKeyEnv,

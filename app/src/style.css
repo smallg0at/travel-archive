@@ -2457,14 +2457,30 @@ html.desktop-shell #nav-tools {
 
 /* --- Provider rows (Settings > Generation) -------------------------------- */
 
+/* Local services and online ones are different choices, so they are grouped
+   rather than listed as one. */
+.set-provider-group {
+  margin-top: 14px;
+}
+.set-provider-group-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* A row is a header that opens in place; only the open one shows fields, which
+   is what keeps nine backends from filling the page. */
 .set-provider {
-  margin-top: 10px;
-  padding: 10px 12px;
+  margin-top: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   background: var(--bg-muted);
+  overflow: hidden;
 }
-/* The one in force, so the list reads as a choice rather than four forms. */
+/* The one in force, so the list reads as a choice rather than a wall of forms. */
 .set-provider.is-active {
   border-color: var(--accent);
   background: var(--surface-selected);
@@ -2473,6 +2489,17 @@ html.desktop-shell #nav-tools {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.set-provider-head:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 .set-provider-name {
   font-size: 13px;
@@ -2482,17 +2509,27 @@ html.desktop-shell #nav-tools {
   font-size: 11px;
   color: var(--text-secondary);
 }
-.set-provider-head button {
+/* Pushed to the right edge: key state without opening the row. */
+.set-provider-summary {
   margin-left: auto;
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.set-provider-chevron {
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: transform 0.15s;
+}
+.set-provider.is-open .set-provider-chevron {
+  transform: rotate(90deg);
+}
+.set-provider-panel {
+  padding: 0 12px 12px;
 }
 .set-provider-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px 14px;
-  margin-top: 10px;
 }
 /* The endpoint gets a row of its own; model and key sit side by side under it. */
 .set-provider-fields > :first-child {
@@ -2506,6 +2543,11 @@ html.desktop-shell #nav-tools {
 }
 .set-provider .set-progress {
   margin-top: 6px;
+}
+.set-provider-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .set-select {

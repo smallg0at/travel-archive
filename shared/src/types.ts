@@ -680,6 +680,8 @@ export interface ProviderOption {
   id: string;
   label: string;
   kind: "gemini" | "openai";
+  /** Where it runs: on this machine (`local`) or over the network (`cloud`). */
+  scope: "local" | "cloud";
   baseUrl: string | null;
   model: string;
   /** The `.env` variable the key is written to, so the form can target it. */

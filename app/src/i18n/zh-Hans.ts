@@ -286,9 +286,11 @@ export const zhHans: Messages = {
 
     providerTableNote:
       "选择生成（说明、当天摘要、翻译）所用的后端。各家独立——保存哪一行就切换到哪一行。密钥保存在上面的文件中，服务器不会回传。",
+    providersLocal: "本机运行",
+    providersCloud: "在线服务",
     providerBaseUrl: "接口地址",
     providerModel: "模型",
-    providerUse: "使用此项",
+    providerSaveUse: "保存并使用",
     providerActive: "使用中",
     providerKeySet: "密钥已保存",
     providerKeyMissing: "未配置密钥",

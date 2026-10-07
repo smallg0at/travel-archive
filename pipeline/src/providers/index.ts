@@ -27,6 +27,11 @@ export interface ProviderPreset {
   /** What Settings calls it. */
   label: string;
   kind: "gemini" | "openai";
+  /**
+   * Where it runs. Absent means `cloud` (over the network); a service on this
+   * machine sets `"local"`, which is what Settings groups by.
+   */
+  scope?: "local" | "cloud";
   /** OpenAI-compatible only. */
   baseUrl?: string;
   model: string;
@@ -104,6 +109,7 @@ export const PRESETS: ProviderPreset[] = [
     id: "ollama",
     label: "Local (Ollama)",
     kind: "openai",
+    scope: "local",
     baseUrl: "http://127.0.0.1:11434/v1",
     model: "gemma4:e4b",
     apiKeyEnv: "OLLAMA_API_KEY",
@@ -124,6 +130,7 @@ export const PRESETS: ProviderPreset[] = [
     id: "lmstudio",
     label: "Local (LM Studio)",
     kind: "openai",
+    scope: "local",
     baseUrl: "http://127.0.0.1:1234/v1",
     model: "google/gemma-4-e4b",
     apiKeyEnv: "LMSTUDIO_API_KEY",

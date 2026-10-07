@@ -40,3 +40,17 @@ describe("the local LM Studio preset", () => {
     expect(presetById("ollama")!.label).not.toMatch(/LM Studio/);
   });
 });
+
+/**
+ * Settings groups the backends by `scope`, so a local service left unmarked
+ * would quietly file itself under "Online services" — a reader would think a
+ * call that never leaves the machine goes out to the network.
+ */
+describe("provider scope", () => {
+  it("marks the on-machine services, and only those", () => {
+    const local = PRESETS.filter((p) => p.scope === "local")
+      .map((p) => p.id)
+      .sort();
+    expect(local).toEqual(["lmstudio", "ollama"]);
+  });
+});

@@ -293,9 +293,11 @@ export const en = {
 
     providerTableNote:
       "Pick the backend captions, day summaries and translations run on. Each is separate — switching submits the one row you save. Keys are stored in the file above and never sent back.",
+    providersLocal: "On this machine",
+    providersCloud: "Online services",
     providerBaseUrl: "Endpoint",
     providerModel: "Model",
-    providerUse: "Use this",
+    providerSaveUse: "Save and use",
     providerActive: "In use",
     providerKeySet: "Key saved",
     providerKeyMissing: "No key",
