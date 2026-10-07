@@ -10,6 +10,7 @@ import {
   startCollect,
   watchJob,
   type Health,
+  type RenderCapability,
   type ThumbWarming,
 } from "./backend";
 import { el } from "./photoUi";
@@ -223,6 +224,24 @@ function renderNow(host: HTMLElement, job: JobRecord | null): void {
   });
 }
 
+/**
+ * What this machine cannot render, when that is something.
+ *
+ * Only ever shown while degraded: a line that reads "all good" on every visit
+ * is a line nobody reads, and the gaps are rare enough to be worth the
+ * silence. It names the fix because this note is where a missing ffmpeg is
+ * visible from at all — the job log says it too, but only after an analyze
+ * run has already been started.
+ */
+function capabilityNote(render: RenderCapability | undefined): HTMLElement | null {
+  if (!render) return null;
+  const gaps: string[] = [];
+  if (!render.images) gaps.push(ui.activity.noSharp);
+  else if (!render.heif) gaps.push(ui.activity.noHeic);
+  if (!render.ffmpeg) gaps.push(ui.activity.noFfmpeg);
+  return gaps.length ? note(gaps.join(" · ")) : null;
+}
+
 /** Background thumbnail caching — not a job, so it has no stream; the indicator's poll repaints it. */
 function renderWarming(host: HTMLElement, warm: ThumbWarming | null | undefined): void {
   host.replaceChildren();
@@ -390,6 +409,9 @@ export async function showActivity(): Promise<void> {
   lastBatches = batches ?? [];
   renderNow(now.body, health.running ?? null);
   renderWarming(warm, health.warming);
+  // What this machine cannot render — the reason a video has no tile.
+  const gap = capabilityNote(health.render);
+  if (gap) now.node.appendChild(gap);
   if (writable) {
     renderBatches(batchSection.body, batches, auto);
     renderHistory(past.body, history);

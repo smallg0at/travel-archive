@@ -69,6 +69,8 @@ export const zhHans: Messages = {
      * cover` 裁进去——见 album.ts。
      */
     gridDensity: "网格密度",
+    /** 悬停提示：这张照片在任何地方都渲染不出缩略图 — 见 photoUi.ts。 */
+    noPreview: "这张照片没有预览图",
     contents: "目录",
     density: { compact: "小", comfortable: "中", spacious: "大" },
   },
@@ -484,6 +486,10 @@ export const zhHans: Messages = {
     readyToCollect: (photos) => `Google 已处理完毕 ${num(photos)} 张照片，将在 10 分钟内自动收取。`,
     batches: "照片说明批量任务",
     noBatches: "尚未提交过照片说明批量任务。",
+    /** 本机渲染的缺口 —— 只在确实缺东西时显示（Activity 页）。 */
+    noSharp: "本机无法生成缩略图：图像库（sharp）加载失败。",
+    noHeic: "HEIC 解码不可用（heic-decode 加载失败）。",
+    noFfmpeg: "未找到 ffmpeg：视频封面和 DNG 缩略图无法在本机生成。安装后重启应用即可。",
     batchDetail: (applied, failed, input, output, cost) => {
       const parts: string[] = [];
       if (applied !== null) parts.push(`已生成说明 ${num(applied)} 张`);

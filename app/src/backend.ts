@@ -69,6 +69,20 @@ export interface Health {
   /** Optional: a server built before the Activity page sends neither. */
   lastFinished?: Pick<JobRecord, "id" | "kind" | "status" | "finishedAt"> | null;
   warming?: ThumbWarming | null;
+  /**
+   * What the server can render locally — sharp, heic-decode, ffmpeg — for the
+   * thumbnails OneDrive refuses to produce. Absent on a server built before
+   * this existed, so it stays optional like `lastFinished`.
+   */
+  render?: RenderCapability;
+}
+
+/** The same shape `/health` reports; declared here rather than imported from
+ * the pipeline, which the browser bundle must not depend on. */
+export interface RenderCapability {
+  images: boolean;
+  heif: boolean;
+  ffmpeg: string | null;
 }
 
 /**

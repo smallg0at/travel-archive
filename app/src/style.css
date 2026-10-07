@@ -926,6 +926,26 @@ html.desktop-shell .nav-year:hover {
   background-image: none;
   animation: none;
 }
+/* A picture that exists nowhere: OneDrive will not render it and this machine
+   could not either — an MP4 on a machine with no ffmpeg, an item whose
+   transform failed years ago and stays failed. The shimmer above is a loading
+   state, so it has to stop here, or the cell reads as a request still in
+   flight on every visit. The slash is drawn with gradients because an <img>
+   has no children for ::after to mark, and background-size is reset because
+   the shimmer's 260% would stretch it off the cell. */
+.album-cell img.thumb-missing,
+.stop-grid img.thumb-missing,
+.card-images img.thumb-missing {
+  background-size: 100% 100%;
+  background-image: linear-gradient(
+    to top right,
+    transparent calc(50% - 1px),
+    color-mix(in srgb, var(--text) 28%, transparent) calc(50% - 1px),
+    color-mix(in srgb, var(--text) 28%, transparent) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+  animation: none;
+}
 @keyframes shimmer {
   from { background-position: 130% 0; }
   to { background-position: -130% 0; }

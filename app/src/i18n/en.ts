@@ -73,6 +73,8 @@ export const en = {
      * regardless, and only the cell is sized — see album.ts.
      */
     gridDensity: "Grid density",
+    /** Hover text on a cell whose picture nothing can render — see photoUi.ts. */
+    noPreview: "No preview for this photo",
     contents: "Contents",
     density: { compact: "Small", comfortable: "Medium", spacious: "Large" },
   },
@@ -502,6 +504,11 @@ export const en = {
       `Google has finished ${count(photos, "photo", "photos")}; they are collected within ten minutes.`,
     batches: "Caption batches",
     noBatches: "No caption batches have been submitted.",
+    /** The local-render gaps — shown only while one is present, in Activity. */
+    noSharp: "Local thumbnails are unavailable: the image library (sharp) failed to load.",
+    noHeic: "HEIC decoding is unavailable (heic-decode failed to load).",
+    noFfmpeg:
+      "ffmpeg was not found — video posters and DNG thumbnails cannot be rendered here. Install it and restart the app.",
     batchDetail: (
       applied: number | null,
       failed: number | null,

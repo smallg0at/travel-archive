@@ -3,6 +3,7 @@ import { loadThumbnail, loadLarge } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
 import { isLocalMachine } from "./backend";
 import { loc } from "./contentLang";
+import { ui } from "./i18n";
 
 /** Builds an element from an HTML string. Used everywhere in place of a template engine. */
 export function el<T extends HTMLElement>(html: string): T {
@@ -71,6 +72,22 @@ export function transcriptOriginal(original: string, label: string): HTMLDetails
 const BLANK_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 /**
+ * Marks a cell whose picture does not exist anywhere: OneDrive will not
+ * render it and this machine could not either.
+ *
+ * Without this the cell shimmers forever. The placeholder is a *loading*
+ * animation, so a permanently unrenderable photo — an MP4 on a machine with
+ * no ffmpeg, an item whose transform OneDrive failed years ago — read as a
+ * request that never comes back, and every visit repeated the impression.
+ * The cell keeps its shape and stays clickable: only the thumbnail is
+ * missing, and the original still opens in the lightbox.
+ */
+function markMissing(img: HTMLImageElement): void {
+  img.classList.add("thumb-missing");
+  img.title = ui.album.noPreview;
+}
+
+/**
  * Thumbnails load only once the <img> comes near the viewport. This is the
  * difference between a month tab being usable and not: a busy month holds
  * several hundred photos and every thumbnail is its own authenticated Graph
@@ -109,7 +126,12 @@ function hydrate(img: HTMLImageElement): Promise<void> {
   const load = loader === "large" ? loadLarge : loadThumbnail;
   return load(photoId!)
     .then((url) => {
-      if (!url) return;
+      // Nothing to show, and not for want of trying: the local server answered
+      // 404, or Graph had no link to give. Said so rather than left pending.
+      if (!url) {
+        markMissing(img);
+        return;
+      }
       // `lazy` defers the *fetch* of whatever src is assigned, so an image far
       // below the fold could still be pending when print snapshots the page.
       // Nothing is deferred once we have decided to load it.
@@ -133,6 +155,7 @@ function hydrate(img: HTMLImageElement): Promise<void> {
           "error",
           () => {
             img.src = BLANK_PIXEL;
+            markMissing(img);
             resolve();
           },
           { once: true },
