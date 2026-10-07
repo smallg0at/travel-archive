@@ -110,6 +110,25 @@ export const PRESETS: ProviderPreset[] = [
     // A local server has no key; the field exists only so the form has
     // something to write. Model and URL are the parts that matter here.
   },
+  {
+    // LM Studio is not Ollama with a different port: it speaks the same
+    // Chat Completions shape but **answers 400 to OpenAI's
+    // `response_format:{"type":"json_object"}`**, accepting only
+    // `json_schema` or `text`. That difference lives on the entry
+    // (`jsonMode`), which is exactly what the preset table is for, so it gets
+    // its own row rather than being folded into `ollama` and breaking a real
+    // Ollama. `prompt` sends no `response_format`; the caption and summary
+    // prompts already demand one JSON object and `looseJson` unwraps a fenced
+    // reply, so this costs nothing and is the difference between working and
+    // every call failing.
+    id: "lmstudio",
+    label: "Local (LM Studio)",
+    kind: "openai",
+    baseUrl: "http://127.0.0.1:1234/v1",
+    model: "google/gemma-4-e4b",
+    apiKeyEnv: "LMSTUDIO_API_KEY",
+    jsonMode: "prompt",
+  },
 ];
 
 export function presetById(id: string): ProviderPreset | null {
