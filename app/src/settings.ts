@@ -50,7 +50,8 @@ import { fmtDate, num, ui } from "./i18n";
  * perfectly readable without one.
  */
 
-const STATE_LABEL: Record<SyncState, string> = ui.settings.syncState;
+/** Read at use rather than captured here: the language can still be applied in place while the app starts. */
+const stateLabel = (state: SyncState): string => ui.settings.syncState[state];
 
 /** Green for settled, amber for "something to do", red only for a real decision. */
 const STATE_TONE: Record<SyncState, string> = {
@@ -306,7 +307,7 @@ export async function showSettings(): Promise<void> {
 }
 
 function applyState(node: HTMLElement, status: SyncStatus): void {
-  node.textContent = STATE_LABEL[status.state];
+  node.textContent = stateLabel(status.state);
   node.className = `set-sync-state tone-${STATE_TONE[status.state]}`;
 }
 

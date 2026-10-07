@@ -96,7 +96,8 @@ const UNDATED = "undated";
 type Density = "compact" | "comfortable" | "spacious";
 
 const DENSITY_CELL_PX: Record<Density, number> = { compact: 78, comfortable: 120, spacious: 190 };
-const DENSITY_LABEL: Record<Density, string> = ui.album.density;
+/** Read at use rather than captured here: the language can still be applied in place while the app starts. */
+const densityLabel = (option: Density): string => ui.album.density[option];
 
 function readDensity(): Density {
   try {
@@ -128,7 +129,7 @@ export function renderDensityControl(): HTMLElement {
   const wrap = el<HTMLDivElement>(`<div class="density-control" role="group" aria-label="${ui.album.gridDensity}"></div>`);
   for (const option of ["compact", "comfortable", "spacious"] as Density[]) {
     const button = el<HTMLButtonElement>(`<button type="button"></button>`);
-    button.textContent = DENSITY_LABEL[option];
+    button.textContent = densityLabel(option);
     if (option === density) button.classList.add("active");
     button.addEventListener("click", () => {
       density = option;
@@ -1259,13 +1260,14 @@ function enter(hash: string): void {
  * whatever it showed, and so did every entry in the Back menu — which made the
  * history this file now keeps unreadable.
  */
-const APP_TITLE = ui.app.title;
-
 let pageTitle = "";
 
 function setTitle(page: string): void {
   pageTitle = page;
-  document.title = `${page} · ${APP_TITLE}`;
+  // Read here rather than captured in a constant above: the language can still
+  // be applied in place while the app starts, and a captured title would go on
+  // saying "Photo Archive" for the life of the page.
+  document.title = `${page} · ${ui.app.title}`;
 }
 
 /** Opens a view without adding a history entry. */

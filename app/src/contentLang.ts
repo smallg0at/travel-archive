@@ -1,6 +1,7 @@
 import type { DayRecord, TranslationFile, TripRecord } from "@travel-archive/shared";
 import { applyEdits, textKey } from "@travel-archive/shared";
 import { CONTENT_LANG_KEY, rememberPref } from "./prefs";
+import { registerLanguageApplier } from "./language";
 
 /**
  * The reader's language — one setting for both the archive's own text
@@ -31,19 +32,98 @@ export const CONTENT_LANG_OPTIONS: { value: ContentLang; label: string }[] = [
   { value: "zh-Hans", label: "简体中文" },
 ];
 
-function stored(): ContentLang {
+/**
+ * A first run with nothing stored answers in the browser's own language.
+ *
+ * The archive's own answer, if the job server has one, is applied in place a
+ * moment later (see the applier below) — so this guess only stands where the
+ * archive has no preference of its own: a phone with no server beside it, or a
+ * first-ever launch. Without it that case was English for everyone, and a
+ * Chinese reader stayed on the wrong language until they found a refresh.
+ *
+ * Simplified Chinese is the archive's only non-English language, so a primary
+ * tag of `zh` maps there — a Traditional-region reader would otherwise be
+ * handed English, which is further from what they read than Simplified is.
+ *
+ * The **first** tag decides, because `navigator.languages` is the reader's
+ * ordered preference and its first entry is the language their own interface is
+ * already in. Deciding on "any tag that mentions Chinese" would put English in
+ * front of a browser that merely lists Chinese as a fallback.
+ */
+function detect(): ContentLang {
+  const tags: readonly string[] =
+    navigator.languages && navigator.languages.length > 0
+      ? navigator.languages
+      : navigator.language
+        ? [navigator.language]
+        : [];
+  const primary = tags.find((tag) => typeof tag === "string" && tag.trim().length > 0);
+  return primary && /^zh\b/i.test(primary) ? "zh-Hans" : "en";
+}
+
+/** `null` when nothing is stored — that case belongs to `detect()`, not to "en". */
+function stored(): ContentLang | null {
   try {
-    return localStorage.getItem(CONTENT_LANG_KEY) === "zh-Hans" ? "zh-Hans" : "en";
+    const raw = localStorage.getItem(CONTENT_LANG_KEY);
+    return raw === "zh-Hans" || raw === "en" ? raw : null;
   } catch {
-    return "en";
+    return null;
   }
 }
 
-const current: ContentLang = stored();
+let current: ContentLang = stored() ?? rememberDetection();
+
+/**
+ * Recorded at once rather than re-derived every load: `prefs.ts` reads this key
+ * to decide what it owes the server, and a browser that never records its
+ * answer will keep disagreeing with a server that has one.
+ */
+function rememberDetection(): ContentLang {
+  const lang = detect();
+  try {
+    localStorage.setItem(CONTENT_LANG_KEY, lang);
+  } catch {
+    // Storage blocked: the guess still holds for this session, and prefs.ts
+    // keeps a disagreement it cannot settle from reloading for ever.
+  }
+  return lang;
+}
 // The page's language is the content's: it is most of what is on screen, and
 // it is what makes the browser pick Chinese glyphs rather than Japanese ones
 // for the same code points.
 document.documentElement.lang = current;
+
+/** Who else has to learn when the language changes — `i18n/`, never imported here. */
+type LanguageListener = (lang: ContentLang) => void;
+const listeners = new Set<LanguageListener>();
+
+export function onContentLanguageApplied(listener: LanguageListener): void {
+  listeners.add(listener);
+}
+
+/**
+ * The archive's language, learned from the server during startup and applied
+ * where nothing has been drawn yet: `restorePrefs` is awaited before
+ * `localiseShell` (main.ts) and before `start` (mobile/main.ts).
+ *
+ * In place rather than by reloading. At this point the language-dependent
+ * things that exist are this module's answer, `i18n`'s table and the static
+ * shell's English — and all three are switched here, so no wrong language is
+ * ever on screen and the page is not loaded twice. `prefs.ts` keeps its reload
+ * for a caller with no applier registered, so this is only ever an
+ * improvement over what was there.
+ */
+registerLanguageApplier((lang) => {
+  current = lang;
+  document.documentElement.lang = lang;
+  try {
+    localStorage.setItem(CONTENT_LANG_KEY, lang);
+  } catch {
+    // Storage blocked: every lookup reads `current`, so this session is right
+    // regardless, and the server already holds the answer for the next one.
+  }
+  for (const listener of listeners) listener(lang);
+});
 
 export function contentLanguage(): ContentLang {
   return current;

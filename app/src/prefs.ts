@@ -1,5 +1,6 @@
 import type { AppPrefs } from "@travel-archive/shared";
 import { getPrefs, savePrefs } from "./backend";
+import { applyLanguage } from "./language";
 
 /**
  * Interface preferences, held by the local job server and mirrored into
@@ -88,7 +89,9 @@ function local(): AppPrefs {
     // As `contentLang.ts` reads it: anything that is not Simplified Chinese is
     // English. Absence is a real answer here rather than "never set", so that
     // a server holding "en" against an untouched browser does not read as a
-    // disagreement and cost a reload.
+    // disagreement and cost a reload. Absence is also now rare: `contentLang.ts`
+    // writes what it detected from the browser while it loads, so this line
+    // mainly runs when storage cannot be written at all.
     contentLang: lang === "zh-Hans" ? "zh-Hans" : "en",
     navOpenGroups,
   };
@@ -183,8 +186,15 @@ export async function restorePrefs(): Promise<Restored> {
   if (server.contentLang === null) {
     if (mine.contentLang) savePrefs({ contentLang: mine.contentLang });
   } else if (server.contentLang !== mine.contentLang) {
-    write(CONTENT_LANG_KEY, server.contentLang);
-    reloadOnce();
+    // Learned late, applied where nothing has been drawn: by now the reader has
+    // seen only the static shell, so `ui`, `loc` and <html lang> can all be
+    // switched in place. That is what removes the second load a mismatch used
+    // to cost — the English shell, a reload, then the page again.
+    // A caller with no applier registered (no i18n loaded) still reloads.
+    if (!applyLanguage(server.contentLang)) {
+      write(CONTENT_LANG_KEY, server.contentLang);
+      reloadOnce();
+    }
   }
 
   return restored;
