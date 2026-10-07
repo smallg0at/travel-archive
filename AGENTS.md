@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`travel-archive` — a personal OneDrive photo archive (~31,700 photos, 2016–2026),
+`travel-archive` — a personal OneDrive photo archive (a decade of photos),
 built as four workspaces: `shared/` (schema), `pipeline/` (jobs + local server),
 `app/` (reader), `desktop/` (Electron shell).
 
