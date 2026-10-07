@@ -18,6 +18,8 @@
  *
  *   node scripts/bench-local.mjs --n 12 --random 100 --days 3 --seed 20261007
  *   node scripts/bench-local.mjs --sets naming,doc      # resume subsets
+ *   node scripts/bench-local.mjs --concurrency 4        # throughput, not latency
+ *   node scripts/bench-local.mjs --dates 2026-08-31 --max-context 65536
  *
  * What it measures, each with its denominator and the cloud figure beside it:
  *
@@ -42,6 +44,7 @@
  * `sample.json`) so a number can always be traced back to the text that
  * produced it.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -65,6 +68,21 @@ const detN = Number(arg("determinism", "8"));
 const batchN = Number(arg("batch", "6"));
 /** The context the local server actually loaded a model with. Caption calls fit easily; a big day summary does not. */
 const maxContext = Number(arg("max-context", "8192"));
+/**
+ * Caption calls in flight. **1 keeps per-call latency and result order
+ * comparable run to run**, which is what the bake-off numbers want; raise it to
+ * measure throughput against the same inputs (the server's `--parallel` and its
+ * KV headroom are the ceiling). The real `analyze` path batches six images a
+ * request and runs `ANALYZE_CONCURRENCY` requests at once; this flag is the
+ * bench's stand-in for that.
+ */
+const concurrency = Math.max(1, Number(arg("concurrency", "1")));
+/**
+ * `--dates 2026-08-31,...` pins both the caption pools and the day set to those
+ * dates, so one day can be examined on its own (a museum day, say) without
+ * taking whatever the seed shuffle hands out.
+ */
+const onlyDates = new Set((arg("dates", "") || "").split(",").map((s) => s.trim()).filter(Boolean));
 const sets = new Set((arg("sets", "naming,doc,random,determinism,batch,days")).split(",").map((s) => s.trim()).filter(Boolean));
 const date = new Date().toISOString().slice(0, 10);
 const OUT = arg("out", path.join(ROOT, "..", "data", "bakeoff", `local-${date}`));
@@ -97,31 +115,42 @@ initProxyDispatcher();
  * original.
  */
 const RAW = [];
+/**
+ * The requests one logical call produced. A shared array is correct only while
+ * calls are sequential; with `--concurrency > 1` two calls interleave and a
+ * `slice` attributes another call's requests to this one (measured: 2 photos
+ * reporting 3 requests). The store is entered around each call, so a request is
+ * credited to the call that made it.
+ */
+const callContext = new AsyncLocalStorage();
 const realFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (url, init) => {
   const res = await realFetch(url, init);
   if (String(url).includes("/chat/completions")) {
+    let record;
     try {
       const body = await res.clone().json();
       const choice = body?.choices?.[0];
-      RAW.push({
+      record = {
         at: Date.now(),
         status: res.status,
         finish: choice?.finish_reason ?? null,
         contentLen: (choice?.message?.content ?? "").length,
         reasoningLen: (choice?.message?.reasoning_content ?? "").length,
         usage: body?.usage ?? null,
-      });
+      };
     } catch {
-      RAW.push({ at: Date.now(), status: res.status, finish: null, contentLen: -1, reasoningLen: 0, usage: null });
+      record = { at: Date.now(), status: res.status, finish: null, contentLen: -1, reasoningLen: 0, usage: null };
     }
+    RAW.push(record);
+    callContext.getStore()?.requests.push(record);
   }
   return res;
 };
 
 const provider = getProvider();
 console.log(`provider: ${providerName}  baseUrl=${baseUrl}  model=${model}`);
-console.log(`seed=${seed}  n=${nNamed}  doc=${nDoc}  random=${nRandom}  days=${nDays}  sets=${[...sets].join(",")}`);
+console.log(`seed=${seed}  n=${nNamed}  doc=${nDoc}  random=${nRandom}  days=${nDays}  concurrency=${concurrency}  sets=${[...sets].join(",")}`);
 console.log(`out: ${OUT}\n`);
 
 /* ---------- archive, read-only ------------------------------------------- */
@@ -212,7 +241,13 @@ const shuffled = (list) => {
 // bake-off uses. Screenshots are excluded on purpose (privacy, and no cloud
 // baseline for the ones the policy withholds).
 const camera = [...photos.values()].filter(
-  (p) => !p.video && p.caption && p.takenAt && (p.bytes ?? 0) <= 2_000_000 && p.screenshot !== true,
+  (p) =>
+    !p.video &&
+    p.caption &&
+    p.takenAt &&
+    (p.bytes ?? 0) <= 2_000_000 &&
+    p.screenshot !== true &&
+    (!onlyDates.size || onlyDates.has(p.takenAt.slice(0, 10))),
 );
 
 const namingPool = camera
@@ -241,23 +276,36 @@ console.log(`pools: naming=${namingPool.length}  doc=${docPool.length}  random=$
 
 /* ---------- the run ------------------------------------------------------ */
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Runs `worker` over `items` with at most `limit` in flight. `1` is a plain
+ * sequential loop; more measures throughput over the same inputs at the cost of
+ * comparable per-call latency.
+ */
+async function pooledMap(items, limit, worker) {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) await worker(items[cursor++]);
+  });
+  await Promise.all(runners);
+}
 
 /** One caption call, with the raw HTTP it produced attached. */
 async function runCaption(p, label) {
   const img = await imageFor(p.id);
   if (!img) return { label, id: p.id, fileName: p.fileName, ok: false, error: "no image (no cached thumbnail, Graph unavailable)" };
   const context = captionContextFor(p, sources);
-  const before = RAW.length;
   const t0 = Date.now();
   let out = null;
   let err = null;
+  const call = { requests: [] };
   try {
-    out = await provider.captionPhoto({ imageBase64: img.bytes.toString("base64"), mediaType: mediaTypeOf(img.bytes), context });
+    out = await callContext.run(call, () =>
+      provider.captionPhoto({ imageBase64: img.bytes.toString("base64"), mediaType: mediaTypeOf(img.bytes), context }),
+    );
   } catch (e) {
     err = e.message;
   }
-  const raw = RAW.slice(before);
+  const raw = call.requests;
   return {
     label,
     id: p.id,
@@ -293,6 +341,9 @@ const log = (line) => {
   console.log(line);
   report.push(line);
 };
+const startedAt = Date.now();
+/** Seconds since the run began, so every progress line says how far in it is. */
+const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(0)}s`;
 /** A long run must not lose what it has already paid for — flush raw results as it goes. */
 const checkpoint = () => {
   try {
@@ -306,8 +357,9 @@ const checkpoint = () => {
 
 /* naming ------------------------------------------------------------------ */
 if (sets.has("naming")) {
-  console.log("\n=== naming set (OCR names the day's stop; does the caption?) ===");
-  for (const { p, stop, key } of namingPick) {
+  console.log(`\n=== naming set (${namingPick.length} photos; OCR names the day's stop, does the caption?) ===`);
+  let done = 0;
+  await pooledMap(namingPick, concurrency, async ({ p, stop, key }) => {
     const r = await run("naming", p);
     r.key = key;
     r.stop = stop.title;
@@ -321,10 +373,9 @@ if (sets.has("naming")) {
     r.localAny = words.some((w) => r.local?.caption?.toLowerCase().includes(w.toLowerCase()));
     results.naming.push(r);
     console.log(
-      `  ${r.ok ? "ok " : "BAD"} ${stop.title} (${stop.date}) key="${key}" cloud=${r.cloudHit} local=${r.localHit} ${r.ms}ms`,
+      `  [${elapsed()}] naming ${++done}/${namingPick.length} ${r.ok ? "ok" : "BAD"} ${stop.title} (${stop.date}) key="${key}" cloud=${r.cloudHit} local=${r.localHit} ${r.ms}ms`,
     );
-    await sleep(50);
-  }
+  });
   checkpoint();
 }
 
@@ -339,8 +390,9 @@ const jaccard = (a, b) => {
   return inter / (A.size + B.size - inter);
 };
 if (sets.has("doc")) {
-  console.log("\n=== document set (cloud extracted_text non-empty; transcription fidelity) ===");
-  for (const p of docPick) {
+  console.log(`\n=== document set (${docPick.length} photos; cloud extracted_text non-empty, transcription fidelity) ===`);
+  let done = 0;
+  await pooledMap(docPick, concurrency, async (p) => {
     const r = await run("doc", p);
     const ct = tokens(r.cloud.extractedText);
     const lt = tokens(r.local?.extractedText);
@@ -349,32 +401,32 @@ if (sets.has("doc")) {
     r.localLen = (r.local?.extractedText ?? "").length;
     results.doc.push(r);
     console.log(
-      `  ${r.ok ? "ok " : "BAD"} ${p.fileName} jaccard=${r.tokenJaccard.toFixed(2)} cloudLen=${r.cloudLen} localLen=${r.localLen} ${r.ms}ms`,
+      `  [${elapsed()}] doc ${++done}/${docPick.length} ${r.ok ? "ok" : "BAD"} ${p.fileName} jaccard=${r.tokenJaccard.toFixed(2)} cloudLen=${r.cloudLen} localLen=${r.localLen} ${r.ms}ms`,
     );
-    await sleep(50);
-  }
+  });
   checkpoint();
 }
 
 /* random ------------------------------------------------------------------ */
 if (sets.has("random")) {
-  console.log("\n=== random set (seeded; schema, style, hallucination candidates) ===");
-  for (let i = 0; i < randomPick.length; i++) {
-    const p = randomPick[i];
+  console.log(`\n=== random set (${randomPick.length} photos; seeded schema, style, hallucination candidates) ===`);
+  let done = 0;
+  await pooledMap(randomPick, concurrency, async (p) => {
     const r = await run("random", p);
     results.random.push(r);
-    if ((i + 1) % 10 === 0) {
-      console.log(`  ${i + 1}/${randomPick.length} ...`);
-      checkpoint();
-    }
-    await sleep(50);
-  }
+    const n = ++done;
+    console.log(`  [${elapsed()}] random ${n}/${randomPick.length} ${r.ok ? "ok" : "BAD"} ${p.fileName} ${r.ms}ms`);
+    if (n % 10 === 0) checkpoint();
+  });
+  checkpoint();
 }
 
 /* determinism ------------------------------------------------------------- */
 if (sets.has("determinism")) {
-  console.log("\n=== determinism (same thumbnail twice) ===");
-  for (const p of randomPick.slice(0, detN)) {
+  const detPick = randomPick.slice(0, detN);
+  console.log(`\n=== determinism (${detPick.length} photos, same thumbnail twice) ===`);
+  let done = 0;
+  for (const p of detPick) {
     const a = await run("determinism", p);
     const b = await run("determinism", p);
     const tagsJ = jaccard(tokens((a.local?.tags ?? []).join(" ")), tokens((b.local?.tags ?? []).join(" ")));
@@ -389,9 +441,8 @@ if (sets.has("determinism")) {
       b: b.local?.caption ?? null,
     });
     console.log(
-      `  ${p.fileName}: captionSame=${a.local?.caption === b.local?.caption} typeSame=${a.local?.contentType === b.local?.contentType} tagsJ=${tagsJ.toFixed(2)}`,
+      `  [${elapsed()}] determinism ${++done}/${detPick.length} ${p.fileName}: captionSame=${a.local?.caption === b.local?.caption} typeSame=${a.local?.contentType === b.local?.contentType} tagsJ=${tagsJ.toFixed(2)}`,
     );
-    await sleep(50);
   }
   checkpoint();
 }
@@ -475,9 +526,6 @@ if (sets.has("days")) {
         d.segments.some((seg) => (seg.photoIds ?? []).some((id) => photos.get(id)?.caption)),
     )
     .sort((a, b) => a.date.localeCompare(b.date) || (a.trip ?? "").localeCompare(b.trip ?? ""));
-  // `--dates 2026-04-29,...` pins the day set, for re-testing one date at a
-  // different context without taking whatever the seed shuffle hands out.
-  const onlyDates = new Set((arg("dates", "") || "").split(",").map((s) => s.trim()).filter(Boolean));
   const scoped = onlyDates.size ? eligible.filter((d) => onlyDates.has(d.date)) : eligible;
   /**
    * The loaded context is the binding constraint, not the model's ceiling:
@@ -534,7 +582,7 @@ if (sets.has("days")) {
       local: out,
       registerViolations: violations,
     });
-    console.log(`\n  ${day.date}${day.trip ? ` · ${day.trip}` : ""} place=${day.place ?? "—"} photos=${results.days.at(-1).photoCount} ${ms}ms err=${err ?? "none"}`);
+    console.log(`\n  [${elapsed()}] day ${day.date}${day.trip ? ` · ${day.trip}` : ""} place=${day.place ?? "—"} photos=${results.days.at(-1).photoCount} ${ms}ms err=${err ?? "none"}`);
     console.log(`  cloud: ${(day.summary ?? "").slice(0, 220)}`);
     console.log(`  local: ${(out?.summary ?? "").split("\n").join(" ").slice(0, 220)}`);
     console.log(`  register violations: ${violations.length ? violations.join(", ") : "none"}`);
