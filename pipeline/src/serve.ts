@@ -9,7 +9,7 @@ import { isAbsolute } from "node:path";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { originAllowed } from "./originCheck.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
@@ -829,7 +829,19 @@ const routes: [RegExp, string, Handler][] = [
       const cached = await readThumb(size as ThumbSize, itemId);
       if (cached) return sendImage(cached);
 
-      const bytes = await fetchAndCache(size as ThumbSize, itemId);
+      let bytes: Buffer | null;
+      try {
+        bytes = await fetchAndCache(size as ThumbSize, itemId);
+      } catch (err) {
+        // "That item does not exist" is the archive's answer, not the server
+        // breaking. The generic handler maps anything else to 500, which told
+        // the reader a ghost month's worth of ids (TODO, #12) was a server
+        // fault, and 500 is not the status the app reads as "no preview".
+        if (err instanceof GraphError && err.status === 404) {
+          return json(res, 404, { error: "No such item, or not signed in" });
+        }
+        throw err;
+      }
       if (!bytes) return json(res, 404, { error: "No image for that item, or not signed in" });
       sendImage(bytes);
     },
