@@ -305,3 +305,35 @@ meant to be public, so the things that are a travel history in prose — the ope
 items (a private GitHub Project, see `TODO.md`) and the archived TODO
 (`private/TODO-history.md`) — are kept outside it.
 
+**OneDrive caches a *failure* and serves it forever.** Graph's
+`/thumbnails/0/large` answers **200 with a URL** for items it cannot render; the
+transform CDN behind that URL then answers **406** with
+`Substitution Stream for ImageProcessingFailure found in slot (Original Time:
+2026-09-11 …)` — videos say `VideoThumbnailProcessingFailure`. The failure was
+recorded once, months ago, and every request since has received that same body,
+so "Graph has no thumbnail" was the wrong diagnosis and waiting for OneDrive is
+not a fix. It is not a format problem either: real HEIF, `.HEIC` files that
+actually hold JPEG bytes, DNG and MP4 all fail alike (40 items measured,
+2026-10-07). `downloadThumbnailBuffer` now falls through to a local render
+(`localThumb.ts`) instead of returning null — and how it gets the bytes hides a
+second lesson: **a `$select` suppresses `@microsoft.graph.downloadUrl`**, the
+same MP4 returning it on a plain GET and omitting it under
+`$select=file,@microsoft.graph.downloadUrl`, so ask for the whole item when you
+need both.
+
+**An optional decoder must never be a required import.** Rendering locally
+needs sharp, `heic-decode` and, for video frames and DNG, a program the user's
+computer may simply not have. They load lazily (`renderCapability()`), a native
+module that fails to load costs the feature and not the process — the job server
+does far more than thumbnails — and `/health.render` reports what survived so
+Activity can name the gap. Assume nothing about the machine: ffmpeg is on `PATH`
+here, and the product still has to behave on one where it is not.
+
+**A shimmer is a promise.** `photoUi`'s placeholder background is a *loading*
+state, so an item nothing can render shimmered forever — a photo that will never
+arrive, looking exactly like one still on its way, on every visit.
+`.thumb-missing` stops the animation and marks the cell instead (with
+`ui.album.noPreview` on hover), and the cell stays clickable because only the
+thumbnail is missing: the original still opens in the lightbox. The server keeps
+returning `null` rather than a placeholder for the same reason seen from the
+other side — a grey tile must never reach the model as a photograph.

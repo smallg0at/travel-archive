@@ -120,9 +120,13 @@ Subsystem explanations — the phone's offline archive, the offline gazetteer, s
 
 **Caption what is left** — the 2,574 uncaptioned photos are mostly **deliberate**:
 2,395 are withheld screenshots. The genuinely capturable remainder was **52**
-(31 photos + 21 videos) on 2026-09-24, of which 41 have no Graph thumbnail at all
-— older videos, HEIC and DNG, which the thumbnail pipeline does not decode. There
-is no model work left in the archive; what remains is a **local decode** for those
-41 if they are wanted.
+(31 photos + 21 videos) on 2026-09-24, of which 41 had no Graph thumbnail at all
+— older videos, HEIC and DNG. **That blocker is gone.** OneDrive cached a
+processing failure for those items and serves it forever, so waiting on Graph
+was never going to work; `downloadThumbnailBuffer` now renders them locally
+instead (`pipeline/src/localThumb.ts` — HEIC through `heic-decode`, DNG and
+video frames through ffmpeg, both optional), verified 6/6 against live items on
+2026-10-07. What remains is one **analyze run** over the range, which costs
+money and so waits for a go-ahead. There is no model work left in the archive.
 
 How captioning works, for when it is needed again: [`docs/architecture.md`](docs/architecture.md#how-captioning-works-for-when-it-is-needed-again).
