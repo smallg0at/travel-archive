@@ -219,7 +219,22 @@ function ffmpegJpeg(bin: string, inputArgs: string[], output: string, box: numbe
       bin,
       ["-hide_banner", "-loglevel", "error", ...inputArgs, "-frames:v", "1", "-vf", scale, "-q:v", "3", "-y", output],
       { timeout: 90_000, windowsHide: true, maxBuffer: 1024 * 1024 },
-      (err) => (err ? reject(err) : resolve()),
+      async (err) => {
+        if (err) return reject(err);
+        // ffmpeg exits 0 on an empty output: a 168ms clip seeked to `-ss 0.1`
+        // yields *no frames at all*, and it reports
+        // "Output file is empty, nothing was encoded" while still succeeding.
+        // Treating that as success returned a missing file to a caller that
+        // only retried on error, so the video was silently skipped forever.
+        try {
+          const { stat } = await import("node:fs/promises");
+          const info = await stat(output);
+          if (info.size > 0) return resolve();
+        } catch {
+          // No file at all, which is the same conclusion.
+        }
+        reject(new Error("ffmpeg produced no frame"));
+      },
     );
   });
 }
@@ -339,12 +354,23 @@ export async function renderVideoPoster(url: string, box: number): Promise<Buffe
   const dir = await mkdtemp(join(tmpdir(), "poster-"));
   try {
     const output = join(dir, "poster.jpg");
-    try {
-      await ffmpegJpeg(cap.ffmpeg, ["-ss", "0.1", "-i", url], output, box);
-    } catch {
-      await ffmpegJpeg(cap.ffmpeg, ["-i", url], output, box);
+    // Two attempts, because they fail for different reasons: a seek past the
+    // end of a very short clip produces an empty file without an error, while
+    // a 1.1GB recording with its `moov` at the tail cannot be probed from a
+    // `-ss` Range request at all. The second attempt reads from zero.
+    for (const args of [
+      ["-ss", "0.1", "-i", url],
+      ["-i", url],
+    ]) {
+      try {
+        await ffmpegJpeg(cap.ffmpeg, args, output, box);
+        const bytes = await readFile(output);
+        if (bytes.length) return bytes;
+      } catch {
+        // Try the next shape rather than give up on the video.
+      }
     }
-    return await readFile(output);
+    return null;
   } catch {
     return null;
   } finally {

@@ -450,7 +450,7 @@ async function renderMissing(token: string, itemId: string, size: "medium" | "la
         : null
       : await renderImageThumbnail(await downloadPhotoBuffer(token, itemId), box);
 
-    if (bytes) return bytes;
+    if (bytes?.length) return bytes;
     renderGaveUpAt.set(itemId, Date.now());
     return null;
   } catch (err) {
