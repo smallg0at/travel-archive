@@ -1,4 +1,4 @@
-# This machine
+# Environment and the machine
 
 ## The shell has no node, and that is not a broken install
 
@@ -22,10 +22,9 @@ fnm env --shell powershell | Out-String | Invoke-Expression; npm run --workspace
 `npm` works. The asymmetry is the confusing part: "it works for me" and "npm is
 not recognised" are both true of the same machine.
 
-The profile (`~/OneDrive/Documents/PowerShell/profile.ps1`) has the `fnm env`
-block as of 2026-09-25; before that it had only conda, so nobody's shell had
-node either. If a future machine reports `npm` missing with no `-NoProfile`
-involved, that block is what to check.
+The user's PowerShell profile has the `fnm env` block as of 2026-09-25; before
+that it had only conda, so nobody's shell had node either. If a machine reports
+`npm` missing with no `-NoProfile` involved, that block is what to check.
 
 ---
 
@@ -33,8 +32,8 @@ involved, that block is what to check.
 
 **The job server starts itself at sign-in.** `HKCU\...\Run\PhotoArchiveServer`
 → `wscript serve-at-login.vbs` → hidden `serve-at-login.ps1` → `Start-Process
--WindowStyle Hidden` on `node dist/serve.js`. Enabled from Settings > 开机启动;
-the two generated scripts and `serve-at-login.trace` sit in `pipeline/` and are
+-WindowStyle Hidden` on `node dist/serve.js`. Enabled from Settings; the two
+generated scripts and `serve-at-login.trace` sit in `pipeline/` and are
 gitignored — machine state, like `.env`.
 
 Verified on a real boot (2026-10-05): the trace reads `vbs started → ps1 started
@@ -45,16 +44,15 @@ a day. The server itself is ~90MB working set and about a minute of CPU a day.
 **If a sign-in ever leaves no server, read `pipeline/serve-at-login.trace`
 first**: it records whether the chain ran, when, and whether the replacement
 answered — the question that had no answer before (the first real boot produced
-no server and no trace of why). An empty trace means the Run key did not fire;
-a trigger that provably works on this box is a logon scheduled task, which is
-what v2rayN uses (`v2rayNAutoRun_...`).
+no server and no trace of why). An empty trace means the Run key did not fire; a
+trigger that provably works here is a logon scheduled task.
 
-**Restarting without a window**: Settings > 远程访问 > 重启档案服务器. It closes
-the listener *before* spawning — on Windows a replacement binding while the old
-one holds the port is EADDRINUSE, which is what the first attempt did for twenty
-seconds — then waits for `/health` and leaves only once the replacement answers.
-It refuses while a job runs: a process killed mid-write leaves the archive lock
-held by something that never releases it.
+**Restarting without a window**: Settings > Remote access > restart the archive
+server. It closes the listener *before* spawning — on Windows a replacement
+binding while the old one holds the port is EADDRINUSE, which is what the first
+attempt did for twenty seconds — then waits for `/health` and leaves only once
+the replacement answers. It refuses while a job runs: a process killed mid-write
+leaves the archive lock held by something that never releases it.
 
 **The server writes its own log** — `pipeline/data/serve.log`, both streams, one
 5MB generation rotated to `.1`. The launcher deliberately does not redirect:
@@ -70,12 +68,12 @@ running` (6.8 hours) was a suspend, not a blocked event loop. Real stalls here
 are sub-second (560-754ms during scans) — treat a reading in the hours as the
 machine having slept.
 
-**This box's network.** HTTP proxy on `127.0.0.1:10808` (v2rayN + xray, `xray_tun`
-present). **Direct connections to `dl.google.com` and
-`generativelanguage.googleapis.com` time out**, so AI traffic goes through the
-proxy (`PROXY_AI_MODE=system`), and Android builds need `~/.gradle/gradle.properties`
-with `systemProp.https.proxy*` — a machine-local file, deliberately not in the
-repo, because Gradle's daemon ignores `-D` flags and TUN does not capture it.
+**The network here.** An HTTP proxy runs on loopback. **Direct connections to
+`dl.google.com` and `generativelanguage.googleapis.com` time out**, so AI traffic
+goes through the proxy (`PROXY_AI_MODE=system`), and Android builds need
+`~/.gradle/gradle.properties` with `systemProp.https.proxy*` — a machine-local
+file, deliberately not in the repo, because Gradle's daemon ignores `-D` flags
+and a TUN interface does not capture it.
 
 **Building the phone app.** `npm run cap:sync --workspace @travel-archive/app`,
 then `app\android\gradlew.bat assembleDebug`; APK lands in
@@ -91,10 +89,10 @@ while the display dozes: `input keyevent KEYCODE_WAKEUP` + `wm dismiss-keyguard`
 first.
 
 **Mobile verification state (build installed 2026-10-06).** Home, map clusters,
-Chinese captions and the local search index all verified on device
-(`london → 4,312 photos across 276 days, 34ms`). The Microsoft session had
-expired, so thumbnails needed an owner-only re-login, and the `.is-the-day`
-transit rendering is the one change still to be eyeballed.
+translated captions and the local search index all verified on device (a
+place-name search returned 4,312 photos across 276 days in 34ms). The Microsoft
+session had expired, so thumbnails needed an owner-only re-login, and the
+`.is-the-day` transit rendering is the one change still to be eyeballed.
 
 **Google's generation-parameter deprecation (2026-10) is handled.** No
 `temperature`, `top_p`, `top_k` or `thinking_budget` leaves this codebase:
@@ -113,15 +111,15 @@ goes into `ARCHIVE_EXTRA_HOSTS` in `.env`: hand-edited, read per request, no
 restart. Unknown names are configured rather than guessed, because an arbitrary
 legitimate name and an arbitrary hostile one are indistinguishable.
 
-**A push that fails while everything else works (2026-10-07).** Pushing `main`
-gave `unpack ok.` and then `ng refs/heads/main Internal Server Error`, four
-times in four minutes, while `git ls-remote` and `gh api` both answered and
-githubstatus.com still said all systems operational. One command isolated it:
-the same commits pushed one at a time to a throwaway ref
+**A push that fails while everything else works (2026-10-07).** Pushing the
+default branch gave `unpack ok.` and then `ng refs/heads/main Internal Server
+Error`, four times in four minutes, while `git ls-remote` and `gh api` both
+answered and githubstatus.com still said all systems operational. One command
+isolated it: the same commits pushed one at a time to a throwaway ref
 (`git push origin <sha>:refs/heads/tmp-probe`) all succeeded, which clears the
 objects, the account and the credentials and leaves only the default branch's
 ref update. Retrying that later worked on its own. Note there is **no SSH
-fallback here** — `~/.ssh/id_ed25519` is not registered with the GitHub account
-(`Permission denied (publickey)`), so HTTPS is the only path until the key is
-added; and note that status page is not a substitute for probing, since it
-stayed green throughout.
+fallback here** — the local `~/.ssh/id_ed25519` is not registered with the
+GitHub account (`Permission denied (publickey)`), so HTTPS is the only path until
+the key is added; and note that status page is not a substitute for probing,
+since it stayed green throughout.

@@ -27,7 +27,7 @@ are unchanged.
 
 The app is served locally, so bytes are close to free. What costs is **DOM
 nodes**: every ring is an SVG `<path>` the browser re-rasterises on each pan
-frame. Measured on the a city-a city trip:
+frame. Measured on a multi-city trip:
 
 | source | nodes in DOM | median pan frame |
 |---|---|---|

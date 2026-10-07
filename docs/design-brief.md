@@ -31,12 +31,12 @@ Design desktop first; do not lead with phone screens.
 **A day is a page, not a grid.** The hierarchy inside a trip is:
 
 ```
-Day  (2026-08-19 · a city, Nederland · day summary, ~70 words)
- └── Place  ("Rijksmuseum", 12:52–15:20, 99 photos, place summary)
+Day  (2026-08-19 · a city · day summary, ~70 words)
+ └── Place  ("the museum", 12:52–15:20, 99 photos, place summary)
       ├── Cards        the things worth describing, sized by how much they matter
       └── "N more photos"   everything else, collapsed
- └── Place  ("a city Canals", 11:22–12:10, 5 photos)
- └── Transit ("Walk along Canals", 10:50–11:17) — one collapsed line, not a place
+ └── Place  ("the canals", 11:22–12:10, 5 photos)
+ └── Transit ("walk along the canals", 10:50–11:17) — one collapsed line, not a place
 ```
 
 Three rules the layout must respect:
@@ -113,8 +113,8 @@ Clicking a city scrolls to that city's section in the page.
 
 It **lives inside the trip page**. It is not a global navigation tab.
 
-23 cities on the reference trip. Precision bar: a city and a city must not
-merge into one dot; neither must a city and a city.
+23 cities on the reference trip. Precision bar: two cities ~55km apart must not
+merge into one dot, nor two towns ~25km apart.
 
 ---
 

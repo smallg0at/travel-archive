@@ -298,7 +298,9 @@ set system-wide, which is exactly the case; `configStatus.shadowed` reports it
 and the form warns.
 
 **Nothing personal is committed.** `.env`, `token-cache.json`,
-`redaction-terms.json` and all of `data/` are ignored. Check with
-`git check-ignore`, not by reading `.gitignore`. The repo is private because
-`TODO.md` is a travel history in prose.
+`redaction-terms.json`, all of `data/` and everything under `private/` are
+ignored. Check with `git check-ignore`, not by reading `.gitignore`. The repo is
+meant to be public, so the things that are a travel history in prose — the open
+items (a private GitHub Project, see `TODO.md`) and the archived TODO
+(`private/TODO-history.md`) — are kept outside it.
 
