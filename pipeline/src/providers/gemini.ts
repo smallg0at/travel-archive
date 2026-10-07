@@ -95,8 +95,7 @@ async function translate(model: string, input: TranslateInput): Promise<Translat
     config: {
       responseMimeType: "application/json",
       responseSchema: TRANSLATE_SCHEMA,
-      temperature: 0,
-      ...thinkingFor(0),
+      ...thinkingFor("minimal"),
     },
   }));
 
@@ -142,17 +141,16 @@ const CAPTION_PROMPT = `You are cataloging a personal photo library that mixes t
 - notable: true only if this photo should get its own write-up; false for routine snapshots that can be folded into a day summary.`;
 
 /**
- * Gemini 3.x enables dynamic thinking by default and thinking tokens bill as
- * output, so this exists to bound that cost.
+ * How much the model thinks is decided in `geminiConfig.ts`: Google retired
+ * `thinking_budget` for `thinking_level`, and that file is the one place that
+ * knows it, so no call site here can reintroduce the old field by accident.
  *
- * In practice the model appears to ignore it: a budget of 0 still produced
- * 84-114 thinking tokens per call on gemini-3.7-flash. It is kept because the
- * cost turned out not to matter anyway — thinking runs ~150 tokens per caption
- * against ~1227 input, a few percent of the bill.
+ * The cost observation that made it configurable still holds regardless:
+ * thinking runs ~150 tokens a caption against ~1227 input — a few percent of
+ * the bill — and on gemini-3.7-flash a budget of 0 measured not to stop it
+ * anyway (84-114 thinking tokens a call).
  */
-function thinkingFor(budget: number | undefined) {
-  return budget === undefined ? {} : { thinkingConfig: { thinkingBudget: budget } };
-}
+import { thinkingFor, type ThinkingLevel } from "./geminiConfig.js";
 
 /**
  * Captions read the image at low resolution.
@@ -214,7 +212,7 @@ function captionContext(input: CaptionPhotoInput): string {
   return captionContextBlock(input.context);
 }
 
-async function captionPhoto(model: string, thinkingBudget: number | undefined, input: CaptionPhotoInput): Promise<CaptionResult> {
+async function captionPhoto(model: string, thinkingLevel: ThinkingLevel | undefined, input: CaptionPhotoInput): Promise<CaptionResult> {
   const response = await withRetry("caption", () => ai().models.generateContent({
     model,
     contents: [
@@ -226,20 +224,20 @@ async function captionPhoto(model: string, thinkingBudget: number | undefined, i
     config: {
       responseMimeType: "application/json",
       responseSchema: CAPTION_SCHEMA,
-      // Note this does NOT buy reproducibility, though it is still the right
-      // default for a factual captioning task. Measured: the same image
-      // captioned three times gives three different sentences at temperature 0,
-      // and the thinking-token count varies too (150/116/104), so the reasoning
-      // path itself is nondeterministic and the wording follows it.
+      // This buys no reproducibility, and Google has retired it anyway:
+      // sampling parameters have been fixed to the model's defaults since 3.6
+      // Flash (a custom value had no effect), and soon they are an error. It
+      // never bought much in the first place — the same image captioned three
+      // times gives three different sentences even at temperature 0, and the
+      // thinking-token count varies with them (150/116/104).
       //
-      // Design around it rather than fighting it: never re-analyze a photo that
-      // already has a caption (analyze.ts gates on analyzedAt), let duplicate
-      // copies inherit one caption rather than earning their own, and leave
-      // unchanged days alone in organize.ts. Those three rules are what keep
-      // the archive's prose stable between runs.
-      temperature: 0,
+      // Design around nondeterminism rather than fighting it: never re-analyze
+      // a photo that already has a caption (analyze.ts gates on analyzedAt),
+      // let duplicate copies inherit one caption rather than earning their own,
+      // and leave unchanged days alone in organize.ts. Those three rules are
+      // what keep the archive's prose stable between runs.
       mediaResolution: CAPTION_RESOLUTION,
-      ...thinkingFor(thinkingBudget),
+      ...thinkingFor(thinkingLevel),
     },
   }));
 
@@ -271,9 +269,8 @@ Describe this in your own words. Do not transcribe or quote any text in the imag
       config: {
         responseMimeType: "application/json",
         responseSchema: CAPTION_SCHEMA,
-        temperature: 0,
         mediaResolution: CAPTION_RESOLUTION,
-        ...thinkingFor(thinkingBudget),
+        ...thinkingFor(thinkingLevel),
       },
     }));
     text = retry.text;
@@ -389,7 +386,7 @@ const DAY_SCHEMA = {
   required: ["summary", "segments"],
 };
 
-async function summarizeDay(model: string, thinkingBudget: number | undefined, input: SummarizeDayInput): Promise<DaySummaryResult> {
+async function summarizeDay(model: string, thinkingLevel: ThinkingLevel | undefined, input: SummarizeDayInput): Promise<DaySummaryResult> {
   const response = await withRetry("day-summary", () => ai().models.generateContent({
     model,
     contents: [
@@ -403,8 +400,7 @@ async function summarizeDay(model: string, thinkingBudget: number | undefined, i
     config: {
       responseMimeType: "application/json",
       responseSchema: input.alsoIn ? withAltFields(DAY_SCHEMA, input.alsoIn) : DAY_SCHEMA,
-      temperature: 0,
-      ...thinkingFor(thinkingBudget),
+      ...thinkingFor(thinkingLevel),
     },
   }));
 
@@ -437,7 +433,7 @@ const TRIP_SCHEMA = {
 
 async function summarizeTrip(
   model: string,
-  thinkingBudget: number | undefined,
+  thinkingLevel: ThinkingLevel | undefined,
   input: SummarizeTripInput,
 ): Promise<TripSummaryResult> {
   const response = await withRetry("trip-narrative", () => ai().models.generateContent({
@@ -453,8 +449,7 @@ async function summarizeTrip(
     config: {
       responseMimeType: "application/json",
       responseSchema: input.alsoIn ? withAltFields(TRIP_SCHEMA, input.alsoIn) : TRIP_SCHEMA,
-      temperature: 0,
-      ...thinkingFor(thinkingBudget),
+      ...thinkingFor(thinkingLevel),
     },
   }));
 
@@ -485,9 +480,8 @@ export function captionBatchRequest(input: CaptionPhotoInput): object {
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: CAPTION_SCHEMA,
-      temperature: 0,
       mediaResolution: CAPTION_RESOLUTION,
-      ...thinkingFor(env.geminiThinkingBudget),
+      ...thinkingFor(env.geminiThinkingLevel),
     },
   };
 }
@@ -517,12 +511,12 @@ export function geminiClient(): GoogleGenAI {
 
 export function createGeminiProvider(
   model: string = env.geminiModel,
-  thinkingBudget: number | undefined = env.geminiThinkingBudget,
+  thinkingLevel: ThinkingLevel | undefined = env.geminiThinkingLevel,
 ): AiProvider {
   return {
-    captionPhoto: (input) => captionPhoto(model, thinkingBudget, input),
-    summarizeDay: (input) => summarizeDay(model, thinkingBudget, input),
-    summarizeTrip: (input) => summarizeTrip(model, thinkingBudget, input),
+    captionPhoto: (input) => captionPhoto(model, thinkingLevel, input),
+    summarizeDay: (input) => summarizeDay(model, thinkingLevel, input),
+    summarizeTrip: (input) => summarizeTrip(model, thinkingLevel, input),
     // Its own model when set: bulk translation is the place for the cheapest one.
     translate: (input) => translate(env.translateModel ?? model, input),
   };

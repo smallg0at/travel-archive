@@ -1,5 +1,6 @@
 import { config as loadDotenv } from "dotenv";
 import { homeFile } from "./paths.js";
+import { levelFromLegacyBudget, parseThinkingLevel } from "./providers/geminiConfig.js";
 
 // Not `dotenv/config`, which reads `.env` from process.cwd(). The desktop
 // shell runs this from wherever Electron happened to start, and an installed
@@ -121,9 +122,17 @@ function readEnv() {
     // German plaque correctly where 3.8 hallucinated a letter.
     geminiModel: fromEnv("GEMINI_MODEL") ?? "gemini-3.7-flash",
     // Thinking tokens bill as output and Gemini 3.x turns them on by default.
-    // Unset leaves the model's default; 0 disables; -1 is explicit dynamic.
-    geminiThinkingBudget:
-      fromEnv("GEMINI_THINKING_BUDGET") === undefined ? undefined : Number(fromEnv("GEMINI_THINKING_BUDGET")),
+    // `GEMINI_THINKING_LEVEL` is the knob now — minimal/low/medium/high, unset
+    // for the model's own default, which is the value Google tunes per model.
+    //
+    // The older `GEMINI_THINKING_BUDGET` is read and *mapped*, never sent:
+    // Gemini 3.x was remapping it to a level, and upcoming models answer 400
+    // INVALID_ARGUMENT to it instead (Google's deprecation notice, 2026-10). A
+    // `.env` written before the change keeps its intent; a value that is not a
+    // number is treated as unset rather than guessed at.
+    geminiThinkingLevel:
+      parseThinkingLevel(fromEnv("GEMINI_THINKING_LEVEL")) ??
+      levelFromLegacyBudget(fromEnv("GEMINI_THINKING_BUDGET")),
     // The model `translate` uses, for whichever provider is active. Unset means
     // that provider's own model. Translation is bulk text where quality matters
     // least, so this is the setting for the cheapest model that will do.
