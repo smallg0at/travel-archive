@@ -4,7 +4,8 @@ For whoever picks this up next.
 
 - **`README.md`** — how the pipeline works.
 - **`docs/design-brief.md`** — what the product is.
-- **`TODO.md`** — the live checklist; the only trusted source of what is outstanding.
+- **`TODO.md`** — a pointer to where the open items live (a private GitHub
+  Project, so the entries' measurements stay out of a public repo).
 - **`AGENTS.md`** — how to work in this repo (run to completion, report progress, measure before asserting).
 
 This file is the front door. The depth lives in `docs/`:

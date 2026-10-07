@@ -9,8 +9,8 @@ built as four workspaces: `shared/` (schema), `pipeline/` (jobs + local server),
 This file is the short entry point; the depth lives in the repo:
 
 - **`HANDOFF.md`** — the front door: how to run it, the shape, and a map of the rest.
-- **`TODO.md`** — the live checklist; the only trustworthy source of what is
-  outstanding.
+- **`TODO.md`** — a pointer; the live list is a private GitHub Project (open it
+  from there).
 - **`docs/invariants.md`** — the rules this codebase punishes you for forgetting;
   read it before changing the pipeline.
 - The rest is in `docs/`: `working-style.md`, `architecture.md`, `environment.md`,
@@ -33,4 +33,5 @@ Keep this file short; don't restate what those already cover.
   Never grind through dozens of tool calls in silence.
 - **Measure before asserting** — see `docs/working-style.md`.
 - **Keep the docs alive.** A new durable lesson goes in `docs/` (`invariants.md`
-  or `working-style.md`); changed outstanding work goes in `TODO.md`.
+  or `working-style.md`); changed outstanding work goes in the private GitHub
+  Project that `TODO.md` points at.
