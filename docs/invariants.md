@@ -52,7 +52,7 @@ signed cookie; **write is a rule about kind, not about accounts** — anything
 that is not a GET is refused to everyone but loopback, because there are no
 users, roles or session store and a photo archive does not need them. Video is
 deliberately **404 to remote readers**: `/video/:id` is the one route that hands
-out a pre-authenticated OneDrive URL, and the family does not need it. The cookie
+out a pre-authenticated OneDrive URL, and a reader on the LAN does not need it. The cookie
 secret is regenerated at every start, so a restart signs everyone out; that is
 the honest behaviour for a token nobody can revoke.
 
@@ -77,7 +77,7 @@ Found in one session, all self-inflicted:
 - **The CSP used a wildcard, which a source cannot contain.**
   `http://192.168.*:*` is not a valid host-source — the browser **discards it
   silently** and the policy kept only its loopback origins, so every request from
-  the family's laptop was refused with no error on screen. There is no CIDR
+  a laptop on the LAN was refused with no error on screen. There is no CIDR
   syntax either. Fix: read the machine's own private IPv4 addresses from
   `os.networkInterfaces()` **at listen time** and emit literal hosts
   (`d007dc1`). Enumerated, not patterned; current, not remembered across a DHCP
@@ -156,10 +156,11 @@ entries.
 
 **A photo shown from the phone must be the file the archive describes.** The
 installed app serves photographs from the phone's own storage where it has them
-(README, "Photographs from the phone's own storage") — 76% of this library.
+(`docs/clients.md`, "Photographs from the phone's own storage") — 76% of this library.
 The match is file name **plus exact byte size**, and both halves are load
-bearing: ~1,900 names in this library have an archived copy that is a different
-encoding of the same picture, ~235KB against ~2.6MB. Match on the name alone and
+bearing: about two thousand names in this library have an archived copy that is
+a different encoding of the same picture, a few hundred KB against a few MB.
+Match on the name alone and
 the reader is shown a different photograph from the one the caption, the day
 and the place were written about, which is the one failure this feature could
 introduce and the reason it cannot. Every URL carries the expected size and the

@@ -2,7 +2,7 @@
 
 > **Historical, written 2026-09-18.** The phone app this brief asked for exists:
 > `app/mobile/` + `app/android/`, and it caches the whole library offline now.
-> Read `README.md` ("The phone app") and `docs/architecture.md` ("The phone's
+> Read `README.md` and `docs/clients.md` ("The phone app"), and `docs/architecture.md` ("The phone's
 > offline archive") for the current state; this file is kept for the reasoning
 > that got
 > it there, and some of its "what is already true" is no longer true — notably

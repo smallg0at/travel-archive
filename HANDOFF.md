@@ -2,7 +2,7 @@
 
 For whoever picks this up next.
 
-- **`README.md`** — how the pipeline works.
+- **`README.md`** — what this is, quick start, one-time setup, licence.
 - **`docs/design-brief.md`** — what the product is.
 - **`TODO.md`** — a pointer to where the open items live (a private GitHub
   Project, so the entries' measurements stay out of a public repo).
@@ -12,12 +12,14 @@ This file is the front door. The depth lives in `docs/`:
 
 | file | what |
 |---|---|
+| [`docs/pipeline.md`](docs/pipeline.md) | The storage layout, the three passes, providers, trips. |
+| [`docs/clients.md`](docs/clients.md) | The web app, the phone app, the desktop shell, authentication. |
 | [`docs/invariants.md`](docs/invariants.md) | The things that bite — every rule this codebase punishes you for forgetting. |
 | [`docs/working-style.md`](docs/working-style.md) | How to work on this: measurement discipline, multi-session hygiene, the writing's register. |
 | [`docs/architecture.md`](docs/architecture.md) | Subsystem notes: the phone's offline archive, the offline gazetteer, captioning. |
 | [`docs/environment.md`](docs/environment.md) | This machine: `npm`/`fnm`, the job server at logon, the network. |
 | [`docs/history.md`](docs/history.md) | Records, not rules: past regressions and the local-model measurements. |
-| [`docs/TODO-history.md`](docs/TODO-history.md) | Frozen archive of `TODO.md` as of 2026-09-22. Not maintained. |
+| `private/TODO-history.md` | Frozen archive of the old TODO as of 2026-09-22. Kept on disk, not committed. |
 
 ---
 

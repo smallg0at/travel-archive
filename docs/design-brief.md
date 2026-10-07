@@ -8,8 +8,8 @@ been getting mocked up wrong.
 
 ## What it is
 
-A **personal photo archive** over one person's OneDrive library: ~31,700 photos
-across 123 months, 2016–2026. It does two things:
+A **personal photo archive** over one person's OneDrive library: tens of
+thousands of photos across a decade. It does two things:
 
 1. Shows the whole library, filed by month.
 2. Turns selected stretches of it into something **written and readable** — an
@@ -75,7 +75,7 @@ The sidebar has **two sibling groups**, not a nesting:
 
 ```
 Trips
-  the train 1                    4685
+  a trip                           4685
 2026
   September                        1873
   August                           4998
@@ -88,7 +88,7 @@ Trips
 - **Trips are a second way into the same days, not a container for months.** The
   photos still appear under their month; a trip is a *reading* of part of the
   library.
-- A trip **straddles months** (the reference trip runs 16 Aug – 2 Sep). Month is
+- A trip **straddles months** (the reference trip starts mid-August). Month is
   a storage detail, not a concept inside a trip. **There is no "filter by month"
   within a trip** — that would cut a continuous narrative in half at an
   arbitrary boundary.
@@ -96,7 +96,7 @@ Trips
 
 ### A trip page, top to bottom
 
-1. **Title + range** — "the train 1 · Sun 16 August 2026 – Wed 2 September 2026 · 18 days · 4,685 photos"
+1. **Title + range** — "a trip name · the date range · 18 days · 4,685 photos"
 2. **Narrative** — the model's prose account of the whole trip, ~380 words, several paragraphs. This is the first thing you read.
 3. **Places** — a row of chips (21 of them).
 4. **Map** — see below.
@@ -178,8 +178,8 @@ Recorded so the same corrections are not needed twice:
 
 | | |
 |---|---|
-| library | ~31,700 photos, 123 months, 2016–2026 |
-| reference trip | the train 1, 2026-08-16 → 09-02, 18 days, 4,685 photos |
+| library | tens of thousands of photos, a decade of months |
+| reference trip | an 18-day trip, 4,685 photos |
 | its segments | 125 places, 81 transit |
 | its cards | 725 (125 full, 152 half, 448 normal) |
 | photos in cards vs collapsed | 1,292 vs 2,367 |
