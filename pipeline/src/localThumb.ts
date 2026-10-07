@@ -47,6 +47,13 @@ export interface RenderCapability {
  */
 const CAPABILITY_TTL_MS = 60_000;
 
+/**
+ * How long a `ffmpeg -version` check gets. It is a version string from a local
+ * binary — anything slower than this is a wedged process, and the probe feeds
+ * `/health`, whose own caller gives up after eight seconds.
+ */
+const PROBE_TIMEOUT_MS = 3_000;
+
 let capabilityAt = 0;
 let capability: RenderCapability = { images: false, heif: false, ffmpeg: null };
 
@@ -62,8 +69,13 @@ function findFfmpeg(): Promise<string | null> {
   const attempt = (async (): Promise<string | null> => {
     for (const bin of candidates) {
       const found = await new Promise<string | null>((resolve) => {
-        execFile(bin, ["-version"], { timeout: 10_000, windowsHide: true }, (err, stdout) => {
-          if (err) return;
+        execFile(bin, ["-version"], { timeout: PROBE_TIMEOUT_MS, windowsHide: true }, (err, stdout) => {
+          // Settle either way. An error used to `return` without resolving,
+          // which left `renderCapability()` — and therefore `/health`, which
+          // calls it — waiting for ever on any machine where ffmpeg is absent
+          // or exits non-zero. A missing decoder must cost the feature, and
+          // this is how it used to cost the health banner instead.
+          if (err) return resolve(null);
           const line = stdout.split(/\r?\n/)[0] ?? "";
           resolve(line.startsWith("ffmpeg version") ? bin : null);
         });

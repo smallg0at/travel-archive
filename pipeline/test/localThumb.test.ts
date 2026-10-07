@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { renderCapability, renderImageThumbnail, sniffImageKind, BOX } from "../src/localThumb.js";
+import { renderCapability, renderImageThumbnail, resetRenderCapability, sniffImageKind, BOX } from "../src/localThumb.js";
 
 /**
  * What can be tested without OneDrive: the sniffer, the sharp path, and the
@@ -85,5 +85,24 @@ describe("renderCapability", () => {
     expect(cap.images).toBe(true);
     // HEIC needs both packages: decoded to raw pixels, then resized by sharp.
     expect(cap.heif).toBe(cap.images);
+  });
+
+  it("answers when ffmpeg is absent, instead of waiting for it", async () => {
+    // The probe's error branch used to `return` without resolving, so on any
+    // machine where ffmpeg is missing — which is what a CI runner is — this
+    // call waited for ever, and `/health`, which calls it, waited with it.
+    // Point it at a name that cannot exist anywhere and require an answer.
+    process.env.FFMPEG_PATH = "definitely-not-ffmpeg";
+    resetRenderCapability();
+    try {
+      const cap = await renderCapability();
+      expect(cap.ffmpeg).toBeNull();
+      // The decoders are a separate question: sharp's answer must not change
+      // because a program on PATH was not found.
+      expect(cap.images).toBe(true);
+    } finally {
+      delete process.env.FFMPEG_PATH;
+      resetRenderCapability();
+    }
   });
 });
