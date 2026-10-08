@@ -233,6 +233,9 @@ export const en = {
 
     localServer: "Local server",
     background: "Start at sign-in",
+    startServer: "Start the job server now",
+    startServerBusy: "Starting…",
+    startServerFailed: "The job server could not be started.",
     backgroundNote:
       "Runs the job server in the background from the moment you sign in, with no window of its own. The desktop app finds it already running and uses it rather than starting a second copy — so closing the window no longer takes the archive away from the phone, or from anyone on the home network. Its output goes to data\\serve.log beside it.",
     backgroundUnsupported: "Sign-in start-up is only available on Windows.",

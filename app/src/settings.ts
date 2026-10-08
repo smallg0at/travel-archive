@@ -1132,15 +1132,48 @@ function backgroundSection(): HTMLElement {
   const box = control.querySelector("input") as HTMLInputElement;
   const script = row(ui.settings.backgroundScript, "");
   const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
-  body.append(note, control, script, problem);
+  // The one control that must exist when the server cannot answer: every row
+  // beside it asks the server something, and this one is for when there is
+  // nobody to ask. Shell-only (IPC), so it exists exactly where a window does.
+  const startBtn = el<HTMLButtonElement>(`<button type="button" class="set-btn" hidden>${ui.settings.startServer}</button>`);
+  body.append(note, control, script, problem, startBtn);
+
+  startBtn.addEventListener("click", () => {
+    const api = window.electronAPI;
+    if (!api?.startPipeline) return;
+    problem.hidden = true;
+    startBtn.disabled = true;
+    startBtn.textContent = ui.settings.startServerBusy;
+    void api
+      .startPipeline()
+      .then((r) => {
+        if (r.ok) {
+          // Settings draws from the server; reload so every row fills in from
+          // the one that just came up.
+          location.reload();
+          return;
+        }
+        problem.textContent = r.error || ui.settings.startServerFailed;
+        problem.hidden = false;
+      })
+      .catch(() => {
+        problem.textContent = ui.settings.startServerFailed;
+        problem.hidden = false;
+      })
+      .finally(() => {
+        startBtn.disabled = false;
+        startBtn.textContent = ui.settings.startServer;
+      });
+  });
 
   const apply = (status: AutostartStatus | null) => {
-    // No answer at all: keep the explanation and draw nothing — a checkbox
-    // that would fail on click is worse than an absent one.
+    // No answer at all: keep the explanation, and offer the way out — the
+    // start button — instead of drawing a checkbox that would fail on click.
     if (!status) {
       note.textContent = ui.settings.backgroundNote;
       control.hidden = true;
       script.hidden = true;
+      startBtn.hidden = false;
       return;
     }
     if (!status.supported) {

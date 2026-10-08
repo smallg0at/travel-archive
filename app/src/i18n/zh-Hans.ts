@@ -227,6 +227,9 @@ export const zhHans: Messages = {
 
     localServer: "本地服务器",
     background: "开机启动",
+    startServer: "立即启动档案服务器",
+    startServerBusy: "正在启动…",
+    startServerFailed: "档案服务器没能启动。",
     backgroundNote:
       "登录后在后台运行档案服务器，不打开窗口。桌面应用会发现它已在运行并直接使用，而不是再起一份 —— 于是关掉窗口不再等于把档案从手机和局域网里撤走。它的输出写到同目录的 data\\serve.log。",
     backgroundUnsupported: "开机启动仅在 Windows 上可用。",

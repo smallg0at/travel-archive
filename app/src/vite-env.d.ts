@@ -5,6 +5,8 @@ interface ElectronAPI {
   setTheme?(theme: "light" | "dark" | "system"): void;
   getSystemAccent?(): Promise<string | null>;
   onSystemAccentChanged?(cb: (color: string) => void): void;
+  /** Shell-only: start the job server when it is not answering (desktop shell). */
+  startPipeline?(): Promise<{ ok: boolean; error?: string }>;
 }
 
 interface Window {
