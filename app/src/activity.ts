@@ -190,8 +190,10 @@ async function paintDeviceCode(host: HTMLElement): Promise<void> {
     return;
   }
   const box = el<HTMLDivElement>(`
-    <div class="job-signin-hint"></div>
-    <div class="job-signin-row"><span class="job-signin-url"></span><code class="job-signin-code"></code></div>
+    <div class="job-signin-inner">
+      <div class="job-signin-hint"></div>
+      <div class="job-signin-row"><span class="job-signin-url"></span><code class="job-signin-code"></code></div>
+    </div>
   `);
   box.querySelector(".job-signin-hint")!.textContent = ui.activity.deviceCode;
   box.querySelector(".job-signin-url")!.textContent = code.url;

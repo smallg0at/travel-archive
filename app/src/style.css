@@ -1791,11 +1791,11 @@ body.m #toasts {
 .job-signin:not([hidden]) {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   padding: 10px 12px;
   border-radius: 8px;
   background: rgba(127, 127, 127, 0.14);
 }
+.job-signin-inner { display: flex; flex-direction: column; gap: 6px; }
 .job-signin-hint { color: var(--text-secondary); font-size: 13px; }
 .job-signin-row { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
 .job-signin-url { color: var(--text-secondary); word-break: break-all; }
