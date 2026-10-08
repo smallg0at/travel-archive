@@ -482,6 +482,7 @@ export const zhHans: Messages = {
     loading: "正在加载活动…",
     now: "进行中",
     idle: "当前没有正在运行的任务。",
+    deviceCode: "等待登录：在浏览器打开下面的链接并输入代码",
     waitingForGoogle: (photos, ago) => `本机暂无运行中的任务。正在等待 Google 处理：${num(photos)} 张照片，于 ${ago}前提交。`,
     readyToCollect: (photos) => `Google 已处理完毕 ${num(photos)} 张照片，将在 10 分钟内自动收取。`,
     batches: "照片说明批量任务",

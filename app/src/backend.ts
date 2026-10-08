@@ -399,6 +399,30 @@ export async function autostartStatus(): Promise<AutostartStatus | null> {
   }
 }
 
+/** What setup is still waiting on, and the device code while one is pending. */
+export interface OobeState {
+  signedIn: boolean;
+  deviceCode: { url: string; code: string; expiresAt: string } | null;
+  photosFolderValidatedAt: string | null;
+}
+
+/**
+ * `GET /oobe` — the server's own answer to "what does setup still need".
+ *
+ * Null when there is no server, and also when the server refuses: the route
+ * is loopback-only (a device code would let a remote reader link *their*
+ * account to this archive), so a remote reader's 403 lands here as the same
+ * harmless nothing as an absent server.
+ */
+export async function oobeState(): Promise<OobeState | null> {
+  try {
+    const res = await apiFetch("/oobe", { cache: "no-store" });
+    return res.ok ? ((await res.json()) as OobeState) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Turns sign-in start-up on or off.
  *

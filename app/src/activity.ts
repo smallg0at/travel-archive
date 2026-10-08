@@ -7,9 +7,11 @@ import {
   checkHealth,
   jobHistory,
   listBatches,
+  oobeState,
   startCollect,
   watchJob,
   type Health,
+  type OobeState,
   type RenderCapability,
   type ThumbWarming,
 } from "./backend";
@@ -164,6 +166,40 @@ function idleNote(): HTMLElement {
   return note(lines.length ? lines.join(" ") : ui.activity.idle);
 }
 
+/**
+ * The device-code prompt while a job sits at `signing-in`.
+ *
+ * The server used to print the code to its console alone, so a first run
+ * waited here with nobody able to complete it — the code is now fetched from
+ * the loopback-only `/oobe` and shown next to the very line that is waiting.
+ * Throttled, because this repaints on every job update and the code only
+ * changes when the server starts a new attempt.
+ */
+let codeCache: { state: OobeState | null; at: number } = { state: null, at: 0 };
+
+async function paintDeviceCode(host: HTMLElement): Promise<void> {
+  if (Date.now() - codeCache.at > 4000) {
+    codeCache.at = Date.now(); // stamp before awaiting, so calls cannot pile up
+    const state = await oobeState();
+    codeCache.state = state;
+  }
+  const code = codeCache.state?.deviceCode;
+  if (!code) {
+    host.hidden = true;
+    host.replaceChildren();
+    return;
+  }
+  const box = el<HTMLDivElement>(`
+    <div class="job-signin-hint"></div>
+    <div class="job-signin-row"><span class="job-signin-url"></span><code class="job-signin-code"></code></div>
+  `);
+  box.querySelector(".job-signin-hint")!.textContent = ui.activity.deviceCode;
+  box.querySelector(".job-signin-url")!.textContent = code.url;
+  box.querySelector(".job-signin-code")!.textContent = code.code;
+  host.hidden = false;
+  host.replaceChildren(box);
+}
+
 /** The running job, followed live, with its cancel button; or what is idle and what is still out. */
 function renderNow(host: HTMLElement, job: JobRecord | null): void {
   stopLive?.();
@@ -180,6 +216,7 @@ function renderNow(host: HTMLElement, job: JobRecord | null): void {
     <div class="job-progress">
       <div class="job-phase"></div>
       <div class="job-bar"><div class="job-bar-fill"></div></div>
+      <div class="job-signin" hidden></div>
       <pre class="job-log"></pre>
       <button type="button" class="job-cancel"></button>
     </div>
@@ -201,6 +238,14 @@ function renderNow(host: HTMLElement, job: JobRecord | null): void {
     const { phase, done, total } = j.progress;
     box.querySelector(".job-phase")!.textContent = `${jobTitle(j)} · ${phase}${total > 0 ? ` · ${num(done)}/${num(total)}` : ""}`;
     box.querySelector<HTMLElement>(".job-bar-fill")!.style.width = `${total > 0 ? Math.round((done / total) * 100) : 0}%`;
+    // While the job waits for a human, show the code that unsticks it — and
+    // take it down again the moment the phase moves on.
+    const signin = box.querySelector<HTMLElement>(".job-signin")!;
+    if (phase === "signing-in") void paintDeviceCode(signin);
+    else if (!signin.hidden) {
+      signin.hidden = true;
+      signin.replaceChildren();
+    }
     // Model output and file names end up in here, so it is set as text.
     // A whole tail, not the last few lines: a scan writes one line per folder,
     // so eight showed barely the current one. The box scrolls (see `.job-log`)

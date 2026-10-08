@@ -498,6 +498,7 @@ export const en = {
     loading: "Loading activity…",
     now: "Now",
     idle: "Nothing is running.",
+    deviceCode: "Waiting for sign-in: open this in a browser and enter the code",
     waitingForGoogle: (photos: number, ago: string) =>
       `Nothing is running here. Waiting for Google: ${count(photos, "photo", "photos")}, submitted ${ago} ago.`,
     readyToCollect: (photos: number) =>

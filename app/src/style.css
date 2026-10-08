@@ -1787,6 +1787,24 @@ body.m #toasts {
 
 .job-progress:not([hidden]) { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .job-phase { color: var(--text-secondary); }
+/* The device-code prompt, shown only while a job sits at "signing-in". */
+.job-signin:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.14);
+}
+.job-signin-hint { color: var(--text-secondary); font-size: 13px; }
+.job-signin-row { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.job-signin-url { color: var(--text-secondary); word-break: break-all; }
+.job-signin-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 17px;
+  letter-spacing: 3px;
+  font-weight: 600;
+}
 .job-bar {
   height: 3px;
   background: var(--bg-muted);
