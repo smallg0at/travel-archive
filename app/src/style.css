@@ -1805,6 +1805,76 @@ body.m #toasts {
   letter-spacing: 3px;
   font-weight: 600;
 }
+
+/* ---- First-run setup: app/src/setup.ts (docs/oobe.md) ----
+   While the wizard is up the shell it would sit inside has nothing to offer —
+   an empty sidebar, a search that cannot search, and the reader's own sign-in
+   prompt, which step 1 supersedes. */
+body.setup-active #sidebar,
+body.setup-active #sidebar-resize,
+body.setup-active #search-bar,
+body.setup-active #signin-banner {
+  display: none !important;
+}
+.setup-page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.setup-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.setup-head h1 { font-size: 22px; margin: 0; }
+.setup-count { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.setup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 10px;
+}
+.setup-card h2 { font-size: 14px; margin: 4px 0 0; color: var(--text-secondary); font-weight: 600; }
+.setup-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.setup-blocked { color: var(--text-secondary); font-size: 13px; }
+.setup-later { margin-left: auto; color: var(--text-secondary); font-size: 13px; }
+.setup-lang { display: flex; gap: 8px; }
+.setup-lang .on { outline: 2px solid var(--accent); }
+.setup-ok { font-weight: 600; }
+.setup-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  word-break: break-all;
+  margin: 0;
+}
+.setup-code {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(127, 127, 127, 0.14);
+  border-radius: 8px;
+}
+.setup-code p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.setup-code code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 20px;
+  letter-spacing: 4px;
+  font-weight: 600;
+}
+.setup-field { display: flex; gap: 8px; }
+.setup-input { flex: 1; min-width: 0; }
+.setup-picker { border-top: 1px solid rgba(127, 127, 127, 0.25); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.setup-pick-list { max-height: 240px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.setup-pick-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.linkish { background: none; border: none; color: inherit; cursor: pointer; text-align: left; padding: 4px 2px; }
+.linkish:hover { text-decoration: underline; }
+.setup-scan { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; width: 100%; }
+.setup-scan-phase { font-size: 18px; }
+.setup-scan-count { font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.setup-done { font-size: 20px; font-weight: 600; margin: 0; }
+.setup-log { font-size: 12px; opacity: 0.8; max-height: 96px; overflow: auto; width: 100%; }
 .job-bar {
   height: 3px;
   background: var(--bg-muted);

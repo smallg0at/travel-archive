@@ -399,11 +399,15 @@ export async function autostartStatus(): Promise<AutostartStatus | null> {
   }
 }
 
-/** What setup is still waiting on, and the device code while one is pending. */
+/** What setup still needs, and the device code while one is pending. */
 export interface OobeState {
   signedIn: boolean;
   deviceCode: { url: string; code: string; expiresAt: string } | null;
   photosFolderValidatedAt: string | null;
+  /** True until a scan has saved an index — a fresh archive. */
+  neverScanned: boolean;
+  /** The configured value, whatever its source. */
+  photosFolder: string;
 }
 
 /**
@@ -418,6 +422,49 @@ export async function oobeState(): Promise<OobeState | null> {
   try {
     const res = await apiFetch("/oobe", { cache: "no-store" });
     return res.ok ? ((await res.json()) as OobeState) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Starts the server's device-code sign-in. The code arrives via `oobeState`. */
+export function oobeSignIn(): Promise<{ pending?: boolean; signedIn?: boolean }> {
+  return post("/oobe/signin", {});
+}
+
+export interface FolderProbe {
+  state: "ok" | "not-found" | "no-token";
+  path: string;
+  count?: number;
+  months?: number;
+}
+
+/**
+ * Probes the configured photo folder; `confirm` also records it as agreed.
+ *
+ * A missing folder is an **answer** (`state: "not-found"`), not a failure —
+ * null here means the request itself could not be made.
+ */
+export async function oobeFolder(confirm = false): Promise<FolderProbe | null> {
+  try {
+    const res = await apiFetch("/oobe/folder", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm }),
+    });
+    return res.ok ? ((await res.json()) as FolderProbe) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One level of sub-folders for the setup picker. */
+export async function oobeFolders(
+  path: string,
+): Promise<{ state?: string; path: string; folders: string[]; truncated?: boolean } | null> {
+  try {
+    const res = await apiFetch(`/oobe/folders?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+    return res.ok ? ((await res.json()) as { path: string; folders: string[]; truncated?: boolean }) : null;
   } catch {
     return null;
   }

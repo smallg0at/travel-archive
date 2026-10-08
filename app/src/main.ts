@@ -16,6 +16,7 @@ import { setArchiveRefresh } from "./dayEdit";
 import { setActivityRefresh } from "./activity";
 import { ui } from "./i18n";
 import { restorePrefs } from "./prefs";
+import { setupNeeded, showSetup } from "./setup";
 import { readTheme, showTheme } from "./theme";
 import { healthResult } from "./backend";
 import { localServerSource, setThumbnailSource } from "./photoSource";
@@ -214,7 +215,16 @@ async function main() {
     if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
   }
 
-  await loadAndRender();
+  // A fresh archive is configured before it is drawn: with no scan there is no
+  // index to show, and the wizard's last page is what runs that scan. Only
+  // when the server itself is answering — it computes the state, and a wizard
+  // whose every step talks to it cannot start against a dead one. On the phone
+  // (no server) and for a remote reader this is false and nothing changes.
+  if (health.ok && (await setupNeeded())) {
+    showSetup({ onDone: () => void loadAndRender(), onSkip: () => void loadAndRender() });
+  } else {
+    await loadAndRender();
+  }
 }
 
 main().catch((err) => {
