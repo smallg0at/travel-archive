@@ -170,3 +170,28 @@ fallback here** — the local `~/.ssh/id_ed25519` is not registered with the
 GitHub account (`Permission denied (publickey)`), so HTTPS is the only path until
 the key is added; and note that status page is not a substitute for probing,
 since it stayed green throughout.
+
+## Operations on this machine (2026-10-08)
+
+**Port tables are not evidence here.** `netstat -ano` returned no LISTENING
+row for a port its own ESTABLISHED rows were talking to, and a PID parsed from
+it was `0` (System Idle) more than once; `Get-NetTCPConnection` has been
+declining silently since at least 2026-10-07. What does work: a real TCP
+connect probe for "is it answering", and `Get-CimInstance Win32_Process`
+filtered on the command line (`dist[\\/]serve\.js`) sorted by `CreationDate`
+when the task is "kill the test server and definitely not the real one" —
+the newest instance is the throwaway, and a guard of "only if two or more
+exist" makes the real 18419 unkillable by accident.
+
+**Driving the app in a browser, end to end.** Build with
+`VITE_PIPELINE_URL=http://127.0.0.1:<throwaway port>` and serve the result
+with `npm run --workspace app preview -- --port 4173` (4173 is in the origin
+allow-list, so CORS answers). The throwaway is a fresh `ARCHIVE_HOME` plus
+`SERVE_PORT`, metadata pointed at `Apps/TravelArchiveTest`, and `.env` copied
+in for `AZURE_CLIENT_ID` — never the real metadata folder, because the auto
+scan starts on its own. **Rebuild `app/dist` without the variable when done**
+(verified by grepping the assets for the test port): a stale pointer ships
+into the desktop shell and nothing works until it is noticed. A fresh browser
+origin has no reader session, so this reaches everything that renders before
+the archive loads — the setup wizard, offline and error states — and none of
+what sits behind the sign-in wall.
