@@ -220,7 +220,7 @@ export const zhHans: Messages = {
     monthHint: "预期结构：yyyy-mm（或 yyyy/mm）子文件夹。",
     change: "更改",
     checking: "检查中…",
-    folderExists: (count, months) => `存在 · ${count} 个条目 · ${months} 个按月文件夹`,
+    folderExists: (count, months) => `存在 · ${count} 个条目 · ${months} 个分期文件夹`,
     notFound: "找不到这个路径——它必须是你 OneDrive 里的文件夹。",
     noToken: "先登录，再检查。",
     pickUp: "上一级",

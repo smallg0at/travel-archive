@@ -1,15 +1,25 @@
 # First-run setup (OOBE)
 
-**Status: proposed design, 2026-10-08 (v2 — reviewed and ruled the same
-day).** Tracked as a draft in the project (`GUI OOBE: first-run sign-in and
-setup`). v2 is a four-step wizard — language + sign-in, folder, AI, then a
-full-screen first scan — replacing the single panel of v1, on the ruling that
-sign-in cannot be a co-equal row: without Microsoft there is no data to show.
-The follow-up rulings: **no value is trusted from a bake** (the folder is the
-user's to confirm, because the shipped default matches neither this account
-nor OneDrive's own photo-sync layout) and the **folder picker is in**.
-Nothing here is implemented yet; the measurements below are, and they are what
-the design answers.
+**Status: implemented 2026-10-08 (v2 — designed, ruled and shipped the same
+day).** Server routes `75e5600`, wizard `9c25b98`, bake drop with it. Tracked
+as a draft in the project (`GUI OOBE: first-run sign-in and setup`). v2 is a
+four-step wizard — language + sign-in, folder, AI, then a full-screen first
+scan — replacing the single panel of v1, on the ruling that sign-in cannot be
+a co-equal row: without Microsoft there is no data to show. The follow-up
+rulings: **no value is trusted from a bake** (the folder is the user's to
+confirm, because the shipped default matches neither this account nor
+OneDrive's own photo-sync layout) and the **folder picker is in**.
+
+Verified end to end in a browser against a throwaway archive: entry before
+the archive loads (no session, no index, no sign-in wall — the point of
+drawing it pre-load), Chinese copy surviving a reload through the server-held
+preference, a real device code in the page, the probe answering against this
+machine's actual folder, the provider list, and the first scan streaming its
+progress. Known looseness, on purpose: the auto-scan timer and page 4's
+button can race for the first scan (one job runs; the loser gets the server's
+honest "A job is already running"), and the button that starts the server
+from Settings is typechecked but not clicked — it lives in the Electron
+window, the one surface an agent here cannot operate.
 
 ## Why this exists — five measured facts
 

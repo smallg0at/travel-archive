@@ -225,7 +225,7 @@ export const en = {
     monthHint: "Expected layout: yyyy-mm (or yyyy/mm) subfolders.",
     change: "Change",
     checking: "Checking…",
-    folderExists: (count: number, months: number) => `Exists · ${count} entries · ${months} month folders`,
+    folderExists: (count: number, months: number) => `Exists · ${count} entries · ${months} period folders`,
     notFound: "Not found — it must be a folder in your OneDrive.",
     noToken: "Sign in first, then check again.",
     pickUp: "Up one level",
