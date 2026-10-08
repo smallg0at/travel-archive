@@ -1,8 +1,12 @@
 # First-run setup (OOBE)
 
-**Status: proposed design, 2026-10-08.** Tracked as a draft in the project
-(`GUI OOBE: first-run sign-in and setup`). Nothing here is implemented yet;
-the measurements below are, and they are what the design answers.
+**Status: proposed design, 2026-10-08 (v2 — reviewed the same day).** Tracked
+as a draft in the project (`GUI OOBE: first-run sign-in and setup`). v2 is a
+four-step wizard — language + sign-in, folder, AI, then a full-screen first
+scan — replacing the single panel of v1, on the ruling that sign-in cannot be
+a co-equal row: without Microsoft there is no data to show. Nothing here is
+implemented yet; the measurements below are, and they are what the design
+answers.
 
 ## Why this exists — five measured facts
 
@@ -51,8 +55,10 @@ All five come from the first deliberate from-scratch run of this archive
 - Never start a scan before the photo folder has been confirmed.
 - As few sign-ins as the caches actually allow, with the one that matters
   (the server's) made visible.
-- Resumable and skippable: a user who is not ready must be able to leave and
-  come back, and an already-configured archive must never be interrupted.
+- Resumable: closing the window and coming back continues where it stopped,
+  and an already-configured archive is never interrupted. There is no "later"
+  inside the wizard — with no sign-in there is no archive to look at, so an
+  escape hatch would only lead to an empty room.
 - Remote readers never see any of this (the write-capability invariant: the
   server does not advertise write, so nothing that configures is drawn).
 
@@ -66,114 +72,143 @@ All five come from the first deliberate from-scratch run of this archive
   them rather than trusting them, because an installer built on this machine
   bakes this machine's personal paths.
 
-## The flow
+## The flow — four steps, and their order is the argument
 
-The server decides; the app draws. `GET /oobe` returns a computed state, so
-the same conditions can also drive a banner or a job-server message later:
+**Ruling (2026-10-08 review): a wizard, not a panel; sign-in is not
+skippable.** Without Microsoft there is no data to show — a "稍后再说" that
+lands in an empty app is an escape hatch out of a room that has no furniture —
+so the first page earns its blocking state, and the scan comes last because it
+is the *result* of the three answers, not a step among them.
 
-```jsonc
-{
-  "needed": true,
-  "reasons": ["server-not-signed-in", "photos-folder-unverified", "never-scanned"],
-  "optional": ["ai-key"],              // never blocks reading
-  "photosFolder": "图片/本机照片",       // current value, whatever its source
-  "folderState": "unknown",            // unknown | ok | not-found | no-months
-  "signedIn": false,
-  "language": "zh-Hans",
-  "skippedAt": null
-}
-```
+0. **Gate.** Shell only; `canWrite` must be true; remote readers get no route.
 
-**When it appears.** Automatic only when the archive has never been scanned
-and the reader can write (loopback). If something is already readable, the
-same reasons produce a dismissible card instead of a takeover — a configured
-archive whose folder later went missing must not lose the page it is showing.
+1. **Language and sign-in — one page.** Language first because it costs
+   nothing and decides the words of every following screen (the browser's
+   detection is already made; this page only confirms it). Sign-in sits on the
+   same page as the blocking action: the page reads as "tell the archive who
+   you are and which tongue", and it is the only step with a hard dependency —
+   the folder probe, the scan, thumbnails and every job hang off this token.
+   The device code renders here (P0, because today it only reaches
+   `serve.log`).
 
-**The steps, in dependency order** (this order is the answer to "不能太快"):
+2. **Photos folder.** Displayed and *probed* — does the path resolve, does it
+   hold `yyyy-mm` children — edited only when the probe fails (see the open
+   question on baking below). Success stamps `photosFolderValidatedAt`, which
+   is what releases the scan gate.
 
-0. **Gate.** Shell only; `canWrite` must be true; remote readers get nothing.
+3. **AI provider and key.** The provider list and key field the Settings form
+   already has, with its set-or-not semantics. Skippable *as a step* (a
+   secondary action, not an exit from the wizard): scanning costs nothing, and
+   generation can arrive later from Settings.
 
-1. **Sign in the archive server.** The device code has to appear in the page:
-   while `acquireTokenByDeviceCode` is pending, `GET /oobe` (or a dedicated
-   `/auth/device`) carries `{ url, code, expiresAt }`, and `signedIn` flips
-   when it completes. The console line stays — it is still the right place for
-   a CLI run. The reader's own PKCE sign-in is *not* collected here (see
-   decision 1).
+4. **First scan — its own full-screen state.** Not a footer this time: the
+   wizard's chrome goes away and the scan owns the page, because this is the
+   one moment the user is waiting on the machine. On completion it shows the
+   two numbers every fresh archive wants — photos and months — and one action
+   that opens the archive, at which point `never-scanned` is false and the
+   wizard is over for good.
 
-2. **The photo folder.** Show the value (default, baked, or user-supplied) and
-   **probe it**: does the path resolve, and does it contain `yyyy-mm` or
-   `yyyy/mm` children? On `not-found`, a text field — writing goes through the
-   existing `POST /config`, because `ONEDRIVE_PHOTOS_FOLDER` is already in the
-   writable whitelist and the server already validates and applies it. Success
-   here is what stamps `photosFolderValidatedAt`, which is also what releases
-   the scan gate.
-
-3. **Language.** The detected value (`contentLang` already detects from the
-   browser on first use) with a two-state control. Cosmetic: it can be changed
-   any time afterwards in Settings.
-
-4. **AI key — optional, and last.** Deep-links to the Settings form that
-   already exists, with its set-or-not semantics. Skipping leaves the archive
-   fully readable; generation is the only thing that waits.
-
-5. **First scan, explicitly.** A button, not a timer (decision 2). Once it has
-   run, ownership returns to `scanIfDue` as it is today.
+**Resuming** is client-side only: each step's completion is derivable from
+the server (`signedIn`, the folder probe, key set, `never-scanned`), so the
+server keeps no wizard cursor and reopening restarts at page 1 — which is
+cheap now, because page 1 is language + a sign-in that remembers itself.
 
 ## Server pieces
 
-- `data/oobe.json` — machine-level state beside `sync.json` and `prefs.json`:
-  `{ version, photosFolderValidatedAt, skippedAt }`. Single writer, lives in
-  `ARCHIVE_HOME`, invisible to remote readers.
-- `GET /oobe` (read, loopback) — computes the state above; the folder probe is
-  one Graph request, cached until the folder changes.
-- `POST /oobe/skip`, `POST /oobe/complete` — writes the timestamps.
+- `data/oobe.json` — the one piece of state the server keeps for this:
+  `{ version, photosFolderValidatedAt }`, beside `sync.json` and `prefs.json`.
+  Single writer, lives in `ARCHIVE_HOME`, invisible to remote readers.
+  Everything else the wizard needs is derived: `signedIn` (`/health`), key set
+  (`/config` status), `never-scanned` (`sync.json`), folder state (probe).
+  There is deliberately **no wizard cursor** on the server — see resuming above.
+- `GET /oobe` (read, loopback) — the computed state:
+
+  ```jsonc
+  {
+    "needed": true,                    // never-scanned && canWrite
+    "reasons": ["server-not-signed-in", "photos-folder-unverified", "never-scanned"],
+    "optional": ["ai-key"],            // blocks nothing that reads
+    "photosFolder": "图片/本机照片",     // current value, whatever its source
+    "folderState": "unknown",          // unknown | ok | not-found | no-months
+    "signedIn": false,
+    "language": "zh-Hans",
+    "deviceCode": null                 // { url, code, expiresAt } while pending
+  }
+  ```
+
 - Folder writes stay on `POST /config`; no second path to the same value.
+  Folder **reads** need one new endpoint (a bounded listing for the picker —
+  see the open question below), guarded like every other non-GET.
 - **Scan gate** (`scanIfDue`): skip silently when the folder is unverified or
   404, log one line, start nothing. This is item "Do not auto-scan a fresh
   archive before the photo folder is configured" and it holds whether or not
   the rest of OOBE has shipped.
 - **Device-code slot**: `deviceCodeCallback` additionally records the pending
   response (one slot, replaced by any newer attempt) so `/oobe` can serve it,
-  and clears it on completion or failure.
+  and clears it on completion or failure. The console line stays — it is
+  still the right place for a CLI run.
 
 ## Client pieces
 
-- `#setup` route: a full-screen page for the first run, drawn by the existing
-  app (i18n both languages, existing controls, no new styling system).
+- One route, four pages: `#setup` runs the wizard (page 1 language + sign-in,
+  page 2 folder, page 3 AI, page 4 full-screen scan), drawn by the existing
+  app — i18n in both languages, existing controls, no new styling system.
+  Progress is held by the route (which page am I on), nothing else.
 - A compact card for the non-first-run case, living in the `#toasts` stack
   that already holds the sign-in prompt and the server toast.
 - Everything else is reuse: `msAuth.signIn()` stays where it is, Settings
   keeps owning keys and remote access, `contentLang` keeps detecting, and
   `canWrite()` keeps the whole thing off remote readers.
 
-## Decisions needed before implementation
+## Decisions
 
-1. **One sign-in or two?**
-   - **A (recommended): OOBE collects only the server's device code.** Jobs,
-     the mirror and thumbnails all work; the reader's PKCE session remains the
-     fallback it already is for degraded mode and the phone. One sign-in on
-     screen, no new token plumbing.
-   - B: collect both — correct but reads as "sign in to Microsoft twice".
-   - C: bridge the reader's refresh token into msal-node's cache — best UX,
-     new plumbing, and cache surgery is exactly where this project has been
-     burned before.
+**Ruled on, 2026-10-08 (the review that produced v2):**
 
-2. **First scan: button or automatic once the folder is confirmed?**
-   **Recommended: button.** The user's framing was "不然扫个寂寞" — the one
-   scan that matters most should be the one the user started; `scanIfDue`
-   keeps its 6-hour life afterwards.
+1. **A wizard, not a single panel**, and **sign-in is not skippable** —
+   without Microsoft there is no data to show, so there is nowhere to "come
+   back later" to.
+2. **Language and sign-in share page 1**; the folder is page 2; AI provider
+   and key are page 3; the first scan is page 4 and **full-screen**.
+3. The scan stays an explicit action (never a timer the user waits on) —
+   the original "不然扫个寂寞" requirement, now expressed as a page rather
+   than a button.
 
-3. **Folder creation in v1?** Recommended no: path entry only. (Graph creates
-   parent folders for a PUT by path — measured — so creating a folder is
-   small, but it is scope on top of the flow that fixes the actual failure.)
+**Still open — recommendations below, need a yes:**
 
-4. **Skip semantics.** Recommended: `skippedAt` suppresses the automatic
-   appearance until a reason changes (a new failure re-raises it) or Settings
-   offers "run setup again". No timer, so nothing pops up weeks later.
+4. **The folder: baked and hidden, or a real step?** The installer already
+   bakes `ONEDRIVE_PHOTOS_FOLDER` (this machine's personal paths — the bundle
+   script's own comment calls the `.exe` personal as a result), and `env.ts`
+   has a default for a checkout. **Recommendation: bake *and* validate, and
+   only surface the input when the probe fails.** A green probe shows a
+   read-only line ("图片/本机照片 · 144 个按月文件夹") and page 2 becomes a
+   confirmation; a red probe turns the same page into the editor. This keeps
+   the folder out of the way when it is right — which is the question being
+   asked — without ever stranding a machine where the baked path is someone
+   else's. Hiding it *unconditionally* would trade one silent failure (today's
+   404 loop) for another.
 
-5. **Where it draws.** Recommended: in-app page, not native dialogs —
-   bilingual, matches the product, and testable the way everything else here
-   is.
+5. **Interactive picker, yes — minimal.** The paths here are Chinese; typing
+   `图片/本机照片` by hand is the failure mode, not the concept. A
+   breadcrumb + children list (one bounded listing endpoint, list-and-descend,
+   no drag, no create in v1) with the text field as the fallback for a path
+   that is not yet reachable. Roughly one endpoint and one dialog — small
+   next to what page 4 has to do.
+
+6. **The AI step skips within the wizard** (secondary action, keeps the user
+   in the flow): scanning costs nothing, and an API key is not something a
+   photo archive should demand before it will look at its own photos.
+
+## Privacy
+
+Asked on 2026-10-08 with a dog attached, and the answer is boring on purpose:
+no telemetry, no analytics, no third party beyond the two the archive is made
+of — OneDrive (Microsoft) for storage, and whichever AI provider is configured.
+That second one is the only place **image bytes leave this machine**, and it
+leaves because captioning is precisely that; keys live in `.env` on disk and
+are reported set-or-not over the wire. A personal, sideloaded tool needs no
+privacy policy. If this were ever distributed, the honest artifact is a short
+"what leaves this machine" paragraph — and Settings already carries the
+`dataCredits` row it would hang on.
 
 ## Test plan
 
@@ -183,9 +218,14 @@ The throwaway-home harness from the first from-scratch run is the base
 
 - checkout with no `.env` → still the P0 companion fix (surface the child's
   failure), because OOBE cannot run without a server;
-- packaged first run → OOBE appears *before* the 60s scan check; no scan until
-  the folder step completes; device code visible in the page;
-- wrong folder → one log line, no job, no 404 loop;
+- packaged first run → the wizard appears *before* the 60s scan check; page 1
+  shows the device code; nothing scans until page 2's probe passes **and**
+  page 4 is started;
+- close the wizard at page 2 and reopen → back at page 1 with sign-in already
+  held (no server cursor, by design);
+- wrong folder → one log line, no job, no 404 loop; picking the right path
+  stamps `photosFolderValidatedAt` and page 4 unblocks;
+- AI step skipped → the scan still runs; Settings shows the key as unset;
 - configured archive → `/oobe` says nothing to do, `scanIfDue` unchanged;
 - remote reader (`canWrite` false) → no route, no card, no endpoint writes.
 
@@ -194,8 +234,9 @@ The throwaway-home harness from the first from-scratch run is the base
 - **P0 — a fresh install stops failing silently** (each item stands alone):
   surface the device code; the scan gate; surface a job server that exited
   (pairs with the manual-start item for the desktop).
-- **P1 — the flow**: `/oobe`, `#setup`, folder and language steps, first-scan
-  button.
+- **P1 — the wizard**: `/oobe`, `#setup`'s four pages, the folder step
+  (probe, and the picker if it is ruled in), the AI step, and the full-screen
+  first scan.
 - **P2 — polish**: create-folder helper, "run setup again" in Settings, phone
   parity if it ever needs any.
 
@@ -203,117 +244,135 @@ The throwaway-home harness from the first from-scratch run is the base
 
 ## The experience (UX)
 
-The system design above says *when*; this says *what it looks like*. Desktop
-first, per the design brief; the phone is not in scope.
+The system design above says *when*; this says what the four pages look like.
+Ruled a wizard on 2026-10-08: the order is the argument, so each page states
+what it is waiting for. Desktop first, per the design brief; the phone is not
+in scope.
 
 ### Principles, taken from the product as it already is
 
-- **No ceremony.** Settings on this app are plain sectioned rows, the sign-in
-  prompt is one sentence and a button, and the server toast states a
-  consequence before an action. OOBE is a few rows in that register — not a
-  tour, not wizard pages, no progress dots, no illustrations.
-- **Show the state, not the promise.** Every row reports what was *measured*
-  ("144 个按月文件夹", "找不到这个路径"), because the whole failure this design
-  fixes was an unverified assumption.
-- **One panel, ordered by dependency.** The steps are short; hiding them
-  behind Next buttons would make a two-minute setup feel longer than it is.
-- **The primary button explains itself.** A disabled action always carries a
-  line naming what is missing, so nothing is a mystery grey.
+- **No ceremony.** Plain sectioned rows, short declarative copy, consequence
+  before action — the register of "登录后即可加载照片。" No illustrations, no
+  cartoon progress dots, no feature tour. The step indicator is a quiet list
+  of four words, because the real progress bar is "am I blocked or not".
+- **Show the state, not the promise.** Folder counts come from the probe,
+  sign-in state from `/health`, scan numbers from the job. The failure this
+  design fixes was an unverified assumption; the pages must not make new ones.
+- **Every blocking page says what unblocks it** — under the disabled
+  button, naming one thing, not a bare grey.
+- **The scan owns the screen.** Page 4 is full-bleed because it is the only
+  step where the user is waiting on the machine.
 
-### Entry and exit
-
-| Situation (server-computed) | What the reader sees |
-|---|---|
-| never scanned **and** can write | the setup page, automatically (`#setup`) |
-| archive works, but a reason exists (folder404, server signed out) | a compact card in the `#toasts` stack — never a takeover |
-| no reasons | nothing, ever |
-| cannot write (remote reader) | nothing; the route does not exist for them |
-
-Exiting: **稍后再说** sets `skippedAt` and lands in the (empty) app, where any
-unmet reason is still visible as a card — so skipping is never losing the
-thread. **完成** clears the reasons and the page never returns. On the setup
-page the sidebar, search field and nav tools are hidden: an empty shell behind
-a setup panel reads as "broken", and there is nothing in it to navigate to
-yet.
-
-### The panel
-
-One centred column (~560px) in the app's own chrome, dark theme, same radius
-and borders as Settings:
+### Page 1 — 语言与登录
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  设置照片档案                                     稍后再说 │
-│                                                          │
-│  ● 登录档案服务器                                        │
-│    作业、缩略图与扫描都经由它，需要授权一次。            │
-│    ┌ 打开 microsoft.com/devicelink 并输入 ─────────────┐ │
-│    │  A B 1 C D 2 E F        9 分钟后过期    [取消]    │ │
-│    └───────────────────────────────────────────────────┘ │
-│                                                          │
-│  ● 照片目录                                   默认值 ·可改│
-│    图片/本机照片                                         │
-│    ✓ 存在 · 144 个按月文件夹              [更改]         │
-│                                                          │
-│  ● 语言                                                │
-│    中文（简体）· 检测自浏览器               [English]    │
-│                                                          │
-│  可选 · AI 密钥   生成摘要与图片说明时才需要 [生成设置…]  │
-│ ────────────────────────────────────────────────────────│
-│                    [ 开始首次扫描 ]                     │
-│                    需要先完成：登录                      │
-└──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│  设置照片档案                                    1 / 4 │
+│                                                        │
+│  语言                                                  │
+│  中文（简体）· 检测自浏览器                [English]   │  ← applies in place, no reload
+│                                                        │
+│  登录                                                  │
+│  作业、缩略图与扫描都经由档案服务器，它需要你的        │
+│  Microsoft 账户授权一次。                              │
+│                                                        │
+│  ┌ 打开 microsoft.com/devicelink 并输入 ────────────┐  │
+│  │  A B 1 C D 2 E F        9 分钟后过期   [复制]    │  │  ← P0: today this code only
+│  └──────────────────────────────────────────────────┘  │     reaches serve.log
+│                                                        │
+│  ✓ 已登录                          （先看看界面 →）    │
+│                                    [ 继续 → ]          │  ← enabled only by signedIn
+└────────────────────────────────────────────────────────┘
 ```
 
-After the click the footer becomes the scan itself — same panel, no context
-switch:
+Language is here because it decides the words of every page after it and
+costs nothing; sign-in is the *reason* this page blocks — everything downstream
+(folder probe, scan, thumbnails, jobs) hangs off that token. The reader's own
+PKCE session is not collected (one sign-in on screen; the browser-side
+fallback stays exactly as it is for degraded mode and the phone).
+
+**Offline trapdoor:** 先看看界面 is a deliberately quiet text link. It does
+not record a skip — the wizard reopens on next launch — it exists so a machine
+with no network is not stuck in a page it cannot complete. If the review wants
+it gone, the cost is: offline users cannot leave page 1.
+
+### Page 2 — 照片目录
+
+The ruling is *bake and validate; surface only what fails* (Decisions 4–5), so
+this page has two faces:
 
 ```
-│  正在扫描 …                                              │
-│  117/144 · 2024-09 — 38 张          [后台运行]           │
-│  ───────────────────────────────────────────────────────│
-│  完成：32,750 张照片 · 124 个月   [打开档案]             │
+  照片目录                                            2 / 4
+  图片/本机照片 · 随安装包提供
+  ✓ 存在 · 144 个按月文件夹                 [更改]      ← green: confirmation only
+
+  — or, when the probe fails —
+  照片目录
+  ✗ 找不到 图片/本机照片
+  [ 图片/本机照片            ]  [浏览…]  [检查]          ← red: the page becomes the editor
+  必须是 OneDrive 里的文件夹，且以 yyyy-mm 分月。         (field + picker + re-probe)
 ```
 
-### Row states and copy
+**The picker** (recommended: yes, minimal): a list of the current path's
+children — breadcrumb, click to descend, "选择这个文件夹" to accept — because
+these paths are Chinese and hand-typing `图片/本机照片` is the failure mode.
+No create, no rename, no drag; the text field stays for anything the listing
+cannot reach. One bounded listing endpoint, guarded like every other non-GET.
 
-Strings ship in both languages with the rest (the i18n cross-check keeps them
-honest). Register: short, declarative, consequence first — the same voice as
-"登录后即可加载照片。"
+Probes that find a folder with no month subfolders get their own state
+(存在，但没有 yyyy-mm 子文件夹，扫描会找不到照片) rather than being dressed
+up as success — `scan.ts` already words this correctly.
 
-| Row | State | Copy (zh / en) | Action |
-|---|---|---|---|
-| sign-in | idle | 登录档案服务器，作业与扫描才能运行 / Sign in the archive server so jobs and scanning can run | 使用 Microsoft 账户登录 |
-| | pending | 打开 *devicelink* 并输入下列代码 · X 分钟后过期 / Open *devicelink* and enter this code · expires in X min | 复制代码 · 打开链接 · 取消 |
-| | done | ✓ 已登录 / ✓ Signed in | — |
-| | failed | 授权没有完成 / The sign-in did not finish | 重试 |
-| folder | pre-signin | 登录后检查这个路径 / Checked after sign-in | — |
-| | checking | 检查中… / Checking… | — |
-| | ok | 存在 · N 个按月文件夹 / Exists · N month folders | 更改 |
-| | not-found | 找不到这个路径——必须是 OneDrive 里的文件夹 / Not found — it must be a folder in OneDrive | 更改 → 输入 + 检查 |
-| | no-months | 存在，但没有 yyyy-mm 子文件夹，扫描会找不到照片 / Present, but no yyyy-mm subfolders — a scan would find nothing | 更改 |
-| | offline | 现在无法检查（网络不通）；没有记为无效 / Can't check right now (offline); not recorded as invalid | 重试 |
-| language | any | 中文（简体）· 检测自浏览器 / Simplified Chinese · detected from the browser | 中文 / English，**立即生效** |
-| key | any | 可选。生成摘要与图片说明时才需要。/ Optional. Only needed to generate summaries and captions. | 打开生成设置 |
+### Page 3 — AI 生成（可跳过一步）
 
-**The device-code moment** is the only intricate part, and it is the reason
-P0 exists: the code renders in the panel (large, mono, copyable), the app
-polls `signedIn` and flips the row by itself, and 取消 only stops *watching* —
-the server's pending attempt is replaced by the next one, so nothing needs to
-be cancelled across a process boundary. Expiry shows as the failed state with
-重试.
+Provider list (the presets Settings already renders, cloud and local alike),
+key field with set-or-not semantics, model left at its default unless touched.
 
-**The scan moment** streams the job's own progress lines into the footer (the
-SSE endpoint already exists), so the panel never invents numbers it does not
-have. 后台运行 sends them into the app while it continues — the Activity page
-already hosts running jobs — and 打开档案 appears on completion with the two
-numbers every fresh archive actually wants: photos and months.
+```
+  生成                                                3 / 4
+  选择服务 · DeepSeek                                   ← or Gemini / LM Studio / …
+  API 密钥  [••••••••••••]                    已保存 ✓
+  摘要与图片说明会发送照片给所选服务；密钥只存在本机。
 
-### The card variant (everything that is not a first run)
+  [ 跳过，稍后在设置里配置 ]              [ 继续 → ]
+```
 
-Same voice, one line plus an action, stacked with the toasts that already
-exist (so a signed-out server *and* a missing folder read as two cards, not a
-dialog):
+Skipping is a secondary action **inside** the wizard, not an exit: scanning
+costs nothing, and an API key is not something a photo archive should demand
+before it will look at its own photos. Copy says where the photos go — the one
+sentence a privacy-minded reader deserves (see **Privacy** below).
+
+### Page 4 — 首次扫描（全屏）
+
+The chrome disappears; the scan is the whole page.
+
+```
+  正在扫描照片目录
+              18,402                                  ← live count from the job
+  117 / 144 个文件夹 · 当前 2024-09 — 38 张
+  ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░                        ← proportion of folders, honest
+```
+
+- Progress lines are the job's own (SSE); no invented estimates, no ETA.
+- Closing the window does **not** stop it — the server keeps scanning, and the
+  next launch lands here rather than at page 1 (`never-scanned` still true,
+  `signedIn` held).
+- Completion states the result in the archive's own terms:
+  **32,750 张照片 · 124 个月** → `[ 打开档案 ]`, after which `never-scanned`
+  is false and the wizard never returns.
+- Failure keeps the page with the job's short error and `[ 重试 ]`; the full
+  log stays where job logs live.
+
+### Entry, exit, and the card variant
+
+Automatic entry is unchanged: never scanned **and** can write. There is no
+"稍后再说" as a destination — with no sign-in there is no archive to go back
+to — only the quiet trapdoor above for offline machines, and closing the
+window (which resumes).
+
+Everything that is *not* a first run keeps the v1 answer: one card in the
+`#toasts` stack, never a takeover — a working archive whose folder later went
+missing must not lose the page it is showing:
 
 - 照片目录 *图片/本机照片* 找不到——新照片不会被扫描。 [打开设置向导]
 - 档案服务器未登录——扫描与生成不可用。 [登录]
@@ -321,30 +380,20 @@ dialog):
 
 ### Interaction details
 
-- **Esc** = 稍后再说; **Enter** in the folder field = 检查; focus lands on the
-  first blocking row's action.
-- The primary button is never a bare grey: the line under it names the
-  missing step, and it names **one** thing at a time (the first unmet).
-- Motion matches the existing toasts (0.18s, disabled under
-  `prefers-reduced-motion`).
-- Language switches in place — no reload, no flash (the mechanism that
-  already removed the second load).
-- Failure keeps the panel open with the job's short error and 重试; the full
-  log stays where job logs live. Nothing in this flow requires reading a file
-  outside the app — that is the whole point of it.
+- The step list is informational; pages advance only through their own
+  继续, so a green row on page 3 never skips page 2's validation.
+- Focus lands on the blocking action; **Enter** submits the folder field;
+  Esc leaves the picker, nothing else.
+- Motion matches the existing toasts (0.18s, off under
+  `prefers-reduced-motion`); language switches in place.
+- Both languages ship together — the i18n cross-check keeps them honest, and
+  page 1 is the first thing either of them has to say.
+- Failure never leaves the app: no step requires reading a file outside the
+  wizard. That is the whole point of it.
 
 ### Deliberately not done
 
-No multi-page wizard, no progress dots, no welcome illustration, no tour of
-features, no phone screens, no native dialogs, and no second question about a
-folder that already probes green. The archive itself is the reward screen; the
-setup's job is to be finished and forgotten.
-
-### UX decisions (recommendations)
-
-1. **Single panel over a wizard** — the rows are the progress indicator.
-2. **Scan progress in the panel** with 后台运行 as the escape, rather than
-   throwing the user to the Activity page mid-story.
-3. **Keep the language row** even though detection already chose a value:
-   it is the only visible personalisation available before there is content,
-   and switching it now costs one control (and demonstrates the app works).
+No wizard dots, no illustrations, no welcome copy, no feature tour, no phone
+screens, no native dialogs, no second question about a folder that probes
+green, and no privacy policy (see below) — the archive itself is the reward
+screen, and the setup's job is to be finished and forgotten.
