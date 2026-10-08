@@ -1,6 +1,6 @@
 import type { MonthSummary, PhotoRecord, PhotoShard } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
-import { listPhotoFolders, listPhotosInFolder, type PhotoFolder, type ScannedPhoto } from "../graph.js";
+import { GraphError, listPhotoFolders, listPhotosInFolder, type PhotoFolder, type ScannedPhoto } from "../graph.js";
 import { env } from "../env.js";
 import { loadIndex, loadShard, saveIndex, saveShard } from "../archiveStore.js";
 import { formatMonthLabel, monthKey } from "../util.js";
@@ -211,7 +211,21 @@ export async function runScan(range: Range, onProgress: ProgressFn, signal?: Abo
   const index = await loadIndex(token);
 
   onProgress({ phase: "listing", message: `Listing photo folders under ${env.photosFolder}...` });
-  const allFolders = await listPhotoFolders(token, env.photosFolder);
+  let allFolders: PhotoFolder[];
+  try {
+    allFolders = await listPhotoFolders(token, env.photosFolder);
+  } catch (err) {
+    // The one failure a fresh install actually hits: the configured folder is
+    // not there. The raw Graph line said "404 itemNotFound" with a URL and
+    // named no setting, so the person had nothing to act on — the same
+    // wording the empty-folder case below already uses.
+    if (err instanceof GraphError && err.status === 404) {
+      throw new Error(
+        `Photo folder not found on OneDrive: ${env.photosFolder} — set ONEDRIVE_PHOTOS_FOLDER to the folder holding your photos (expected yyyy-mm or yyyy/mm subfolders).`,
+      );
+    }
+    throw err;
+  }
   const folders = allFolders.filter((f) => inRange(f, range));
   result.folders = folders.length;
 
