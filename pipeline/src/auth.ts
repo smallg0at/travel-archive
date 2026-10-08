@@ -76,6 +76,29 @@ export async function getCachedAccessToken(): Promise<string | null> {
 }
 
 /**
+ * The device-code prompt while it is waiting for a human.
+ *
+ * `getAccessToken` used to render it to `console.log` alone, which is right
+ * for a CLI run and wrong for a server: on a real first run the job page said
+ * "Signing in…" forever while the code sat in `serve.log` where nobody looks.
+ * This slot lets a page show it (loopback-only — see `/oobe`), and it clears
+ * itself whether the sign-in lands or fails, so a stale code is never on
+ * offer twice.
+ */
+export interface PendingDeviceCode {
+  url: string;
+  code: string;
+  /** ISO timestamp — the page counts down from it. */
+  expiresAt: string;
+}
+
+let pendingDeviceCode: PendingDeviceCode | null = null;
+
+export function getPendingDeviceCode(): PendingDeviceCode | null {
+  return pendingDeviceCode;
+}
+
+/**
  * Returns a valid Graph API access token, reusing the cached refresh token
  * silently when possible and only prompting the device-code flow on first
  * run or once the refresh token itself expires.
@@ -92,13 +115,23 @@ export async function getAccessToken(): Promise<string> {
     }
   }
 
-  const result = await pca.acquireTokenByDeviceCode({
-    scopes: GRAPH_SCOPES,
-    deviceCodeCallback: (response) => {
-      console.log(response.message);
-    },
-  });
+  try {
+    const result = await pca.acquireTokenByDeviceCode({
+      scopes: GRAPH_SCOPES,
+      deviceCodeCallback: (response) => {
+        console.log(response.message);
+        pendingDeviceCode = {
+          url: response.verificationUri,
+          code: response.userCode,
+          expiresAt: new Date(Date.now() + response.expiresIn * 1000).toISOString(),
+        };
+      },
+    });
 
-  if (!result) throw new Error("Device code sign-in did not return a token");
-  return result.accessToken;
+    if (!result) throw new Error("Device code sign-in did not return a token");
+    return result.accessToken;
+  } finally {
+    // Completed or abandoned: either way this code is spent.
+    pendingDeviceCode = null;
+  }
 }

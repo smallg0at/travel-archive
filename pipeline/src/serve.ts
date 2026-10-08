@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
+import { readOobe } from "./oobeStore.js";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -9,7 +10,7 @@ import { isAbsolute } from "node:path";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { originAllowed } from "./originCheck.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError, listFolderFileNames } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
@@ -22,7 +23,7 @@ import {
 import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { readPrefs, writePrefs } from "./prefsStore.js";
 import { env } from "./env.js";
-import { getCachedAccessToken, hasCachedAccount } from "./auth.js";
+import { getCachedAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
 import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
 import { monitorEventLoopDelay } from "node:perf_hooks";
@@ -643,6 +644,28 @@ const routes: [RegExp, string, Handler][] = [
     /^\/settings\/remote$/,
     "GET",
     async (req, res) => json(res, 200, await remoteAccessStatus(access.isLocal(req))),
+  ],
+
+  /**
+   * What setup still needs, as the server sees it — plus the device code
+   * while one is pending.
+   *
+   * Loopback only, and deliberately so: the code signs *this* machine's
+   * archive into a Microsoft account, so a remote reader holding it could
+   * link their own. `/health` keeps answering everyone with the boolean;
+   * this route exists for the page that has to show a code.
+   */
+  [
+    /^\/oobe$/,
+    "GET",
+    async (req, res) => {
+      if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      return json(res, 200, {
+        signedIn: await hasCachedAccount(),
+        deviceCode: getPendingDeviceCode(),
+        photosFolderValidatedAt: (await readOobe()).photosFolderValidatedAt ?? null,
+      });
+    },
   ],
   [
     /^\/settings\/remote$/,
@@ -1675,6 +1698,36 @@ async function scanIfDue(): Promise<void> {
     if (jobs.runningJob()) return;
     const { lastScanAt } = await readSync();
     if (lastScanAt && Date.now() - Date.parse(lastScanAt) < SCAN_EVERY_MS) return;
+
+    // The first scan belongs to setup, not to a timer: until a human has
+    // confirmed the photo folder, starting would scan whatever the default
+    // says — on a real account usually somebody else's path, so either a 404
+    // loop every six hours or an index of nothing.
+    if (!lastScanAt && !(await readOobe()).photosFolderValidatedAt) {
+      console.log("scan check: first scan not confirmed yet — waiting for setup");
+      return;
+    }
+
+    // And no folder survives a rename: probe before starting, so a missing
+    // folder is one log line instead of a failing job. Without a cached
+    // account there is nothing to ask with — and the only state that reaches
+    // here without one is "confirmed in setup yet signed out", where the job
+    // below is the thing that prompts (and now shows its code in Activity).
+    const token = await getCachedAccessToken();
+    if (token) {
+      try {
+        await listFolderFileNames(token, env.photosFolder);
+      } catch (err) {
+        if (err instanceof GraphError && err.status === 404) {
+          console.warn(
+            `scan check: photo folder not found: ${env.photosFolder} — set ONEDRIVE_PHOTOS_FOLDER, not scanning`,
+          );
+          return;
+        }
+        throw err;
+      }
+    }
+
     const range = await resolveRange("incremental", { from: null, to: null });
     console.log(`  looking for new photos (from ${range.from ?? "the beginning"})`);
     jobs.start({ kind: "scan", run: (onProgress, signal) => runScan(range, onProgress, signal) });
