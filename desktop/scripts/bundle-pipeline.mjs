@@ -39,10 +39,16 @@ const OUT = resolve(STAGE, "dist/server.mjs");
  * the building machine's own `.env`, so nothing personal enters the repository
  * — but the installer does carry them, which makes the .exe personal.
  */
+// ONEDRIVE_PHOTOS_FOLDER is deliberately NOT baked: this machine's path is
+// not anybody else's and the shipped default matches neither this account nor
+// OneDrive's photo-sync layout — the setup wizard asks instead (docs/oobe.md,
+// ruled 2026-10-08). The metadata folder stays, with a literal fallback
+// below: it names where the archive *lives*, a wrong value strands a first
+// run in an empty namespace, and the ruling was that a default must already
+// be present rather than left to the user.
 const BAKE = [
   "AZURE_CLIENT_ID",
   "AZURE_TENANT_ID",
-  "ONEDRIVE_PHOTOS_FOLDER",
   "ONEDRIVE_METADATA_FOLDER",
   "GEOCODE_CONTACT_EMAIL",
   "AI_PROVIDER",
@@ -70,6 +76,9 @@ function bakedConfig() {
     if (value) out[key] = value;
   }
   console.log(`baking ${Object.keys(out).length} setting(s): ${Object.keys(out).join(", ")}`);
+  // Guarantee, not hope: every build carries a metadata folder. The builder's
+  // value when there is one; the documented default otherwise — never nothing.
+  if (!out.ONEDRIVE_METADATA_FOLDER) out.ONEDRIVE_METADATA_FOLDER = "Apps/TravelArchive";
   return out;
 }
 
