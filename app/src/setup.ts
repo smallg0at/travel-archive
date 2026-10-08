@@ -20,6 +20,7 @@ import { ui } from "./i18n";
 import {
   archiveStatus,
   canWrite,
+  checkHealth,
   getConfig,
   oobeFolder,
   oobeFolders,
@@ -236,27 +237,41 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
     state.saveError = null;
     state.scan = { job: null, stop: null, error: null, photos: null, months: null };
     render();
-    try {
-      const job = await startScan({ mode: "incremental" });
-      state.scan.job = job;
+
+    // Both this button and the 60-second scan timer can want the first scan;
+    // one job runs and the other gets "already running" (noted in
+    // docs/oobe.md). Attaching to the job that won is the honest recovery:
+    // the reader is watching the same scan either way.
+    const follow = (job: JobRecord): void => {
+      state.scan!.job = job;
       render();
-      state.scan.stop = watchJob(job.id, (update) => {
+      state.scan!.stop = watchJob(job.id, (update) => {
         if (!state.scan) return;
         state.scan.job = update;
         if (update.status === "done" || update.status === "failed") {
           state.scan.stop?.();
           state.scan.stop = null;
           if (update.status === "failed") state.scan.error = update.error ?? ui.setup.scanFailed;
-          else void archiveStatus().then((s) => {
-            if (!state.scan) return;
-            state.scan.photos = s?.totals.photos ?? null;
-            state.scan.months = s?.months.length ?? null;
-            render();
-          });
+          else
+            void archiveStatus().then((s) => {
+              if (!state.scan) return;
+              state.scan.photos = s?.totals.photos ?? null;
+              state.scan.months = s?.months.length ?? null;
+              render();
+            });
         }
         render();
       });
+    };
+
+    try {
+      follow(await startScan({ mode: "incremental" }));
     } catch (err) {
+      const health = await checkHealth().catch(() => null);
+      if (health?.running) {
+        follow(health.running);
+        return;
+      }
       state.scan.error = (err as Error).message;
       render();
     }
