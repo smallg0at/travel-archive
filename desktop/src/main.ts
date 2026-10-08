@@ -177,10 +177,20 @@ let mainWindow: BrowserWindow | null = null;
 /** Device-code prompts are shown once; MSAL repeats the line while it polls. */
 let deviceCodeShown = false;
 
+/**
+ * Recent child output, so a failure whose only trace was the console can
+ * still be shown to a person. The job server keeps no logs of its own
+ * (TODO.md), and the reason it refused to start used to live exactly here.
+ */
+const serverTail: string[] = [];
+
 function log(line: string): void {
   // Goes to the terminal when started with `npm run --workspace desktop start`,
   // and is the only trace of the child otherwise.
   console.log(`[pipeline] ${line}`);
+
+  serverTail.push(line);
+  if (serverTail.length > 40) serverTail.shift();
 
   if (isDeviceCodePrompt(line) && !deviceCodeShown) {
     deviceCodeShown = true;
@@ -195,6 +205,21 @@ function log(line: string): void {
       if (response === 0) void shell.openExternal("https://microsoft.com/devicelogin");
     });
   }
+}
+
+/**
+ * The most plausible explanation among the lines the child has produced.
+ *
+ * Errors first — "Missing required env var: AZURE_CLIENT_ID" is the whole
+ * answer to a fresh checkout with no `.env`, and it used to be a line in a
+ * console nobody had open. Falling back to the last few lines keeps the
+ * dialog honest when nothing matched rather than inventing a cause.
+ */
+function failureDetail(fallback: string): string {
+  const err = serverTail.find((l) => /missing required|error:|EADDRINUSE|cannot find|refused/i.test(l));
+  if (err) return err;
+  if (serverTail.length) return serverTail.slice(-4).join("\n");
+  return fallback;
 }
 
 /**
@@ -598,8 +623,18 @@ async function startup(): Promise<void> {
       });
     } catch (err) {
       // Not fatal: the archive still reads from OneDrive and only generation
-      // is unavailable — the same read-only path the phone takes.
+      // is unavailable — the same read-only path the phone takes. Said out
+      // loud, though: the thrown message is the actual reason (a missing
+      // setting, an unbuilt pipeline), and a console nobody has open is not
+      // a place to put it.
       log(`Job server unavailable: ${(err as Error).message}`);
+      void dialog.showMessageBox({
+        type: "error",
+        title: "The archive server did not start",
+        message: "The archive continues read-only: scanning, generation and jobs are unavailable.",
+        detail: (err as Error).message,
+        buttons: ["OK"],
+      });
       loadApp();
       return;
     }
@@ -621,6 +656,16 @@ async function startup(): Promise<void> {
     // (app/src/serverStatus.ts) notices within 30s and offers a reload.
     if (!ready && !(await healthy)) {
       log(`Job server did not become healthy on ${PIPELINE_PORT}; continuing read-only.`);
+      // The common case behind this branch is a child that exited on its first
+      // second with a reason — the dialog takes the reason from its own output
+      // rather than making the reader guess.
+      void dialog.showMessageBox({
+        type: "error",
+        title: "The archive server did not start",
+        message: `It did not answer on port ${PIPELINE_PORT}. The archive continues read-only.`,
+        detail: failureDetail(""),
+        buttons: ["OK"],
+      });
     }
   })();
 
