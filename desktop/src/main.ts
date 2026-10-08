@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, session, shell, systemPreferences } from "electron";
 import type { Server } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import { serveApp } from "./static";
 import {
   isDeviceCodePrompt,
+  isHealthy,
   startPipelineServer,
   stopPipelineServer,
   waitForHealthy,
@@ -459,6 +460,43 @@ function getSystemAccentColor(): string | null {
 
 ipcMain.handle("get-system-accent", () => getSystemAccentColor());
 
+/**
+ * Starts the job server on demand — the action behind Settings' "start it
+ * now" button, for a server that died after launch. Without it the only
+ * remedies were restarting the whole app or a terminal.
+ *
+ * Deliberately mirrors the spawn at startup rather than sharing it:
+ * startup's flow is entangled with `loadApp` and the ready race, and what
+ * this path has to reproduce is only the three outcomes — already up,
+ * started, or the reason it is not.
+ */
+ipcMain.handle("start-pipeline", async (): Promise<{ ok: boolean; error?: string }> => {
+  if (await isHealthy(PIPELINE_PORT)) return { ok: true };
+
+  // A child that exited leaves `pipeline` set but dead; replacing it is the
+  // point of the button. A child that is alive but not answering gets an
+  // explanation instead of a second process fighting for the port.
+  if (pipeline?.child && pipeline.child.exitCode === null && !pipeline.adopted) {
+    return { ok: false, error: `A server process is running but not answering on ${PIPELINE_PORT}.` };
+  }
+
+  try {
+    pipeline = await startPipelineServer({
+      cwd: ARCHIVE_HOME ?? PIPELINE_DIR,
+      entry: PIPELINE_ENTRY,
+      archiveHome: ARCHIVE_HOME,
+      archiveHost: ARCHIVE_HOST,
+      port: PIPELINE_PORT,
+      onOutput: log,
+    });
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+
+  if (await waitForHealthy(PIPELINE_PORT, 25_000)) return { ok: true };
+  return { ok: false, error: failureDetail(`No answer on ${PIPELINE_PORT} within 25 seconds.`) };
+});
+
 if (process.platform === "win32") {
   systemPreferences.on("accent-color-changed", (_event, newColor) => {
     const formatted = `#${newColor.slice(0, 6)}`;
@@ -676,6 +714,7 @@ async function startup(): Promise<void> {
 // two processes fighting over both ports and, worse, two job servers writing the
 // same archive. The archive lock would catch the write itself, but refusing the
 // second window is the honest place to stop.
+let lastAlreadyRunningNotice = 0;
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -683,6 +722,18 @@ if (!app.requestSingleInstanceLock()) {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
+    // Focusing alone reads as "the double-click did nothing", especially when
+    // the running copy belongs to a *different* install (dev shell versus the
+    // installed app share one userData — see the shared-profile draft). So the
+    // copy that is already here says so out loud. Debounced, because one
+    // double-click can launch more than one process.
+    if (Date.now() - lastAlreadyRunningNotice > 5000) {
+      lastAlreadyRunningNotice = Date.now();
+      new Notification({
+        title: "Photo Archive",
+        body: "Photo Archive is already running — its window has been brought to the front.",
+      }).show();
+    }
   });
 
   void app.whenReady().then(startup);

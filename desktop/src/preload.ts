@@ -48,5 +48,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onSystemAccentChanged: (callback: (color: string) => void): void => {
     ipcRenderer.on("system-accent-changed", (_event, color: string) => callback(color));
   },
+  // The one control that has to exist without a server: starting it. Every
+  // other Settings row asks the server something; this one is for when the
+  // server cannot be asked.
+  startPipeline: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("start-pipeline"),
 });
 
