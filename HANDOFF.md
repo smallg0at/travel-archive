@@ -5,7 +5,8 @@ For whoever picks this up next.
 - **`README.md`** — what this is, quick start, one-time setup, licence.
 - **`docs/design-brief.md`** — what the product is.
 - **`TODO.md`** — a pointer to where the open items live (a private GitHub
-  Project, so the entries' measurements stay out of a public repo).
+  Project, so the entries' measurements stay out of a public repo). Read and
+  written with `scripts/todo.mjs` — not with `gh` by hand.
 - **`AGENTS.md`** — how to work in this repo (run to completion, report progress, measure before asserting).
 
 This file is the front door. The depth lives in `docs/`:
@@ -114,6 +115,7 @@ cycle would hit it uninitialised. Server and job log text stays English.
 | thumbnails / disk cache | `pipeline/src/thumbStore.ts`, `serve.ts` |
 | sync | `pipeline/src/jobs/sync.ts`, `syncStore.ts` |
 | place names (offline) | `pipeline/src/geocodeOffline.ts` + `scripts/build-geo.mjs` |
+| the open-item list (a private GitHub Project) | `scripts/todo.mjs` |
 
 Subsystem explanations — the phone's offline archive, the offline gazetteer, street level — are in [`docs/architecture.md`](docs/architecture.md).
 
