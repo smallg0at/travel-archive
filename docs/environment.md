@@ -9,14 +9,24 @@ this harness `npm` is not a command, and it looks exactly like a machine where
 node was never installed — it was, and versions are installed, and `fnm` itself
 *is* on `PATH`.
 
-Check `fnm list` before concluding anything. Either prefix a command with the
-selected version's directory (what the earlier sessions did, and it silently
-breaks when the version changes), or set it up per command the way the profile
-does:
+Check `fnm list` before concluding anything. Three ways, best first:
 
-```powershell
-fnm env --shell powershell | Out-String | Invoke-Expression; npm run --workspace app build
-```
+1. **Call node by absolute path.** No `fnm`, no `Invoke-Expression`, nothing for
+   Defender to match — this is the route for anything multi-step. The path is
+   in "Windows Defender flags long commands that start that way", below.
+2. **One short command**, initialised the way the profile does. Legitimate, but
+   it must stay short — see the same note:
+
+   ```powershell
+   fnm env --shell powershell | Out-String | Invoke-Expression; npm run --workspace app build
+   ```
+
+3. Prefix a command with the selected version's directory — what the earlier
+   sessions did, and it silently breaks when the version changes.
+
+**Never put the `fnm env … | Invoke-Expression` prefix at the head of a long
+inline command.** That is the exact shape Defender kills, and it takes the whole
+command with it.
 
 **In a terminal a person opened, none of this applies** — the profile runs and
 `npm` works. The asymmetry is the confusing part: "it works for me" and "npm is
@@ -36,7 +46,8 @@ back as `aborted` with no output, which reads like a hang. OpenCode's
 "move to background" does **not** release such a command; it has to be
 terminated manually. Short commands with the same prefix were never flagged —
 it is the length and the shape (a copy-paste chain with `Start-Process`,
-redirections and nested quoting) that trips it.
+redirections and nested quoting) that trips it. Re-read the evidence any time
+with `Get-MpThreatDetection`, which keeps both cmdlines.
 
 The rule that follows: **keep shell commands to a line or two, and put anything
 multi-step in a script file.** Orchestration belongs in Node (`.mjs`) rather

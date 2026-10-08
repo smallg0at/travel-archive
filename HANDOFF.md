@@ -35,10 +35,13 @@ npm run desktop          # Electron shell: serves the app, starts the job server
 Or, without the shell: `npm run preview --workspace app -- --port 4173` and
 `node pipeline/dist/serve.js` from `pipeline/`.
 
-Node is installed via **fnm**, so every shell needs
-`fnm env --use-on-cd | Out-String | Invoke-Expression` before `node` or `npm`
-resolve. This is why the desktop shell spawns the job server through Electron's
-own Node rather than `node` — a GUI-launched app has run no shell profile.
+Node is installed via **fnm**, so a shell needs node put on `PATH` before `node`
+or `npm` resolve — but **never as the head of a long inline command**:
+`fnm env … | Out-String | Invoke-Expression` followed by a multi-step script is
+what Windows Defender matches as a Trojan and kills mid-run. Prefer node's
+absolute path (`docs/environment.md` → "The shell has no node"). This is also
+why the desktop shell spawns the job server through Electron's own Node rather
+than `node` — a GUI-launched app has run no shell profile.
 
 `npm run package` builds the installer (~90MB) into `desktop/release/`.
 
