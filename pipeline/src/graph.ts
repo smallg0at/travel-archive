@@ -155,8 +155,13 @@ async function graphFetchUrl(initialToken: string, url: string, init: RequestIni
       continue;
     }
 
-    const throttled = res.status === 429 || res.status === 503;
-    if (throttled && attempt < MAX_ATTEMPTS) {
+    // 429 is Graph's documented throttle and 503 its documented outage; 502
+    // and 504 are the gateway in front of it timing out — measured 2026-10-08
+    // as a single 504 on one large folder, which killed a scan that had
+    // already walked 106 of 144. Same answer for all four: wait, ask again.
+    const transient =
+      res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504;
+    if (transient && attempt < MAX_ATTEMPTS) {
       const after = Number(res.headers.get("Retry-After"));
       await sleep(Number.isFinite(after) && after > 0 ? after * 1000 : DEFAULT_BACKOFF_MS * attempt);
       continue;
