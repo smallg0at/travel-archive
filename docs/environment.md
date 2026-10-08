@@ -26,6 +26,32 @@ The user's PowerShell profile has the `fnm env` block as of 2026-09-25; before
 that it had only conda, so nobody's shell had node either. If a machine reports
 `npm` missing with no `-NoProfile` involved, that block is what to check.
 
+### Windows Defender flags long commands that start that way
+
+**`Trojan:Win32/ClickFix.DHT!MTB` (severity Severe) matches a long inline
+`pwsh -Command` whose body opens with `fnm env … | Out-String |
+Invoke-Expression`.** Two detections on 2026-10-08 — 01:37 (remediated
+"Removed") and 11:38 — each killed the command mid-run: the tool call comes
+back as `aborted` with no output, which reads like a hang. OpenCode's
+"move to background" does **not** release such a command; it has to be
+terminated manually. Short commands with the same prefix were never flagged —
+it is the length and the shape (a copy-paste chain with `Start-Process`,
+redirections and nested quoting) that trips it.
+
+The rule that follows: **keep shell commands to a line or two, and put anything
+multi-step in a script file.** Orchestration belongs in Node (`.mjs`) rather
+than PowerShell — start a child server, poll, collect evidence, stop it — and
+node's absolute path is what makes that possible without `fnm env` at all:
+
+```
+%APPDATA%\fnm\node-versions\<version>\installation\node.exe
+```
+
+**Roaming, not `Local`**, and the same path is what the login launcher pins.
+`fnm` itself lives under WinGet
+(`…\WinGet\Packages\Schniz.fnm_…\fnm.exe`); `fnm list` still answers when the
+version directory needs finding after an upgrade.
+
 ---
 
 ## Operations on this machine (2026-10-07)
@@ -74,6 +100,16 @@ goes through the proxy (`PROXY_AI_MODE=system`), and Android builds need
 `~/.gradle/gradle.properties` with `systemProp.https.proxy*` — a machine-local
 file, deliberately not in the repo, because Gradle's daemon ignores `-D` flags
 and a TUN interface does not capture it.
+
+**git carries the same proxy in its global config** (`http.proxy` /
+`https.proxy` = `http://localhost:10808`), so after a reboot — before the proxy
+app is up — `git push` fails with `Failed to connect … via localhost` while
+GitHub still answers directly (200 without the proxy). Push through with a
+one-shot override rather than editing their config:
+
+```powershell
+git -c http.proxy= -c https.proxy= push origin main
+```
 
 **Building the phone app.** `npm run cap:sync --workspace @travel-archive/app`,
 then `app\android\gradlew.bat assembleDebug`; APK lands in
