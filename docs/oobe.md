@@ -198,3 +198,153 @@ The throwaway-home harness from the first from-scratch run is the base
   button.
 - **P2 — polish**: create-folder helper, "run setup again" in Settings, phone
   parity if it ever needs any.
+
+---
+
+## The experience (UX)
+
+The system design above says *when*; this says *what it looks like*. Desktop
+first, per the design brief; the phone is not in scope.
+
+### Principles, taken from the product as it already is
+
+- **No ceremony.** Settings on this app are plain sectioned rows, the sign-in
+  prompt is one sentence and a button, and the server toast states a
+  consequence before an action. OOBE is a few rows in that register — not a
+  tour, not wizard pages, no progress dots, no illustrations.
+- **Show the state, not the promise.** Every row reports what was *measured*
+  ("144 个按月文件夹", "找不到这个路径"), because the whole failure this design
+  fixes was an unverified assumption.
+- **One panel, ordered by dependency.** The steps are short; hiding them
+  behind Next buttons would make a two-minute setup feel longer than it is.
+- **The primary button explains itself.** A disabled action always carries a
+  line naming what is missing, so nothing is a mystery grey.
+
+### Entry and exit
+
+| Situation (server-computed) | What the reader sees |
+|---|---|
+| never scanned **and** can write | the setup page, automatically (`#setup`) |
+| archive works, but a reason exists (folder404, server signed out) | a compact card in the `#toasts` stack — never a takeover |
+| no reasons | nothing, ever |
+| cannot write (remote reader) | nothing; the route does not exist for them |
+
+Exiting: **稍后再说** sets `skippedAt` and lands in the (empty) app, where any
+unmet reason is still visible as a card — so skipping is never losing the
+thread. **完成** clears the reasons and the page never returns. On the setup
+page the sidebar, search field and nav tools are hidden: an empty shell behind
+a setup panel reads as "broken", and there is nothing in it to navigate to
+yet.
+
+### The panel
+
+One centred column (~560px) in the app's own chrome, dark theme, same radius
+and borders as Settings:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  设置照片档案                                     稍后再说 │
+│                                                          │
+│  ● 登录档案服务器                                        │
+│    作业、缩略图与扫描都经由它，需要授权一次。            │
+│    ┌ 打开 microsoft.com/devicelink 并输入 ─────────────┐ │
+│    │  A B 1 C D 2 E F        9 分钟后过期    [取消]    │ │
+│    └───────────────────────────────────────────────────┘ │
+│                                                          │
+│  ● 照片目录                                   默认值 ·可改│
+│    图片/本机照片                                         │
+│    ✓ 存在 · 144 个按月文件夹              [更改]         │
+│                                                          │
+│  ● 语言                                                │
+│    中文（简体）· 检测自浏览器               [English]    │
+│                                                          │
+│  可选 · AI 密钥   生成摘要与图片说明时才需要 [生成设置…]  │
+│ ────────────────────────────────────────────────────────│
+│                    [ 开始首次扫描 ]                     │
+│                    需要先完成：登录                      │
+└──────────────────────────────────────────────────────────┘
+```
+
+After the click the footer becomes the scan itself — same panel, no context
+switch:
+
+```
+│  正在扫描 …                                              │
+│  117/144 · 2024-09 — 38 张          [后台运行]           │
+│  ───────────────────────────────────────────────────────│
+│  完成：32,750 张照片 · 124 个月   [打开档案]             │
+```
+
+### Row states and copy
+
+Strings ship in both languages with the rest (the i18n cross-check keeps them
+honest). Register: short, declarative, consequence first — the same voice as
+"登录后即可加载照片。"
+
+| Row | State | Copy (zh / en) | Action |
+|---|---|---|---|
+| sign-in | idle | 登录档案服务器，作业与扫描才能运行 / Sign in the archive server so jobs and scanning can run | 使用 Microsoft 账户登录 |
+| | pending | 打开 *devicelink* 并输入下列代码 · X 分钟后过期 / Open *devicelink* and enter this code · expires in X min | 复制代码 · 打开链接 · 取消 |
+| | done | ✓ 已登录 / ✓ Signed in | — |
+| | failed | 授权没有完成 / The sign-in did not finish | 重试 |
+| folder | pre-signin | 登录后检查这个路径 / Checked after sign-in | — |
+| | checking | 检查中… / Checking… | — |
+| | ok | 存在 · N 个按月文件夹 / Exists · N month folders | 更改 |
+| | not-found | 找不到这个路径——必须是 OneDrive 里的文件夹 / Not found — it must be a folder in OneDrive | 更改 → 输入 + 检查 |
+| | no-months | 存在，但没有 yyyy-mm 子文件夹，扫描会找不到照片 / Present, but no yyyy-mm subfolders — a scan would find nothing | 更改 |
+| | offline | 现在无法检查（网络不通）；没有记为无效 / Can't check right now (offline); not recorded as invalid | 重试 |
+| language | any | 中文（简体）· 检测自浏览器 / Simplified Chinese · detected from the browser | 中文 / English，**立即生效** |
+| key | any | 可选。生成摘要与图片说明时才需要。/ Optional. Only needed to generate summaries and captions. | 打开生成设置 |
+
+**The device-code moment** is the only intricate part, and it is the reason
+P0 exists: the code renders in the panel (large, mono, copyable), the app
+polls `signedIn` and flips the row by itself, and 取消 only stops *watching* —
+the server's pending attempt is replaced by the next one, so nothing needs to
+be cancelled across a process boundary. Expiry shows as the failed state with
+重试.
+
+**The scan moment** streams the job's own progress lines into the footer (the
+SSE endpoint already exists), so the panel never invents numbers it does not
+have. 后台运行 sends them into the app while it continues — the Activity page
+already hosts running jobs — and 打开档案 appears on completion with the two
+numbers every fresh archive actually wants: photos and months.
+
+### The card variant (everything that is not a first run)
+
+Same voice, one line plus an action, stacked with the toasts that already
+exist (so a signed-out server *and* a missing folder read as two cards, not a
+dialog):
+
+- 照片目录 *图片/本机照片* 找不到——新照片不会被扫描。 [打开设置向导]
+- 档案服务器未登录——扫描与生成不可用。 [登录]
+- 档案还没扫描过。 [开始设置]
+
+### Interaction details
+
+- **Esc** = 稍后再说; **Enter** in the folder field = 检查; focus lands on the
+  first blocking row's action.
+- The primary button is never a bare grey: the line under it names the
+  missing step, and it names **one** thing at a time (the first unmet).
+- Motion matches the existing toasts (0.18s, disabled under
+  `prefers-reduced-motion`).
+- Language switches in place — no reload, no flash (the mechanism that
+  already removed the second load).
+- Failure keeps the panel open with the job's short error and 重试; the full
+  log stays where job logs live. Nothing in this flow requires reading a file
+  outside the app — that is the whole point of it.
+
+### Deliberately not done
+
+No multi-page wizard, no progress dots, no welcome illustration, no tour of
+features, no phone screens, no native dialogs, and no second question about a
+folder that already probes green. The archive itself is the reward screen; the
+setup's job is to be finished and forgotten.
+
+### UX decisions (recommendations)
+
+1. **Single panel over a wizard** — the rows are the progress indicator.
+2. **Scan progress in the panel** with 后台运行 as the escape, rather than
+   throwing the user to the Activity page mid-story.
+3. **Keep the language row** even though detection already chose a value:
+   it is the only visible personalisation available before there is content,
+   and switching it now costs one control (and demonstrates the app works).
