@@ -1,12 +1,15 @@
 # First-run setup (OOBE)
 
-**Status: proposed design, 2026-10-08 (v2 — reviewed the same day).** Tracked
-as a draft in the project (`GUI OOBE: first-run sign-in and setup`). v2 is a
-four-step wizard — language + sign-in, folder, AI, then a full-screen first
-scan — replacing the single panel of v1, on the ruling that sign-in cannot be
-a co-equal row: without Microsoft there is no data to show. Nothing here is
-implemented yet; the measurements below are, and they are what the design
-answers.
+**Status: proposed design, 2026-10-08 (v2 — reviewed and ruled the same
+day).** Tracked as a draft in the project (`GUI OOBE: first-run sign-in and
+setup`). v2 is a four-step wizard — language + sign-in, folder, AI, then a
+full-screen first scan — replacing the single panel of v1, on the ruling that
+sign-in cannot be a co-equal row: without Microsoft there is no data to show.
+The follow-up rulings: **no value is trusted from a bake** (the folder is the
+user's to confirm, because the shipped default matches neither this account
+nor OneDrive's own photo-sync layout) and the **folder picker is in**.
+Nothing here is implemented yet; the measurements below are, and they are what
+the design answers.
 
 ## Why this exists — five measured facts
 
@@ -68,9 +71,12 @@ All five come from the first deliberate from-scratch run of this archive
   configuration authority.
 - Moving or importing an existing archive's configuration.
 - Changing how sign-in works underneath: both existing flows stay as they are.
-- Packaging: the baked settings stay exactly as they are — OOBE *validates*
-  them rather than trusting them, because an installer built on this machine
-  bakes this machine's personal paths.
+- Packaging, beyond the one change the rulings require:
+  `ONEDRIVE_PHOTOS_FOLDER` leaves the bake list when the wizard ships
+  (Decisions 4). The rest of the baked settings stay — `AZURE_CLIENT_ID`
+  especially, because without it a packaged server dies at import (measured),
+  and the metadata folder names where the archive lives rather than what it
+  scans.
 
 ## The flow — four steps, and their order is the argument
 
@@ -91,10 +97,16 @@ is the *result* of the three answers, not a step among them.
    The device code renders here (P0, because today it only reaches
    `serve.log`).
 
-2. **Photos folder.** Displayed and *probed* — does the path resolve, does it
-   hold `yyyy-mm` children — edited only when the probe fails (see the open
-   question on baking below). Success stamps `photosFolderValidatedAt`, which
-   is what releases the scan gate.
+2. **Photos folder — always confirmed, never trusted.** The configured value
+   (default or `.env`) is shown as a *suggestion* with its source labelled,
+   and the probe answers before anything can proceed: does the path resolve,
+   does it hold `yyyy-mm` children. **继续 — enabled only on a green probe —
+   is the confirmation**, because the path is this page's entire subject;
+   leaving the page is agreeing to it. Nothing about this path is baked into
+   the installer (Decisions 4): the bundled value was this machine's own, and
+   the default matches neither this account nor OneDrive's photo-sync layout,
+   so a path nobody confirmed is a path nobody should scan. Success stamps
+   `photosFolderValidatedAt`, which is what releases the scan gate.
 
 3. **AI provider and key.** The provider list and key field the Settings form
    already has, with its set-or-not semantics. Skippable *as a step* (a
@@ -138,7 +150,7 @@ cheap now, because page 1 is language + a sign-in that remembers itself.
 
 - Folder writes stay on `POST /config`; no second path to the same value.
   Folder **reads** need one new endpoint (a bounded listing for the picker —
-  see the open question below), guarded like every other non-GET.
+  Decisions 5), guarded like every other non-GET.
 - **Scan gate** (`scanIfDue`): skip silently when the folder is unverified or
   404, log one line, start nothing. This is item "Do not auto-scan a fresh
   archive before the photo folder is configured" and it holds whether or not
@@ -173,30 +185,32 @@ cheap now, because page 1 is language + a sign-in that remembers itself.
    the original "不然扫个寂寞" requirement, now expressed as a page rather
    than a button.
 
-**Still open — recommendations below, need a yes:**
+4. **No value is trusted from a bake.** The photos folder is the user's to
+   confirm: `bundle-pipeline.mjs` drops `ONEDRIVE_PHOTOS_FOLDER` from its bake
+   list (this machine's own path is not anybody else's, and the shipped
+   default matches neither this account nor OneDrive's photo-sync layout —
+   a path nobody confirmed is a path nobody should scan). Page 2 therefore
+   always appears, always probes, and moving past it is the confirmation.
+   *Kept baked, unless ruled otherwise:* `AZURE_CLIENT_ID` (measured
+   essential — without it the server dies at import) and
+   `ONEDRIVE_METADATA_FOLDER`, which names where the archive *lives* rather
+   than what it scans: a wrong value does not 404 (PUT creates parents) but
+   would strand a first run in an empty namespace, which is worse than
+   asking about the folder that actually has a wrong answer.
 
-4. **The folder: baked and hidden, or a real step?** The installer already
-   bakes `ONEDRIVE_PHOTOS_FOLDER` (this machine's personal paths — the bundle
-   script's own comment calls the `.exe` personal as a result), and `env.ts`
-   has a default for a checkout. **Recommendation: bake *and* validate, and
-   only surface the input when the probe fails.** A green probe shows a
-   read-only line ("图片/本机照片 · 144 个按月文件夹") and page 2 becomes a
-   confirmation; a red probe turns the same page into the editor. This keeps
-   the folder out of the way when it is right — which is the question being
-   asked — without ever stranding a machine where the baked path is someone
-   else's. Hiding it *unconditionally* would trade one silent failure (today's
-   404 loop) for another.
+5. **Picker: yes — minimal.** A breadcrumb + children list (one bounded
+   listing endpoint, list-and-descend, no drag, no create in v1) with the
+   text field as the fallback for a path the listing cannot reach. The paths
+   here are Chinese: typing `图片/本机照片` by hand is the failure mode, not
+   the concept. One endpoint and one dialog — small next to what page 4 has
+   to do.
 
-5. **Interactive picker, yes — minimal.** The paths here are Chinese; typing
-   `图片/本机照片` by hand is the failure mode, not the concept. A
-   breadcrumb + children list (one bounded listing endpoint, list-and-descend,
-   no drag, no create in v1) with the text field as the fallback for a path
-   that is not yet reachable. Roughly one endpoint and one dialog — small
-   next to what page 4 has to do.
+**Open:**
 
 6. **The AI step skips within the wizard** (secondary action, keeps the user
    in the flow): scanning costs nothing, and an API key is not something a
    photo archive should demand before it will look at its own photos.
+   Recommended; a one-word yes and it is ruled too.
 
 ## Privacy
 
@@ -219,8 +233,10 @@ The throwaway-home harness from the first from-scratch run is the base
 - checkout with no `.env` → still the P0 companion fix (surface the child's
   failure), because OOBE cannot run without a server;
 - packaged first run → the wizard appears *before* the 60s scan check; page 1
-  shows the device code; nothing scans until page 2's probe passes **and**
-  page 4 is started;
+  shows the device code; the installer carries **no** folder path, so page 2
+  pre-fills whatever is configured (often the default, usually red) and must
+  be confirmed; nothing scans until that probe is green **and** page 4 is
+  started;
 - close the wizard at page 2 and reopen → back at page 1 with sign-in already
   held (no server cursor, by design);
 - wrong folder → one log line, no job, no 404 loop; picking the right path
@@ -235,8 +251,11 @@ The throwaway-home harness from the first from-scratch run is the base
   surface the device code; the scan gate; surface a job server that exited
   (pairs with the manual-start item for the desktop).
 - **P1 — the wizard**: `/oobe`, `#setup`'s four pages, the folder step
-  (probe, and the picker if it is ruled in), the AI step, and the full-screen
-  first scan.
+  (probe + picker + confirmation), the AI step, and the full-screen first
+  scan. **The bake drop (`ONEDRIVE_PHOTOS_FOLDER` out of `bundle-pipeline.mjs`)
+  ships here, never alone**: a packaged build with no folder baked *and* no
+  scan gate is exactly the 404 loop that was measured — gate first, bake out
+  with the page that replaces it.
 - **P2 — polish**: create-folder helper, "run setup again" in Settings, phone
   parity if it ever needs any.
 
@@ -296,21 +315,26 @@ not record a skip — the wizard reopens on next launch — it exists so a machi
 with no network is not stuck in a page it cannot complete. If the review wants
 it gone, the cost is: offline users cannot leave page 1.
 
-### Page 2 — 照片目录
+### Page 2 — 照片目录（确认，不信任）
 
-The ruling is *bake and validate; surface only what fails* (Decisions 4–5), so
-this page has two faces:
+**Nothing is baked in** (Decisions 4): the installer carries no folder path,
+because the one it used to carry was this machine's own and the default
+matches neither this account nor OneDrive's photo-sync settings. So this page
+always appears, always probes, and **the 继续 button — green probe only — is
+the confirmation**: the path is the page's whole subject, so leaving it is
+agreeing to it.
 
 ```
   照片目录                                            2 / 4
-  图片/本机照片 · 随安装包提供
-  ✓ 存在 · 144 个按月文件夹                 [更改]      ← green: confirmation only
+  [ 图片/本机照片              ] 来源：配置文件  [浏览…]
+  ✓ 存在 · 144 个按月文件夹          [检查]              ← probe must be green
+  以 yyyy-mm 分月的文件夹才算数。
 
   — or, when the probe fails —
   照片目录
-  ✗ 找不到 图片/本机照片
-  [ 图片/本机照片            ]  [浏览…]  [检查]          ← red: the page becomes the editor
-  必须是 OneDrive 里的文件夹，且以 yyyy-mm 分月。         (field + picker + re-probe)
+  ✗ 找不到 Pictures/Travel（来源：默认值）
+  [ Pictures/Travel              ]  [浏览…]  [检查]      ← the page becomes the editor
+  必须是 OneDrive 里的文件夹，且以 yyyy-mm 分月。
 ```
 
 **The picker** (recommended: yes, minimal): a list of the current path's
