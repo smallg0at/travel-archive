@@ -191,12 +191,18 @@ cheap now, because page 1 is language + a sign-in that remembers itself.
    default matches neither this account nor OneDrive's photo-sync layout —
    a path nobody confirmed is a path nobody should scan). Page 2 therefore
    always appears, always probes, and moving past it is the confirmation.
-   *Kept baked, unless ruled otherwise:* `AZURE_CLIENT_ID` (measured
-   essential — without it the server dies at import) and
-   `ONEDRIVE_METADATA_FOLDER`, which names where the archive *lives* rather
-   than what it scans: a wrong value does not 404 (PUT creates parents) but
-   would strand a first run in an empty namespace, which is worse than
-   asking about the folder that actually has a wrong answer.
+   *Kept baked, now ruled:* `AZURE_CLIENT_ID` (measured essential — without
+   it the server dies at import) and `ONEDRIVE_METADATA_FOLDER`, which **must
+   carry a value in every build** — the builder's, else a literal fallback —
+   because it names where the archive *lives* rather than what it scans: a
+   wrong value does not 404 (PUT creates parents) but strands a first run in
+   an empty namespace. The ruling's reason is on record: the user is not
+   trusted with it, so a default must already be present and the wizard never
+   asks. Whether it stays editable through the config API is indifferent —
+   nothing requires the user to form an opinion. (Measured today: the value
+   bakes whenever `pipeline/.env` exists — 7 settings on this machine's build
+   — and without a `.env` nothing bakes and `env.ts`'s default takes over;
+   closing that gap is the P1 guarantee below.)
 
 5. **Picker: yes — minimal.** A breadcrumb + children list (one bounded
    listing endpoint, list-and-descend, no drag, no create in v1) with the
@@ -205,12 +211,12 @@ cheap now, because page 1 is language + a sign-in that remembers itself.
    the concept. One endpoint and one dialog — small next to what page 4 has
    to do.
 
-**Open:**
+6. **The AI step skips within the wizard** — ruled: it does. A secondary
+   action on the same page (never an exit from the flow), because scanning
+   costs nothing and an API key is not something a photo archive should
+   demand before it will look at its own photos.
 
-6. **The AI step skips within the wizard** (secondary action, keeps the user
-   in the flow): scanning costs nothing, and an API key is not something a
-   photo archive should demand before it will look at its own photos.
-   Recommended; a one-word yes and it is ruled too.
+**No open decisions remain.**
 
 ## Privacy
 
@@ -255,7 +261,9 @@ The throwaway-home harness from the first from-scratch run is the base
   scan. **The bake drop (`ONEDRIVE_PHOTOS_FOLDER` out of `bundle-pipeline.mjs`)
   ships here, never alone**: a packaged build with no folder baked *and* no
   scan gate is exactly the 404 loop that was measured — gate first, bake out
-  with the page that replaces it.
+  with the page that replaces it. Also here: the metadata bake **guarantees a
+  value** (builder's `.env`, else a literal fallback) so no build ships
+  without one — see Decisions 4.
 - **P2 — polish**: create-folder helper, "run setup again" in Settings, phone
   parity if it ever needs any.
 
