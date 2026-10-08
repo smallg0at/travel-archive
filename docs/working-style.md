@@ -126,3 +126,23 @@ same content written in X" produced translationese in both providers — Gemini'
 stored narratives read "低地国家以其充满活力的建筑奇观……迎接了我". And on the
 OpenAI-compatible path the `_alt` fields must be listed in the JSON shape, or the
 model is told about fields it cannot see (see the regressions above).
+
+**Wrap a hostile interface once; do not re-derive it every session.** The
+open-item list is a GitHub Project, and its raw surface punishes anything that
+has to reason about it: no `item-read` command, opaque option ids, a listing that
+is eventually consistent and disagrees with itself between query shapes, and an
+exit code that does not distinguish "wrote" from "did nothing". A session spent
+its reasoning budget working out how to *verify* that one field had been set —
+which is the signature of the interface, not of the model. The answer is
+`scripts/todo.mjs`: one wrap around `gh api graphql` that adds a read path, a
+read-back after every write, distinct exits (`3` = written but not visible yet),
+and failures that name the valid options.
+
+The rule underneath is the same one as the `localThumb` bug and
+`ctx_expand(message=2000000)`: **an interface that answers plausibly when it
+should have failed is what breaks an agent** — a person stops and asks, an agent
+builds on it. Agent-friendly means three things: discoverable (the error says
+what to do instead), verifiable (one read confirms one write), and loud (a miss
+says it missed). The job server already is one — `/access` reports `canWrite`,
+and a refusal is a 403 *with a sentence*. When you meet an interface that is not,
+wrap it once and document the wrapper.
