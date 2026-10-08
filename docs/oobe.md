@@ -14,12 +14,14 @@ Verified end to end in a browser against a throwaway archive: entry before
 the archive loads (no session, no index, no sign-in wall — the point of
 drawing it pre-load), Chinese copy surviving a reload through the server-held
 preference, a real device code in the page, the probe answering against this
-machine's actual folder, the provider list, and the first scan streaming its
-progress. Known looseness, on purpose: the auto-scan timer and page 4's
-button can race for the first scan (one job runs; the loser gets the server's
-honest "A job is already running"), and the button that starts the server
-from Settings is typechecked but not clicked — it lives in the Electron
-window, the one surface an agent here cannot operate.
+machine's actual folder, the provider list, the first scan streaming its
+progress — including a real Graph 504 mid-listing rendering error + retry,
+and the retry then carrying all 144 folders home — and the handover: completion
+numbers (32,767 photos · 124 months), the wizard gone, and the normal app
+drawing a full 124-month sidebar from the index the scan had just built.
+Known looseness, on purpose: the Settings button that starts the server is
+typechecked but not clicked — it lives in the Electron window, the one
+surface an agent here cannot operate.
 
 ## Why this exists — five measured facts
 
