@@ -12,8 +12,8 @@
  * simply does not exist, which reads as "nothing confirmed" — the same
  * absent-is-legitimate contract `syncStore` keeps.
  */
-import { readFile } from "node:fs/promises";
-import { dataFile } from "./paths.js";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dataDir, dataFile } from "./paths.js";
 
 const FILE = "oobe.json";
 
@@ -34,4 +34,13 @@ export async function readOobe(): Promise<OobeFile> {
     cached = {};
   }
   return cached;
+}
+
+/** Records a confirmation. Written once per setup run; same shape as `writeSync`. */
+export async function writeOobe(patch: Partial<OobeFile>): Promise<OobeFile> {
+  const next = { ...(await readOobe()), ...patch };
+  cached = next;
+  await mkdir(dataDir(), { recursive: true });
+  await writeFile(dataFile(FILE), `${JSON.stringify(next, null, 2)}\n`, "utf-8");
+  return next;
 }

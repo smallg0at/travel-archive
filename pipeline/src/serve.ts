@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
-import { readOobe } from "./oobeStore.js";
+import { readOobe, writeOobe } from "./oobeStore.js";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -10,7 +10,7 @@ import { isAbsolute } from "node:path";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { originAllowed } from "./originCheck.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError, listFolderFileNames } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError, listChildFolderNames, listFolderFileNames } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
@@ -23,7 +23,7 @@ import {
 import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { readPrefs, writePrefs } from "./prefsStore.js";
 import { env } from "./env.js";
-import { getCachedAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
+import { getCachedAccessToken, getAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
 import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
 import { monitorEventLoopDelay } from "node:perf_hooks";
@@ -664,7 +664,85 @@ const routes: [RegExp, string, Handler][] = [
         signedIn: await hasCachedAccount(),
         deviceCode: getPendingDeviceCode(),
         photosFolderValidatedAt: (await readOobe()).photosFolderValidatedAt ?? null,
+        neverScanned: !(await readSync()).lastScanAt,
+        photosFolder: env.photosFolder,
       });
+    },
+  ],
+
+  /**
+   * Starts the device-code sign-in, if one is not already waiting.
+   *
+   * The flow blocks until a human enters the code, so the answer to this
+   * request is only "the prompt is (re)starting": the page reads the actual
+   * code from `GET /oobe`, which is loopback-only for the same reason this
+   * one is.
+   */
+  [
+    /^\/oobe\/signin$/,
+    "POST",
+    async (req, res) => {
+      if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      if (getPendingDeviceCode()) return json(res, 202, { pending: true });
+      if (await hasCachedAccount()) return json(res, 200, { signedIn: true });
+      void getAccessToken()
+        .then(() => console.log("  setup: sign-in completed"))
+        .catch((err) => console.warn(`  setup sign-in failed: ${(err as Error).message}`));
+      return json(res, 202, { pending: true });
+    },
+  ],
+
+  /**
+   * Probes the configured photo folder; with `confirm`, stamps it as agreed.
+   *
+   * A missing folder answers `not-found` with **200** — it is an answer, not a
+   * transport failure, and the page has to be able to render it. Confirmation
+   * writes `photosFolderValidatedAt`, which is what releases the first scan;
+   * the path itself is never written here (it travels through `POST /config`,
+   * so there stays one way to change a setting).
+   */
+  [
+    /^\/oobe\/folder$/,
+    "POST",
+    async (req, res) => {
+      if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      const body = await readJsonBody<{ confirm?: unknown }>(req);
+      const token = await getCachedAccessToken();
+      if (!token) return json(res, 200, { state: "no-token", path: env.photosFolder });
+      try {
+        const names = await listFolderFileNames(token, env.photosFolder);
+        const months = names.filter((n) => /^\d{4}-\d{2}$/.test(n) || /^\d{4}$/.test(n)).length;
+        if (body.confirm === true) {
+          await writeOobe({ photosFolderValidatedAt: new Date().toISOString() });
+        }
+        return json(res, 200, { state: "ok", path: env.photosFolder, count: names.length, months });
+      } catch (err) {
+        if (err instanceof GraphError && err.status === 404) {
+          return json(res, 200, { state: "not-found", path: env.photosFolder });
+        }
+        return json(res, 502, { error: (err as Error).message });
+      }
+    },
+  ],
+
+  /** One level of sub-folders — the setup picker's list, folders only. */
+  [
+    /^\/oobe\/folders$/,
+    "GET",
+    async (req, res) => {
+      if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      const path = new URL(req.url ?? "/", "http://localhost").searchParams.get("path") ?? "";
+      const token = await getCachedAccessToken();
+      if (!token) return json(res, 200, { state: "no-token", path, folders: [] });
+      try {
+        const folders = await listChildFolderNames(token, path);
+        return json(res, 200, { path, folders: folders.slice(0, 500), truncated: folders.length > 500 });
+      } catch (err) {
+        if (err instanceof GraphError && err.status === 404) {
+          return json(res, 200, { state: "not-found", path, folders: [] });
+        }
+        return json(res, 502, { error: (err as Error).message });
+      }
     },
   ],
   [

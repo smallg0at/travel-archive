@@ -168,8 +168,12 @@ async function graphFetchUrl(initialToken: string, url: string, init: RequestIni
 /** Drains every page of a /children listing, following @odata.nextLink. */
 async function listChildren(token: string, folderPath: string, select: string): Promise<DriveItem[]> {
   const items: DriveItem[] = [];
-  let nextUrl: string | undefined =
-    `${GRAPH_BASE}/me/drive/root:/${encodeURI(folderPath)}:/children?$top=200&$select=${select}`;
+  // The root has no `root:/…:` addressing — an empty path means "the drive's
+  // root", which is where the setup picker starts when the configured folder
+  // is wrong or unknown.
+  let nextUrl: string | undefined = folderPath
+    ? `${GRAPH_BASE}/me/drive/root:/${encodeURI(folderPath)}:/children?$top=200&$select=${select}`
+    : `${GRAPH_BASE}/me/drive/root/children?$top=200&$select=${select}`;
 
   while (nextUrl) {
     const res: Response = await graphFetchUrl(token, nextUrl);
@@ -188,6 +192,21 @@ const NESTED_MONTH_FOLDER = /^\d{1,2}$/;
 export async function listFolderFileNames(token: string, folderPath: string): Promise<string[]> {
   const items = await listChildren(token, folderPath, "name");
   return items.map((item) => item.name).filter((name): name is string => !!name);
+}
+
+/**
+ * The **folder** names directly under a path — what the setup picker walks.
+ *
+ * Separate from the listing above on purpose: a picker that offers files as
+ * destinations is a picker that produces a wrong path, and the setup flow has
+ * enough ways to end up with one already.
+ */
+export async function listChildFolderNames(token: string, folderPath: string): Promise<string[]> {
+  const items = await listChildren(token, folderPath, "name,folder");
+  return items
+    .filter((item) => item.folder)
+    .map((item) => item.name)
+    .filter((name): name is string => !!name);
 }
 
 export interface PhotoFolder {

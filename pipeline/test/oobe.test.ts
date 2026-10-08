@@ -34,4 +34,15 @@ describe("oobe store", () => {
     // overwrites state it does not own.
     await expect(readFile(path, "utf-8")).resolves.toBe("{ not json");
   });
+
+  it("writes a confirmation and reads it back across reloads", async () => {
+    const { vi } = await import("vitest");
+    vi.resetModules();
+    const fresh = await import("../src/oobeStore.js");
+    await fresh.writeOobe({ photosFolderValidatedAt: "2026-10-08T00:00:00.000Z" });
+
+    vi.resetModules(); // the next reader is a new module, as a server restart would be
+    const again = await import("../src/oobeStore.js");
+    await expect(again.readOobe()).resolves.toEqual({ photosFolderValidatedAt: "2026-10-08T00:00:00.000Z" });
+  });
 });
