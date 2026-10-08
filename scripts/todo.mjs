@@ -100,7 +100,7 @@ const ITEM = `
   id
   content {
     __typename
-    ... on DraftIssue { title body }
+    ... on DraftIssue { id title body }
     ... on Issue { title }
     ... on PullRequest { title }
   }
@@ -124,6 +124,9 @@ function shape(node) {
   };
   return {
     id: node.id,
+    // The DraftIssue node has its own id, and it is the one
+    // `updateProjectV2DraftIssue` wants. Only a draft has one.
+    draftId: node.content?.__typename === "DraftIssue" ? node.content.id ?? null : null,
     title: node.content?.title ?? "(no title)",
     body: node.content?.body ?? "",
     status: pick("Status"),
@@ -189,6 +192,26 @@ function setOption(itemId, fieldId, optionId) {
   );
 }
 
+/**
+ * Rewrite a draft item's body.
+ *
+ * The mutation takes the *DraftIssue* node's id, not the ProjectV2Item's — the
+ * two are different nodes and passing the item id is rejected. The payload
+ * returns `draftIssue`, not `projectItem` (asking for that field is rejected),
+ * and nothing in it proves the write: the read-back does that.
+ *
+ * The input goes over as a variable object so only the keys present are sent —
+ * title and body are both optional, and a field left out means "leave it alone".
+ */
+function updateDraftBody(draftIssueId, fields) {
+  graphql(
+    `mutation($input: UpdateProjectV2DraftIssueInput!) {
+       updateProjectV2DraftIssue(input: $input) { draftIssue { id } }
+     }`,
+    { input: { draftIssueId, ...fields } },
+  );
+}
+
 function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
@@ -201,6 +224,10 @@ function sleepSync(ms) {
  * be lag. Retry briefly; if it still disagrees, say exactly that and exit 3 —
  * "written, not yet visible" is a different fact from "failed", and conflating
  * them is how an agent ends up writing the same thing twice.
+ *
+ * A check value is normally the exact expected value, and may also be a
+ * predicate — for anything where the bytes are not the contract, such as a
+ * body GitHub may normalise whitespace in.
  */
 function readVerified(itemId, checks) {
   let last = null;
@@ -211,9 +238,21 @@ function readVerified(itemId, checks) {
       last = `${itemId} reads back as nothing at all`;
       continue;
     }
-    const wrong = Object.entries(checks).filter(([key, want]) => (item[key] ?? null) !== want);
+    const wrong = Object.entries(checks).filter(([key, want]) => {
+      const actual = item[key] ?? null;
+      return typeof want === "function" ? !want(actual) : actual !== want;
+    });
     if (!wrong.length) return item;
-    last = wrong.map(([key, want]) => `${key}="${item[key] ?? "(unset)"}" (wanted "${want}")`).join(", ");
+    last = wrong
+      .map(([key, want]) => {
+        const actual = item[key] ?? null;
+        if (typeof want === "function") {
+          const shown = actual === null ? "(unset)" : `${JSON.stringify(String(actual).slice(0, 50))} (${String(actual).length} chars)`;
+          return `${key}=${shown} (failed the check)`;
+        }
+        return `${key}="${actual ?? "(unset)"}" (wanted "${want}")`;
+      })
+      .join(", ");
   }
   console.error(`WROTE, UNVERIFIED: the mutation was accepted but the read back still shows ${last}.`);
   console.error("GitHub's project reads lag by minutes — do not repeat the write.");
@@ -230,9 +269,15 @@ function usage(stream = console.log, code = 0) {
   show <item-id> [--json]
   add --title "..." [--area <area>] [--body "..." | --body-file <path>]
   set-area <item-id> <area>
+  set-body <item-id> [--body "..." | --body-file <path>] [--append]
   close <item-id>
 
 areas: ${Object.keys(AREA.options).join(", ")}
+
+set-body replaces the item's body, or with --append keeps it and adds the new
+text after a --- rule (the way to attach a measurement to an existing entry).
+GitHub may normalise whitespace, so the read-back checks the content, not the
+exact bytes.
 
 exit: 0 verified · 1 failed · 2 usage · 3 written but not visible yet`);
   process.exit(code);
@@ -356,6 +401,42 @@ switch (verb) {
     setOption(id, AREA.field, AREA.options[area]);
     const item = readVerified(id, { area });
     console.log(`${item.id}  area=${item.area}  ${item.title}`);
+    break;
+  }
+
+  case "set-body": {
+    const id = rest[0];
+    if (!id) usage(console.error, 2);
+    let incoming = "";
+    if (typeof flags["body-file"] === "string") {
+      try {
+        incoming = readFileSync(flags["body-file"], "utf8");
+      } catch (err) {
+        fail(`could not read --body-file ${flags["body-file"]}: ${err.message}`);
+      }
+    } else if (typeof flags.body === "string") {
+      incoming = flags.body;
+    } else {
+      usage(console.error, 2);
+    }
+    const before = readItem(id);
+    if (!before) fail(`no project item with id ${id}`);
+    if (!before.draftId) {
+      fail(
+        `${id} is not a draft item: its title and body live on the GitHub content (an issue or PR), ` +
+          `and updateProjectV2DraftIssue only edits drafts.`,
+      );
+    }
+    const next = flags.append
+      ? `${before.body.trimEnd()}\n\n---\n\n${incoming.trim()}\n`
+      : incoming;
+    updateDraftBody(before.draftId, { body: next });
+    const item = readVerified(id, {
+      body: (actual) => String(actual ?? "").trim() === next.trim(),
+    });
+    console.log(
+      `body ${flags.append ? "appended to" : "replaced on"} ${item.id}  (${next.length} chars)  ${item.title}`,
+    );
     break;
   }
 
