@@ -55,6 +55,24 @@ function fromEnv(name: string): string | undefined {
   return process.env[name] || baked[name] || undefined;
 }
 
+/**
+ * The default analyze concurrency — which depends on where the model runs.
+ *
+ * 4 was measured for cloud captioning: ~37 photos/min against gemini-3.7-flash,
+ * far under any paid-tier request limit, with OneDrive's throttling the binding
+ * constraint rather than the model. A local vision model cannot take 4: at 4
+ * concurrent streams LM Studio on the 8 GiB card logged "Channel Error" and
+ * lost 104 of 359 calls, and at 2 it ran 199 of 200.
+ *
+ * So the default follows the provider's `scope`, which is the field that marks
+ * a service as running on this machine in providers/index.ts. That module is
+ * not imported here on purpose: it already imports this one.
+ */
+function defaultAnalyzeConcurrency(): number {
+  const id = fromEnv("AI_PROVIDER") ?? "deepseek";
+  return id === "ollama" || id === "lmstudio" ? 2 : 4;
+}
+
 function required(name: string, fallback?: string): string {
   const value = fromEnv(name) ?? fallback;
   if (!value) {
@@ -105,12 +123,12 @@ function readEnv() {
     /**
      * How many photos `analyze` captions at once.
      *
-     * 4 was measured at ~37 photos/min against gemini-3.7-flash, which is far
-     * under any paid-tier request limit — the binding constraint is OneDrive's
-     * throttling, not the model. Raise it if Graph tolerates it; the backoff in
-     * graph.ts is what makes that safe to try.
+     * Defaults by where the model runs — 4 in the cloud, 2 on this machine; see
+     * `defaultAnalyzeConcurrency` above for both measurements. Setting
+     * ANALYZE_CONCURRENCY overrides it outright, and the backoff in graph.ts is
+     * what makes a higher cloud value safe to try.
      */
-    analyzeConcurrency: Math.max(1, Number(fromEnv("ANALYZE_CONCURRENCY") ?? 4)),
+    analyzeConcurrency: Math.max(1, Number(fromEnv("ANALYZE_CONCURRENCY") ?? defaultAnalyzeConcurrency())),
 
     // Which providers/*.ts implementation of AiProvider to use. Any id from
     // providers/index.ts's PRESETS; a new OpenAI-compatible service is a table
