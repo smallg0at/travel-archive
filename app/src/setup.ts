@@ -92,9 +92,33 @@ function fresh(): State {
 }
 
 /**
- * Whether this machine is looking at a fresh archive.
+ * Where the wizard was **in this tab**.
  *
- * Server-computed (`neverScanned`), gated on write capability — a remote
+ * `neverScanned` alone is not enough: the folder stamp (what releases the
+ * first scan) used to gate this function too, so pressing Continue on page 2
+ * and reloading dropped the reader into the app with no way back — and the
+ * auto scan would quietly finish the wizard behind them. A step this tab
+ * recorded means "still in progress" and keeps the wizard alive across a
+ * refresh, even if the background scan completed while it was open; the
+ * key dies with the tab, so a fresh visit later sees the normal app.
+ */
+const STEP_KEY = "setup.step";
+const resumedStep = (): 1 | 2 | 3 | 4 | null => {
+  const n = Number(sessionStorage.getItem(STEP_KEY));
+  return n >= 1 && n <= 4 ? (n as 1 | 2 | 3 | 4) : null;
+};
+
+/** Move pages, leaving a trail this tab's refresh can follow. */
+const goto = (step: 1 | 2 | 3 | 4): void => {
+  state.step = step;
+  sessionStorage.setItem(STEP_KEY, String(step));
+};
+
+/**
+ * Whether this machine is still owed the wizard.
+ *
+ * A fresh archive (server-computed `neverScanned`) **or** an unfinished step
+ * in this tab (see `resumedStep`). Gated on write capability — a remote
  * reader has no route to any of this — and absent-on-error: a reader that
  * cannot ask should get the app it already knows, not a wizard nobody can
  * complete.
@@ -103,7 +127,7 @@ export async function setupNeeded(): Promise<boolean> {
   try {
     if (!canWrite()) return false;
     const s = await oobeState();
-    return !!s && s.neverScanned && !s.photosFolderValidatedAt;
+    return !!s && (s.neverScanned || resumedStep() !== null);
   } catch {
     return false;
   }
@@ -118,6 +142,7 @@ export function showSetup(opts: { onDone: () => void }): void {
   if (active) return;
   active = true;
   state = fresh();
+  state.step = resumedStep() ?? 1;
   document.body.classList.add("setup-active");
 
   const content = document.getElementById("content")!;
@@ -127,6 +152,7 @@ export function showSetup(opts: { onDone: () => void }): void {
     stopPoll();
     state.scan?.stop?.();
     active = false;
+    sessionStorage.removeItem(STEP_KEY);
     document.body.classList.remove("setup-active");
     next();
   };
@@ -255,7 +281,7 @@ export function showSetup(opts: { onDone: () => void }): void {
       if (key && provider) patch[`${provider.toUpperCase()}_API_KEY`] = key;
       if (Object.keys(patch).length) await saveConfig(patch);
       state.keyDraft = "";
-      state.step = 4;
+      goto(4);
       render();
     } catch (err) {
       state.saveError = (err as Error).message;
@@ -397,7 +423,7 @@ export function showSetup(opts: { onDone: () => void }): void {
       primary(
         ui.setup.continue,
         () => {
-          state.step = 2;
+          goto(2);
           stopPoll();
           render();
           void probeFolder(false);
@@ -505,7 +531,7 @@ export function showSetup(opts: { onDone: () => void }): void {
         card.appendChild(panel);
       }
       secondary(ui.setup.back, () => {
-        state.step = 1;
+        goto(1);
         render();
       });
       if (!folderOk()) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needFolder}</span>`));
@@ -519,7 +545,7 @@ export function showSetup(opts: { onDone: () => void }): void {
             // never recorded and the wizard came back on every launch.
             await probeFolder(true);
             if (state.probe?.state === "ok" && state.probe.path === state.photosFolder) {
-              state.step = 3;
+              goto(3);
               render();
               void loadConfig();
             } else render();
@@ -574,10 +600,24 @@ export function showSetup(opts: { onDone: () => void }): void {
       }
       card.appendChild(el(`<p class="set-note">${ui.setup.aiSkipNote}</p>`));
       if (state.saveError) card.appendChild(el(`<p class="set-note tone-warn">${state.saveError}</p>`));
-      secondary(ui.setup.skip, () => {
-        state.step = 4;
+      secondary(ui.setup.back, () => {
+        goto(2);
         render();
       });
+      // Skip only means something when there is something to skip: a typed
+      // key or an unsaved provider pick (otherwise it is exactly Continue),
+      // or a missing key (where Continue is hidden and this is the way out).
+      const dirty =
+        state.keyDraft.trim() !== "" ||
+        (state.providerDraft !== "" && state.providerDraft !== (state.config?.provider ?? ""));
+      if (keyMissing || dirty) {
+        secondary(ui.setup.skip, () => {
+          state.keyDraft = "";
+          state.providerDraft = state.config?.provider ?? "";
+          goto(4);
+          render();
+        });
+      }
       if (state.config && keyMissing) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needKey}</span>`));
       primary(
         ui.setup.continue,
@@ -614,7 +654,7 @@ export function showSetup(opts: { onDone: () => void }): void {
         card.appendChild(big);
       }
       secondary(ui.setup.back, () => {
-        state.step = 3;
+        goto(3);
         render();
       });
     }
