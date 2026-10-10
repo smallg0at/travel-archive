@@ -1837,6 +1837,11 @@ body.setup-active #signin-banner {
 }
 .setup-card h2 { font-size: 14px; margin: 4px 0 0; color: var(--text-secondary); font-weight: 600; }
 .setup-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* Page 3's provider row: select and key side by side, the key taking what
+   is left — the unstyled pair used to clip its placeholder at the edge. */
+.setup-ai { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.setup-ai .setup-input { flex: 1 1 200px; min-width: 0; }
+.setup-ai select.setup-input { flex: 0 1 auto; min-width: 140px; }
 /* Left-anchored beside the buttons; the way forward anchors right. */
 .setup-blocked { color: var(--text-secondary); font-size: 13px; margin-right: auto; }
 .setup-primary { margin-left: auto; }

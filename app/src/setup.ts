@@ -61,6 +61,8 @@ interface State {
   pick: Picking | null;
   config: ConfigStatus | null;
   keyDraft: string;
+  /** The provider picked in the wizard, held across re-renders until saved. */
+  providerDraft: string;
   saveError: string | null;
   scan: ScanState | null;
 }
@@ -83,6 +85,7 @@ function fresh(): State {
     pick: null,
     config: null,
     keyDraft: "",
+    providerDraft: "",
     saveError: null,
     scan: null,
   };
@@ -236,6 +239,7 @@ export function showSetup(opts: { onDone: () => void }): void {
   const loadConfig = async (): Promise<void> => {
     if (state.config) return;
     state.config = await getConfig();
+    if (!state.providerDraft) state.providerDraft = state.config?.provider ?? "";
     render();
   };
 
@@ -244,7 +248,7 @@ export function showSetup(opts: { onDone: () => void }): void {
     try {
       const cfg = state.config;
       const select = document.getElementById("setup-provider") as HTMLSelectElement | null;
-      const provider = select?.value || cfg?.provider;
+      const provider = select?.value || state.providerDraft || cfg?.provider;
       const patch: Record<string, string> = {};
       if (provider) patch.AI_PROVIDER = provider;
       const key = state.keyDraft.trim();
@@ -525,21 +529,32 @@ export function showSetup(opts: { onDone: () => void }): void {
       );
     } else if (state.step === 3) {
       card.appendChild(el(`<h2>${ui.setup.aiTitle}</h2>`));
+      // Why this page exists, before any control: what setting a provider
+      // buys (search, the timeline's prose and the album text all read the
+      // generated captions and summaries) and what keeps working without it.
       card.appendChild(el(`<p class="set-note">${ui.setup.aiNote}</p>`));
+      card.appendChild(el(`<p class="set-note">${ui.setup.aiSend}</p>`));
       const row = el(`<div class="setup-ai"></div>`);
       const select = el<HTMLSelectElement>(`<select id="setup-provider" class="setup-input"></select>`);
+      const selected = (): string => state.providerDraft || state.config?.provider || "";
       for (const p of state.config?.providers ?? []) {
         const opt = el<HTMLOptionElement>(`<option value="${p.id}"></option>`);
         opt.textContent = p.label;
-        if (p.id === state.config?.provider) opt.selected = true;
+        if (p.id === selected()) opt.selected = true;
         select.appendChild(opt);
       }
       select.addEventListener("change", () => {
+        // Hold the pick across the re-render the key row needs: the option
+        // mark used to point only at the saved provider, so the select
+        // snapped back the moment you chose another one.
+        state.providerDraft = select.value;
         state.keyDraft = "";
         render();
       });
       row.appendChild(select);
-      const cloud = (state.config?.providers ?? []).find((p) => p.id === select.value)?.scope !== "local";
+      const picked = (state.config?.providers ?? []).find((p) => p.id === select.value);
+      const cloud = picked?.scope !== "local";
+      const keyMissing = cloud && picked?.editable.apiKey !== false && !picked?.hasKey;
       if (cloud) {
         const key = el<HTMLInputElement>(`<input type="password" class="setup-input" autocomplete="off"></input>`);
         key.placeholder = ui.setup.aiKeyHint;
@@ -548,12 +563,27 @@ export function showSetup(opts: { onDone: () => void }): void {
         row.appendChild(key);
       }
       card.appendChild(row);
+      // Whether the choice already works — the one thing an empty box cannot
+      // tell you (the saved key lives in .env and is never shown).
+      if (cloud) {
+        card.appendChild(
+          keyMissing
+            ? el(`<p class="set-note tone-warn">${ui.setup.keyMissing}</p>`)
+            : el(`<p class="set-note">${ui.setup.keySet}</p>`),
+        );
+      }
+      card.appendChild(el(`<p class="set-note">${ui.setup.aiSkipNote}</p>`));
       if (state.saveError) card.appendChild(el(`<p class="set-note tone-warn">${state.saveError}</p>`));
       secondary(ui.setup.skip, () => {
         state.step = 4;
         render();
       });
-      primary(ui.setup.continue, () => void saveGeneration(), !state.config);
+      if (state.config && keyMissing) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needKey}</span>`));
+      primary(
+        ui.setup.continue,
+        () => void saveGeneration(),
+        !state.config || keyMissing,
+      );
     } else {
       // Page 4 — the scan owns the screen, per the design.
       card.appendChild(el(`<h2>${ui.setup.scanTitle}</h2>`));

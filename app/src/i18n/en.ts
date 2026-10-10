@@ -237,7 +237,13 @@ export const en = {
     back: "Back",
     aiTitle: "Generation (optional)",
     aiNote:
-      "Photos are sent to this service for captions and summaries. Keys are stored only in .env on this machine.",
+      "Generation captions every photo and writes the day and trip summaries — that text is what content search, the timeline and the album cards read. Without it, the archive is photos sorted by date.",
+    aiSend: "Photos are sent to the selected service (local ones never leave this machine). Keys are stored only in this machine's .env.",
+    aiSkipNote:
+      "Skipping is fine: scanning and browsing do not depend on it. Captions, summaries and content search can be added later under Settings → Generation.",
+    keySet: "✓ Key is set — leave the box blank to keep it.",
+    keyMissing: "No key for this service yet: fill the box, or skip and configure later.",
+    needKey: "Add the key, or skip",
     aiKeyHint: "API key (leave blank to keep the saved one)",
     skip: "Skip — configure later in Settings",
     scanTitle: "First scan",
