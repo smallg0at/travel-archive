@@ -93,6 +93,18 @@ function setRowValue(node: HTMLElement, value: string): void {
   node.querySelector("b")!.textContent = value;
 }
 
+/**
+ * A row whose value is a file path. Machine text, so it wears `.is-path`
+ * instead of the row's headline style: mono, muted, capped and ellipsised at
+ * the tail — the head is the part that differs between archive homes, so it
+ * is what survives truncation — with the whole line on hover for copying.
+ */
+function setPathValue(node: HTMLElement, value: string): void {
+  setRowValue(node, value);
+  node.classList.add("is-path");
+  node.querySelector("b")!.title = value;
+}
+
 function button(label: string, onClick: () => void, kind = ""): HTMLButtonElement {
   const b = el<HTMLButtonElement>(`<button type="button" class="set-btn ${kind}"></button>`);
   b.textContent = label;
@@ -1070,7 +1082,7 @@ function remoteSection(): HTMLElement {
     setRowValue(hostRow, status.host);
     setRowValue(passRow, status.hasPassword ? ui.settings.remotePasswordSet : ui.settings.remotePasswordUnset);
     logRow.hidden = !status.logFile;
-    if (status.logFile) setRowValue(logRow, status.logFile);
+    if (status.logFile) setPathValue(logRow, status.logFile);
     // The checkbox shows what is *saved*, because that is what ticking it
     // changes; the running answer is the row above, and `restartNeeded` is the
     // line between them.
@@ -1208,13 +1220,13 @@ function backgroundSection(): HTMLElement {
     // The launcher only exists while it is registered, so the path is shown
     // when there is a file to open — it is the thing to edit if Node moves.
     script.hidden = !status.enabled;
-    if (status.enabled) setRowValue(script, status.script);
+    if (status.enabled) setPathValue(script, status.script);
     // What the Run key actually holds — the field the contract always
     // carried ("shown, so an empty setting is not mistaken for a broken
     // one") but never rendered, which is how a checked box could mean
     // "someone else's home starts at login".
     registered.hidden = !status.command;
-    if (status.command) setRowValue(registered, status.command);
+    if (status.command) setPathValue(registered, status.command);
     foreign.hidden = status.enabled || !status.command;
     if (!foreign.hidden) foreign.textContent = ui.settings.backgroundForeign;
   };

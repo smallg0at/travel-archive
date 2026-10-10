@@ -2459,6 +2459,20 @@ html.desktop-shell #nav-tools {
 .set-row:last-child { border-bottom: none; }
 .set-row > span { color: var(--text-secondary); }
 .set-row > b { font-weight: 500; }
+/* A path the server handed back is machine text, not the row's headline:
+   mono, muted, and capped so a long home path reads as one line instead of
+   out-shouting everything around it. Truncation cuts the tail — the head is
+   what differs between archive homes — and hover carries the whole line. */
+.set-row.is-path > b {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Data credits, under the last section: GeoNames is CC BY 4.0 and asks for it. */
 .set-credits {
