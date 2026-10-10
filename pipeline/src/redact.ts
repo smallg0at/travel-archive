@@ -11,7 +11,7 @@ import { mayBeAnalyzed } from "./screenshots.js";
  *
  *   npm run --workspace pipeline redact                      # report only
  *   npm run --workspace pipeline redact -- --apply
- *   npm run --workspace pipeline redact -- --apply --month 2026-09
+ *   npm run --workspace pipeline redact -- --apply --month 2025-04
  *   npm run --workspace pipeline redact -- --dismiss <photoId>
  *   npm run --workspace pipeline redact -- --revoke --apply
  *

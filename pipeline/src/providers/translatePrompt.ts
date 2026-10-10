@@ -18,7 +18,7 @@ export function translatePrompt(input: TranslateInput): string {
   const from = LANGUAGE_NAMES[input.sourceLang] ?? input.sourceLang;
   const to = LANGUAGE_NAMES[input.targetLang] ?? input.targetLang;
   const examples = input.targetLang.startsWith("zh")
-    ? " (for example 城市 for a city, 美泉宫 for Schönbrunn Palace)"
+    ? " (for example 里斯本 for Lisboa, 阿尔罕布拉宫 for the Alhambra)"
     : "";
   const opening = input.mixedSource
     ? `Translate the texts below into ${to}. They are written in whichever language each was photographed in — a museum label, a menu or a sign often prints the same thing in two or three languages at once.`

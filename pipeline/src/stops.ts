@@ -28,9 +28,9 @@ const GAP_MINUTES = 75;
  * museum visit trips the photo count in minutes, while a long slow lunch trips
  * the duration on a handful of photos.
  *
- * Tuned by hand against three real days. Lower and a city's tram-window
- * shots each claimed their own heading; higher and the the pavilion (6 photos over
- * 27 minutes) stopped being a stop.
+ * Tuned by hand against three real days. Lower and a passing tram-window
+ * snapshot claimed its own heading; higher and a six-photo, 27-minute pause
+ * stopped being a stop.
  */
 const MIN_PHOTOS = 12;
 const MIN_MINUTES = 25;
@@ -123,9 +123,9 @@ function timeIsReal(photo: PhotoRecord): boolean {
  * An arrival: the end of a day's last transit run, when the run finished far
  * from where it began and there are photos at the far end.
  *
- * the city airport was the case. The day's last 8 hours were one run, "Flight to
- * the city airport", and the photos taken after landing were in it — too few and
- * too spread between the airport and the hotel to pass `isVisit`. The trip
+ * An evening arrival by air was the case. The day's last 8 hours were one run,
+ * "Flight to <city>", and the photos taken after landing were in it — too few
+ * and too spread between the airport and the hotel to pass `isVisit`. The trip
  * map marks only places, so the city the day ended in was nowhere on it, and
  * nothing later in the day named it either. Only for the day's last run with
  * nothing *located* after it: a located place later in the day already covers
@@ -292,7 +292,7 @@ export function detectStops(dayPhotos: PhotoRecord[], opts: { splitArrival?: boo
     if (substantial(cluster)) {
       // Nothing located for the rest of the day means no later stop can put
       // where the journey ended on the map, so this run's end is an arrival —
-      // 2026-09-02 ends in seven hotel photos with no GPS after the flight.
+      // a day that ends in seven hotel photos with no GPS after the flight.
       flushTransit(!clusters.slice(i).some(located));
       pushStop("place", cluster);
     } else {
@@ -306,7 +306,7 @@ export function detectStops(dayPhotos: PhotoRecord[], opts: { splitArrival?: boo
   // than being stretched back to midnight.
   //
   // A place rather than simply the last stop: transit collapses behind a single
-  // line in the app, and 2026-09-07 ends in transit — which would have buried
+  // line in the app, and a day that ends in transit — which would have buried
   // 119 photos there. Falling back to the last stop only when the day has no
   // place at all. Appending rather than prepending because it cannot then
   // change how the day opens, and because a WhatsApp save is dated when it
@@ -319,7 +319,7 @@ export function detectStops(dayPhotos: PhotoRecord[], opts: { splitArrival?: boo
   //
   // Not an arrival, when there is another place: a few photos taken after
   // getting off a train would otherwise carry every undated photo of the day —
-  // on 2026-09-07 thirty of them moved from a town to a four-photo the capital.
+  // one day thirty of them moved from one place to a four-photo arrival.
   if (untimed.length > 0 && stops.length > 0) {
     const places = stops.map((s, i) => (s.kind === "place" ? i : -1)).filter((i) => i >= 0);
     const settled = places.filter((i) => !arrivals.has(stops[i]));

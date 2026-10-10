@@ -161,7 +161,7 @@ export interface PhotoRecord {
    * The same place in the app's display languages, from the offline gazetteer
    * (see pipeline/src/geocodeOffline.ts). `place` stays the endonym — what the
    * place calls itself, which is what a caption should use — while a reader in
-   * 简体中文 can be shown 城市 for a city. Absent for photos placed before this
+   * 简体中文 can be shown 东京 for Tokyo. Absent for photos placed before this
    * existed.
    */
   placeNames?: { en: string; zh: string | null } | null;
@@ -257,7 +257,7 @@ export const SUMMARY_MIN_PHOTOS = 15;
  */
 export interface Highlight {
   size: HighlightSize;
-  /** What it is: "Klimt's The Kiss", "a city Castle", "Halušky at the Slovak Pub". */
+  /** What it is: "the portrait in the main hall", "the castle courtyard", "the dumplings at the market stall". */
   title: string;
   description: string | null;
   /** The thing itself — usually one photo, sometimes a few angles of it. */
@@ -267,10 +267,10 @@ export interface Highlight {
   /**
    * What the bound placards say, in English.
    *
-   * The transcript is verbatim, so a Slovak museum label stays Slovak and a
-   * German menu stays German — useful as evidence, unreadable as content to an
-   * owner who reads neither. Null when the documents are already English, or
-   * when there are none.
+   * The transcript is verbatim, so a museum label in another language stays in
+   * that language — useful as evidence, unreadable as content to an owner who
+   * does not read it. Null when the documents are already English, or when
+   * there are none.
    */
   documentTranslation: string | null;
 }
@@ -286,7 +286,7 @@ export interface Highlight {
 export interface DaySegment {
   id: string;
   kind: "place" | "transit";
-  /** The venue or place — "Schönbrunn Palace", "the museum Museum". */
+  /** The venue or place — "the palace gardens", "the natural history museum". */
   title: string;
   summary: string | null;
   startTime: string;
@@ -336,8 +336,8 @@ export interface DayRecord {
   summary: string | null;
   photoIds: string[];
   /**
-   * What the owner told the summarizer about this day — "this is the
-   * the railway museum", "the morning was a write-off".
+   * What the owner told the summarizer about this day — "this is the transport
+   * museum", "the morning was a write-off".
    *
    * Stored on the day rather than passed per run, because it is a fact about
    * the day and not about one invocation: it has to reach *every* future
@@ -613,7 +613,7 @@ export interface DayExcursion {
 
 /** One place, as the map draws it: a dot, a label, and what it opens. */
 export interface HomePlace {
-  /** The endonym, as `PhotoRecord.place` holds it — "a city, Osterreich". */
+  /** The endonym, as `PhotoRecord.place` holds it — "Reykjavik, Island". */
   name: string;
   /** English and Chinese, when the gazetteer had them. */
   nameEn: string | null;

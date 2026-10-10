@@ -15,9 +15,9 @@ export interface CaptionPhotoInput {
 
 /**
  * Only fields that can name something. The first version passed the town and
- * the six nearest captions, and on 20 photos of the the railway museum none named
- * the museum, before or after (TODO.md, 2026-09-09): a town cannot name a
- * museum, and neighbours written without context cannot either. The neighbours
+ * the six nearest captions, and on 20 photos of one museum none of them named
+ * the museum, before or after: a town cannot name a museum, and neighbours
+ * written without context cannot either. The neighbours
  * are gone — marginal in that test, +16% input on every photo, and impossible
  * in a batch, where every photo is sent before any caption exists.
  */
@@ -95,7 +95,7 @@ export interface SummarizeDayInput {
    * This outranks anything the model infers from the pictures: the captions are
    * guesses about what a photograph shows, and this is testimony from the person
    * who was there. It is also the only channel for things no photograph can
-   * carry — that a stop is the the railway museum, or that a morning was a write-off
+   * carry — that a stop is the transport museum, or that a morning was a write-off
    * and should not be dressed up as an activity.
    */
   note: string | null;

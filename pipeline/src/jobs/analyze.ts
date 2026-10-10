@@ -383,7 +383,7 @@ export async function runAnalyze(
     // but returning here made it unreachable exactly when it was needed. A
     // photo skipped as `gpsSuspect` during its original run, and later
     // un-flagged by a better outlier rule, has nothing left to caption and so
-    // could never acquire a place. That is how the city airport stayed off the map.
+    // could never acquire a place. That is how an arrival city stayed off the map.
     for (const summary of months) {
       if (signal?.aborted) break;
       const shard = await loadShardForWriting(token, summary.month);

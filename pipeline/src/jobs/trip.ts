@@ -103,8 +103,8 @@ function dayGeometry(photos: PhotoRecord[]): { centre: [number, number]; spanKm:
  * `findTripFor` takes the first range matching a date, so two definitions
  * covering the same days silently split the trip: the days attach to one id
  * while everything else refers to the other. That happened on the first real
- * run — a hand-written `trip-vienna-bratislava-2026-08` and a generated
- * `trip-wien-bratislava-2026-08-30` with identical ranges — and the narrative
+ * run — a hand-written `trip-spring-2026-05` and a generated
+ * `trip-spring-2026-05-01` with identical ranges — and the narrative
  * was attached to the empty one.
  */
 async function upsertDefinition(def: TripDefinition): Promise<TripDefinition[]> {

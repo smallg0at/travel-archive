@@ -7,9 +7,9 @@ import { env } from "./env.js";
  * `pipeline serve` runs exactly the same code — see the note in jobs/analyze.ts.
  *
  *   npm run --workspace pipeline organize
- *   npm run --workspace pipeline organize -- --only 2026-09      # one month
- *   npm run --workspace pipeline organize -- --only 2026-09-01   # one day
- *   npm run --workspace pipeline organize -- --only 2026-09-01 --force
+ *   npm run --workspace pipeline organize -- --only 2025-04      # one month
+ *   npm run --workspace pipeline organize -- --only 2025-04-01   # one day
+ *   npm run --workspace pipeline organize -- --only 2025-04-01 --force
  *
  * Without `--only` every day is considered, but only days whose summarized
  * photo set actually changed are sent to the model, so re-running is cheap.

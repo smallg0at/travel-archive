@@ -23,8 +23,8 @@ import { LANGUAGE_NAMES } from "./translatePrompt.js";
  *
  * The captions are a model's guesses about single photographs; this is
  * testimony from the person who was there. It is also the only channel for
- * things no photograph carries — that a stop is the the railway museum, or that a
- * morning was a write-off and must not be dressed up into an activity.
+ * things no photograph carries — that a stop is the transport museum, or that
+ * a morning was a write-off and must not be dressed up into an activity.
  *
  * Framed as authority over naming and framing, not as licence to invent: the
  * same caution `placeFromMetadataOnly` already encodes. A note that says where
@@ -96,7 +96,7 @@ The day is already divided into stops by where and when the photos were taken. R
 - highlights: the key pictures worth describing, best first, up to 33. Each is a thing — an artwork, a building, a dish — not a category.
   - size: how much room it deserves, and there is a budget per stop — exactly one "full" for the single thing that defined this place, at most two "half" for the next best, and up to thirty "normal" for everything else worth a glance. Fill the budget. Each stop states how many cards to aim for — roughly one per four photos. A stop with 145 photos and seven cards is wrong; only genuinely unremarkable or repetitive shots belong in the collapsed grid.
   - photo_ids: the photos of the thing itself.
-  - document_translation: what those placards say, in English. Museum labels here are usually German or Slovak — translate them; only leave this null if the text really is already English. The archive owner does not read Slovak or German, so a verbatim transcript alone is unreadable to them. Null if already English or there are none.
+  - document_translation: what those placards say, in English. Museum labels here are usually not in English — translate them; only leave this null if the text really is already English. The archive owner does not read every language the labels are in, so a verbatim transcript alone is unreadable to them. Null if already English or there are none.
   - document_photo_ids: photos that only describe it. A museum label belongs to the artwork beside it; a menu belongs to the meal. Binding them here is what stops the page showing the same exhibit twice.
   - Leave highlights empty for a transit stop.
 

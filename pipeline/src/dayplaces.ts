@@ -13,9 +13,10 @@ import { buildSearchIndex } from "./jobs/searchIndex.js";
  *   npm run --workspace pipeline dayplaces -- --apply
  *
  * Re-deriving photo places offline (replaceplaces.ts) and the border-aware
- * lookup after it changed what a day's dominant place is — 城区 became 城市,
- * a North Korean town became a Chinese one. `organize` treats that as a stale
- * input and offers to rewrite those days, which is a model call each.
+ * lookup after it changed what a day's dominant place is — a district resolved
+ * to the city it belongs to, and a border town changed country. `organize`
+ * treats that as a stale input and offers to rewrite those days, which is a
+ * model call each.
  *
  * The owner asked for the cheap half: copy the new place onto the day so the
  * label is right and the day stops being offered for a paid rewrite. The

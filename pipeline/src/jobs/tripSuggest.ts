@@ -12,8 +12,8 @@ import { loadTripDefinitions, type TripDefinition } from "../tripDefs.js";
  * measured each *day's* distance from a fixed home, and no threshold separated
  * a trip from a day out — a real trip's first day sat 105km from home, an
  * ordinary day out at 87km. This measures something else: **where each night
- * was spent**. A day out, however far, ends at home; a trip, however near —
- * a town is 75km from the capital — has a night somewhere else. The night is the
+ * was spent**. A day out, however far, ends at home; a trip, however near, has
+ * a night somewhere else. The night is the
  * last fixes of one day, and it is confirmed when the next morning starts in
  * the same place.
  *
@@ -26,7 +26,7 @@ import { loadTripDefinitions, type TripDefinition } from "../tripDefs.js";
  * and a range the owner has already defined is never proposed over.
  */
 
-/** A night further than this from home was spent away. a town is 75km from the capital. */
+/** A night further than this from home was spent away; nearer than this is a day out. */
 const AWAY_KM = 40;
 /** Days without a located photo that a trip may span, between two nights away. */
 const MAX_GAP_DAYS = 3;
@@ -96,7 +96,7 @@ function middle(fixes: PhotoRecord[]): Fix {
 
 const dayNumber = (date: string) => Math.round(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
 
-/** "a city" from "a city, Austria"; the country from the last part. */
+/** The city from "City, Country"; the country from the last part. */
 const head = (name: string) => name.split(",")[0].trim();
 const tail = (name: string) => {
   const comma = name.lastIndexOf(",");
@@ -334,9 +334,9 @@ export function suggestTrips(
 
 /**
  * A first name for the trip: its countries when it crossed borders, its main
- * places when it did not. "Austria, Slovakia & Hungary"; "a city &
- * Inverness". Deliberately plain — a model could do better, but a name is the
- * one field the owner changes anyway, and this costs nothing.
+ * places when it did not — "Country A, Country B & Country C"; "City & City".
+ * Deliberately plain — a model could do better, but a name is the one field the
+ * owner changes anyway, and this costs nothing.
  */
 function nameFor(
   places: { en: string; zh: string | null; photos: number }[],
@@ -394,7 +394,7 @@ export async function listTripSuggestions(): Promise<TripSuggestion[]> {
  * Days out: went somewhere, came home the same night.
  *
  * The counterpart to a trip. A trip is nights away; this is the day that has
- * none — a town and back, Derby and back — which the album otherwise shows
+ * none — out and back the same day — which the album otherwise shows
  * as an ordinary heading over a grid of photos, indistinguishable from a
  * Tuesday at home. It needs no trip page and no definition: it is one day, and
  * the app gives it a card in its month.

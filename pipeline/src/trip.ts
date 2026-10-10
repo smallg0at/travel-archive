@@ -5,8 +5,8 @@ import { env } from "./env.js";
 /**
  * Writes the story of one trip over a date range you choose.
  *
- *   npm run --workspace pipeline trip -- --from 2026-08-30 --to 2026-09-02
- *   npm run --workspace pipeline trip -- --from 2026-08-30 --to 2026-09-02 --name "a city & a city"
+ *   npm run --workspace pipeline trip -- --from 2026-05-01 --to 2026-05-04
+ *   npm run --workspace pipeline trip -- --from 2026-05-01 --to 2026-05-04 --name "Spring trip"
  *   npm run --workspace pipeline trip -- --from ... --to ... --notes "flew out Saturday night"
  *   npm run --workspace pipeline trip -- --from ... --to ... --doc plan.md --doc tickets.txt
  *

@@ -11,12 +11,13 @@ import type { GeoPoint, PhotoRecord } from "@travel-archive/shared";
  *
  * **The previous rule flagged anything >100km from the day's median, and that
  * was wrong in the case that matters most.** A travel day legitimately spans
- * countries: on 2026-09-02 the archive flew a city → a city → the capital, and
- * because the airport held the median, all 21 genuinely-correct the capital fixes were
- * marked suspect and dropped — from stop detection, from the day's place, and
- * from the map, which is why the city airport never appeared on it. 54 of that day's
- * photos were discarded as bad data. The days a travel archive most needs to
- * get right are exactly the days that rule broke.
+ * countries: on a three-point day — home, an airport used only in transit, and
+ * the city actually being visited — the airport's coordinates held the median,
+ * so all 21 genuinely-correct fixes at the day's real destination were marked
+ * suspect and dropped: from stop detection, from the day's place, and from the
+ * map, which is why that city never appeared on it. 54 of the day's photos were
+ * discarded as bad data. The days a travel archive most needs to get right are
+ * exactly the days that rule broke.
  *
  * So the test is now physical rather than statistical: a fix is suspect when
  * reaching it from its neighbour in time would require an impossible speed. A
@@ -110,7 +111,7 @@ export function flagGpsOutliers(dayPhotos: PhotoRecord[]): void {
 
   // Excursions first, and the point-by-point test only over what they leave.
   // Otherwise a good photo is judged against the bad run next to it — the
-  // first the capital photo after the a city run was flagged, and the run was not.
+  // first good photo after the bad run was flagged, and the run was not.
   flagExcursions(all);
   const located = all.filter((p) => !p.gpsSuspect);
   if (located.length < 3) return;
@@ -137,7 +138,7 @@ export function flagGpsOutliers(dayPhotos: PhotoRecord[]): void {
  * Deliberately far below MAX_SPEED_KMH, which has to allow a single flight.
  * A round trip averages its whole elapsed time, boarding and all: a day trip
  * by air covers perhaps 1,200km in eight hours, 150km/h. The run this exists
- * for needed 765km/h to reach a city and back, before counting India.
+ * for needed 765km/h to reach its farthest point and back.
  */
 const MAX_ROUND_TRIP_KMH = 400;
 
@@ -147,12 +148,12 @@ const MIN_ANCHOR_PHOTOS = 3;
 /**
  * Flags runs of bad fixes that leave a place and come back to it too fast.
  *
- * The point-by-point test cannot see these. Underground at the Postal
- * Museum's Mail Rail on 2025-10-07 the phone logged four photos near
- * a city and then three in a city, India, before surfacing in the capital 45
- * minutes after it went down. Each bad photo was reachable from its bad
- * neighbour — same point, zero speed — so none was "unreachable from both",
- * and India appeared on the map of everywhere the owner has been.
+ * The point-by-point test cannot see these. Underground in a tunnel one day the
+ * phone logged four photos at one place and then three at another, thousands of
+ * kilometres away, before surfacing where it went down less than an hour later.
+ * Each bad photo was reachable from its bad neighbour — same point, zero speed —
+ * so none was "unreachable from both", and a country the owner had never been to
+ * appeared on the map of everywhere they have been.
  *
  * So: group the day into runs of nearby photos, and wherever the day returns
  * to a run it left, ask whether the detour in between could have been made in
@@ -188,21 +189,20 @@ export function flagExcursions(located: PhotoRecord[]): void {
     if ((2 * farthest) / hours <= MAX_ROUND_TRIP_KMH) continue;
     // And the detour has to be the minority on both sides. Otherwise one stale
     // fix reads as "back home" and condemns the real journey around it: a lone
-    // a city point at 10:23 on 2026-05-27 flagged the whole road trip past
-    // a town and a village. That point is the outlier, and the test below —
-    // one point, unreachable both ways — is what catches it.
+    // stray point one morning flagged the whole road trip past it. That point
+    // is the outlier, and the test below — one point, unreachable both ways —
+    // is what catches it.
     const detourPhotos = detour.reduce((n, run) => n + run.length, 0);
     if (detourPhotos >= Math.min(runs[i].length, runs[back].length)) continue;
     // Solid on both sides. With one stuck coordinate interleaved through a
-    // day — a city, 52 times at the identical point, between real stops on
-    // the road north — single stuck fixes are runs of one, and must not be
-    // taken for home.
+    // day — 52 photos at one identical point, between real stops on a long
+    // drive — single stuck fixes are runs of one, and must not be taken for
+    // home.
     if (runs[i].length < MIN_ANCHOR_PHOTOS || runs[back].length < MIN_ANCHOR_PHOTOS) continue;
-    // And nowhere else today. Every bad run found — a city, a city, a city,
-    // a county — appears once and never again, while two sources interleaved
-    // all day (the capital 146 times and Oxford 94 on 2023-08-12) visit each place
-    // repeatedly. There is no telling which of those is real, so neither is
-    // flagged.
+    // And nowhere else today. Every bad run found appears once and never again,
+    // while two sources interleaved all day (one place counted 146 times and
+    // its nearest neighbour 94) visit each place repeatedly. There is no
+    // telling which of those is real, so neither is flagged.
     const recurs = runs.some(
       (run, r) => (r < i || r > back) && detour.some((d) => haversineKm(d[0].gps!, run[0].gps!) < MIN_JUMP_KM),
     );

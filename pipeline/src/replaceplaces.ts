@@ -14,11 +14,11 @@ import { buildSearchIndex } from "./jobs/searchIndex.js";
  *   npm run --workspace pipeline places -- --apply
  *
  * The archive's places were written by Nominatim over months, and Nominatim
- * answers with whatever administrative area covers the point: 城区 and 海淀区
- * rather than 城市, "the capital region" and "City of Westminster" rather than
- * the capital. The string then reads locality-then-country with the city missing
- * from the middle — the owner's observation, and the reason searching 城市
- * found one photo in a library with thousands taken there.
+ * answers with whatever administrative area covers the point: a district name
+ * rather than the city people use, "Greater <City>" and a borough rather than
+ * the city itself. The string then reads locality-then-country with the city
+ * missing from the middle — the owner's observation, and the reason searching
+ * for the city found one photo in a library with thousands taken there.
  *
  * The offline lookup already collapses districts into the city people name
  * (geocodeOffline.ts), so this applies that rule to what is already stored,
@@ -58,7 +58,7 @@ async function main(): Promise<void> {
 
     // The outlier flags first, so the places below are derived from the
     // current rule. They are otherwise only recomputed when a month is
-    // rescanned, which is how the Mail Rail's a city fixes outlived the rule
+    // rescanned, which is how one day's bad fixes outlived the rule
     // that should have caught them.
     const photos = Object.values(shard.photos) as PhotoRecord[];
     const before = new Map(photos.map((p) => [p.id, p.gpsSuspect]));

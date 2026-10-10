@@ -35,10 +35,10 @@ import { NATIVE_LANGUAGE, saveNativeText } from "./translate.js";
  * one seen.
  *
  * First-wins is wrong for exactly the days that matter: a day trip starts at
- * home. This archive's 30 Aug has 263 photos in a city, 38 in a city and 11
- * in a town, and the very first geotagged photo at 09:30 is the a city one —
- * so the whole a city day was labelled "a city, Osterreich" in the app and
- * handed to the summarizer as such.
+ * home. One day here has 263 photos in the place the day was really spent, 38
+ * at home and 11 in a third place, and the first geotagged photo of the morning
+ * is one of the home ones — so the whole day was labelled with home in the app
+ * and handed to the summarizer as such.
  */
 function dominantPlace(photos: PhotoRecord[]): string | null {
   const counts = new Map<string, number>();

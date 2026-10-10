@@ -18,7 +18,7 @@ import { countryAt, sameCountry } from "./countryPolygons.js";
  * microseconds. There is no rate limit and no network, so locating a whole
  * round of 4,000 photos costs nothing but the read.
  *
- * What it cannot do is street level: "The Quay, a coastal suburb" needs OSM
+ * What it cannot do is street level: "The Quay, <village>" needs OSM
  * road data, which offline means a multi-gigabyte import. Measured on this
  * archive, street detail reached only 9% of captions and street names 0.1%, so
  * it was dropped rather than kept on a slow drip.
@@ -42,13 +42,13 @@ export interface OfflinePlace {
 /**
  * How far a settlement's name reaches, by the cube root of its population.
  *
- * A city's stored coordinates are its centre, so "you are in the capital" has to
+ * A city's stored coordinates are its centre, so "you are in <city>" has to
  * hold 25km out, while a village of 800 speaks for about a kilometre. The
  * constant was fitted against this archive's 18,141 already-placed photos: at
- * 0.12 a photo on the the island is named a town rather than a city
- * across the water, and a town stays a town instead of being claimed by slightly
- * larger a town nearby — both of which a flat "biggest within 20km" rule
- * got wrong.
+ * 0.12 a photo on an island is named for the village it is actually in rather
+ * than the larger town across the water, and a small town keeps its own name
+ * instead of being claimed by a slightly larger neighbour nearby — both of
+ * which a flat "biggest within 20km" rule got wrong.
  */
 const REACH_KM_PER_CBRT = 0.12;
 const reachOf = (population: number) => REACH_KM_PER_CBRT * Math.cbrt(Math.max(population, 200));
@@ -138,9 +138,9 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
  * The town or city a photo was taken in, or null out at sea.
  *
  * Prefers the sizeable place you would name over the nearest dot on the map:
- * Nominatim answered a Beijing photo with the district (城区) and the bare
- * nearest-settlement rule answered "a village", a neighbourhood of 0 recorded
- * people. Both are true; neither is what anyone says.
+ * one service answered a photo with the administrative district, and the bare
+ * nearest-settlement rule answered with a neighbourhood of 0 recorded people.
+ * Both are true; neither is what anyone says.
  */
 export async function offlinePlace(gps: GeoPoint): Promise<OfflinePlace | null> {
   const p = await places();
@@ -196,7 +196,7 @@ export async function offlinePlace(gps: GeoPoint): Promise<OfflinePlace | null> 
   };
 }
 
-/** "a city, Österreich" — the same shape the archive has always stored. */
+/** "Reykjavik, Island" in the place's own language — the shape the archive has always stored. */
 export function placeString(place: OfflinePlace, lang: "local" | "en" | "zh" = "local"): string {
   const locality = place.locality[lang] ?? place.locality.local;
   const country = place.country[lang] ?? place.country.local;

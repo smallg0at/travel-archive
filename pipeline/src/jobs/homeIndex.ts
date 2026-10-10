@@ -52,11 +52,11 @@ function median(values: number[]): number {
 }
 
 /**
- * "United Kingdom" from "a town, United Kingdom".
+ * "<Country>" from "<Town>, <Country>".
  *
- * Taken from the English name only. The endonym's last part is a country in a
- * language that varies by row — "Osterreich", "中国" — so counting distinct
- * values across them would count one country several times.
+ * Taken from the English name only. The endonym's last part is a country in
+ * whatever language that row was stored in, so counting distinct values across
+ * them would count one country several times.
  */
 function countryOf(nameEn: string | null): string | null {
   if (!nameEn) return null;

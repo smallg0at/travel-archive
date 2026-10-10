@@ -7,11 +7,11 @@ import { env } from "./env.js";
  * that `pipeline serve` runs exactly the same code — see the note there.
  *
  *   npm run --workspace pipeline analyze -- --month 2025-04
- *   npm run --workspace pipeline analyze -- --from 2026-09-01 --to 2026-09-03
- *   npm run --workspace pipeline analyze -- --from 2026-09-01 --to 2026-09-03 --limit 20
+ *   npm run --workspace pipeline analyze -- --from 2025-04-01 --to 2025-04-03
+ *   npm run --workspace pipeline analyze -- --from 2025-04-01 --to 2025-04-03 --limit 20
  *
  * Ranges are inclusive and accept either a month (`2025-04`) or a day
- * (`2026-09-01`), so a trip can be analyzed without dragging in the rest of
+ * (`2025-04-01`), so a trip can be analyzed without dragging in the rest of
  * its month.
  *
  * Re-running is safe: photos that already have a caption are skipped, and each

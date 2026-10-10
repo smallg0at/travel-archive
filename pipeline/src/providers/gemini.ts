@@ -246,7 +246,7 @@ async function captionPhoto(model: string, thinkingLevel: ThinkingLevel | undefi
   // RECITATION means Gemini suppressed the output as too close to memorised
   // training text. In a museum that fires reliably: asking it to transcribe the
   // plaque of a famous artwork is asking it to reproduce something it has seen
-  // many times. Measured on the a city trip, 4 of 398 photos failed this way
+  // many times. Measured over one trip here, 4 of 398 photos failed this way
   // and kept failing on retry.
   //
   // Retry once asking for description only. That gives up the transcription for
@@ -330,7 +330,7 @@ const DAY_SCHEMA = {
           title: {
             type: Type.STRING,
             description:
-              "The venue or place, 1-4 words. For a transit stop, say how it moved: 'Train to a city'.",
+              "The venue or place, 1-4 words. For a transit stop, say how it moved: 'Train to the next city'.",
           },
           summary: {
             type: Type.STRING,

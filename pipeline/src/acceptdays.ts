@@ -15,8 +15,8 @@ import { dayKey } from "./util.js";
  *
  * `organize` treats a day as stale when the set of captioned photos it was
  * written from has changed. The whole-library caption batch then landed a
- * photo or two on nearly every day already summarized — 2 of 59 on
- * 2026-08-16 — and each of those days became a rewrite the owner would pay
+ * photo or two on nearly every day already summarized — 2 of 59 on one day —
+ * and each of those days became a rewrite the owner would pay
  * for, though its summary is perfectly good.
  *
  * This records the day's current captioned set as the set it was written

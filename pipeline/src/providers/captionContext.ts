@@ -5,8 +5,8 @@ import type { CaptionContext } from "./types.js";
  * provider, so a caption means the same thing whichever model wrote it.
  *
  * Framed hard as naming help. Context invites a model to assert what it cannot
- * see — a photo tagged "the railway museum" becomes "a locomotive in the
- * the railway museum" whether or not the picture shows one — and a caption that
+ * see — a photo tagged "transport museum" becomes "a locomotive in the
+ * transport museum" whether or not the picture shows one — and a caption that
  * confidently states the wrong thing is worse than a vague one, because
  * everything downstream reads captions as observations.
  *
