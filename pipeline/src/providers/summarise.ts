@@ -240,6 +240,25 @@ export const tripJsonShape = (lang: string | null | undefined): string =>
  * highlight that renders as a blank tile, or hide a real photo behind a
  * document that does not exist.
  */
+/**
+ * Text the model has to supply, or the reply is unusable.
+ *
+ * These were bare `.trim()` calls, so a reply that omitted the field died as
+ * "Cannot read properties of undefined (reading 'trim')" — which names neither
+ * the field, nor the stop, nor the fact that the reply was merely malformed.
+ * The day is isolated and retried either way (organize keeps its old text and
+ * leaves it stale), so failing is not the problem; not being able to tell what
+ * failed is.
+ *
+ * Blank counts as missing on purpose. An empty day summary or segment title
+ * written into the archive reads as a day with nothing to say, which is worse
+ * than a named failure the next run retries.
+ */
+function requiredText(value: unknown, what: string): string {
+  if (typeof value !== "string" || value.trim() === "") throw new Error(`the model's reply had no ${what}`);
+  return value.trim();
+}
+
 export function parseDaySummary(input: SummarizeDayInput, parsed: unknown): DaySummaryResult {
   const p = parsed as {
     summary: string;
@@ -266,12 +285,12 @@ export function parseDaySummary(input: SummarizeDayInput, parsed: unknown): DayS
       const valid = byStop.get(seg.id)!;
       return {
         id: seg.id,
-        title: seg.title.trim(),
+        title: requiredText(seg.title, `title for stop ${seg.id}`),
         summary: seg.summary?.trim() || null,
         highlights: (seg.highlights ?? [])
           .map((h) => ({
             size: h.size === "full" || h.size === "half" ? h.size : ("normal" as const),
-            title: h.title.trim(),
+            title: requiredText(h.title, `title for a highlight at stop ${seg.id}`),
             description: h.description?.trim() || null,
             photoIds: (h.photo_ids ?? []).filter((id) => valid.has(id)).slice(0, 3),
             documentPhotoIds: (h.document_photo_ids ?? []).filter((id) => valid.has(id)),
@@ -282,7 +301,7 @@ export function parseDaySummary(input: SummarizeDayInput, parsed: unknown): DayS
       };
     });
 
-  return { summary: p.summary.trim(), segments, native: nativeText(input.alsoIn, p) };
+  return { summary: requiredText(p.summary, "day summary"), segments, native: nativeText(input.alsoIn, p) };
 }
 
 /** Validates a trip response. Returns everything but `usage`, which the provider attaches. */
@@ -292,8 +311,8 @@ export function parseTripSummary(input: SummarizeTripInput, parsed: unknown): Om
   // whatever the model echoed back.
   const namePair: [string, string][] = input.name && p.name_alt ? [[input.name.trim(), p.name_alt]] : [];
   return {
-    name: (input.name ?? p.name).trim(),
-    narrative: p.narrative.trim(),
+    name: requiredText(input.name ?? p.name, "trip name"),
+    narrative: requiredText(p.narrative, "trip narrative"),
     places: p.places ?? [],
     native: nativeText(input.alsoIn, p, namePair),
   };
