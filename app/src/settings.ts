@@ -25,6 +25,7 @@ import {
   startSync,
   startScan,
   syncStatus,
+  validateGeneration,
   watchJob,
   type ConflictChoice,
   type ScanMode,
@@ -367,6 +368,7 @@ function photosFolderSection(): HTMLElement {
   const s = section(ui.setup.folderTitle);
   const body = s.querySelector(".set-body")!;
   body.appendChild(createFolderPanel("").root);
+  body.appendChild(el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.photosFolderNote}</p>`));
   return s;
 }
 
@@ -564,8 +566,9 @@ function generationSection(): HTMLElement {
     const note = el<HTMLElement>(`<p class="set-note"></p>`);
     const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
     const actions = el<HTMLDivElement>(`<div class="set-provider-actions"></div>`);
+    const checkButton = button(ui.settings.providerCheck, () => void check());
     const useButton = button(ui.settings.providerSaveUse, () => {}, "primary");
-    actions.append(useButton);
+    actions.append(checkButton, useButton);
     panel.append(fields, note, status, actions);
     root.append(head, panel);
     groups[scope].appendChild(root);
@@ -607,8 +610,32 @@ function generationSection(): HTMLElement {
         const batch = option.supportsBatch ? ui.settings.providerBatchOk : ui.settings.providerNoBatch;
         note.textContent = `${option.hasKey ? ui.settings.providerKeySet : ui.settings.providerKeyMissing} · ${batch}`;
         note.classList.toggle("tone-warn", !option.hasKey);
-        useButton.disabled = active;
+        // Never disabled, not even for the backend already in use: its key or
+        // model is exactly what one comes here to fix, and a disabled button
+        // with no reason reads as a broken page.
       },
+    };
+
+    /**
+     * A check the reader asks for, not a gate: it reports what the provider
+     * answered and never blocks saving — a wrong key is the reader's to fix,
+     * and a service that happens to be down should not stop them either.
+     */
+    const check = async () => {
+      const typed = keyInput.value.trim();
+      status.hidden = false;
+      status.classList.remove("tone-warn");
+      status.textContent = ui.settings.providerCheckBusy;
+      const result = await validateGeneration(row.id, typed || undefined);
+      if (result.ok) {
+        status.textContent = ui.settings.providerCheckOk;
+      } else if (result.kind === "auth") {
+        status.textContent = ui.setup.keyRejected(result.detail);
+        status.classList.add("tone-warn");
+      } else {
+        status.textContent = ui.settings.providerCheckUnreachable(result.detail);
+        status.classList.add("tone-warn");
+      }
     };
 
     head.addEventListener("click", () => {
@@ -1160,15 +1187,16 @@ function backgroundSection(): HTMLElement {
     `<label class="set-check" hidden><input type="checkbox"><span>${ui.settings.backgroundOn}</span></label>`,
   );
   const box = control.querySelector("input") as HTMLInputElement;
-  const script = row(ui.settings.backgroundScript, "");
-  const registered = row(ui.settings.backgroundRegistered, "");
-  const foreign = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
+  // What the Run key holds, carried by the checkbox's own hint rather than a
+  // row of its own: a registered command is a fact about the switch, not a
+  // setting — and with the box off, that line is the reason why.
+  const where = el<HTMLParagraphElement>(`<p class="set-note" hidden></p>`);
   const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
   // The one control that must exist when the server cannot answer: every row
   // beside it asks the server something, and this one is for when there is
   // nobody to ask. Shell-only (IPC), so it exists exactly where a window does.
   const startBtn = el<HTMLButtonElement>(`<button type="button" class="set-btn" hidden>${ui.settings.startServer}</button>`);
-  body.append(note, control, script, registered, foreign, problem, startBtn);
+  body.append(note, control, where, problem, startBtn);
 
   startBtn.addEventListener("click", () => {
     const api = window.electronAPI;
@@ -1204,31 +1232,29 @@ function backgroundSection(): HTMLElement {
     if (!status) {
       note.textContent = ui.settings.backgroundNote;
       control.hidden = true;
-      script.hidden = true;
+      where.hidden = true;
       startBtn.hidden = false;
       return;
     }
     if (!status.supported) {
       note.textContent = ui.settings.backgroundUnsupported;
       control.hidden = true;
-      script.hidden = true;
+      where.hidden = true;
       return;
     }
     note.textContent = ui.settings.backgroundNote;
     control.hidden = false;
     box.checked = status.enabled;
-    // The launcher only exists while it is registered, so the path is shown
-    // when there is a file to open — it is the thing to edit if Node moves.
-    script.hidden = !status.enabled;
-    if (status.enabled) setPathValue(script, status.script);
-    // What the Run key actually holds — the field the contract always
-    // carried ("shown, so an empty setting is not mistaken for a broken
-    // one") but never rendered, which is how a checked box could mean
-    // "someone else's home starts at login".
-    registered.hidden = !status.command;
-    if (status.command) setPathValue(registered, status.command);
-    foreign.hidden = status.enabled || !status.command;
-    if (!foreign.hidden) foreign.textContent = ui.settings.backgroundForeign;
+    // The registered command is the switch's own footnote: what it will start
+    // when ticked, or — with the box off — whose archive that Run key belongs
+    // to, which is the whole reason a checked box can mean someone else's home.
+    where.hidden = !status.command;
+    if (status.command) {
+      where.textContent = status.enabled
+        ? ui.settings.backgroundWhere(status.command)
+        : ui.settings.backgroundForeign(status.command);
+      where.classList.toggle("tone-warn", !status.enabled);
+    }
   };
 
   box.addEventListener("change", () => {

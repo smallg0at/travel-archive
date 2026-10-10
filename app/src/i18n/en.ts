@@ -292,9 +292,9 @@ export const en = {
       "Runs the job server in the background from the moment you sign in, with no window of its own. The desktop app finds it already running and uses it rather than starting a second copy — so closing the window no longer takes the archive away from the phone, or from anyone on the home network. Its output goes to data\\serve.log beside it.",
     backgroundUnsupported: "Sign-in start-up is only available on Windows.",
     backgroundOn: "Start the job server when I sign in",
-    backgroundScript: "Startup script",
-    backgroundRegistered: "Registered command",
-    backgroundForeign: "Registered for a different archive home — logging in starts that one, not this.",
+    backgroundWhere: (command: string) => `Registered to start: ${command}`,
+    backgroundForeign: (command: string) =>
+      `Registered for a different archive home — signing in starts that one, not this: ${command}`,
     remote: "Remote access",
     remoteNote:
       "What the job server is bound to. Reading elsewhere needs the shared password; writing is this machine's either way. Saved changes wait for a restart.",
@@ -358,6 +358,12 @@ export const en = {
     providerModel: "Model",
     providerSaveUse: "Save and use",
     providerActive: "In use",
+    providerCheck: "Check",
+    providerCheckBusy: "Checking…",
+    providerCheckOk: "✓ Key accepted",
+    providerCheckUnreachable: (reason: string) => `No answer: ${reason}`,
+    photosFolderNote:
+      "A change is checked first: only a folder that exists is saved, and it takes effect on the next scan.",
     providerKeySet: "Key saved",
     providerKeyMissing: "No key",
     providerBatchOk: "Batch available (half price, within a day)",

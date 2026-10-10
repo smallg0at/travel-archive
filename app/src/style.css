@@ -2482,9 +2482,8 @@ html.desktop-shell #nav-tools {
   font-weight: 500;
   color: var(--text-secondary);
   max-width: 62%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 /* Data credits, under the last section: GeoNames is CC BY 4.0 and asks for it. */
