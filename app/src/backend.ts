@@ -464,6 +464,31 @@ export async function oobeFolder(confirm = false, path?: string): Promise<Folder
   }
 }
 
+export type ProviderValidation =
+  | { ok: true }
+  | { ok: false; kind: "auth" | "unreachable"; detail: string };
+
+/**
+ * One cheap server-side check of a provider (and its key) before anything is
+ * saved: `auth` = the provider rejected the key, `unreachable` = no answer.
+ * The key itself never comes back — the response is only what happened.
+ */
+export async function validateGeneration(provider: string, key?: string): Promise<ProviderValidation> {
+  try {
+    const res = await apiFetch("/config/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider, key }),
+    });
+    return res.ok
+      ? ((await res.json()) as ProviderValidation)
+      : { ok: false, kind: "unreachable", detail: `HTTP ${res.status}` };
+  } catch (err) {
+    console.error("[setup] validate request failed:", err);
+    return { ok: false, kind: "unreachable", detail: (err as Error).message };
+  }
+}
+
 /** One level of sub-folders for the setup picker. */
 export async function oobeFolders(
   path: string,

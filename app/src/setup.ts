@@ -28,6 +28,7 @@ import {
   oobeState,
   saveConfig,
   startScan,
+  validateGeneration,
   watchJob,
   type FolderProbe,
   type OobeState,
@@ -63,6 +64,8 @@ interface State {
   keyDraft: string;
   /** The provider picked in the wizard, held across re-renders until saved. */
   providerDraft: string;
+  /** The last validation of that pick: a failed one blocks Continue. */
+  validateFailed: boolean;
   saveError: string | null;
   scan: ScanState | null;
 }
@@ -86,6 +89,7 @@ function fresh(): State {
     config: null,
     keyDraft: "",
     providerDraft: "",
+    validateFailed: false,
     saveError: null,
     scan: null,
   };
@@ -271,10 +275,24 @@ export function showSetup(opts: { onDone: () => void }): void {
 
   const saveGeneration = async (): Promise<void> => {
     state.saveError = null;
+    state.validateFailed = false;
     try {
       const cfg = state.config;
       const select = document.getElementById("setup-provider") as HTMLSelectElement | null;
       const provider = select?.value || state.providerDraft || cfg?.provider;
+      // A key is believed only after the provider believes it: this form used
+      // to write any text into `.env` and continue, with the typo surfacing
+      // minutes later as a failed job. Local services are checked too — an
+      // LM Studio that is not running says so here instead of at scan time.
+      if (provider) {
+        const verdict = await validateGeneration(provider, state.keyDraft);
+        if (!verdict.ok) {
+          state.validateFailed = true;
+          state.saveError = verdict.detail;
+          render();
+          return;
+        }
+      }
       const patch: Record<string, string> = {};
       if (provider) patch.AI_PROVIDER = provider;
       const key = state.keyDraft.trim();
@@ -575,28 +593,49 @@ export function showSetup(opts: { onDone: () => void }): void {
         // snapped back the moment you chose another one.
         state.providerDraft = select.value;
         state.keyDraft = "";
+        state.validateFailed = false;
         render();
       });
       row.appendChild(select);
       const picked = (state.config?.providers ?? []).find((p) => p.id === select.value);
       const cloud = picked?.scope !== "local";
-      const keyMissing = cloud && picked?.editable.apiKey !== false && !picked?.hasKey;
+      // "Missing" counts a typed key too. The saved-only reading is what the
+      // first test ran into: fill a key into a service that has none and
+      // Continue never appeared — no way to attempt, let alone fail, a wrong
+      // key. Typed or saved lets Continue show; the server then decides
+      // whether it is any good, which is the actual validation.
+      const keyAvailable = Boolean(picked?.hasKey) || state.keyDraft.trim() !== "";
+      const keyMissing = !!state.config && cloud && picked?.editable.apiKey !== false && !keyAvailable;
+      const keyStateNode = (): HTMLElement => {
+        if (picked?.hasKey) return el(`<p class="set-note">${ui.setup.keySet}</p>`);
+        if (state.keyDraft.trim()) return el(`<p class="set-note">${ui.setup.keyTyped}</p>`);
+        return el(`<p class="set-note tone-warn">${ui.setup.keyMissing}</p>`);
+      };
       if (cloud) {
         const key = el<HTMLInputElement>(`<input type="password" class="setup-input" autocomplete="off"></input>`);
         key.placeholder = ui.setup.aiKeyHint;
         key.value = state.keyDraft;
-        key.addEventListener("input", () => (state.keyDraft = key.value));
+        key.addEventListener("input", () => {
+          state.keyDraft = key.value;
+          // The state line follows the box as it fills — in place, so the
+          // caret survives (the folder field works the same way).
+          document.getElementById("setup-keystate")?.replaceChildren(keyStateNode());
+        });
         row.appendChild(key);
       }
       card.appendChild(row);
       // Whether the choice already works — the one thing an empty box cannot
       // tell you (the saved key lives in .env and is never shown).
-      if (cloud) {
-        card.appendChild(
-          keyMissing
-            ? el(`<p class="set-note tone-warn">${ui.setup.keyMissing}</p>`)
-            : el(`<p class="set-note">${ui.setup.keySet}</p>`),
-        );
+      if (cloud && state.config) {
+        const keyState = el(`<div id="setup-keystate"></div>`);
+        keyState.appendChild(keyStateNode());
+        card.appendChild(keyState);
+        if (picked?.platformUrl) {
+          const link = el<HTMLAnchorElement>(`<a class="setup-link" target="_blank" rel="noreferrer"></a>`);
+          link.href = picked.platformUrl;
+          link.textContent = ui.setup.platformLink;
+          card.appendChild(link);
+        }
       }
       card.appendChild(el(`<p class="set-note">${ui.setup.aiSkipNote}</p>`));
       if (state.saveError) card.appendChild(el(`<p class="set-note tone-warn">${state.saveError}</p>`));
@@ -604,16 +643,14 @@ export function showSetup(opts: { onDone: () => void }): void {
         goto(2);
         render();
       });
-      // Skip only means something when there is something to skip: a typed
-      // key or an unsaved provider pick (otherwise it is exactly Continue),
-      // or a missing key (where Continue is hidden and this is the way out).
-      const dirty =
-        state.keyDraft.trim() !== "" ||
-        (state.providerDraft !== "" && state.providerDraft !== (state.config?.provider ?? ""));
-      if (keyMissing || dirty) {
+      // Skip appears when Continue cannot succeed as-is: nothing has been
+      // supplied (its hint says so) or the last attempt was rejected (the
+      // red line says why). It is the way out of either — and only then.
+      if (keyMissing || state.validateFailed) {
         secondary(ui.setup.skip, () => {
           state.keyDraft = "";
           state.providerDraft = state.config?.provider ?? "";
+          state.validateFailed = false;
           goto(4);
           render();
         });

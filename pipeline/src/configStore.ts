@@ -106,6 +106,7 @@ export function configStatus(): ConfigStatus {
     model: process.env[`${p.id.toUpperCase()}_MODEL`] || p.model,
     apiKeyEnv: p.apiKeyEnv,
     hasKey: Boolean(process.env[p.apiKeyEnv]),
+    platformUrl: p.platformUrl ?? null,
     supportsBatch: p.kind === "gemini",
     editable: { baseUrl: p.kind === "openai", model: true, apiKey: true },
   }));

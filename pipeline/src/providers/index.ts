@@ -36,6 +36,8 @@ export interface ProviderPreset {
   baseUrl?: string;
   model: string;
   apiKeyEnv: string;
+  /** Where a key for this service is made; local services take none. */
+  platformUrl?: string | null;
   /** OpenAI-compatible only: send `response_format`, or leave it to the prompt. */
   jsonMode?: "response_format" | "prompt";
   tokenParam?: "max_tokens" | "max_completion_tokens";
@@ -48,7 +50,7 @@ export interface ProviderPreset {
  * it and `/config` can report whether it is set without ever returning it.
  * Everything but Gemini is OpenAI-compatible and shares one implementation.
  */
-export const PRESETS: ProviderPreset[] = [
+const RAW_PRESETS: ProviderPreset[] = [
   {
     id: "deepseek",
     label: "DeepSeek",
@@ -137,6 +139,70 @@ export const PRESETS: ProviderPreset[] = [
     jsonMode: "prompt",
   },
 ];
+
+/**
+ * Where a key for each cloud service is made — console roots, not deep
+ * links: vendors move their settings pages around, the root lasts. Read
+ * 2026-10-10. The on-machine services take no key and have no platform.
+ */
+const PLATFORM_URLS: Record<string, string> = {
+  deepseek: "https://platform.deepseek.com/api_keys",
+  gemini: "https://aistudio.google.com/app/apikey",
+  siliconflow: "https://cloud.siliconflow.cn",
+  dashscope: "https://bailian.console.aliyun.com",
+  zhipu: "https://open.bigmodel.cn",
+  moonshot: "https://platform.moonshot.cn/console/api-keys",
+  openrouter: "https://openrouter.ai/settings/keys",
+};
+
+export const PRESETS: ProviderPreset[] = RAW_PRESETS.map((p) => ({
+  ...p,
+  platformUrl: PLATFORM_URLS[p.id] ?? null,
+}));
+
+/**
+ * One cheap request that says whether a key (or a local endpoint) works.
+ *
+ * The setup wizard used to accept any text as an API key, write it to
+ * `.env` and continue — the typo surfaced minutes later as a failed job.
+ * Three verdicts, so the page can act on each: `ok` (429 counts: rate
+ * limited still means authenticated), `auth` (401/403 — a wrong key, fix
+ * it), `unreachable` (no answer, no `/models` at that address, or the local
+ * service is down — the reason spelled out). The key never appears in the
+ * result. Read 2026-10-10; a vendor that drops `GET /models` shows up
+ * here as a 404 with the URL in the message, not as a mystery failure.
+ */
+export async function validateProvider(
+  id: string,
+  typedKey?: string,
+): Promise<{ ok: true } | { ok: false; kind: "auth" | "unreachable"; detail: string }> {
+  const preset = presetById(id);
+  if (!preset) return { ok: false, kind: "auth", detail: `unknown provider "${id}"` };
+  const key = (typedKey ?? "").trim() || process.env[preset.apiKeyEnv] || "";
+  const fail = (kind: "auth" | "unreachable", detail: string) => ({ ok: false as const, kind, detail });
+  try {
+    if (preset.kind === "gemini") {
+      // The host the SDK talks to; listing models is free and needs only the
+      // key as a query parameter.
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1${key ? `&key=${encodeURIComponent(key)}` : ""}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (res.ok || res.status === 429) return { ok: true };
+      if (res.status === 400 || res.status === 401 || res.status === 403)
+        return fail("auth", `Gemini rejected the key (${res.status})`);
+      return fail("unreachable", `Gemini answered ${res.status} ${res.statusText}`);
+    }
+    const base = (process.env[`${preset.id.toUpperCase()}_BASE_URL`] || preset.baseUrl || "").replace(/\/+$/, "");
+    if (!base) return fail("unreachable", "no base URL configured");
+    const headers: Record<string, string> = preset.scope === "local" || !key ? {} : { authorization: `Bearer ${key}` };
+    const res = await fetch(`${base}/models`, { headers, signal: AbortSignal.timeout(10_000) });
+    if (res.ok || res.status === 429) return { ok: true };
+    if (res.status === 401 || res.status === 403) return fail("auth", `key rejected (${res.status})`);
+    if (res.status === 404) return fail("unreachable", `no /models at ${base} (404) — check the base URL`);
+    return fail("unreachable", `${res.status} ${res.statusText}`);
+  } catch (err) {
+    return fail("unreachable", (err as Error).message || "no answer");
+  }
+}
 
 export function presetById(id: string): ProviderPreset | null {
   return PRESETS.find((p) => p.id === id) ?? null;

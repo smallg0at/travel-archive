@@ -238,6 +238,8 @@ export const zhHans: Messages = {
     keySet: "✓ 密钥已设置——上方的框留空即可保持原样。",
     keyMissing: "所选服务还没有密钥：填写密钥框，或跳过稍后配置。",
     needKey: "填写密钥，或跳过",
+    keyTyped: "密钥会在点继续时验证。",
+    platformLink: "前往平台获取密钥 ↗",
     aiKeyHint: "API 密钥（留空则保持已保存的）",
     skip: "跳过，稍后在设置里配置",
     scanTitle: "首次扫描",

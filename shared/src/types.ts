@@ -687,6 +687,8 @@ export interface ProviderOption {
   /** The `.env` variable the key is written to, so the form can target it. */
   apiKeyEnv: string;
   hasKey: boolean;
+  /** Where a key for this service is made, or null when none is needed. */
+  platformUrl: string | null;
   /** Gemini's Batch API only; false makes the Batch checkbox meaningless. */
   supportsBatch: boolean;
   /** The fields this provider actually uses, so the form can hide the rest. */

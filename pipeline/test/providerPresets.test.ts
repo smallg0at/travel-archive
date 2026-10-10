@@ -54,3 +54,17 @@ describe("provider scope", () => {
     expect(local).toEqual(["lmstudio", "ollama"]);
   });
 });
+
+/**
+ * The setup wizard links a reader to where a key comes from, and one missing
+ * link leaves that key box with no way out; a local service claiming one
+ * invites a visit that cannot produce a key.
+ */
+describe("platform links", () => {
+  it("names a platform for every cloud service, and none for the local ones", () => {
+    for (const p of PRESETS) {
+      if (p.scope === "local") expect(p.platformUrl, p.id).toBeNull();
+      else expect(p.platformUrl, p.id).toMatch(/^https:\/\//);
+    }
+  });
+});

@@ -34,6 +34,7 @@ import { remoteAccessStatus, runningExposed, runningHost, runningPassword, setRe
 import { appDistIndex, serveApp } from "./staticApp.js";
 import { initProxyDispatcher } from "./proxy.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
+import { validateProvider } from "./providers/index.js";
 import {
   autoSubmitDue,
   autoSubmitStatus,
@@ -703,6 +704,27 @@ const routes: [RegExp, string, Handler][] = [
         .then(() => console.log("  setup: sign-in completed"))
         .catch((err) => console.warn(`  setup sign-in failed: ${(err as Error).message}`));
       return json(res, 202, { pending: true });
+    },
+  ],
+
+  /**
+   * Asks a provider one cheap question: does this key (or endpoint) work?
+   *
+   * Setup used to write any text a reader typed into `.env` and continue;
+   * a typo surfaced minutes later as a failed job. `auth` (401/403) is a
+   * wrong key, `unreachable` is no answer at all — the page blocks on
+   * either. The key itself is never part of the response.
+   */
+  [
+    /^\/config\/validate$/,
+    "POST",
+    async (req, res) => {
+      if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      const body = await readJsonBody<{ provider?: unknown; key?: unknown }>(req);
+      if (typeof body.provider !== "string" || !body.provider)
+        return json(res, 400, { error: "provider is required" });
+      const key = typeof body.key === "string" ? body.key : undefined;
+      return json(res, 200, await validateProvider(body.provider, key));
     },
   ],
 

@@ -244,6 +244,8 @@ export const en = {
     keySet: "✓ Key is set — leave the box blank to keep it.",
     keyMissing: "No key for this service yet: fill the box, or skip and configure later.",
     needKey: "Add the key, or skip",
+    keyTyped: "The key is checked when you press Continue.",
+    platformLink: "Get a key on the platform ↗",
     aiKeyHint: "API key (leave blank to keep the saved one)",
     skip: "Skip — configure later in Settings",
     scanTitle: "First scan",
