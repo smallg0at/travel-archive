@@ -145,54 +145,61 @@ export async function restorePrefs(): Promise<Restored> {
   const server = await getPrefs();
   if (!server) return restored;
 
-  // A remote reader is a guest on someone else's archive: its appearance is
-  // its own, kept in this browser, while the machine holding the archive keeps
-  // whatever its owner chose. Without this the page adopted the server's
-  // theme on load and then silently lost whatever the guest picked, because
-  // the server refuses a write from another machine (see the write gate in
-  // serve.ts) and the next reconcile put the server's value back.
-  if (!isLocalMachine) return restored;
+  // A remote reader is a guest on someone else's archive. **Appearance is the
+  // guest's own** — kept in this browser, while the machine holding the archive
+  // keeps whatever its owner chose. Without this the page adopted the server's
+  // theme on load and then silently lost whatever the guest picked, because the
+  // server refuses a write from another machine (see the write gate in
+  // serve.ts) and the next reconcile put the server's value back. The
+  // **content language is still the archive's**, adopted below either way:
+  // captions and summaries are written in it, so a guest reading them in
+  // another language would be reading a translation that does not exist.
+  const guest = !isLocalMachine;
 
   const mine = local();
   const seed: Partial<AppPrefs> = {};
 
-  if (server.theme === null) seed.theme = mine.theme;
-  else if (server.theme !== mine.theme) {
-    // "system" is stored as the absence of the key — see theme.ts.
-    if (server.theme === "system") {
-      try {
-        localStorage.removeItem(THEME_KEY);
-      } catch {
-        /* as in write() */
-      }
-    } else write(THEME_KEY, server.theme);
-    restored.theme = true;
-  }
+  if (!guest) {
+    if (server.theme === null) seed.theme = mine.theme;
+    else if (server.theme !== mine.theme) {
+      // "system" is stored as the absence of the key — see theme.ts.
+      if (server.theme === "system") {
+        try {
+          localStorage.removeItem(THEME_KEY);
+        } catch {
+          /* as in write() */
+        }
+      } else write(THEME_KEY, server.theme);
+      restored.theme = true;
+    }
 
-  if (server.density === null) {
-    if (mine.density) seed.density = mine.density;
-  } else if (server.density !== mine.density) {
-    write(DENSITY_KEY, server.density);
-    restored.density = true;
-  }
+    if (server.density === null) {
+      if (mine.density) seed.density = mine.density;
+    } else if (server.density !== mine.density) {
+      write(DENSITY_KEY, server.density);
+      restored.density = true;
+    }
 
-  if (server.sidebarWidth === null) {
-    if (mine.sidebarWidth !== null) seed.sidebarWidth = mine.sidebarWidth;
-  } else if (server.sidebarWidth !== mine.sidebarWidth) {
-    write(SIDEBAR_WIDTH_KEY, String(server.sidebarWidth));
-  }
+    if (server.sidebarWidth === null) {
+      if (mine.sidebarWidth !== null) seed.sidebarWidth = mine.sidebarWidth;
+    } else if (server.sidebarWidth !== mine.sidebarWidth) {
+      write(SIDEBAR_WIDTH_KEY, String(server.sidebarWidth));
+    }
 
-  if (server.navOpenGroups === null) {
-    if (mine.navOpenGroups) seed.navOpenGroups = mine.navOpenGroups;
-  } else if (JSON.stringify(server.navOpenGroups) !== JSON.stringify(mine.navOpenGroups)) {
-    write(OPEN_GROUPS_KEY, JSON.stringify(server.navOpenGroups));
-  }
+    if (server.navOpenGroups === null) {
+      if (mine.navOpenGroups) seed.navOpenGroups = mine.navOpenGroups;
+    } else if (JSON.stringify(server.navOpenGroups) !== JSON.stringify(mine.navOpenGroups)) {
+      write(OPEN_GROUPS_KEY, JSON.stringify(server.navOpenGroups));
+    }
 
-  if (Object.keys(seed).length > 0) savePrefs(seed);
+    if (Object.keys(seed).length > 0) savePrefs(seed);
+  }
 
   // Last, and on its own: this one ends the page rather than returning to it.
   if (server.contentLang === null) {
-    if (mine.contentLang) savePrefs({ contentLang: mine.contentLang });
+    // Only the machine that owns the store may seed it; a guest has nothing to
+    // tell the server anyway (its writes are refused).
+    if (!guest && mine.contentLang) savePrefs({ contentLang: mine.contentLang });
   } else if (server.contentLang !== mine.contentLang) {
     // Learned late, applied where nothing has been drawn: by now the reader has
     // seen only the static shell, so `ui`, `loc` and <html lang> can all be

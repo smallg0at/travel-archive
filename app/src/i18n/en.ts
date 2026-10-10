@@ -457,8 +457,6 @@ export const en = {
 
     appearance: "Appearance",
     sidebarWidth: "Sidebar width",
-    appearanceLocalOnly:
-      "Appearance is kept in this browser. The machine holding the archive has its own theme and density, and this page does not change them.",
 
     storage: "Local storage",
     files: (n: number) => count(n, "file", "files"),
