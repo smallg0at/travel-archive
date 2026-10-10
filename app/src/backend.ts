@@ -824,7 +824,13 @@ export async function getJob(id: string): Promise<JobRecord | null> {
  * close it from this side too.
  */
 export function watchJob(id: string, onUpdate: (job: JobRecord) => void): () => void {
-  const source = new EventSource(`${BACKEND}/jobs/${id}/events`);
+  // `withCredentials` matters for a reader that is not this machine. The stream
+  // sits behind the same gate as every other read (serve.ts), this page and the
+  // API are different origins even on one machine, and a cross-origin
+  // EventSource sends no cookies unless asked — so without this the stream
+  // answers 401, and the panel paints its first frame and then never moves.
+  // `apiFetch` asks for the same thing (see its note); this one did not.
+  const source = new EventSource(`${BACKEND}/jobs/${id}/events`, { withCredentials: true });
 
   source.addEventListener("message", (event) => {
     let job: JobRecord;
