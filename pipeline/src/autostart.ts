@@ -199,7 +199,7 @@ shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Fi
 const reg = (args: string[]) => exec("reg", args, { windowsHide: true });
 
 /**
- * What the Run key holds, as this process last knew it.
+ * What the Run key **actually stores**, as this process last knew it.
  *
  * **Read once, then maintained here** — and that difference is between two
  * kinds of caller, which is why it is worth the state. Populating the control
@@ -216,33 +216,53 @@ const reg = (args: string[]) => exec("reg", args, { windowsHide: true });
  * Trusting the cache is deliberate: this is the server's own record, corrected
  * by the next save if someone edits the key by hand outside it.
  */
-let registration: boolean | null = null;
+let registration: string | null = null;
 
-/** Whether the Run key holds our value. Any query failure reads as "not registered". */
-async function registered(): Promise<boolean> {
-  if (!supported) return false;
+/**
+ * The stored data — "" when the value is absent or unreadable.
+ *
+ * The value *name* existing was never the point: there is one name per
+ * machine, and a second archive home's line under it made that home's
+ * switch read as "on" while the machine would start someone else's archive
+ * at login. Holding the string instead of a boolean is what lets
+ * `autostartStatus` report what is registered rather than what this home
+ * would register — the desync the settings page was reported for.
+ */
+async function registeredLine(): Promise<string> {
+  if (!supported) return "";
   if (registration !== null) return registration;
   try {
-    await reg(["query", RUN_KEY, "/v", VALUE]);
-    registration = true;
-    return true;
+    const { stdout } = await reg(["query", RUN_KEY, "/v", VALUE]);
+    const line = stdout.split(/\r?\n/).find((l) => l.includes("REG_SZ"));
+    // `reg query` prints `name REG_SZ data`; everything after the type is the
+    // value, and the data is whatever wrote it last — this home, another one,
+    // or a hand edit.
+    registration = line ? line.slice(line.indexOf("REG_SZ") + "REG_SZ".length).trim() : "";
   } catch {
-    registration = false;
-    return false;
+    // No value of that name (reg exits non-zero) or the read failed: either
+    // way nothing starts at sign-in, as far as this process can tell.
+    registration = "";
   }
+  return registration;
 }
 
 /** Asks once, at start-up, so the first Settings page does not have to. */
 export function warmAutostartCache(): void {
-  void registered();
+  void registeredLine();
 }
 
 export async function autostartStatus(): Promise<AutostartStatus> {
+  const command = await registeredLine();
+  // One name per machine; "enabled" means the stored line points at *this*
+  // home's wrapper. Another home's line reads as off here, with its line in
+  // `command` so the page shows what the machine actually starts at login
+  // instead of a checked box that would start someone else's archive.
+  const mine = command !== "" && command.includes(homeFile(WRAPPER));
   return {
     supported,
-    enabled: await registered(),
+    enabled: mine,
     script: homeFile(LAUNCHER),
-    command: supported ? registeredValue() : "",
+    command,
   };
 }
 
@@ -277,14 +297,14 @@ export async function setAutostart(enabled: boolean): Promise<AutostartStatus> {
     await writeFile(homeFile(LAUNCHER), `\uFEFF${launcherSource(entry, env.servePort)}`, "utf-8");
     await writeFile(homeFile(WRAPPER), wrapperSource(), "ascii");
     await reg(["add", RUN_KEY, "/v", VALUE, "/t", "REG_SZ", "/d", registeredValue(), "/f"]);
-    registration = true;
+    registration = registeredValue();
     return autostartStatus();
   }
 
-  if (await registered()) {
+  if ((await registeredLine()) !== "") {
     await reg(["delete", RUN_KEY, "/v", VALUE, "/f"]);
   }
-  registration = false;
+  registration = "";
   await Promise.all([rm(homeFile(LAUNCHER), { force: true }), rm(homeFile(WRAPPER), { force: true })]);
   return autostartStatus();
 }

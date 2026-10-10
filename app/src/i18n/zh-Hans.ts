@@ -286,6 +286,8 @@ export const zhHans: Messages = {
     backgroundUnsupported: "开机启动仅在 Windows 上可用。",
     backgroundOn: "登录时自动启动档案服务器",
     backgroundScript: "启动脚本",
+    backgroundRegistered: "注册命令",
+    backgroundForeign: "机器上已有注册，但指向另一份档案——登录时启动的不是它。",
     remote: "远程访问",
     remoteNote: "档案服务器当前的监听方式。局域网读取需要访问口令；无论怎么设置，写入都只限本机。保存后需重启生效。",
     remoteHost: "监听地址",

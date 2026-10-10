@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { launcherSource, registeredValue, runtimePath, wrapperSource } from "../src/autostart.js";
+import { autostartStatus, launcherSource, registeredValue, runtimePath, wrapperSource } from "../src/autostart.js";
 
 /**
  * The sign-in launcher, line by line.
@@ -161,6 +161,25 @@ describe("launcher", () => {
       expect(launcherSource(ENTRY, 18419)).not.toContain("$env:ARCHIVE_HOME");
     } finally {
       if (previous !== undefined) process.env.ARCHIVE_HOME = previous;
+    }
+  });
+});
+
+/**
+ * The Run key is one per machine, but the switch answers a per-home
+ * question. A checked box that starts *another* home's archive at login is
+ * the desync the fourth round reported: enabled must imply the registration
+ * belongs here, and a foreign registration must still show its line.
+ */
+describe("autostartStatus", () => {
+  it("reads enabled only for this home's registration", async () => {
+    const status = await autostartStatus();
+    if (status.enabled) {
+      expect(status.command).toContain(String(process.env.ARCHIVE_HOME));
+    } else if (status.supported && status.command) {
+      expect(status.command).toContain("serve-at-login.vbs");
+    } else {
+      expect(status.enabled).toBe(false);
     }
   });
 });

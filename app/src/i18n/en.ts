@@ -293,6 +293,8 @@ export const en = {
     backgroundUnsupported: "Sign-in start-up is only available on Windows.",
     backgroundOn: "Start the job server when I sign in",
     backgroundScript: "Startup script",
+    backgroundRegistered: "Registered command",
+    backgroundForeign: "Registered for a different archive home — logging in starts that one, not this.",
     remote: "Remote access",
     remoteNote:
       "What the job server is bound to. Reading elsewhere needs the shared password; writing is this machine's either way. Saved changes wait for a restart.",

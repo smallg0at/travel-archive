@@ -738,7 +738,7 @@ export interface ConfigStatus {
 export interface AutostartStatus {
   /** False off Windows, where there is no Run key to write. */
   supported: boolean;
-  /** Whether the value is registered now. */
+  /** Whether the value is registered now **for this archive's home** — the Run key is one per machine, so another home's registration reads as false (its line stays in `command`). */
   enabled: boolean;
   /** The launcher's path, so the UI can name the file rather than describe it. */
   script: string;

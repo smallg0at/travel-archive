@@ -58,7 +58,10 @@ const DEFAULTS: SyncFile = {
   lastState: null,
   lastScanAt: null,
   autoSyncOnLaunch: true,
-  intervalMinutes: 0,
+  // Hourly, not "never": a fresh home stays in step without anyone opening
+  // Settings — most of the time there is nothing to check, so the check is
+  // cheap (the reviewer's call; files that stored a value keep it).
+  intervalMinutes: 60,
 };
 
 let cached: SyncFile | null = null;

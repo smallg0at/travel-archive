@@ -22,24 +22,15 @@ import {
   canWrite,
   checkHealth,
   getConfig,
-  oobeFolder,
-  oobeFolders,
   oobeSignIn,
   oobeState,
   saveConfig,
   startScan,
   validateGeneration,
   watchJob,
-  type FolderProbe,
   type OobeState,
 } from "./backend";
-
-interface Picking {
-  path: string;
-  folders: string[];
-  loading: boolean;
-  notFound: boolean;
-}
+import { createFolderPanel, type FolderPanel } from "./photoFolder";
 
 interface ScanState {
   job: JobRecord | null;
@@ -54,12 +45,8 @@ interface State {
   signedIn: boolean;
   deviceCode: OobeState["deviceCode"];
   signingIn: boolean;
+  /** Seed for the folder panel; after construction the panel owns the path. */
   photosFolder: string;
-  editing: boolean;
-  folderText: string;
-  probe: FolderProbe | null;
-  probing: boolean;
-  pick: Picking | null;
   config: ConfigStatus | null;
   keyDraft: string;
   /** The provider picked in the wizard, held across re-renders until saved. */
@@ -81,11 +68,6 @@ function fresh(): State {
     deviceCode: null,
     signingIn: false,
     photosFolder: "",
-    editing: false,
-    folderText: "",
-    probe: null,
-    probing: false,
-    pick: null,
     config: null,
     keyDraft: "",
     providerDraft: "",
@@ -181,7 +163,7 @@ export function showSetup(opts: { onDone: () => void }): void {
     state.deviceCode = s.deviceCode;
     if (s.photosFolder !== state.photosFolder) {
       state.photosFolder = s.photosFolder;
-      state.probe = null; // a folder set elsewhere has not been measured here
+      folderPanel?.setServerPath(s.photosFolder); // set elsewhere: not measured here
     }
     const after = `${state.signedIn}${state.deviceCode?.code ?? ""}`;
     if (before !== after) render();
@@ -192,77 +174,17 @@ export function showSetup(opts: { onDone: () => void }): void {
     poll = window.setInterval(() => void refreshOobe(), 2000);
   };
 
-  // --- page 2 -------------------------------------------------------------
-  /**
-   * Probes a folder. The answer carries the path it measured
-   * (`FolderProbe.path`), and the page draws it under that path only — the
-   * old state updated `photosFolder` and `probe` along different routes, so
-   * a ✓ for a sub-folder could outlive a change back to the root and only a
-   * refresh straightened it out.
-   */
-  const probeFolder = async (confirm: boolean, path?: string): Promise<void> => {
-    state.probing = true;
-    state.saveError = null;
-    render();
-    state.probe = await oobeFolder(confirm, path);
-    state.probing = false;
-    render();
-  };
-
-  /**
-   * Validates a candidate path and only then writes it: the probe is a
-   * read-only question, `POST /config` stays the one way a setting changes,
-   * and a folder that 404s never reaches the config file (the old flow saved
-   * first — one click on a typo wrote it into `.env`).
-   */
-  const confirmFolder = async (candidate: string): Promise<void> => {
-    if (!candidate) return;
-    await probeFolder(false, candidate);
-    if (state.probe?.state !== "ok" || state.probe.path !== candidate) return;
-    try {
-      await saveConfig({ ONEDRIVE_PHOTOS_FOLDER: candidate });
-      state.photosFolder = candidate;
-      state.folderText = candidate;
-      state.editing = false;
-      render();
-    } catch (err) {
-      state.saveError = (err as Error).message;
-      render();
+  // --- page 2: the folder panel — shared with Settings (photoFolder.ts) ---
+  let folderPanel: FolderPanel | null = null;
+  let paintFooter2: (() => void) | null = null;
+  const panelOf = (): FolderPanel => {
+    if (!folderPanel) {
+      folderPanel = createFolderPanel(state.photosFolder);
+      // Anything that can flip the Continue gate repaints the footer alone —
+      // the card must not rebuild while the caret is in the panel's input.
+      folderPanel.onChange(() => paintFooter2?.());
     }
-  };
-
-  /** What Continue waits on: measured, measuring the configured path, not mid-edit. */
-  const folderOk = (): boolean =>
-    state.probe?.state === "ok" && state.probe.path === state.photosFolder && !state.editing && !state.probing;
-
-  const openPicker = async (start: string): Promise<void> => {
-    state.pick = { path: start, folders: [], loading: true, notFound: false };
-    render();
-    const listed = await oobeFolders(start);
-    if (!state.pick) return;
-    state.pick.folders = listed?.folders ?? [];
-    state.pick.notFound = listed?.state === "not-found";
-    state.pick.loading = false;
-    render();
-  };
-
-  const descend = async (name: string): Promise<void> => {
-    if (!state.pick) return;
-    const path = state.pick.path ? `${state.pick.path}/${name}` : name;
-    await openPicker(path);
-  };
-
-  const upOne = async (): Promise<void> => {
-    if (!state.pick) return;
-    const path = state.pick.path.split("/").slice(0, -1).join("/");
-    await openPicker(path);
-  };
-
-  const choose = async (): Promise<void> => {
-    const path = state.pick?.path ?? "";
-    state.pick = null;
-    if (path) await confirmFolder(path);
-    else render();
+    return folderPanel;
   };
 
   // --- page 3 -------------------------------------------------------------
@@ -447,133 +369,40 @@ export function showSetup(opts: { onDone: () => void }): void {
           goto(2);
           stopPoll();
           render();
-          void probeFolder(false);
         },
         !state.signedIn,
       );
     } else if (state.step === 2) {
       card.appendChild(el(`<h2>${ui.setup.folderTitle}</h2>`));
-      // The status line serves both modes and always names the path it
-      // measured: `FolderProbe.path` must match what is on screen, or the
-      // line reads "not confirmed yet" — never another folder's answer.
-      const statusNode = (): HTMLElement => {
-        if (state.probing) return el(`<p class="set-note">${ui.setup.checking}</p>`);
-        const active = state.editing ? state.folderText.trim() : state.photosFolder;
-        const p = state.probe;
-        if (!p || p.path !== active) return el(`<p class="set-note">${ui.setup.unchecked}</p>`);
-        if (p.state === "ok") return el(`<p class="setup-ok">✓ ${ui.setup.folderExists(p.count ?? 0, p.months ?? 0)}</p>`);
-        if (p.state === "not-found") return el(`<p class="set-note tone-warn">${ui.setup.notFound}</p>`);
-        return el(`<p class="set-note tone-warn">${ui.setup.noToken}</p>`);
+      card.appendChild(panelOf().root);
+      // The footer keys off the panel's verdict; repaint it alone when the
+      // panel reports a change (typing inside must not rebuild the card).
+      paintFooter2 = (): void => {
+        foot.replaceChildren();
+        secondary(ui.setup.back, () => {
+          goto(1);
+          render();
+        });
+        const good = panelOf().ok();
+        if (!good) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needFolder}</span>`));
+        primary(
+          ui.setup.continue,
+          () => {
+            void (async () => {
+              // Green on screen is not agreement: the server re-probes and
+              // stamps here — the record that a human agreed to this path.
+              // It releases no scan; the first scan runs from page 4.
+              if (await panelOf().stamp()) {
+                goto(3);
+                render();
+                void loadConfig();
+              }
+            })();
+          },
+          !good,
+        );
       };
-      if (state.editing) {
-        const field = el(`<div class="setup-field"></div>`);
-        const input = el<HTMLInputElement>(`<input type="text" class="setup-input"></input>`);
-        input.value = state.folderText;
-        input.addEventListener("input", () => {
-          state.folderText = input.value;
-          // Typing retires an answer that no longer describes the text — in
-          // place, because a full re-render here would eat the caret.
-          if (state.probe && state.probe.path !== input.value.trim()) {
-            state.probe = null;
-            document.getElementById("setup-status")?.replaceChildren(statusNode());
-          }
-        });
-        field.appendChild(input);
-        const save = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
-        save.textContent = ui.setup.check;
-        save.addEventListener("click", () => void confirmFolder(state.folderText.trim()));
-        field.appendChild(save);
-        const browse = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
-        browse.textContent = ui.setup.browse;
-        browse.addEventListener("click", () => void openPicker(state.folderText.trim() || ""));
-        field.appendChild(browse);
-        card.appendChild(field);
-        card.appendChild(el(`<p class="set-note">${ui.setup.monthHint}</p>`));
-      } else {
-        card.appendChild(el(`<p class="setup-path">${state.photosFolder}</p>`));
-        const change = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
-        change.textContent = ui.setup.change;
-        change.addEventListener("click", () => {
-          state.editing = true;
-          state.folderText = state.photosFolder;
-          render();
-        });
-        card.appendChild(change);
-      }
-      const statusHost = el(`<div id="setup-status"></div>`);
-      statusHost.appendChild(statusNode());
-      card.appendChild(statusHost);
-      // An unmeasured folder offers the confirm action where the status
-      // sits — checking used to be a mystery keystroke with no visible
-      // result in edit mode (and no result at all for a miss).
-      if (!state.editing && !state.probing && !folderOk()) {
-        const confirm = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
-        confirm.textContent = ui.setup.check;
-        confirm.addEventListener("click", () => void confirmFolder(state.photosFolder));
-        card.appendChild(confirm);
-      }
-      if (state.saveError) card.appendChild(el(`<p class="set-note tone-warn">${state.saveError}</p>`));
-      if (state.pick) {
-        const panel = el(`<div class="setup-picker"></div>`);
-        panel.appendChild(el(`<p class="setup-path">${state.pick.path || "/"}</p>`));
-        const up = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
-        up.textContent = ui.setup.pickUp;
-        up.disabled = !state.pick.path;
-        up.addEventListener("click", () => void upOne());
-        panel.appendChild(up);
-        const list = el(`<div class="setup-pick-list"></div>`);
-        if (state.pick.loading) list.appendChild(el(`<p class="set-note">${ui.setup.checking}</p>`));
-        else if (state.pick.notFound) list.appendChild(el(`<p class="set-note tone-warn">${ui.setup.notFound}</p>`));
-        else if (!state.pick.folders.length) list.appendChild(el(`<p class="set-note">${ui.setup.pickEmpty}</p>`));
-        for (const name of state.pick.folders) {
-          const row = el(`<div class="setup-pick-row"></div>`);
-          const down = el<HTMLButtonElement>(`<button type="button" class="linkish"></button>`);
-          down.textContent = name;
-          down.addEventListener("click", () => void descend(name));
-          row.appendChild(down);
-          const pick = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
-          pick.textContent = ui.setup.pickChoose;
-          pick.addEventListener("click", () => {
-            const path = state.pick?.path ? `${state.pick.path}/${name}` : name;
-            state.pick = null;
-            void confirmFolder(path);
-          });
-          row.appendChild(pick);
-          list.appendChild(row);
-        }
-        panel.appendChild(list);
-        const close = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
-        close.textContent = ui.setup.pickClose;
-        close.addEventListener("click", () => {
-          state.pick = null;
-          render();
-        });
-        panel.appendChild(close);
-        card.appendChild(panel);
-      }
-      secondary(ui.setup.back, () => {
-        goto(1);
-        render();
-      });
-      if (!folderOk()) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needFolder}</span>`));
-      primary(
-        ui.setup.continue,
-        () => {
-          void (async () => {
-            // Green on screen is not agreement: the server re-probes and
-            // stamps here, and that stamp is what releases the first scan —
-            // until now nothing ever sent `confirm: true`, so the folder was
-            // never recorded and the wizard came back on every launch.
-            await probeFolder(true);
-            if (state.probe?.state === "ok" && state.probe.path === state.photosFolder) {
-              goto(3);
-              render();
-              void loadConfig();
-            } else render();
-          })();
-        },
-        !folderOk(),
-      );
+      paintFooter2();
     } else if (state.step === 3) {
       card.appendChild(el(`<h2>${ui.setup.aiTitle}</h2>`));
       // Why this page exists, before any control: what setting a provider

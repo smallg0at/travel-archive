@@ -30,6 +30,7 @@ import {
   type ScanMode,
 } from "./backend";
 import { el } from "./photoUi";
+import { createFolderPanel } from "./photoFolder";
 import { renderDensityControl, getCachedIndex, formatMonthLabel } from "./album";
 import { resetSidebarWidth } from "./chrome";
 import { renderThemeControl } from "./theme";
@@ -280,6 +281,7 @@ export async function showSettings(): Promise<void> {
   // archive it is reading and how this window looks — the server would refuse
   // every control in these sections anyway.
   if (writable) {
+    frag.appendChild(photosFolderSection());
     frag.appendChild(scanSection(sync));
     frag.appendChild(backgroundSection());
     frag.appendChild(remoteSection());
@@ -337,6 +339,22 @@ function librarySection(archive: ArchiveStatus | null): HTMLElement {
   };
   update(archive);
   archiveUpdaters.push(update);
+  return s;
+}
+
+/**
+ * Which photos folder this archive reads.
+ *
+ * The wizard asked once, then the field vanished: after setup there was no
+ * way to point the archive at a different folder at all (the write was
+ * whitelisted, the picker existed — Settings simply never mounted either).
+ * This is the same panel the wizard used, so probe-before-write and the
+ * path-keyed status cannot fork between the two surfaces.
+ */
+function photosFolderSection(): HTMLElement {
+  const s = section(ui.setup.folderTitle);
+  const body = s.querySelector(".set-body")!;
+  body.appendChild(createFolderPanel("").root);
   return s;
 }
 
@@ -1131,12 +1149,14 @@ function backgroundSection(): HTMLElement {
   );
   const box = control.querySelector("input") as HTMLInputElement;
   const script = row(ui.settings.backgroundScript, "");
+  const registered = row(ui.settings.backgroundRegistered, "");
+  const foreign = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
   const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
   // The one control that must exist when the server cannot answer: every row
   // beside it asks the server something, and this one is for when there is
   // nobody to ask. Shell-only (IPC), so it exists exactly where a window does.
   const startBtn = el<HTMLButtonElement>(`<button type="button" class="set-btn" hidden>${ui.settings.startServer}</button>`);
-  body.append(note, control, script, problem, startBtn);
+  body.append(note, control, script, registered, foreign, problem, startBtn);
 
   startBtn.addEventListener("click", () => {
     const api = window.electronAPI;
@@ -1189,6 +1209,14 @@ function backgroundSection(): HTMLElement {
     // when there is a file to open — it is the thing to edit if Node moves.
     script.hidden = !status.enabled;
     if (status.enabled) setRowValue(script, status.script);
+    // What the Run key actually holds — the field the contract always
+    // carried ("shown, so an empty setting is not mistaken for a broken
+    // one") but never rendered, which is how a checked box could mean
+    // "someone else's home starts at login".
+    registered.hidden = !status.command;
+    if (status.command) setRowValue(registered, status.command);
+    foreign.hidden = status.enabled || !status.command;
+    if (!foreign.hidden) foreign.textContent = ui.settings.backgroundForeign;
   };
 
   box.addEventListener("change", () => {
