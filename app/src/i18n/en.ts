@@ -22,7 +22,7 @@ export const en = {
     signInToLoadArchive: "Sign in to load your archive.",
     failedToLoad: (message: string) => `Failed to load archive: ${message}`,
     failedToStart: (message: string) => `Failed to start: ${message}`,
-    emptyArchiveHtml: `Archive is empty. Run <code>npm run --workspace pipeline scan</code> to index your photos.`,
+    emptyArchiveHtml: `The archive is empty. The scan found no photos — check the photos folder under Settings → Library and scan again.`,
   },
 
   common: {

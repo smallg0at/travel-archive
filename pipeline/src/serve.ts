@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { originAllowed } from "./originCheck.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError, listChildFolderNames, listFolderFileNames } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
@@ -753,7 +753,13 @@ const routes: [RegExp, string, Handler][] = [
       if (!token) return json(res, 200, { state: "no-token", path: target });
       try {
         const names = await listFolderFileNames(token, target);
-        const months = names.filter((n) => /^\d{4}-\d{2}$/.test(n) || /^\d{4}$/.test(n)).length;
+        // Period folders: top-level `yyyy-mm`/`yyyy` as always, plus bare
+        // `01`..`12` when the target itself is a year — the same rule the
+        // scan applies (monthUnder), so a green number and a real scan can
+        // never disagree again (the 2025-subfolder test showed 0/0 as green).
+        const months = names.filter(
+          (n) => /^\d{4}-\d{2}$/.test(n) || /^\d{4}$/.test(n) || monthUnder(target, n) !== null,
+        ).length;
         if (body.confirm === true && target === env.photosFolder) {
           await writeOobe({ photosFolderValidatedAt: new Date().toISOString() });
         }

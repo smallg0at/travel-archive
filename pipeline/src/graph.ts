@@ -237,35 +237,50 @@ export interface PhotoFolder {
  * are returned as month-less, non-recursive entries — their shard comes from
  * each photo's own capture date instead of from the folder.
  */
+/**
+ * The month a folder implies from its parent, or null when it is not a
+ * month folder. One rule for two layouts: a flat `yyyy-mm` anywhere, and a
+ * bare `01`..`12` whose **parent** is a year — including when the parent is
+ * the photos folder itself. Choosing `.../2025` as the root used to leave
+ * those bare months to the loop below, which walked into them as if they
+ * were year folders and found only photos: a green probe and a scan of
+ * nothing (measured 2026-10-10, the first wizard test of a subfolder).
+ * `serve.ts` counts probe periods with this same function — the two must
+ * agree or "0 period folders" reads as a verdict when it is only a gap.
+ */
+export function monthUnder(parentPath: string, name: string): { month: string; year: string } | null {
+  if (FLAT_MONTH_FOLDER.test(name)) return { month: name, year: name.slice(0, 4) };
+  const parentName = parentPath.split("/").pop() ?? "";
+  if (YEAR_FOLDER.test(parentName) && NESTED_MONTH_FOLDER.test(name)) {
+    return { month: `${parentName}-${name.padStart(2, "0")}`, year: parentName };
+  }
+  return null;
+}
+
 export async function listPhotoFolders(token: string, rootPath: string): Promise<PhotoFolder[]> {
   const folders: PhotoFolder[] = [];
+  const rootName = rootPath.split("/").pop() ?? "";
 
   for (const item of await listChildren(token, rootPath, "id,name,folder")) {
     if (!item.folder) continue;
     const path = `${rootPath}/${item.name}`;
 
-    if (FLAT_MONTH_FOLDER.test(item.name)) {
-      folders.push({ path, month: item.name, year: item.name.slice(0, 4), recursive: true });
-      continue;
-    }
-
     if (YEAR_FOLDER.test(item.name)) {
       const year = item.name;
       for (const sub of await listChildren(token, path, "id,name,folder")) {
-        if (sub.folder && NESTED_MONTH_FOLDER.test(sub.name)) {
-          folders.push({
-            path: `${path}/${sub.name}`,
-            month: `${year}-${sub.name.padStart(2, "0")}`,
-            year,
-            recursive: true,
-          });
-        }
+        if (!sub.folder) continue;
+        const month = monthUnder(path, sub.name);
+        if (month) folders.push({ path: `${path}/${sub.name}`, month: month.month, year: month.year, recursive: true });
       }
       folders.push({ path, month: null, year, recursive: false });
+      continue;
     }
+
+    const month = monthUnder(rootPath, item.name);
+    if (month) folders.push({ path, month: month.month, year: month.year, recursive: true });
   }
 
-  folders.push({ path: rootPath, month: null, year: null, recursive: false });
+  folders.push({ path: rootPath, month: null, year: YEAR_FOLDER.test(rootName) ? rootName : null, recursive: false });
   return folders.sort((a, b) => (a.month ?? a.year ?? "").localeCompare(b.month ?? b.year ?? ""));
 }
 

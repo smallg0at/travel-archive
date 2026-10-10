@@ -20,7 +20,7 @@ export const zhHans: Messages = {
     signInToLoadArchive: "登录后即可加载照片档案。",
     failedToLoad: (message) => `档案加载失败：${message}`,
     failedToStart: (message) => `启动失败：${message}`,
-    emptyArchiveHtml: `照片档案为空。请运行 <code>npm run --workspace pipeline scan</code> 为照片建立索引。`,
+    emptyArchiveHtml: `照片档案为空。扫描没有找到照片——请在“设置 → 档案”检查照片目录后重新扫描。`,
   },
 
   common: {
