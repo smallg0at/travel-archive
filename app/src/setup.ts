@@ -536,10 +536,16 @@ export function showSetup(opts: { onDone: () => void }): void {
         if (tail) big.appendChild(el(`<pre class="setup-log"></pre>`)).textContent = tail;
         card.appendChild(big);
       }
-      secondary(ui.setup.back, () => {
-        goto(3);
-        render();
-      });
+      // Back is for undoing a choice, not for abandoning a run: once the scan
+      // is going, the page belongs to it — stepping back would reopen the
+      // folder decision while photos are being written into months. A failure
+      // is the one case where the folder is worth a second look.
+      if (!scan || scan.error) {
+        secondary(ui.setup.back, () => {
+          goto(3);
+          render();
+        });
+      }
     }
     return page;
   };
