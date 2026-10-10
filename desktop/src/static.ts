@@ -138,7 +138,7 @@ function isExposed(host: string): boolean {
 }
 
 /** The policy for one server, given whether it is reachable beyond loopback. */
-function contentSecurityPolicy(exposed: boolean): string {
+export function contentSecurityPolicy(exposed: boolean): string {
   const extra = networkOrigins(exposed).map((o) => ` ${o}`).join("");
   return [
     "default-src 'self'",
