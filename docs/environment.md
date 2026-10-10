@@ -229,3 +229,30 @@ the real library's 32,805 photos while the throwaway's `/config` said
 otherwise). Rebuild `app/dist` plainly when done — a stale test pointer ships
 into the desktop shell and nothing works until it is noticed. This supersedes
 the `preview --port 4173` recipe above, which is kept as history.
+
+**Reproducing a reader that is not this machine, without putting anything on the
+network.** `access.ts` calls a peer remote unless its socket address is `::1`,
+`127.0.0.1` or `::ffff:127.0.0.1`, and that one test decides both the read gate
+and `canWrite`. Connecting to `127.0.0.2` does **not** fool it: Windows normalises
+the source address of a loopback connection to `127.0.0.1` (measured 2026-10-10 —
+the connection was made to `127.0.0.2` and arrived as `127.0.0.1`). What does work
+is a local forwarding proxy that dials upstream with
+`net.connect({ host: "127.0.0.1", port, localAddress: "127.0.0.2" })`: the server
+then sees `127.0.0.2` while both ends stay inside `127/8`, so nothing is exposed
+and no LAN address is involved. Point the browser at the proxy and serve the page
+from somewhere else — the two being different origins is usually part of the thing
+under test.
+
+Two conditions come with it. The throwaway must set `ARCHIVE_HOST=0.0.0.0`,
+because `access.ts` only gates reads (and so only wants `ARCHIVE_PASSWORD`) when
+the server is *exposed*; bound to loopback, `canRead` is unconditionally true and
+there is nothing to reproduce. And an empty `ARCHIVE_HOME` is enough: a job still
+starts (it fails for want of a token), which is all a progress-stream test needs.
+
+That is how the remote-reader progress bug was found on 2026-10-10. Every read
+went through `apiFetch`'s `credentials: "include"`, but the progress stream opened
+a bare `new EventSource` — and a cross-origin EventSource sends no cookies unless
+told to, so `serve.ts`'s gate answered 401 while the rest of the page worked, and
+the Activity panel painted one frame and froze. A minimal page asking the same URL
+both ways, with nothing else differing, gave `error` against `open`. `watchJob`
+now passes `{ withCredentials: true }`.
