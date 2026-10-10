@@ -435,6 +435,8 @@ export const zhHans: Messages = {
 
     appearance: "外观",
     sidebarWidth: "侧栏宽度",
+    appearanceLocalOnly:
+      "外观保存在这个浏览器里。档案所在的机器有它自己的主题与密度，本页不会改动它们。",
 
     storage: "本地存储",
     files: (n) => `${num(n)} 个文件`,

@@ -1044,6 +1044,12 @@ function appearanceSection(writable = true): HTMLElement {
   const sidebar = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.sidebarWidth}</span></div>`);
   sidebar.appendChild(button(ui.common.reset, resetSidebarWidth));
   body.appendChild(sidebar);
+
+  // Said out loud for a guest: these choices live in this browser, and the
+  // machine holding the archive keeps its own. The alternative — a reader
+  // finding that a setting it changed has quietly reverted on reload — is the
+  // kind of silence this project treats as a bug.
+  if (!writable) body.appendChild(el(`<p class="set-note">${ui.settings.appearanceLocalOnly}</p>`));
   return s;
 }
 

@@ -1,5 +1,5 @@
 import type { AppPrefs } from "@travel-archive/shared";
-import { getPrefs, savePrefs } from "./backend";
+import { getPrefs, isLocalMachine, savePrefs } from "./backend";
 import { applyLanguage } from "./language";
 
 /**
@@ -145,6 +145,14 @@ export async function restorePrefs(): Promise<Restored> {
   const server = await getPrefs();
   if (!server) return restored;
 
+  // A remote reader is a guest on someone else's archive: its appearance is
+  // its own, kept in this browser, while the machine holding the archive keeps
+  // whatever its owner chose. Without this the page adopted the server's
+  // theme on load and then silently lost whatever the guest picked, because
+  // the server refuses a write from another machine (see the write gate in
+  // serve.ts) and the next reconcile put the server's value back.
+  if (!isLocalMachine) return restored;
+
   const mine = local();
   const seed: Partial<AppPrefs> = {};
 
@@ -202,5 +210,8 @@ export async function restorePrefs(): Promise<Restored> {
 
 /** One setting, to both stores. The browser's copy is the caller's; this is the server's. */
 export function rememberPref(patch: Partial<AppPrefs>): void {
-  savePrefs(patch);
+  // Only the machine holding the archive keeps a durable copy of these; for a
+  // remote reader the browser's copy is the only one, which is where the
+  // caller has already put it.
+  if (isLocalMachine) savePrefs(patch);
 }
