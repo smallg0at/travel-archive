@@ -255,4 +255,6 @@ a bare `new EventSource` — and a cross-origin EventSource sends no cookies unl
 told to, so `serve.ts`'s gate answered 401 while the rest of the page worked, and
 the Activity panel painted one frame and froze. A minimal page asking the same URL
 both ways, with nothing else differing, gave `error` against `open`. `watchJob`
-now passes `{ withCredentials: true }`.
+now passes `{ withCredentials: true }`. The harness is
+`scripts/remote-reader-probe.mjs`; `--keep` leaves the facade up so the real app
+can be hand-driven through it.
