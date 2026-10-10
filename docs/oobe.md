@@ -118,7 +118,11 @@ is the *result* of the three answers, not a step among them.
    the installer (Decisions 4): the bundled value was this machine's own, and
    the default matches neither this account nor OneDrive's photo-sync layout,
    so a path nobody confirmed is a path nobody should scan. Success stamps
-   `photosFolderValidatedAt`, which is what releases the scan gate.
+   `photosFolderValidatedAt` — the record that a human agreed to this path.
+    It starts nothing: the first scan runs from page 4, because until the
+    wizard is finished the reader can still walk back and choose again (the
+    stamp used to release an automatic scan minutes after page 2 — removed
+    for exactly that reason).
 
 3. **AI provider and key.** The provider list and key field the Settings form
    already has, with its set-or-not semantics. Skippable *as a step* (a
@@ -134,8 +138,10 @@ is the *result* of the three answers, not a step among them.
 
 **Resuming** is client-side only: each step's completion is derivable from
 the server (`signedIn`, the folder probe, key set, `never-scanned`), so the
-server keeps no wizard cursor and reopening restarts at page 1 — which is
-cheap now, because page 1 is language + a sign-in that remembers itself.
+server keeps no wizard cursor. **A refresh lands back on the same page**
+(`sessionStorage` holds the step; the key dies with the tab, so a *new*
+visit starts at page 1 — cheap now, because page 1 is language + a sign-in
+that remembers itself).
 
 ## Server pieces
 
@@ -163,10 +169,14 @@ cheap now, because page 1 is language + a sign-in that remembers itself.
 - Folder writes stay on `POST /config`; no second path to the same value.
   Folder **reads** need one new endpoint (a bounded listing for the picker —
   Decisions 5), guarded like every other non-GET.
-- **Scan gate** (`scanIfDue`): skip silently when the folder is unverified or
-  404, log one line, start nothing. This is item "Do not auto-scan a fresh
-  archive before the photo folder is configured" and it holds whether or not
-  the rest of OOBE has shipped.
+- **Scan gate** (`scanIfDue`): a fresh archive (`!lastScanAt`) never
+  auto-starts — the wizard's last page runs the first scan, and the gate
+  waits until it has (the folder stamp records the agreement only; it
+  released an automatic scan too early while the folder could still change,
+  and no longer does). The folder probe before every start stays: a renamed
+  or missing folder is one log line, never a failing job. This is item "Do
+  not auto-scan a fresh archive before the photo folder is configured" and
+  it holds whether or not the rest of OOBE has shipped.
 - **Device-code slot**: `deviceCodeCallback` additionally records the pending
   response (one slot, replaced by any newer attempt) so `/oobe` can serve it,
   and clears it on completion or failure. The console line stays — it is

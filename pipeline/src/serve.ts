@@ -733,7 +733,10 @@ const routes: [RegExp, string, Handler][] = [
    *
    * A missing folder answers `not-found` with **200** — it is an answer, not a
    * transport failure, and the page has to be able to render it. Confirmation
-   * writes `photosFolderValidatedAt`, which is what releases the first scan.
+   * writes `photosFolderValidatedAt`: the record that a human agreed to this
+   * folder. It does **not** start anything — the first scan runs from the
+   * wizard's own last page, because the folder can still be changed while
+   * the wizard is open (see `scanIfDue`).
    * The path itself is never written here (it travels through `POST /config`,
    * so there stays one way to change a setting): `path` only *asks* about a
    * candidate, and the stamp is refused for anything but the folder that is
@@ -1860,12 +1863,16 @@ async function scanIfDue(): Promise<void> {
     const { lastScanAt } = await readSync();
     if (lastScanAt && Date.now() - Date.parse(lastScanAt) < SCAN_EVERY_MS) return;
 
-    // The first scan belongs to setup, not to a timer: until a human has
-    // confirmed the photo folder, starting would scan whatever the default
-    // says — on a real account usually somebody else's path, so either a 404
-    // loop every six hours or an index of nothing.
-    if (!lastScanAt && !(await readOobe()).photosFolderValidatedAt) {
-      console.log("scan check: first scan not confirmed yet — waiting for setup");
+    // The first scan belongs to setup's last page, not to a timer. This
+    // gate used to open the moment page 2 stamped `photosFolderValidatedAt`
+    // — an automatic scan could start while the wizard was still open, at
+    // which point the reader could walk back (page 3's Back) and pick a
+    // different folder: scanning before the choice is final is scanning
+    // into a hole. There is no way past the wizard anymore (the quiet
+    // escape link is gone), every fresh archive comes back to page 4, and
+    // page 4 sets `lastScanAt` — so waiting here costs nothing.
+    if (!lastScanAt) {
+      console.log("scan check: first scan not run yet — waiting for setup to finish");
       return;
     }
 

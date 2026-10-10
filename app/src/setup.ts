@@ -620,6 +620,7 @@ export function showSetup(opts: { onDone: () => void }): void {
           // The state line follows the box as it fills — in place, so the
           // caret survives (the folder field works the same way).
           document.getElementById("setup-keystate")?.replaceChildren(keyStateNode());
+          paintFooter3();
         });
         row.appendChild(key);
       }
@@ -639,28 +640,38 @@ export function showSetup(opts: { onDone: () => void }): void {
       }
       card.appendChild(el(`<p class="set-note">${ui.setup.aiSkipNote}</p>`));
       if (state.saveError) card.appendChild(el(`<p class="set-note tone-warn">${state.saveError}</p>`));
-      secondary(ui.setup.back, () => {
-        goto(2);
-        render();
-      });
-      // Skip appears when Continue cannot succeed as-is: nothing has been
-      // supplied (its hint says so) or the last attempt was rejected (the
-      // red line says why). It is the way out of either — and only then.
-      if (keyMissing || state.validateFailed) {
-        secondary(ui.setup.skip, () => {
-          state.keyDraft = "";
-          state.providerDraft = state.config?.provider ?? "";
-          state.validateFailed = false;
-          goto(4);
+      // The footer depends on what is in the key box, and typing must not
+      // re-render the card — that is where the caret lives. So the footer
+      // paints itself and the input calls it: the same in-place rule the
+      // folder field's status line follows. (Until it did, Continue's
+      // visibility never recalculated and a typed key changed nothing
+      // on screen.)
+      const paintFooter3 = (): void => {
+        foot.replaceChildren();
+        secondary(ui.setup.back, () => {
+          goto(2);
           render();
         });
-      }
-      if (state.config && keyMissing) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needKey}</span>`));
-      primary(
-        ui.setup.continue,
-        () => void saveGeneration(),
-        !state.config || keyMissing,
-      );
+        // Skip appears when Continue cannot succeed as-is: nothing has been
+        // supplied (its hint says so) or the last attempt was rejected (the
+        // red line says why). It is the way out of either — and only then.
+        if (keyMissing || state.validateFailed) {
+          secondary(ui.setup.skip, () => {
+            state.keyDraft = "";
+            state.providerDraft = state.config?.provider ?? "";
+            state.validateFailed = false;
+            goto(4);
+            render();
+          });
+        }
+        if (state.config && keyMissing) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needKey}</span>`));
+        primary(
+          ui.setup.continue,
+          () => void saveGeneration(),
+          !state.config || keyMissing,
+        );
+      };
+      paintFooter3();
     } else {
       // Page 4 — the scan owns the screen, per the design.
       card.appendChild(el(`<h2>${ui.setup.scanTitle}</h2>`));
