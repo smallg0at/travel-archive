@@ -109,7 +109,10 @@ export function createFolderPanel(initialPath: string): FolderPanel {
       root.appendChild(field);
       root.appendChild(el(`<p class="set-note">${ui.setup.monthHint}</p>`));
     } else {
-      root.appendChild(el(`<p class="setup-path">${state.path}</p>`));
+      // One line, not two blocks: the path is the sentence and the button is
+      // its period — stacked, they read as unrelated fragments.
+      const line = el(`<div class="pfp-line"></div>`);
+      line.appendChild(el(`<p class="setup-path">${state.path}</p>`));
       const change = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
       change.textContent = ui.setup.change;
       change.addEventListener("click", () => {
@@ -117,7 +120,8 @@ export function createFolderPanel(initialPath: string): FolderPanel {
         state.text = state.path;
         paint();
       });
-      root.appendChild(change);
+      line.appendChild(change);
+      root.appendChild(line);
     }
     const statusHost = el(`<div id="photo-folder-status"></div>`);
     statusHost.appendChild(statusNode());

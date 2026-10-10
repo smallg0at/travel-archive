@@ -212,12 +212,20 @@ follow:
   (what the login launcher does) — the OS adopts the process and harness
   sweeps cannot touch it. The throwaway test server runs this way now.
 
-**The browser-test recipe is one process, not two.** The job server serves the
-static app page itself (`serveApp` on `DESKTOP_PORT`), so a test setup needs
-only the throwaway server: build `app/dist` plainly (no `VITE_PIPELINE_URL`;
-the app's default base is same-origin), start the throwaway with its own
-`ARCHIVE_HOME`, `SERVE_PORT`, `DESKTOP_PORT`, and a test metadata folder, and
-open `http://localhost:<DESKTOP_PORT>` — same origin for page and API, no
-CORS, no preview, and no stale test-port pointer left in the build the desktop
-shell also serves. This supersedes the `preview --port 4173` recipe above,
-which is kept as history.
+**The browser-test recipe is one process, not two — but the build needs the
+pointer.** The job server serves the static app page itself (`serveApp` on
+`DESKTOP_PORT`), so a test setup needs only the throwaway server: build with
+`VITE_PIPELINE_URL=http://127.0.0.1:<SERVE_PORT>`, start the throwaway with
+its own `ARCHIVE_HOME`, `SERVE_PORT`, `DESKTOP_PORT`, and a test metadata
+folder, and open `http://localhost:<DESKTOP_PORT>` — the page on the static
+port, the API on the throwaway (the origin allow-list covers it).
+
+The pointer is not optional: **the app's default API base is
+`${location.hostname}:18419`** (`backend.ts`) — production's port. A plain
+build opened from any loopback origin silently renders the *production*
+archive, because CORS allows every loopback origin and production is happy to
+answer (verified the hard way on 2026-10-10: the "test" settings page showed
+the real library's 32,805 photos while the throwaway's `/config` said
+otherwise). Rebuild `app/dist` plainly when done — a stale test pointer ships
+into the desktop shell and nothing works until it is noticed. This supersedes
+the `preview --port 4173` recipe above, which is kept as history.
