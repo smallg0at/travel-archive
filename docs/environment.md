@@ -195,3 +195,29 @@ into the desktop shell and nothing works until it is noticed. A fresh browser
 origin has no reader session, so this reaches everything that renders before
 the archive loads — the setup wizard, offline and error states — and none of
 what sits behind the sign-in wall.
+
+## Operations on this machine (2026-10-10)
+
+**Backgrounded shells are ephemeral, and the ledger lies.** OpenCode's
+move-to-background shells are reaped after a few idle hours: the process is
+killed, the `.out` file is deleted, and **no completion notification arrives**
+— the shell stays listed as running. Observed twice on 2026-10-10 (the OOBE
+test environment: a vite preview and a throwaway job server, both reaped
+within hours; ports dead, output files gone, harness silent). The rules that
+follow:
+
+- A backgrounded long-running process is **dead until a probe says otherwise**.
+  A TCP connect probe is the only honest answer; the shell's own record is not.
+- Anything that must outlive the harness is **detached**: `Start-Process`
+  (what the login launcher does) — the OS adopts the process and harness
+  sweeps cannot touch it. The throwaway test server runs this way now.
+
+**The browser-test recipe is one process, not two.** The job server serves the
+static app page itself (`serveApp` on `DESKTOP_PORT`), so a test setup needs
+only the throwaway server: build `app/dist` plainly (no `VITE_PIPELINE_URL`;
+the app's default base is same-origin), start the throwaway with its own
+`ARCHIVE_HOME`, `SERVE_PORT`, `DESKTOP_PORT`, and a test metadata folder, and
+open `http://localhost:<DESKTOP_PORT>` — same origin for page and API, no
+CORS, no preview, and no stale test-port pointer left in the build the desktop
+shell also serves. This supersedes the `preview --port 4173` recipe above,
+which is kept as history.
