@@ -46,7 +46,7 @@ export function renderLibrary(): HTMLElement {
   page.appendChild(head);
 
   const index = archive();
-  // Which trips touch each month, so a row can say "the train 1" — the name
+  // Which trips touch each month, so a row can say the trip's name — the name
   // a reader is actually looking for, which a month label alone never shows.
   const tripsByMonth = new Map<string, string[]>();
   for (const section of index.sections) {

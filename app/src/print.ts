@@ -58,7 +58,7 @@ const PRINT_DPI = 200;
  * JPEG quality for the re-encode.
  *
  * Chosen against Google AI Studio's 50MB upload cap, measured over all 1,292
- * exported images of the the train trip (93.6MB of source thumbnails):
+ * exported images of one 18-day trip (93.6MB of source thumbnails):
  *
  * | quality | export |
  * |---|---|

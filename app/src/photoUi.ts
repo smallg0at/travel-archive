@@ -221,7 +221,7 @@ export function coverFirst(photos: PhotoRecord[]): PhotoRecord[] {
     (p.notable ? 2 : 0) +
     (p.screenshot || p.contentType === "screenshot" ? -8 : 0) +
     // A placard, a menu, a museum label: photographed for what it says, not
-    // for the look of it. The a town day out led with an information board.
+    // for the look of it. A day out once led with an information board.
     (p.contentType === "document" ? -5 : 0) +
     (p.quality === "poor" ? -4 : 0) +
     (p.duplicateGroupId && !p.isDuplicateRepresentative ? -6 : 0) +

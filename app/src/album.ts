@@ -743,8 +743,8 @@ const expanders = new WeakMap<HTMLElement, () => void>();
  * "2026" at different x positions for their label text, which broke the one
  * thing a reading axis needs: every header's text starting in the same place.
  *
- * Children do not repeat their parent's icon — a pin on Trips and a second
- * pin on a town said the same thing twice — but they still have to land on
+ * Children do not repeat their parent's icon — a pin on a parent row and a
+ * second pin under it said the same thing twice — but they still have to land on
  * that same axis, so `.month-link` indents its label by the icon-plus-gap
  * width its parent spent on an icon it doesn't have (see style.css).
  */

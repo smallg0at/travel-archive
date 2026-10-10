@@ -213,8 +213,8 @@ async function renderThen(page: HTMLElement, index: ArchiveIndexFile): Promise<v
     `);
     card.querySelector(".then-year")!.textContent = exact ? date.slice(0, 4) : date;
     card.querySelector(".then-ago")!.textContent = ui.home.yearsAgo(today.getFullYear() - Number(date.slice(0, 4)));
-    // The country is dropped: every card on a date in the capital saying "United
-    // Kingdom" is noise, and the day itself shows it.
+    // The country is dropped: every card on a date in one city saying its
+    // country is noise, and the day itself shows it.
     const place = card.querySelector<HTMLElement>(".then-place")!;
     if (meta.place) place.textContent = meta.place.split(",")[0];
     else place.remove();

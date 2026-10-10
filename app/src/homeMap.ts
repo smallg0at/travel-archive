@@ -32,7 +32,7 @@ function countryNames(places: HomePlace[]): { key: (p: HomePlace) => string | un
   const enOf = new Map<string, string>();
   for (const place of places) {
     const en = tail(place.nameEn);
-    // A Chinese endonym (城市, 中国) is as good as a Chinese name.
+    // A Chinese endonym is as good as a separate Chinese name.
     const zh = tail(place.nameZh) ?? (/[一-鿿]/.test(place.name) ? tail(place.name) : null);
     if (en && zh) {
       zhOf.set(en, zh);
@@ -48,10 +48,11 @@ function countryNames(places: HomePlace[]): { key: (p: HomePlace) => string | un
  * A place's label: its name without the country.
  *
  * The Chinese fallback is the endonym, never the English name: most places
- * carry no separate Chinese name, and for Beijing that is because `name` is
- * already 城市 — falling back to `nameEn` printed "Beijing" in the middle of a
- * Chinese map. The country is on the tooltip, not the label: at world scale
- * the label is there to say *which* dot this is, and "a city" does that alone.
+ * carry no separate Chinese name, and for a place whose endonym is already
+ * Chinese that is because `name` is already in that script — falling back to
+ * `nameEn` printed the romanised name in the middle of a Chinese map. The
+ * country is on the tooltip, not the label: at world scale the label is there
+ * to say *which* dot this is, and the city name alone does that.
  */
 export function homePlaceLabel(place: HomePlace): string {
   const name = contentLanguage() === "zh-Hans" ? (place.nameZh ?? place.name) : (place.nameEn ?? place.name);
@@ -62,10 +63,10 @@ export function homePlaceLabel(place: HomePlace): string {
 /**
  * The places as map points, smallest first.
  *
- * Biggest last, so on top: discs keep one size on screen, and at world zoom
- * the capital's was covered by its own suburbs if they came later — a tap on the
- * dot labelled "the capital" opened a village. `ordered[i]` is the place behind
- * point `i`, for `onPick`.
+ * Biggest last, so on top: discs keep one size on screen, and at world zoom a
+ * big city was covered by its own suburbs if they came later — a tap on the dot
+ * labelled with the city opened a small suburb instead. `ordered[i]` is the
+ * place behind point `i`, for `onPick`.
  */
 export function homeMapPoints(places: HomePlace[]): { ordered: HomePlace[]; points: MapPoint[] } {
   const countries = countryNames(places);

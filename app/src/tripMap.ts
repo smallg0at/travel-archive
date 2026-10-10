@@ -17,9 +17,9 @@ import { ui } from "./i18n";
  * nothing to draw.
  *
  * Six layers, because fewer was not a map. The first version drew country
- * outlines alone and, zoomed to two cities inside Austria and Slovakia, was a
- * blank field with one faint line across it. What places a city is water and
- * neighbours: a city and a city are both on the Danube, and a city sits
+ * outlines alone and, zoomed to two cities a few tens of km apart in the same
+ * region, was a blank field with one faint line across it. What places a city
+ * is water and neighbours: two nearby cities can share a river, and one can sit
  * against a border. So: land, lakes, rivers, borders, and grey labels for
  * nearby cities the trip did not visit. See geo/README.md and
  * scripts/build-basemap.mjs.
@@ -42,8 +42,8 @@ const RIVERS_MAX_SPAN_DEG = 60;
  * Space kept between two discs before they merge, in screen pixels.
  *
  * Places merge only when their discs would touch. The first rule merged
- * anything within 44px, and at world zoom that folded Europe into "the capital
- * +371" and "a city +9" — a disc labelled the capital standing for places in a
+ * anything within 44px, and at world zoom that folded a whole continent into a
+ * couple of discs — one labelled with a single city standing for places in a
  * dozen countries. The owner's word was "too conclusive": it hid where the
  * library had been instead of summarising it.
  */
@@ -78,15 +78,13 @@ function shortCount(n: number): string {
  * Cities are grouped by their reverse-geocoded name, not by distance.
  *
  * The geocoder already runs at Nominatim zoom 10 and takes city/town/village,
- * so "a city, Österreich" and "a city, Slovensko" are distinct strings 55km
- * apart, and a city and a city would be too. A distance threshold cannot
- * express that reliably — it has to be under 26km to split a city from a city,
- * which then splits a single sprawling city into several. Names have no such
- * tension.
+ * so two distinct cities 55km apart come back as distinct strings, and an
+ * adjacent pair of cities would too. A distance threshold cannot express that
+ * reliably — it has to be under 26km to split a close pair, which then splits a
+ * single sprawling city into several. Names have no such tension.
  *
  * Distance clustering is only the fallback for photos whose lookup fell through
- * to a country or county ("Nederland" from the airport, "a district"), where there is
- * no city name to group on.
+ * to a country or county with no city name to group on.
  */
 const FALLBACK_CLUSTER_KM = 15;
 
@@ -168,16 +166,16 @@ export function anchorFor(date: string, segmentId: string): string {
  * One entry per city the trip visited, in the order first reached.
  *
  * A segment's city is the most common `place` among its photos, not the first —
- * a day trip begins at home, so first-wins labelled the whole a city day
- * "a city".
+ * a day trip begins at home, so first-wins labelled the whole day with the home
+ * city.
  */
 function citiesOf(days: DayRecord[], photos: Record<string, PhotoRecord>): { cities: City[]; visits: string[] } {
   const byName = new Map<string, { pts: [number, number][]; count: number; anchor: string | null; first: string }>();
   const unnamed: { pt: [number, number]; count: number; anchor: string | null; first: string }[] = [];
   // Every stop in chronological order, by the key of the city it belongs to.
   // Cities are deduplicated for markers, but the *route* has to keep repeats or
-  // an out-and-back journey loses its return leg: a city -> a city -> a city was
-  // drawn as a single line to a city and nothing coming back.
+  // an out-and-back journey loses its return leg: A -> B -> A was drawn as a
+  // single line to B and nothing coming back.
   const visits: string[] = [];
 
   for (const day of days) {
@@ -208,10 +206,10 @@ function citiesOf(days: DayRecord[], photos: Record<string, PhotoRecord>): { cit
 
       // Only a *city-level* result may group by name. Nominatim returns
       // "<city>, <country>" when it resolves one and a bare country when it
-      // does not, and a country covers many places: grouping every "Nederland"
-      // stop together put the airport and a the capital arrival into one city whose
-      // position was the midpoint of the two — open countryside 20km from Den
-      // Haag, which it then merged into. Country-level results go to the
+      // does not, and a country covers many places: grouping every stop that
+      // resolved only to one country put an airport and a distant arrival city
+      // into a single city whose position was the midpoint of the two — open
+      // countryside, which it then merged into. Country-level results go to the
       // distance clustering below, which is what it was written for.
       const name = resolved?.includes(",") ? resolved : null;
 
@@ -240,14 +238,14 @@ function citiesOf(days: DayRecord[], photos: Record<string, PhotoRecord>): { cit
   const cities: City[] = [];
   for (const [name, entry] of byName) {
     // Nominatim returns "<locality>, <country>" when it resolves a city and
-    // bare "<country>" when it cannot — the airport comes back "Nederland", a
-    // the capital departure "United Kingdom". Taking that as a city name drew
-    // countries as places on the map and made the route look like it flew
-    // between them. The comma is the signal.
+    // bare "<country>" when it cannot — an airport comes back with the country
+    // rather than the city. Taking that as a city name drew countries as places
+    // on the map and made the route look like it flew between them. The comma
+    // is the signal.
     const coarse = !name.includes(",");
     cities.push({
       key: name,
-      // "a city, Österreich" -> "a city". The country is on the basemap already.
+      // "<City>, <Country>" -> "<City>". The country is on the basemap already.
       name: name.split(",")[0]!.trim(),
       coarse,
       lat: median(entry.pts.map((p) => p[0])),
@@ -352,8 +350,8 @@ export interface PlaceMapOptions {
   clusterName?: (biggest: string, more: number) => string;
   /**
    * A cluster spanning several groups: their names, most photos first. Named
-   * for its biggest place instead, one disc standing for five countries read
-   * as a claim about the capital.
+   * for its biggest place instead, one disc standing for five countries reads
+   * as a claim about that one city.
    */
   groupsName?: (groups: string[]) => string;
   /** A line describing what is in view, kept current as the map moves. */
@@ -420,8 +418,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   world.appendChild(basemapGroup);
   // Suppressed by *distance*, not name. Natural Earth uses exonyms while the
   // archive's geocoder returns endonyms, so matching on the string left a grey
-  // "a city" label sitting under the trip's own "a city" marker. The same would
-  // happen for Munich/München and a city/a city.
+  // exonym label sitting under the trip's own endonym marker for the same city.
   const NEAR_VISITED_KM = 25;
   //
   // Decided once, not per repaint: it depends on nothing the view changes, and
@@ -523,9 +520,9 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
    * A disc's size as a multiple of the base radius.
    *
    * The trip map's square root against the busiest city works for a trip —
-   * ten cities within one order of magnitude. Against the home page's the capital
-   * (3,844 photos) it put nearly all 515 places within a few percent of the
-   * floor, so a hub and a one-photo stopover looked the same. Clustered, the
+   * ten cities within one order of magnitude. Against the home page's busiest
+   * city (3,844 photos) it put nearly all 515 places within a few percent of
+   * the floor, so a hub and a one-photo stopover looked the same. Clustered, the
    * scale is logarithmic against the whole library, which is what spans one
    * photo to fifteen thousand in a cluster over Europe.
    */
@@ -749,8 +746,8 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
       badge.textContent = shortCount(count);
       node.appendChild(badge);
       // Named for what it is. The whole of a country is that country; part of
-      // one is its biggest place "and N more" — "+371" read as bookkeeping,
-      // and "the capital" alone as a claim about the capital.
+      // one is its biggest place "and N more" — a bare count read as
+      // bookkeeping, and a bare city name as a claim about that city.
       const group = cities[seed].group;
       const byGroup = new Map<string, number>();
       for (const m of members) {
@@ -805,8 +802,8 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   /**
    * Which labels can be shown without overlapping, busiest first.
    *
-   * Ten cities inside the Randstad produced one illegible stack — "United
-   * Kingdom Hoek van Holland a city a city" written over each other. A
+   * Ten cities inside one region produced one illegible stack — every label
+   * from country down to city written over each other. A
    * label is dropped when its box would collide with one already placed; the
    * marker and its tooltip stay, so nothing is lost, it just stops shouting.
    * Recomputed per frame, so zooming in reveals the labels that were hidden.
@@ -891,7 +888,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
           if (t.cx === undefined || (t.cx === own.x && t.cy === own.y)) continue;
           // Clearly nearer, by a third of a line: in a packed cluster every
           // side is within a pixel or two of some neighbour, and a strict
-          // comparison left the capital's 9.7k unnamed on every side.
+          // comparison left the biggest city's 9.7k unnamed on every side.
           if (Math.hypot(cx - t.cx, cy - t.cy!) - (t.x1 - t.x0) / 2 < mine - unit * 0.35) return true;
         }
       }
@@ -1068,7 +1065,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     const [west, north] = unproject((view.x - view.w / 2) / 1e5, (view.y - view.h / 2) / 1e5);
     const [east, south] = unproject((view.x + view.w / 2) / 1e5, (view.y + view.h / 2) / 1e5);
     // Judged on the *visible* span, not the padded window paint() is handed —
-    // that is 2.2x wider, and measuring it cut the rivers from the train.
+    // that is 2.2x wider, and measuring it cut the rivers from the trip map.
     // Crossing the threshold forces a repaint: zooming in from the world view
     // never leaves the painted window, so rivers would otherwise never return.
     const rivers = east - west <= RIVERS_MAX_SPAN_DEG;
@@ -1130,7 +1127,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     // trip is still in reach, which is what the old 1.67x cap took away.
     //
     // The home page opts out of the continent cap: its subject is the world,
-    // and its fitted view already spans the capital to Beijing.
+    // and its fitted view already spans continents.
     const continentH = opts.zoomOut === "world" ? Infinity : Math.max(home.h * 4, WORLD_H / 6 / aspect);
     const maxH = Math.min(WORLD_H, WORLD_H / aspect, continentH);
     const next = Math.min(maxH, Math.max(home.h / MAX_SCALE, view.h * factor));

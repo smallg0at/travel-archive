@@ -75,8 +75,8 @@ function renderCard(highlight: Highlight, byId: Record<string, PhotoRecord>): HT
   else desc.remove();
 
   // The English rendering sits in the open; the verbatim transcript stays behind
-  // the toggle. A Slovak museum label transcribed faithfully is evidence, but it
-  // is not content to an owner who does not read Slovak.
+  // the toggle. A museum label transcribed faithfully in its own language is
+  // evidence, but it is not content to an owner who does not read that language.
   if (highlight.documentTranslation) {
     const translated = document.createElement("p");
     translated.className = "card-placard";

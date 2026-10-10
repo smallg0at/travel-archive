@@ -120,7 +120,7 @@ function renderCardPanel(highlight: Highlight | null, byId: Record<string, Photo
   }
 
   // The English rendering of a placard, which is the useful half for an owner
-  // who does not read Slovak or German.
+  // who does not read the language it was written in.
   if (highlight.documentTranslation) {
     const quote = document.createElement("p");
     quote.className = "viewer-placard";

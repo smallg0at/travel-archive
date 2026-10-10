@@ -9,7 +9,7 @@ import { ui } from "./i18n";
  * Correcting what the summarizer wrote, from the page it wrote it on.
  *
  * Two surfaces, deliberately not one. A **note** is something you tell the
- * model before it writes — "this is the the railway museum" — and it belongs with
+ * model before it writes — "this is the transport museum" — and it belongs with
  * the day as a whole. An **edit** is you overruling it afterwards, and it
  * belongs on the thing that is wrong: the stop whose title is not its name.
  *

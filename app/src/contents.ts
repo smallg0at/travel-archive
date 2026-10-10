@@ -5,7 +5,7 @@ import { ui } from "./i18n";
  * A contents list beside a long page — every day, and the stops of the day
  * being read — that follows the reader and jumps on a click.
  *
- * the train 1 is 18 days and several thousand photos on one page, and the
+ * A long trip is 18 days and several thousand photos on one page, and the
  * only way to reach day 12 was to scroll there; the trip map's cities jumped
  * to a stop, but only for places the map could label. The list is built from
  * the sections already on the page, so it can never name a day that is not

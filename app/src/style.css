@@ -2906,7 +2906,7 @@ html.desktop-shell #nav-tools {
    380px, its 2px of border and the 22px margin. Without it the map arrived
    after a refresh had restored the reader's scroll offset, and scroll
    anchoring pushed the page down by the map's height — measured at 440px on
-   the train. Kept in step with `.trip-map` and `.trip-map-svg` above. */
+   the trip page. Kept in step with `.trip-map` and `.trip-map-svg` above. */
 .trip-map-slot:empty { height: calc(380px + 2px + 22px); }
 .trip-map-svg {
   display: block;

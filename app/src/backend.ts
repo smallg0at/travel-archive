@@ -301,9 +301,9 @@ export async function localArchiveJson<T>(path: string): Promise<T | null> {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
       // The mirror is rewritten by every job, and the server sends `no-cache`
       // with no validator — which the browser was answering from its own disk
-      // cache anyway. Search kept reporting one match for 城市 against an index
-      // that held 3,112, and the same staleness would hit any shard read after
-      // a job. Nothing here is worth caching: it is a read from localhost.
+      // cache anyway. Search kept reporting one match for a place against an
+      // index that held 3,112, and the same staleness would hit any shard read
+      // after a job. Nothing here is worth caching: it is a read from localhost.
       cache: "no-store",
     });
     return res.ok ? ((await res.json()) as T) : null;
