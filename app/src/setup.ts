@@ -288,7 +288,10 @@ export function showSetup(opts: { onDone: () => void }): void {
         const verdict = await validateGeneration(provider, state.keyDraft);
         if (!verdict.ok) {
           state.validateFailed = true;
-          state.saveError = verdict.detail;
+          // The reason alone ("key rejected (401)") read as a raw fragment;
+          // say which of the two failures this is first.
+          state.saveError =
+            verdict.kind === "auth" ? ui.setup.keyRejected(verdict.detail) : ui.setup.cannotReach(verdict.detail);
           render();
           return;
         }

@@ -246,6 +246,8 @@ export const en = {
     needKey: "Add the key, or skip",
     keyTyped: "The key is checked when you press Continue.",
     platformLink: "Get a key on the platform ↗",
+    keyRejected: (reason: string) => `Invalid key: ${reason}`,
+    cannotReach: (reason: string) => `Cannot reach this service: ${reason}`,
     aiKeyHint: "API key (leave blank to keep the saved one)",
     skip: "Skip — configure later in Settings",
     scanTitle: "First scan",
