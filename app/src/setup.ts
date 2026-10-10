@@ -599,13 +599,16 @@ export function showSetup(opts: { onDone: () => void }): void {
       row.appendChild(select);
       const picked = (state.config?.providers ?? []).find((p) => p.id === select.value);
       const cloud = picked?.scope !== "local";
-      // "Missing" counts a typed key too. The saved-only reading is what the
-      // first test ran into: fill a key into a service that has none and
-      // Continue never appeared — no way to attempt, let alone fail, a wrong
-      // key. Typed or saved lets Continue show; the server then decides
-      // whether it is any good, which is the actual validation.
-      const keyAvailable = Boolean(picked?.hasKey) || state.keyDraft.trim() !== "";
-      const keyMissing = !!state.config && cloud && picked?.editable.apiKey !== false && !keyAvailable;
+      // "Missing" counts a typed key too, and it is a **function**: the
+      // footer repaints per keystroke, and a render-time const would hand it
+      // the value from before the first character (which is exactly how the
+      // reviewer's garbage key still changed nothing on screen).
+      const keyMissingNow = (): boolean =>
+        !!state.config &&
+        cloud &&
+        picked?.editable.apiKey !== false &&
+        !Boolean(picked?.hasKey) &&
+        state.keyDraft.trim() === "";
       const keyStateNode = (): HTMLElement => {
         if (picked?.hasKey) return el(`<p class="set-note">${ui.setup.keySet}</p>`);
         if (state.keyDraft.trim()) return el(`<p class="set-note">${ui.setup.keyTyped}</p>`);
@@ -655,7 +658,7 @@ export function showSetup(opts: { onDone: () => void }): void {
         // Skip appears when Continue cannot succeed as-is: nothing has been
         // supplied (its hint says so) or the last attempt was rejected (the
         // red line says why). It is the way out of either — and only then.
-        if (keyMissing || state.validateFailed) {
+        if (keyMissingNow() || state.validateFailed) {
           secondary(ui.setup.skip, () => {
             state.keyDraft = "";
             state.providerDraft = state.config?.provider ?? "";
@@ -664,11 +667,11 @@ export function showSetup(opts: { onDone: () => void }): void {
             render();
           });
         }
-        if (state.config && keyMissing) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needKey}</span>`));
+        if (keyMissingNow()) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needKey}</span>`));
         primary(
           ui.setup.continue,
           () => void saveGeneration(),
-          !state.config || keyMissing,
+          !state.config || keyMissingNow(),
         );
       };
       paintFooter3();
