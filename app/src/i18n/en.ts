@@ -127,7 +127,7 @@ export const en = {
 
   edit: {
     noteLabel: "Note for the summarizer — kept, and used every time this day is rewritten",
-    notePlaceholder: "e.g. the 11:00 stop is the the railway museum; the morning was a write-off.",
+    notePlaceholder: "e.g. the 11:00 stop is the railway museum; the morning was a write-off.",
     summaryLabel: "Day summary",
     rewrite: "Rewrite this day",
     nothingChanged: "Nothing changed.",

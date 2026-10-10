@@ -120,7 +120,7 @@ export const zhHans: Messages = {
 
   edit: {
     noteLabel: "给摘要模型的备注——永久保留，每次重新生成该日内容时均会生效",
-    notePlaceholder: "例如：11:00 那一站是 the railway museum；上午基本上没安排活动。",
+    notePlaceholder: "例如：11:00 那一站是铁路博物馆；上午基本上没安排活动。",
     summaryLabel: "当天摘要",
     rewrite: "重写这一天",
     nothingChanged: "内容未更改。",
