@@ -564,12 +564,16 @@ function generationSection(): HTMLElement {
     fields.append(urlField, modelField, keyField);
 
     const note = el<HTMLElement>(`<p class="set-note"></p>`);
+    // Where the key comes from, the same link the wizard offers: a provider
+    // row asking for a key without saying where to get one is half a row.
+    const getKey = el<HTMLAnchorElement>(`<a class="setup-link" target="_blank" rel="noreferrer" hidden></a>`);
+    getKey.textContent = ui.setup.platformLink;
     const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
     const actions = el<HTMLDivElement>(`<div class="set-provider-actions"></div>`);
     const checkButton = button(ui.settings.providerCheck, () => void check());
     const useButton = button(ui.settings.providerSaveUse, () => {}, "primary");
     actions.append(checkButton, useButton);
-    panel.append(fields, note, status, actions);
+    panel.append(fields, note, getKey, status, actions);
     root.append(head, panel);
     groups[scope].appendChild(root);
 
@@ -618,6 +622,8 @@ function generationSection(): HTMLElement {
         const batch = option.supportsBatch ? ui.settings.providerBatchOk : ui.settings.providerNoBatch;
         note.textContent = `${keyState} · ${batch}`;
         note.classList.toggle("tone-warn", keyWarn);
+        getKey.hidden = !option.platformUrl;
+        if (option.platformUrl) getKey.href = option.platformUrl;
         // Never disabled, not even for the backend already in use: its key or
         // model is exactly what one comes here to fix, and a disabled button
         // with no reason reads as a broken page.
