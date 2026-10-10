@@ -221,7 +221,7 @@ async function main() {
   // whose every step talks to it cannot start against a dead one. On the phone
   // (no server) and for a remote reader this is false and nothing changes.
   if (health.ok && (await setupNeeded())) {
-    showSetup({ onDone: () => void loadAndRender(), onSkip: () => void loadAndRender() });
+    showSetup({ onDone: () => void loadAndRender() });
   } else {
     await loadAndRender();
   }

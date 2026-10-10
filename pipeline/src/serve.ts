@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
 import { readOobe, writeOobe } from "./oobeStore.js";
@@ -6,7 +6,8 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { get } from "node:http";
-import { isAbsolute } from "node:path";
+import { isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { originAllowed } from "./originCheck.js";
@@ -30,6 +31,7 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { autostartStatus, runtimePath, setAutostart, warmAutostartCache } from "./autostart.js";
 import { remoteAccessStatus, runningExposed, runningHost, runningPassword, setRemoteAccess } from "./remoteAccess.js";
+import { appDistIndex, serveApp } from "./staticApp.js";
 import { initProxyDispatcher } from "./proxy.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
 import {
@@ -463,6 +465,17 @@ async function handOver(entry: string): Promise<void> {
   await Promise.race([closed, new Promise<void>((r) => setTimeout(r, 4000))]);
   clearTimeout(stragglers);
 
+  // The page listener must go too, for the mirror-image reason: a replacement
+  // that cannot bind the app port would come up API-only, and the archive
+  // would answer /health with no way to open it. If this process never
+  // served the page (the shell does), there is nothing to close.
+  if (appServer) {
+    const pageClosed = new Promise<void>((resolve) => appServer!.close(() => resolve()));
+    appServer.closeIdleConnections?.();
+    await Promise.race([pageClosed, new Promise<void>((r) => setTimeout(r, 2000))]);
+    appServer = null;
+  }
+
   let child: ReturnType<typeof spawn> | null = null;
   try {
     child = spawn(runtimePath(), [entry], {
@@ -514,6 +527,7 @@ async function handOver(entry: string): Promise<void> {
   server.listen(env.servePort, HOST, () => {
     console.log(`pipeline serve - back up on ${HOST} after a restart that did not complete`);
   });
+  void startAppServer();
 }
 
 /**
@@ -693,32 +707,35 @@ const routes: [RegExp, string, Handler][] = [
   ],
 
   /**
-   * Probes the configured photo folder; with `confirm`, stamps it as agreed.
+   * Probes a photo folder; with `confirm`, stamps the configured one as agreed.
    *
    * A missing folder answers `not-found` with **200** — it is an answer, not a
    * transport failure, and the page has to be able to render it. Confirmation
-   * writes `photosFolderValidatedAt`, which is what releases the first scan;
-   * the path itself is never written here (it travels through `POST /config`,
-   * so there stays one way to change a setting).
+   * writes `photosFolderValidatedAt`, which is what releases the first scan.
+   * The path itself is never written here (it travels through `POST /config`,
+   * so there stays one way to change a setting): `path` only *asks* about a
+   * candidate, and the stamp is refused for anything but the folder that is
+   * actually configured — validating `A` must never agree to `B`.
    */
   [
     /^\/oobe\/folder$/,
     "POST",
     async (req, res) => {
       if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
-      const body = await readJsonBody<{ confirm?: unknown }>(req);
+      const body = await readJsonBody<{ confirm?: unknown; path?: unknown }>(req);
+      const target = typeof body.path === "string" && body.path.trim() ? body.path.trim() : env.photosFolder;
       const token = await getCachedAccessToken();
-      if (!token) return json(res, 200, { state: "no-token", path: env.photosFolder });
+      if (!token) return json(res, 200, { state: "no-token", path: target });
       try {
-        const names = await listFolderFileNames(token, env.photosFolder);
+        const names = await listFolderFileNames(token, target);
         const months = names.filter((n) => /^\d{4}-\d{2}$/.test(n) || /^\d{4}$/.test(n)).length;
-        if (body.confirm === true) {
+        if (body.confirm === true && target === env.photosFolder) {
           await writeOobe({ photosFolderValidatedAt: new Date().toISOString() });
         }
-        return json(res, 200, { state: "ok", path: env.photosFolder, count: names.length, months });
+        return json(res, 200, { state: "ok", path: target, count: names.length, months });
       } catch (err) {
         if (err instanceof GraphError && err.status === 404) {
-          return json(res, 200, { state: "not-found", path: env.photosFolder });
+          return json(res, 200, { state: "not-found", path: target });
         }
         return json(res, 502, { error: (err as Error).message });
       }
@@ -1600,6 +1617,45 @@ setProtectedProvider(protectedPaths);
 initProxyDispatcher();
 
 /**
+ * The page half of the archive: `app/dist` on its own port, so the login
+ * chain that starts this process brings up the API *and* a page someone can
+ * open. The web server used to live only inside Electron, which meant a
+ * reboot left `/health` answering while 17923 was dead until a window was
+ * opened — a remote reader could reach the API and nothing else.
+ *
+ * The port is the same knob the shell reads (`DESKTOP_PORT`, default 17923):
+ * one number on both sides, because adoption is a single door. A missing
+ * build and a port somebody else owns are both "not our job", never a fault
+ * — the shell, `run-preview.ps1` or a vite dev server may already be
+ * serving, and the reader gets the page either way.
+ */
+let appServer: Server | null = null;
+
+async function startAppServer(): Promise<void> {
+  const port = Number(process.env.DESKTOP_PORT ?? 17923);
+  const root =
+    process.env.APP_DIST ?? join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "app", "dist");
+  if (!appDistIndex(root)) {
+    console.log(`app page: no built app at ${root} — the window will serve it`);
+    return;
+  }
+  try {
+    const result = await serveApp(root, port, HOST);
+    if (result.kind === "serving") {
+      appServer = result.server;
+      console.log(`app page — ${exposed ? `${HOST}:${port}` : `127.0.0.1:${port} (loopback only)`}`);
+    } else if (result.kind === "adopted") {
+      console.log(`app page: ${port} is already serving this app — adopted`);
+    } else {
+      console.log(`app page: ${port} is held by something else (${result.by}) — not serving`);
+    }
+  } catch (err) {
+    // Whatever the page server could not do, the API is up and jobs run.
+    console.log(`app page: could not start — ${(err as Error).message}`);
+  }
+}
+
+/**
  * The host the server listens on, and who it lets in.
  *
  * **Loopback by default.** `ARCHIVE_HOST=0.0.0.0` puts the archive on the
@@ -1645,6 +1701,11 @@ server.listen(env.servePort, HOST, () => {
   console.log(`  GET  /jobs/:id/events     SSE progress`);
   console.log(`  POST /jobs/:id/cancel`);
 });
+
+// The page half, after the API knows its own address — and never fatal to it.
+// A fresh boot with a built app beside it answers on the app port with no
+// window involved; everything else (no build, port in use) logs one line.
+void startAppServer();
 
 /**
  * Collects finished caption batches without anyone asking. A batch takes up to

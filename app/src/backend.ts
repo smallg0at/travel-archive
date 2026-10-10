@@ -440,20 +440,26 @@ export interface FolderProbe {
 }
 
 /**
- * Probes the configured photo folder; `confirm` also records it as agreed.
+ * Probes a photo folder; `confirm` also records the configured one as agreed.
+ *
+ * `path` asks about a **candidate** — read-only, the page validates before it
+ * writes anything, so a folder that 404s never reaches `POST /config`.
  *
  * A missing folder is an **answer** (`state: "not-found"`), not a failure —
  * null here means the request itself could not be made.
  */
-export async function oobeFolder(confirm = false): Promise<FolderProbe | null> {
+export async function oobeFolder(confirm = false, path?: string): Promise<FolderProbe | null> {
   try {
     const res = await apiFetch("/oobe/folder", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ confirm }),
+      body: JSON.stringify(path === undefined ? { confirm } : { confirm, path }),
     });
     return res.ok ? ((await res.json()) as FolderProbe) : null;
-  } catch {
+  } catch (err) {
+    // Never a bare swallow: this is the only surface where "the probe did not
+    // even reach the server" shows up (it renders as "not confirmed yet").
+    console.error("[setup] folder probe request failed:", err);
     return null;
   }
 }

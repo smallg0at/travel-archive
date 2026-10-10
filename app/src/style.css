@@ -1837,8 +1837,9 @@ body.setup-active #signin-banner {
 }
 .setup-card h2 { font-size: 14px; margin: 4px 0 0; color: var(--text-secondary); font-weight: 600; }
 .setup-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.setup-blocked { color: var(--text-secondary); font-size: 13px; }
-.setup-later { margin-left: auto; color: var(--text-secondary); font-size: 13px; }
+/* Left-anchored beside the buttons; the way forward anchors right. */
+.setup-blocked { color: var(--text-secondary); font-size: 13px; margin-right: auto; }
+.setup-primary { margin-left: auto; }
 .setup-lang { display: flex; gap: 8px; }
 .setup-lang .on { outline: 2px solid var(--accent); }
 .setup-ok { font-weight: 600; }

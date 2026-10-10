@@ -106,8 +106,12 @@ export async function setupNeeded(): Promise<boolean> {
   }
 }
 
-/** Runs the wizard. `onDone`/`onSkip` both land back in the normal app. */
-export function showSetup(opts: { onDone: () => void; onSkip: () => void }): void {
+/**
+ * Runs the wizard. `onDone` lands back in the normal app; there is no
+ * skip-back-door — with nothing built yet there is nothing to peek at, and
+ * the state it would skip past (agreed folder) is exactly what has to happen.
+ */
+export function showSetup(opts: { onDone: () => void }): void {
   if (active) return;
   active = true;
   state = fresh();
@@ -142,7 +146,10 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
     const before = `${state.signedIn}${state.deviceCode?.code ?? ""}`;
     state.signedIn = s.signedIn;
     state.deviceCode = s.deviceCode;
-    state.photosFolder = s.photosFolder;
+    if (s.photosFolder !== state.photosFolder) {
+      state.photosFolder = s.photosFolder;
+      state.probe = null; // a folder set elsewhere has not been measured here
+    }
     const after = `${state.signedIn}${state.deviceCode?.code ?? ""}`;
     if (before !== after) render();
     if (s.signedIn) stopPoll();
@@ -153,27 +160,47 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
   };
 
   // --- page 2 -------------------------------------------------------------
-  const probeFolder = async (confirm: boolean): Promise<void> => {
+  /**
+   * Probes a folder. The answer carries the path it measured
+   * (`FolderProbe.path`), and the page draws it under that path only — the
+   * old state updated `photosFolder` and `probe` along different routes, so
+   * a ✓ for a sub-folder could outlive a change back to the root and only a
+   * refresh straightened it out.
+   */
+  const probeFolder = async (confirm: boolean, path?: string): Promise<void> => {
     state.probing = true;
     state.saveError = null;
     render();
-    state.probe = await oobeFolder(confirm);
+    state.probe = await oobeFolder(confirm, path);
     state.probing = false;
-    if (state.probe?.state === "ok") state.editing = false;
     render();
   };
 
-  const saveFolderPath = async (path: string): Promise<void> => {
-    state.saveError = null;
+  /**
+   * Validates a candidate path and only then writes it: the probe is a
+   * read-only question, `POST /config` stays the one way a setting changes,
+   * and a folder that 404s never reaches the config file (the old flow saved
+   * first — one click on a typo wrote it into `.env`).
+   */
+  const confirmFolder = async (candidate: string): Promise<void> => {
+    if (!candidate) return;
+    await probeFolder(false, candidate);
+    if (state.probe?.state !== "ok" || state.probe.path !== candidate) return;
     try {
-      await saveConfig({ ONEDRIVE_PHOTOS_FOLDER: path });
-      state.folderText = path;
-      await probeFolder(false);
+      await saveConfig({ ONEDRIVE_PHOTOS_FOLDER: candidate });
+      state.photosFolder = candidate;
+      state.folderText = candidate;
+      state.editing = false;
+      render();
     } catch (err) {
       state.saveError = (err as Error).message;
       render();
     }
   };
+
+  /** What Continue waits on: measured, measuring the configured path, not mid-edit. */
+  const folderOk = (): boolean =>
+    state.probe?.state === "ok" && state.probe.path === state.photosFolder && !state.editing && !state.probing;
 
   const openPicker = async (start: string): Promise<void> => {
     state.pick = { path: start, folders: [], loading: true, notFound: false };
@@ -201,7 +228,7 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
   const choose = async (): Promise<void> => {
     const path = state.pick?.path ?? "";
     state.pick = null;
-    if (path) await saveFolderPath(path);
+    if (path) await confirmFolder(path);
     else render();
   };
 
@@ -288,10 +315,16 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
     const foot = el(`<div class="setup-foot"></div>`);
     page.appendChild(foot);
 
-    const primary = (label: string, onClick: () => void, disabled = false): void => {
-      const b = el<HTMLButtonElement>(`<button type="button" class="set-btn setup-primary"></button>`);
+    // The way forward appears only when its condition holds: a greyed button
+    // with fine print read as "press me and something will explain", which
+    // is what it was. The hint span takes its place until then (laid out
+    // left, the button right), and when it does show it is the one
+    // highlighted control here — `.set-btn.primary`, the settings page's own
+    // accent button.
+    const primary = (label: string, onClick: () => void, blocked = false): void => {
+      if (blocked) return;
+      const b = el<HTMLButtonElement>(`<button type="button" class="set-btn primary setup-primary"></button>`);
       b.textContent = label;
-      b.disabled = disabled;
       b.addEventListener("click", onClick);
       foot.appendChild(b);
     };
@@ -300,15 +333,6 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
       b.textContent = label;
       b.addEventListener("click", onClick);
       foot.appendChild(b);
-    };
-    const later = (): void => {
-      const a = el<HTMLAnchorElement>(`<a href="#" class="setup-later"></a>`);
-      a.textContent = ui.setup.later;
-      a.addEventListener("click", (e) => {
-        e.preventDefault();
-        exit(opts.onSkip);
-      });
-      foot.appendChild(a);
     };
 
     if (state.step === 1) {
@@ -365,25 +389,48 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
           card.appendChild(code);
         }
       }
-      primary(ui.setup.continue, () => {
-        state.step = 2;
-        stopPoll();
-        render();
-        void probeFolder(false);
-      }, !state.signedIn);
-      foot.appendChild(el(`<span class="setup-blocked">${state.signedIn ? "" : ui.setup.needSignIn}</span>`));
-      later();
+      if (!state.signedIn) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needSignIn}</span>`));
+      primary(
+        ui.setup.continue,
+        () => {
+          state.step = 2;
+          stopPoll();
+          render();
+          void probeFolder(false);
+        },
+        !state.signedIn,
+      );
     } else if (state.step === 2) {
       card.appendChild(el(`<h2>${ui.setup.folderTitle}</h2>`));
+      // The status line serves both modes and always names the path it
+      // measured: `FolderProbe.path` must match what is on screen, or the
+      // line reads "not confirmed yet" — never another folder's answer.
+      const statusNode = (): HTMLElement => {
+        if (state.probing) return el(`<p class="set-note">${ui.setup.checking}</p>`);
+        const active = state.editing ? state.folderText.trim() : state.photosFolder;
+        const p = state.probe;
+        if (!p || p.path !== active) return el(`<p class="set-note">${ui.setup.unchecked}</p>`);
+        if (p.state === "ok") return el(`<p class="setup-ok">✓ ${ui.setup.folderExists(p.count ?? 0, p.months ?? 0)}</p>`);
+        if (p.state === "not-found") return el(`<p class="set-note tone-warn">${ui.setup.notFound}</p>`);
+        return el(`<p class="set-note tone-warn">${ui.setup.noToken}</p>`);
+      };
       if (state.editing) {
         const field = el(`<div class="setup-field"></div>`);
         const input = el<HTMLInputElement>(`<input type="text" class="setup-input"></input>`);
         input.value = state.folderText;
-        input.addEventListener("input", () => (state.folderText = input.value));
+        input.addEventListener("input", () => {
+          state.folderText = input.value;
+          // Typing retires an answer that no longer describes the text — in
+          // place, because a full re-render here would eat the caret.
+          if (state.probe && state.probe.path !== input.value.trim()) {
+            state.probe = null;
+            document.getElementById("setup-status")?.replaceChildren(statusNode());
+          }
+        });
         field.appendChild(input);
         const save = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
         save.textContent = ui.setup.check;
-        save.addEventListener("click", () => void saveFolderPath(state.folderText.trim()));
+        save.addEventListener("click", () => void confirmFolder(state.folderText.trim()));
         field.appendChild(save);
         const browse = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
         browse.textContent = ui.setup.browse;
@@ -401,13 +448,18 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
           render();
         });
         card.appendChild(change);
-        if (state.probing) card.appendChild(el(`<p class="set-note">${ui.setup.checking}</p>`));
-        else if (state.probe?.state === "ok")
-          card.appendChild(el(`<p class="setup-ok">✓ ${ui.setup.folderExists(state.probe.count ?? 0, state.probe.months ?? 0)}</p>`));
-        else if (state.probe?.state === "not-found")
-          card.appendChild(el(`<p class="set-note tone-warn">${ui.setup.notFound}</p>`));
-        else if (state.probe?.state === "no-token")
-          card.appendChild(el(`<p class="set-note tone-warn">${ui.setup.noToken}</p>`));
+      }
+      const statusHost = el(`<div id="setup-status"></div>`);
+      statusHost.appendChild(statusNode());
+      card.appendChild(statusHost);
+      // An unmeasured folder offers the confirm action where the status
+      // sits — checking used to be a mystery keystroke with no visible
+      // result in edit mode (and no result at all for a miss).
+      if (!state.editing && !state.probing && !folderOk()) {
+        const confirm = el<HTMLButtonElement>(`<button type="button" class="set-btn"></button>`);
+        confirm.textContent = ui.setup.check;
+        confirm.addEventListener("click", () => void confirmFolder(state.photosFolder));
+        card.appendChild(confirm);
       }
       if (state.saveError) card.appendChild(el(`<p class="set-note tone-warn">${state.saveError}</p>`));
       if (state.pick) {
@@ -433,7 +485,7 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
           pick.addEventListener("click", () => {
             const path = state.pick?.path ? `${state.pick.path}/${name}` : name;
             state.pick = null;
-            void saveFolderPath(path);
+            void confirmFolder(path);
           });
           row.appendChild(pick);
           list.appendChild(row);
@@ -448,23 +500,29 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
         panel.appendChild(close);
         card.appendChild(panel);
       }
-      primary(
-        ui.setup.continue,
-        () => {
-          state.step = 3;
-          render();
-          void loadConfig();
-        },
-        state.probe?.state !== "ok" || state.probing,
-      );
-      foot.appendChild(
-        el(`<span class="setup-blocked">${state.probe?.state === "ok" ? "" : ui.setup.needFolder}</span>`),
-      );
       secondary(ui.setup.back, () => {
         state.step = 1;
         render();
       });
-      later();
+      if (!folderOk()) foot.appendChild(el(`<span class="setup-blocked">${ui.setup.needFolder}</span>`));
+      primary(
+        ui.setup.continue,
+        () => {
+          void (async () => {
+            // Green on screen is not agreement: the server re-probes and
+            // stamps here, and that stamp is what releases the first scan —
+            // until now nothing ever sent `confirm: true`, so the folder was
+            // never recorded and the wizard came back on every launch.
+            await probeFolder(true);
+            if (state.probe?.state === "ok" && state.probe.path === state.photosFolder) {
+              state.step = 3;
+              render();
+              void loadConfig();
+            } else render();
+          })();
+        },
+        !folderOk(),
+      );
     } else if (state.step === 3) {
       card.appendChild(el(`<h2>${ui.setup.aiTitle}</h2>`));
       card.appendChild(el(`<p class="set-note">${ui.setup.aiNote}</p>`));
@@ -496,7 +554,6 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
         render();
       });
       primary(ui.setup.continue, () => void saveGeneration(), !state.config);
-      later();
     } else {
       // Page 4 — the scan owns the screen, per the design.
       card.appendChild(el(`<h2>${ui.setup.scanTitle}</h2>`));
@@ -530,7 +587,6 @@ export function showSetup(opts: { onDone: () => void; onSkip: () => void }): voi
         state.step = 3;
         render();
       });
-      later();
     }
     return page;
   };
