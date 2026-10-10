@@ -16,7 +16,7 @@ import {
   type ThumbWarming,
 } from "./backend";
 import { el } from "./photoUi";
-import { fmtDateTime, num, ui } from "./i18n";
+import { fmtDateTime, jobPhase, num, ui } from "./i18n";
 
 /**
  * Activity: what the local server is doing, and has done, in one place.
@@ -238,7 +238,7 @@ function renderNow(host: HTMLElement, job: JobRecord | null): void {
 
   const paint = (j: JobRecord) => {
     const { phase, done, total } = j.progress;
-    box.querySelector(".job-phase")!.textContent = `${jobTitle(j)} · ${phase}${total > 0 ? ` · ${num(done)}/${num(total)}` : ""}`;
+    box.querySelector(".job-phase")!.textContent = `${jobTitle(j)} · ${jobPhase(phase)}${total > 0 ? ` · ${num(done)}/${num(total)}` : ""}`;
     box.querySelector<HTMLElement>(".job-bar-fill")!.style.width = `${total > 0 ? Math.round((done / total) * 100) : 0}%`;
     // While the job waits for a human, show the code that unsticks it — and
     // take it down again the moment the phase moves on.

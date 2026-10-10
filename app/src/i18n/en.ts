@@ -25,6 +25,37 @@ export const en = {
     emptyArchiveHtml: `The archive is empty. The scan found no photos — check the photos folder under Settings → Library and scan again.`,
   },
 
+  /**
+   * The pipeline's phase ids in words. These are stable identifiers, not
+   * prose, so this is a lookup rather than a translation of a sentence — and
+   * the English table stays the source of the key set, so a language missing
+   * one does not compile. An id no table has met yet renders as itself (see
+   * `jobPhase`), which is how a new phase shows up instead of showing blank.
+   */
+  jobPhases: {
+    starting: "Starting",
+    "signing-in": "Waiting for sign-in",
+    loading: "Loading",
+    listing: "Listing folders",
+    saving: "Writing",
+    done: "Done",
+    cancelled: "Cancelled",
+    geocoding: "Locating",
+    analyzing: "Analyzing",
+    planning: "Planning",
+    downloading: "Downloading",
+    uploading: "Uploading",
+    preparing: "Preparing",
+    merging: "Merging",
+    summarizing: "Summarizing",
+    narrating: "Writing the trip",
+    translating: "Translating",
+    checking: "Checking",
+    pulling: "Pulling",
+    pushing: "Pushing",
+    media: "Fetching photos",
+  },
+
   common: {
     save: "Save",
     saving: "Saving…",

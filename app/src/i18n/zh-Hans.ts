@@ -23,6 +23,31 @@ export const zhHans: Messages = {
     emptyArchiveHtml: `照片档案为空。扫描没有找到照片——请在“设置 → 档案”检查照片目录后重新扫描。`,
   },
 
+  /** 服务端的阶段 id 对照表；英文表是键集的来源，缺一个键就编译不过。 */
+  jobPhases: {
+    starting: "启动中",
+    "signing-in": "等待登录",
+    loading: "读取中",
+    listing: "列举文件夹",
+    saving: "写入中",
+    done: "完成",
+    cancelled: "已取消",
+    geocoding: "定位中",
+    analyzing: "分析中",
+    planning: "规划中",
+    downloading: "下载中",
+    uploading: "上传中",
+    preparing: "准备中",
+    merging: "合并中",
+    summarizing: "生成摘要",
+    narrating: "撰写旅程",
+    translating: "翻译中",
+    checking: "检查中",
+    pulling: "拉取中",
+    pushing: "推送中",
+    media: "抓取照片",
+  },
+
   common: {
     save: "保存",
     saving: "正在保存…",

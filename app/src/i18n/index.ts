@@ -24,6 +24,15 @@ import { zhHans } from "./zh-Hans";
  */
 export let ui: Messages = contentLanguage() === "zh-Hans" ? zhHans : en;
 
+/**
+ * A job phase id in the reader's language. The id comes from the pipeline, so
+ * a phase this build has never heard of renders as itself rather than as
+ * nothing — the same reason the table is a lookup and not a switch.
+ */
+export function jobPhase(id: string): string {
+  return (ui.jobPhases as Record<string, string>)[id] ?? id;
+}
+
 onContentLanguageApplied((lang) => {
   ui = lang === "zh-Hans" ? zhHans : en;
 });

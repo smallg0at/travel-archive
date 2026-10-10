@@ -16,7 +16,7 @@
 import { el } from "./photoUi";
 import type { ConfigStatus, JobRecord } from "@travel-archive/shared";
 import { contentLanguage, setContentLanguage } from "./contentLang";
-import { ui } from "./i18n";
+import { jobPhase, ui } from "./i18n";
 import {
   archiveStatus,
   canWrite,
@@ -523,7 +523,7 @@ export function showSetup(opts: { onDone: () => void }): void {
       } else {
         const job = scan.job;
         const big = el(`<div class="setup-scan"></div>`);
-        const phase = job?.progress.phase ?? ui.setup.starting;
+        const phase = jobPhase(job?.progress.phase ?? "starting");
         const { done, total } = job?.progress ?? { done: 0, total: 0 };
         big.appendChild(el(`<div class="setup-scan-phase"></div>`)).textContent = `${phase}`;
         const bar = el(`<div class="job-bar"><div class="job-bar-fill"></div></div>`);

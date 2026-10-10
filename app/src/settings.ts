@@ -36,7 +36,7 @@ import { renderDensityControl, getCachedIndex, formatMonthLabel } from "./album"
 import { resetSidebarWidth } from "./chrome";
 import { renderThemeControl } from "./theme";
 import { renderContentLanguageControl } from "./contentLang";
-import { fmtDate, num, ui } from "./i18n";
+import { fmtDate, jobPhase, num, ui } from "./i18n";
 
 /**
  * Settings, as a page rather than a popup.
@@ -196,7 +196,7 @@ function followJob(job: JobRecord, line: HTMLElement, busy: HTMLButtonElement | 
     const p = j.progress;
     line.textContent =
       j.status === "running" || j.status === "queued"
-        ? `${p.message ?? p.phase}${p.total ? ui.settings.ofTotal(p.done, p.total) : ""}`
+        ? `${jobPhase(p.phase)}${p.total ? ui.settings.ofTotal(p.done, p.total) : ""}`
         : j.status === "failed"
           ? ui.settings.failed(j.error ?? ui.edit.unknownError)
           : (p.message ?? ui.settings.finished);
