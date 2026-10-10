@@ -41,6 +41,13 @@ export interface ProviderPreset {
   /** OpenAI-compatible only: send `response_format`, or leave it to the prompt. */
   jsonMode?: "response_format" | "prompt";
   tokenParam?: "max_tokens" | "max_completion_tokens";
+  /**
+   * The path `validateProvider` probes to ask whether the key is real.
+   * Default `models` — but only where `GET /models` is auth-bound: a
+   * provider whose list is public (OpenRouter) would answer 200 to
+   * anything, and the probe would say nothing about the key.
+   */
+  probePath?: string;
 }
 
 /**
@@ -106,6 +113,12 @@ const RAW_PRESETS: ProviderPreset[] = [
     baseUrl: "https://openrouter.ai/api/v1",
     model: "deepseek/deepseek-v4-flash",
     apiKeyEnv: "OPENROUTER_API_KEY",
+    // `/models` here is public — it answered 200 to a garbage key (measured
+    // 2026-10-10), so it judges reachability, not the key. `/key` is the
+    // auth-bound one: 401 to garbage, and by their docs 200 with key info
+    // for a real key (that half unverifiable on this machine, which has no
+    // OpenRouter key — if a good key ever fails here, this is the field).
+    probePath: "/key",
   },
   {
     id: "ollama",
@@ -193,11 +206,15 @@ export async function validateProvider(
     }
     const base = (process.env[`${preset.id.toUpperCase()}_BASE_URL`] || preset.baseUrl || "").replace(/\/+$/, "");
     if (!base) return fail("unreachable", "no base URL configured");
+    // Tolerate either spelling of the path ("/key" reads better in the
+    // preset; the URL is built here) — an unnormalized double slash 404s
+    // and reads like a misconfigured base URL, which is a lie.
+    const path = (preset.probePath ?? "models").replace(/^\/+/, "");
     const headers: Record<string, string> = preset.scope === "local" || !key ? {} : { authorization: `Bearer ${key}` };
-    const res = await fetch(`${base}/models`, { headers, signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(`${base}/${path}`, { headers, signal: AbortSignal.timeout(10_000) });
     if (res.ok || res.status === 429) return { ok: true };
     if (res.status === 401 || res.status === 403) return fail("auth", `key rejected (${res.status})`);
-    if (res.status === 404) return fail("unreachable", `no /models at ${base} (404) — check the base URL`);
+    if (res.status === 404) return fail("unreachable", `no /${path} at ${base} (404) — check the base URL`);
     return fail("unreachable", `${res.status} ${res.statusText}`);
   } catch (err) {
     return fail("unreachable", (err as Error).message || "no answer");

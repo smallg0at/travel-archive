@@ -68,3 +68,18 @@ describe("platform links", () => {
     }
   });
 });
+
+/**
+ * OpenRouter's `GET /models` is public: it answered 200 to a garbage key
+ * (measured 2026-10-10), so the default probe would have passed any text a
+ * reader typed. `/key` is the auth-bound endpoint. Dropping this field
+ * silently restores the hole the third test round found.
+ */
+describe("key probe", () => {
+  it("uses an auth-bound path at OpenRouter, and the default elsewhere", () => {
+    expect(presetById("openrouter")!.probePath).toBe("/key");
+    for (const p of PRESETS) {
+      if (p.id !== "openrouter") expect(p.probePath, p.id).toBeUndefined();
+    }
+  });
+});
