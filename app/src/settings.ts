@@ -597,9 +597,17 @@ function generationSection(): HTMLElement {
         badge.classList.toggle("tone-ok", active);
         root.classList.toggle("is-active", active);
         // The collapsed header carries the one thing worth seeing without
-        // opening it: whether this backend can be used as it stands.
-        summary.textContent = option.hasKey ? ui.settings.providerKeySet : ui.settings.providerKeyMissing;
-        summary.classList.toggle("tone-warn", !option.hasKey);
+        // opening it: whether this backend can be used as it stands. A local
+        // service can, key or no key — a missing key is only a problem for the
+        // ones that call out.
+        const keyState = option.hasKey
+          ? ui.settings.providerKeySet
+          : option.scope === "local"
+            ? ui.settings.providerLocalNoKey
+            : ui.settings.providerKeyMissing;
+        const keyWarn = !option.hasKey && option.scope !== "local";
+        summary.textContent = keyState;
+        summary.classList.toggle("tone-warn", keyWarn);
         // The endpoint only means something for an OpenAI-compatible service —
         // Gemini's own client has it baked in.
         urlField.hidden = !option.editable.baseUrl;
@@ -608,8 +616,8 @@ function generationSection(): HTMLElement {
         urlInput.placeholder = option.baseUrl ?? "";
         keyInput.placeholder = option.hasKey ? ui.settings.keySaved : ui.settings.keyPaste;
         const batch = option.supportsBatch ? ui.settings.providerBatchOk : ui.settings.providerNoBatch;
-        note.textContent = `${option.hasKey ? ui.settings.providerKeySet : ui.settings.providerKeyMissing} · ${batch}`;
-        note.classList.toggle("tone-warn", !option.hasKey);
+        note.textContent = `${keyState} · ${batch}`;
+        note.classList.toggle("tone-warn", keyWarn);
         // Never disabled, not even for the backend already in use: its key or
         // model is exactly what one comes here to fix, and a disabled button
         // with no reason reads as a broken page.
@@ -658,10 +666,13 @@ function generationSection(): HTMLElement {
       return;
     }
     const active = latest.providers.find((p) => p.id === latest!.provider);
-    state.textContent = active?.hasKey
-      ? `${providerName(active)} · ${ui.settings.ready}`
+    // A local service is ready without a key: saying "no key" of LM Studio is
+    // the same lie as asking it for one.
+    const usable = !!active && (active.hasKey || active.scope === "local");
+    state.textContent = usable
+      ? `${active ? providerName(active) : ""} · ${ui.settings.ready}`
       : ui.settings.noKey;
-    state.className = `set-sync-state tone-${active?.hasKey ? "ok" : "warn"}`;
+    state.className = `set-sync-state tone-${usable ? "ok" : "warn"}`;
 
     // Rows exist for every provider the server knows, created on first sight
     // into the group its scope names, so the order within a group is the
@@ -1120,6 +1131,21 @@ function remoteSection(): HTMLElement {
       (status.savedExposed && !status.savedHasPassword)
     );
     savedWarn.hidden = !status.restartNeeded;
+    if (status.restartNeeded) {
+      // Name what differs instead of "saved": a divergence can be inherited
+      // from an earlier session (or the harness pinning the environment), and
+      // "Saved" reads like something the reader just did.
+      const changes: string[] = [];
+      if (status.savedExposed !== status.exposed) {
+        changes.push(`${status.host} → ${status.savedExposed ? "0.0.0.0" : "127.0.0.1"}`);
+      }
+      if (status.savedHasPassword !== status.hasPassword) {
+        changes.push(
+          `${ui.settings.remotePassword} → ${status.savedHasPassword ? ui.settings.remotePasswordSet : ui.settings.remotePasswordUnset}`,
+        );
+      }
+      savedWarn.textContent = ui.settings.remoteSaved(changes.join("；"));
+    }
     clearKey.hidden = !(status.hasPassword || status.savedHasPassword);
   };
 
