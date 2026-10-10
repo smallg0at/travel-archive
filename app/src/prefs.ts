@@ -36,6 +36,28 @@ export const THEME_KEY = "theme";
 export const DENSITY_KEY = "album-density";
 export const SIDEBAR_WIDTH_KEY = "sidebar-width";
 export const CONTENT_LANG_KEY = "content-language";
+/**
+ * Where this browser's language came from — the marker that makes "the reader
+ * picked this" different from "this was guessed or copied".
+ *
+ * `contentLang.ts` writes the guess and `prefs.ts` can copy the archive's
+ * answer, and both land in the same `content-language` key, so without this the
+ * reconcile could not tell a settled choice from a standing guess: every load
+ * would re-adopt the server's language and quietly undo a choice made here.
+ */
+export const CONTENT_LANG_SOURCE_KEY = "content-language-source";
+export type LanguageSource = "detected" | "server" | "chosen";
+
+/** `null` when the browser has never settled on a language (a first run). */
+export function languageSource(): LanguageSource | null {
+  const raw = read(CONTENT_LANG_SOURCE_KEY);
+  return raw === "detected" || raw === "server" || raw === "chosen" ? raw : null;
+}
+
+/** Written by `contentLang.ts` (its guess, a hand pick) and by the copy above. */
+export function markLanguageSource(source: LanguageSource): void {
+  write(CONTENT_LANG_SOURCE_KEY, source);
+}
 export const OPEN_GROUPS_KEY = "nav-open-groups";
 
 function read(key: string): string | null {
@@ -196,11 +218,18 @@ export async function restorePrefs(): Promise<Restored> {
   }
 
   // Last, and on its own: this one ends the page rather than returning to it.
+  //
+  // The language is per device: a browser copies the archive's answer **once**,
+  // while it has none of its own, and after that its own stands — whether the
+  // reader picked it here or it was the copy. `contentLang.ts` records its
+  // first-run guess as "detected", which is precisely the state that is still
+  // allowed to be overwritten.
+  const settled = languageSource() === "server" || languageSource() === "chosen";
   if (server.contentLang === null) {
     // Only the machine that owns the store may seed it; a guest has nothing to
     // tell the server anyway (its writes are refused).
     if (!guest && mine.contentLang) savePrefs({ contentLang: mine.contentLang });
-  } else if (server.contentLang !== mine.contentLang) {
+  } else if (!settled && server.contentLang !== mine.contentLang) {
     // Learned late, applied where nothing has been drawn: by now the reader has
     // seen only the static shell, so `ui`, `loc` and <html lang> can all be
     // switched in place. That is what removes the second load a mismatch used
@@ -210,6 +239,7 @@ export async function restorePrefs(): Promise<Restored> {
       write(CONTENT_LANG_KEY, server.contentLang);
       reloadOnce();
     }
+    markLanguageSource("server");
   }
 
   return restored;

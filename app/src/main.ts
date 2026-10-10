@@ -119,7 +119,15 @@ function localiseShell(): void {
 }
 
 async function main() {
-  // Before anything reads a setting or paints with one. The browser's copy of
+  // Before the first render, and before anything is read from the server: a
+  // gated server answers 401 to everything, so the password has to be settled
+  // first. Anything drawn earlier would be an app whose photographs cannot
+  // load — and a reconcile that ran before this would see 401 for every value
+  // and conclude the archive holds none, which is how a remote reader ended up
+  // on its own language until something made it reload.
+  await requireAccess();
+
+  // Then the settings, before anything paints with one. The browser's copy of
   // these was being lost on every launch of the desktop shell — see prefs.ts —
   // and the job server's copy is what puts them back. With no server this
   // answers immediately with nothing to do, which is the phone's path.
@@ -127,20 +135,15 @@ async function main() {
   // Only the theme and the density need re-applying: their modules read the
   // setting while they loaded, which was before this could have answered. The
   // sidebar width is read by `initSidebarResize` below, the open nav groups
-  // when the nav is built, and the content language reloads the page.
+  // when the nav is built, and the content language is applied in place.
   //
-  //
-  // Together with the health check below, and not one after the other: both
-  // are requests to a server that is usually not there, and an absent one that
+  // Together with the health check, and not one after the other: both are
+  // requests to a server that is usually not there, and an absent one that
   // *drops* rather than refuses costs the full 1.5s timeout each. Neither
   // needs the other.
   const [restored, health] = await Promise.all([restorePrefs(), healthResult()]);
   if (restored.theme) showTheme(readTheme());
   if (restored.density) refreshDensity();
-
-  // Before the first render: a gated server answers 401 to everything, so
-  // anything drawn earlier would be an app whose photographs cannot load.
-  await requireAccess();
 
   /**
    * Where photos come from, decided before the first render rather than after

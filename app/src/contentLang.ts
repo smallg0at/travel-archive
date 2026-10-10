@@ -1,6 +1,6 @@
 import type { DayRecord, TranslationFile, TripRecord } from "@travel-archive/shared";
 import { applyEdits, textKey } from "@travel-archive/shared";
-import { CONTENT_LANG_KEY, rememberPref } from "./prefs";
+import { CONTENT_LANG_KEY, markLanguageSource, rememberPref } from "./prefs";
 import { registerLanguageApplier } from "./language";
 
 /**
@@ -82,6 +82,9 @@ function rememberDetection(): ContentLang {
   const lang = detect();
   try {
     localStorage.setItem(CONTENT_LANG_KEY, lang);
+    // "detected", not "chosen": this is a guess, and the one state a copy from
+    // the archive is still allowed to overwrite (see `restorePrefs`).
+    markLanguageSource("detected");
   } catch {
     // Storage blocked: the guess still holds for this session, and prefs.ts
     // keeps a disagreement it cannot settle from reloading for ever.
@@ -142,6 +145,9 @@ export function setContentLanguage(lang: ContentLang): void {
   rememberPref({ contentLang: lang });
   try {
     localStorage.setItem(CONTENT_LANG_KEY, lang);
+    // A hand pick settles this device's language: from here on the archive's
+    // own answer is not copied over it again.
+    markLanguageSource("chosen");
   } catch {
     // Storage blocked. The server has it, so the next launch reads it back and
     // applies it; there is nothing to reload into now.

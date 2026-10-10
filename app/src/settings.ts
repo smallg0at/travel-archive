@@ -304,7 +304,7 @@ export async function showSettings(): Promise<void> {
     frag.appendChild(offlineSection(sync));
     frag.appendChild(storageSection(sync));
   }
-  frag.appendChild(appearanceSection(writable));
+  frag.appendChild(appearanceSection());
   // GeoNames is CC BY 4.0, which asks for credit "as suitable for your medium".
   // Natural Earth is public domain and needs none, but naming it costs a line.
   frag.appendChild(el(`<p class="set-credits"></p>`)).textContent = ui.settings.dataCredits;
@@ -1017,7 +1017,7 @@ function offlineSection(status: SyncStatus): HTMLElement {
   return s;
 }
 
-function appearanceSection(writable = true): HTMLElement {
+function appearanceSection(): HTMLElement {
   const s = section(ui.settings.appearance);
   const body = s.querySelector(".set-body")!;
 
@@ -1032,14 +1032,14 @@ function appearanceSection(writable = true): HTMLElement {
   // One setting for the interface and the archive's own text — captions, day
   // pages, trips. That text needs translating from Generate first; anything
   // without a translation shows as written.
-  // TODO: choose it from the browser's language on first launch instead, which
-  // would make this row — and the question of whose language it is — go away
-  // for every reader rather than being withheld from remote ones.
-  if (writable) {
-    const language = el<HTMLDivElement>(`<div class="set-row"><span>${ui.language.label}</span></div>`);
-    language.appendChild(renderContentLanguageControl(ui.language.label));
-    body.appendChild(language);
-  }
+  //
+  // Offered to every reader, remote ones included: the language is per device,
+  // copied once from the archive when this browser has none of its own, so a
+  // guest picking here is not writing to anybody else's archive — it is
+  // settling this browser's answer.
+  const language = el<HTMLDivElement>(`<div class="set-row"><span>${ui.language.label}</span></div>`);
+  language.appendChild(renderContentLanguageControl(ui.language.label));
+  body.appendChild(language);
 
   const sidebar = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.sidebarWidth}</span></div>`);
   sidebar.appendChild(button(ui.common.reset, resetSidebarWidth));
