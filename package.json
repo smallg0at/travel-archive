@@ -1,6 +1,7 @@
 {
   "name": "travel-archive",
   "private": true,
+  "license": "MIT",
   "workspaces": [
     "shared",
     "pipeline",

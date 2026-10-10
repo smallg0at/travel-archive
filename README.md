@@ -80,8 +80,7 @@ Settings says so when it detects one.
 
 ## Licence and attribution
 
-**No licence has been chosen yet**, so the default applies: all rights reserved.
-Add one before anyone is expected to reuse this.
+**MIT** — see [`LICENSE`](LICENSE).
 
 The code depends on third-party data whose licences require attribution:
 
@@ -92,6 +91,11 @@ The code depends on third-party data whose licences require attribution:
 - **OpenStreetMap** — only if a POI layer is ever built: **ODbL**, so the derived
   index must be built locally, kept out of the repository, and attributed in
   Settings like GeoNames.
+- **HEIC decoding carries a copyleft: `libheif-js`, declared LGPL-3.0**, reached
+  through `heic-decode` (ISC). The local thumbnail renderer uses it, so a
+  packaged desktop build bundles it. MIT covers this repository's own code, not
+  that component: a distributed build should ship `libheif-js`'s licence and a
+  source pointer with it. Nothing else in the tree is copyleft.
 
 Personal data is deliberately absent: `.env`, tokens, the archive itself and
 anything under `private/` are gitignored. See [`docs/invariants.md`](docs/invariants.md) → "Nothing personal is committed".
