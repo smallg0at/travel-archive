@@ -110,3 +110,72 @@ mkdirSync(dirname(OUT), { recursive: true });
 const iconBuffer = png(SIZE, draw(SIZE));
 writeFileSync(OUT, iconBuffer);
 console.log(`wrote ${OUT} (${SIZE}x${SIZE}, ${(iconBuffer.length / 1024).toFixed(0)} KB)`);
+
+/**
+ * And the .ico, written here rather than converted by electron-builder.
+ *
+ * Its converter is a WASM blob, and on this machine it dies every time with
+ * `WebAssembly.Memory(): could not allocate memory` — an odd thing to depend
+ * on for a file this script can write outright. An ICO is a directory of
+ * images, and for 32-bit entries Windows takes a PNG or a raw DIB equally, so
+ * the small sizes go out as DIBs (the shape that file explorers still sample
+ * best at 16px) and the large ones as the PNG already being drawn.
+ *
+ * With `win.icon` pointing at the .ico, the conversion step never runs.
+ */
+const ICO_OUT = resolve(fileURLToPath(new URL("../build/icon.ico", import.meta.url)));
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+
+/** A 32-bit DIB: BITMAPINFOHEADER, bottom-up BGRA, then an (empty) 1bpp AND mask. */
+function dib(px, rgba) {
+  const header = Buffer.alloc(40);
+  header.writeUInt32LE(40, 0);
+  header.writeInt32LE(px, 4);
+  header.writeInt32LE(px * 2, 8); // height doubled: the AND mask follows the XOR bitmap
+  header.writeUInt16LE(1, 12);
+  header.writeUInt16LE(32, 14);
+  header.writeUInt32LE(px * px * 4, 20);
+  const xor = Buffer.alloc(px * px * 4);
+  for (let j = 0; j < px; j++) {
+    for (let i = 0; i < px; i++) {
+      const src = ((px - 1 - j) * px + i) * 4; // DIB rows are bottom-up
+      const dst = (j * px + i) * 4;
+      xor[dst] = rgba[src + 2];
+      xor[dst + 1] = rgba[src + 1];
+      xor[dst + 2] = rgba[src];
+      xor[dst + 3] = rgba[src + 3];
+    }
+  }
+  const maskRow = Math.ceil(px / 32) * 4;
+  const mask = Buffer.alloc(maskRow * px); // all zero: the alpha channel carries the shape
+  return Buffer.concat([header, xor, mask]);
+}
+
+function ico() {
+  const images = ICO_SIZES.map((px) => {
+    const rgba = draw(px);
+    return px >= 128 ? png(px, rgba) : dib(px, rgba);
+  });
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(images.length, 4);
+  const entries = [];
+  let offset = 6 + images.length * 16;
+  images.forEach((image, i) => {
+    const px = ICO_SIZES[i];
+    const entry = Buffer.alloc(16);
+    entry[0] = px >= 256 ? 0 : px; // 0 means 256
+    entry[1] = px >= 256 ? 0 : px;
+    entry.writeUInt16LE(1, 4); // colour planes
+    entry.writeUInt16LE(32, 6); // bits per pixel
+    entry.writeUInt32LE(image.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += image.length;
+    entries.push(entry);
+  });
+  return Buffer.concat([header, ...entries, ...images]);
+}
+
+const icoBuffer = ico();
+writeFileSync(ICO_OUT, icoBuffer);
+console.log(`wrote ${ICO_OUT} (${ICO_SIZES.join("/")} px, ${(icoBuffer.length / 1024).toFixed(0)} KB)`);
