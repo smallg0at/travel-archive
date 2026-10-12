@@ -24,8 +24,9 @@ import { NATIVE_LANGUAGE, saveNativeText } from "./translate.js";
  *
  * Only days with at least one analyzed photo are summarized — there's nothing
  * for the model to work from otherwise — and, outside a trip, only days with
- * more than SUMMARY_MIN_PHOTOS photos. The album view renders every day
- * regardless, summary or not, so running this is purely additive.
+ * more than SUMMARY_MIN_PHOTOS photos the summary can be written from. The
+ * album view renders every day regardless, summary or not, so running this is
+ * purely additive.
  *
  * Callable by both the CLI and the job server; see ./analyze.ts for why.
  */
@@ -183,19 +184,27 @@ export interface DayDecision {
   analyzed: number;
 }
 
-function decideDay(args: {
+export function decideDay(args: {
   date: string;
   prior: DayRecord | undefined;
+  /**
+   * Photos the summary would be written from — analyzed, not withheld.
+   *
+   * This, and not the day's raw photo count, is what the "too small to
+   * summarize" rule measures. The reader's plan lists these numbers, so a day
+   * shown as "4 photos" was being offered next to a line saying days of 15
+   * photos or fewer are skipped: the two numbers disagreed because the rule was
+   * counting 31 photos of which 27 could never reach the model. A day the
+   * summarizer can barely write about is the thing the rule is for.
+   */
   analyzedCount: number;
-  /** Every photo the day holds, analyzed or not — what the reader sees. */
-  photoCount: number;
   inTrip: boolean;
   place: string | null;
   note: string | null;
   summarizedIds: string[];
   opts: OrganizeOptions;
 }): DayOutcome {
-  const { date, prior, analyzedCount, photoCount, inTrip, place, note, summarizedIds, opts } = args;
+  const { date, prior, analyzedCount, inTrip, place, note, summarizedIds, opts } = args;
   const inScope = opts.days?.length ? opts.days.includes(date) : !opts.only || date.startsWith(opts.only);
   // Place is an input to the summary, not just a label, so a day whose place
   // changed is as stale as one whose photos changed — geocoding lands after
@@ -227,7 +236,7 @@ function decideDay(args: {
   if (analyzedCount === 0) return "skip-no-analyzed";
   // After the others, so a small day that also has nothing analyzed is still
   // reported as needing Analyze — that is the reason it would stay blank in a trip.
-  if (!inTrip && photoCount <= SUMMARY_MIN_PHOTOS) return "skip-small";
+  if (!inTrip && analyzedCount <= SUMMARY_MIN_PHOTOS) return "skip-small";
   return "rewrite";
 }
 
@@ -329,7 +338,6 @@ export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan>
       date,
       prior: existingDaysByDate.get(date),
       analyzedCount: analyzed.length,
-      photoCount: dayPhotos.length,
       inTrip: findTripFor(date, tripDefs) !== null,
       place: dominantPlace(dayPhotos),
       note: existingDaysByDate.get(date)?.note ?? null,
@@ -450,7 +458,6 @@ export async function runOrganize(
       date,
       prior,
       analyzedCount: analyzed.length,
-      photoCount: dayPhotos.length,
       inTrip: findTripFor(date, tripDefs) !== null,
       place,
       note,
