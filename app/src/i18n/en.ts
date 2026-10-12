@@ -185,7 +185,10 @@ export const en = {
     sizing: (done: number, total: number) => `Sizing ${count(total, "photo", "photos")} — ${num(done)} of ${num(total)}`,
     savingPdf: "Saving the PDF…",
     openingPrint: "Opening the print dialog…",
+    waitingForWindow: "Bring this window to the front to finish — a hidden page cannot be printed.",
     exportFailed: (error: string) => `Export failed: ${error}`,
+    viewChanged:
+      "The page changed while this export was being prepared, so it was cancelled — it would have printed the new page. Open the page you want and export again.",
   },
 
   server: {

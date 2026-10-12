@@ -74,6 +74,16 @@ const PRINT_QUALITY = 0.7;
 
 const PX_PER_MM = PRINT_DPI / 25.4;
 
+/**
+ * How long to wait for each swapped image to decode before printing anyway.
+ *
+ * A decode that has not finished by then is not going to (a hidden page defers
+ * them indefinitely; a node that left the document never settles). Printing may
+ * leave that one card blank, which beats an export that never finishes at all —
+ * and `running` means a stuck export also refuses every later one.
+ */
+const DECODE_WAIT_MS = 3000;
+
 /** The printed content width, from the `@media print` block — the card table and the grid fallback both scale against it. */
 const CONTENT_WIDTH_MM = 186;
 
@@ -294,8 +304,24 @@ async function rasteriseAll(
   }
 
   // Every swapped image has a new src to decode before the page is printable.
+  //
+  // Three ways this wait could hold a run forever, all seen: a node that has left
+  // the document (the reader navigated while the pass was running) may never
+  // settle its decode at all; a hidden page has its decoding deferred, so
+  // `decode()` can pend for as long as the window is in the background; and a
+  // decode in flight does not care about the cancel signal. Any of them left the
+  // progress box up for good and every later export ignored, because `running`
+  // was still set. So detached nodes are skipped, a cancel releases the rest,
+  // and the wait is bounded.
   await Promise.all(
-    swapped.map(({ img }) => (img.complete ? Promise.resolve() : img.decode().catch(() => {}))),
+    swapped.map(({ img }) => {
+      if (img.complete || !img.isConnected) return Promise.resolve();
+      return Promise.race([
+        img.decode().catch(() => {}),
+        new Promise<void>((resolve) => setTimeout(resolve, DECODE_WAIT_MS)),
+        new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true })),
+      ]);
+    }),
   );
   return swapped;
 }
@@ -304,31 +330,99 @@ function restore(swapped: Swapped[]): void {
   for (const { img, original } of swapped) img.src = original;
 }
 
+/**
+ * One export at a time.
+ *
+ * The progress box below is a single shared node, and each run hides it before
+ * printing — so starting a second export while the first was still preparing
+ * made the progress vanish mid-run (the first run's hide), and then produced two
+ * save dialogs for one intention, because both runs reached their print step.
+ * A second press is ignored now: the box on screen belongs to the run that is
+ * working, and its Cancel button is the way out.
+ */
+let running = false;
+
 export async function printView(name?: string): Promise<void> {
+  if (running) return;
+  running = true;
+
   const images = exportableImages();
+  // Where this export was started. The photographs are read here and the print
+  // happens at the end, so a navigation in between — clicking another trip,
+  // opening a day — leaves this run holding detached nodes while the print
+  // captures whatever page is on screen by then. That is how an export of one
+  // trip came out as another.
+  const route = location.hash;
   const controller = new AbortController();
   const { box, setText } = overlay(() => controller.abort());
   const signal = controller.signal;
 
+  /** Still the page this export started on? */
+  const viewChanged = (): boolean => route !== location.hash || images.some((img) => !img.isConnected);
+  /** Set when the view changed mid-run, so the loops stop and the reader is told why. */
+  let viewGone = false;
+
   const label = (line: (done: number, total: number) => string) => (done: number, total: number) => {
+    // The progress callback doubles as the watchdog. Both loops already call it
+    // for every image, so a navigation is noticed within one image instead of
+    // after the whole pass — a minute of fetching and encoding — has run for a
+    // page nobody is going to print.
+    if (viewChanged()) {
+      viewGone = true;
+      controller.abort();
+      return;
+    }
     setText(line(done, total));
   };
   label(ui.print.preparing)(0, images.length);
 
+  /** Said out loud rather than printing the wrong page, and long enough to read. */
+  const stopForViewChange = async (): Promise<void> => {
+    setText(ui.print.viewChanged);
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  };
+
   let swapped: Swapped[] = [];
   try {
     await hydrateAll(images, label(ui.print.preparing), signal);
+    // `await` on the message matters: `return promise` runs the `finally` below
+    // immediately (hiding the box) instead of waiting for it, which is how the
+    // cancellation notice ended up invisible.
+    if (viewGone || viewChanged()) return await stopForViewChange();
     if (signal.aborted) return;
 
     // Downscaling before printing, not after: Chrome embeds whatever is in the
     // DOM when the dialog opens.
     swapped = await rasteriseAll(images, label(ui.print.sizing), signal);
+    if (viewGone || viewChanged()) return await stopForViewChange();
+    if (signal.aborted) return;
+
+    // A hidden page cannot be captured: Chrome defers painting (and rAF) for it,
+    // so the print would come out as blank cards. Waiting for the window is both
+    // the honest answer and the way an export is actually used — start it, go and
+    // do something else, come back to the dialog.
+    while (document.hidden && !signal.aborted) {
+      setText(ui.print.waitingForWindow);
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          document.removeEventListener("visibilitychange", done);
+          resolve();
+        };
+        document.addEventListener("visibilitychange", done);
+        setTimeout(done, 2000);
+      });
+    }
     if (signal.aborted) return;
 
     setText(window.electronAPI ? ui.print.savingPdf : ui.print.openingPrint);
     // Two frames: one for the last decode to be painted, one for the layout it
     // changes to settle. Printing before this leaves the final cards blank.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Bounded for the same reason as the decode wait: rAF never fires on a
+    // hidden page, and this runs after the window has just become visible again.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      setTimeout(resolve, 1000);
+    });
     if (signal.aborted) return;
 
     // Hidden rather than removed, so a second export reuses the node — and so it
@@ -355,5 +449,6 @@ export async function printView(name?: string): Promise<void> {
     // was found, rather than showing print-resolution images from then on.
     restore(swapped);
     box.hidden = true;
+    running = false;
   }
 }
