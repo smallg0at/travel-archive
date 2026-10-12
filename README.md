@@ -80,9 +80,22 @@ Settings says so when it detects one.
 
 ## Licence and attribution
 
-**MIT** — see [`LICENSE`](LICENSE).
+**AGPL-3.0-or-later** — see [`LICENSE`](LICENSE), and [`COPYING`](COPYING) for the
+GNU General Public License it builds on.
 
-The code depends on third-party data whose licences require attribution:
+The network clause is the reason for this licence rather than the GPL or the
+LGPL: this is not a library but an application, with a job server and a remote
+reader, and neither of those says anything about use over a network. AGPL-3
+section 13 closes that — a fork that is hosted rather than shipped owes its users
+the source. Every dependency is compatible; the inventory is in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), generated from the lockfile by
+`scripts/third-party-notices.mjs`.
+
+Distributing a built installer carries two obligations the repository itself does
+not: ship the licence texts of everything bundled, and leave the bundled LGPL
+parts replaceable (LGPL-3 section 4).
+
+The code also depends on third-party data whose licences require attribution:
 
 - **GeoNames** — settlement names and coordinates, **CC BY 4.0**. The credit
   line in the app's Settings (`ui.settings.dataCredits`) is that attribution and
@@ -91,11 +104,10 @@ The code depends on third-party data whose licences require attribution:
 - **OpenStreetMap** — only if a POI layer is ever built: **ODbL**, so the derived
   index must be built locally, kept out of the repository, and attributed in
   Settings like GeoNames.
-- **HEIC decoding carries a copyleft: `libheif-js`, declared LGPL-3.0**, reached
-  through `heic-decode` (ISC). The local thumbnail renderer uses it, so a
-  packaged desktop build bundles it. MIT covers this repository's own code, not
-  that component: a distributed build should ship `libheif-js`'s licence and a
-  source pointer with it. Nothing else in the tree is copyleft.
+- **Two copyleft components a build bundles**: `libheif-js` (LGPL-3.0, reached
+  through `heic-decode`) and the libvips inside sharp's prebuilt packages
+  (LGPL-3.0-or-later). Both sit alongside AGPL-3-licensed code without conflict,
+  and both are listed with their texts in THIRD-PARTY-NOTICES.md.
 
 Personal data is deliberately absent: `.env`, tokens, the archive itself and
 anything under `private/` are gitignored. See [`docs/invariants.md`](docs/invariants.md) → "Nothing personal is committed".
