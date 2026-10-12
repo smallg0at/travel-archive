@@ -223,11 +223,10 @@ export function decideDay(args: {
     photosOnlyGrew(prior.summarizedPhotoIds, summarizedIds) &&
     prior.place === place &&
     // A note is an input to the summary like the photos are, so editing one
-    // makes the day stale. `?? null` on both sides because days written before
-    // v14 have no `summarizedNote` at all, and absent must compare equal to
-    // "no note" — otherwise a schema bump alone marks 545 days for a paid
-    // re-run.
-    (prior.summarizedNote ?? null) === note &&
+    // makes the day stale. Compared without whitespace: deleting a blank line
+    // says the same thing, and treating it as an edit re-summarized a 241-photo
+    // day for pay (2026-08-28, one `\n`). Everything else counts.
+    sameNote(prior.summarizedNote, note) &&
     segmentsAreCurrent(prior.segments);
 
   if (prior && (unchanged || !inScope)) return "reuse";
@@ -238,6 +237,29 @@ export function decideDay(args: {
   // reported as needing Analyze — that is the reason it would stay blank in a trip.
   if (!inTrip && analyzedCount <= SUMMARY_MIN_PHOTOS) return "skip-small";
   return "rewrite";
+}
+
+/**
+ * Whether the note in hand should be read as the note a summary was written from.
+ *
+ * Whitespace is not part of what a note says: a deleted blank line, a re-wrapped
+ * paragraph, a full-width space instead of an ASCII one — none of them can make
+ * a summary wrong, and they are easy to leave behind while editing. Counting
+ * them as edits re-summarized 2026-08-28 (241 photos) because one `\n` had gone.
+ * Anything else — a word, a punctuation mark, a digit — is a real edit, because
+ * the note is an input to what the model writes.
+ *
+ * `?? null` on both sides inside: days written before v14 have no
+ * `summarizedNote` at all, and absent must compare equal to "no note", or a
+ * schema bump alone would mark 545 days for a paid re-run.
+ */
+function sameNote(a: string | null | undefined, b: string | null | undefined): boolean {
+  return normaliseNote(a) === normaliseNote(b);
+}
+
+/** `\s` covers the ideographic space too, which is what Chinese notes use for padding. */
+function normaliseNote(note: string | null | undefined): string {
+  return (note ?? "").replace(/\s+/g, " ").trim();
 }
 
 /**

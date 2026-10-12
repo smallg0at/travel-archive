@@ -37,6 +37,7 @@ const decide = (args: {
   inTrip?: boolean;
   only?: string | null;
   days?: string[] | null;
+  note?: string | null;
 }): DayOutcome =>
   decideDay({
     date: args.date ?? "2026-10-08",
@@ -44,13 +45,22 @@ const decide = (args: {
     analyzedCount: args.analyzedCount,
     inTrip: args.inTrip ?? false,
     place: "Home",
-    note: null,
+    note: args.note ?? null,
     summarizedIds: ["a", "b"].slice(0, Math.max(1, args.analyzedCount)),
     opts: { only: args.only ?? null, days: args.days ?? null, force: false },
   });
 
-const storedDay = (): DayRecord =>
-  ({ date: "2026-10-08", place: "Home", note: null, summary: "A day.", segments: [currentSegment()], summarizedPhotoIds: ["a", "b"] }) as unknown as DayRecord;
+/** A stored day, current in every other respect, with the notes as given. */
+const storedDay = (notes: { note?: string | null; summarizedNote?: string | null } = {}): DayRecord =>
+  ({
+    date: "2026-10-08",
+    place: "Home",
+    note: notes.note ?? null,
+    summarizedNote: notes.summarizedNote ?? null,
+    summary: "A day.",
+    segments: [currentSegment()],
+    summarizedPhotoIds: ["a", "b"],
+  }) as unknown as DayRecord;
 
 describe("decideDay", () => {
   it("skips a day outside a trip whose usable photos are too few", () => {
@@ -83,6 +93,24 @@ describe("decideDay", () => {
     // Ticking a day in the plan sends it as `days`; the size rule still applies,
     // since the plan only offers days that passed it.
     expect(decide({ analyzedCount: 4, days: ["2026-10-08"] })).toBe("skip-small");
+  });
+
+  it("leaves a day alone when the note only lost whitespace", () => {
+    // 2026-08-28, verbatim: one blank line deleted out of a 1,228-character
+    // note put a 241-photo day on the plan.
+    const prior = storedDay({ summarizedNote: "Day one.\n\nMuseum, then home." });
+    expect(decide({ prior, analyzedCount: 2, note: "Day one.\nMuseum, then home." })).toBe("reuse");
+  });
+
+  it("re-summarizes when the note itself changed", () => {
+    const prior = storedDay({ summarizedNote: "Day one. Museum." });
+    expect(decide({ prior, analyzedCount: 20, note: "Day one. Museum, again." })).toBe("rewrite");
+    expect(decide({ prior, analyzedCount: 20, note: "Day one. The museum." })).toBe("rewrite");
+  });
+
+  it("re-summarizes when a note appears where there was none", () => {
+    const prior = storedDay({ summarizedNote: null });
+    expect(decide({ prior, analyzedCount: 20, note: "Went to the museum." })).toBe("rewrite");
   });
 
   it("leaves out-of-scope days to their own run", () => {
