@@ -337,3 +337,29 @@ arrive, looking exactly like one still on its way, on every visit.
 thumbnail is missing: the original still opens in the lightbox. The server keeps
 returning `null` rather than a placeholder for the same reason seen from the
 other side — a grey tile must never reach the model as a photograph.
+
+**Announcing a job must never touch the job.** The job server posts Windows
+toasts itself (`pipeline/src/notify.ts`), because it already runs in the
+signed-in session — no window, no phone, no service, nothing leaving the
+machine. Its policy is one function (`shouldNotify`), covered by tests rather
+than by anyone remembering: success interrupts only for work someone started
+(`analyze`, `organize`, `trip`, `translate`), the jobs that run on their own
+stay quiet when they succeed and *speak* when they fail, a job somebody is
+already watching (an open Activity page) says nothing, and a cancel is not an
+outcome. It is **two switches, not one mode** — folding "finished" into "broke"
+is how a failure goes unannounced for a week — and the toast's text is the
+job's own last log line, so a notification can never disagree with Activity.
+Anything the OS refuses is swallowed and logged at most once per ten minutes; a
+missing notification must never be able to fail a finished job (measured with
+an injected missing shell, 2026-10-13).
+
+**An AUMID's icon comes from the installed exe.** A toast's name *and* logo are
+resolved through the Start Menu shortcut's AppUserModelID
+(`com.travelarchive.photoarchive`), so a stale install shows a stale logo —
+which is what happened: the September build predated "Unify application
+branding icon" and every notification carried the old mark until the reinstall
+(2026-10-13). Two facts worth not rediscovering: a bare
+`CreateToastNotifier()` with no AUMID throws `0x80070490` and Windows 11 drops
+the toast anyway, and `SuppressPopup = $true` posts to the Action Center with
+**no banner at all** (confirmed by eye) — what `NOTIFY_BANNER=0` selects, a
+config-only switch on purpose until someone has lived with both.
