@@ -81,7 +81,24 @@ const WRITABLE = [
   "PROXY_AI_URL",
   "PROXY_GRAPH_MODE",
   "PROXY_GRAPH_URL",
+  // Desktop notifications. Three switches, read live by the job when it ends,
+  // so saving one takes effect on the next job rather than at a restart.
+  //
+  // NOTIFY_BANNER is deliberately *not* surfaced in Settings yet: silent
+  // delivery (SuppressPopup — Action Center only, no banner) was measured
+  // working, but the switch has not earned a place in the form until someone
+  // has lived with both. It is settable by hand for that experiment.
+  "NOTIFY_SUCCESS",
+  "NOTIFY_FAILURES",
+  "NOTIFY_BANNER",
 ] as const;
+
+/**
+ * Values that are switches rather than text: `1` on, `0` off, absent meaning
+ * on. A typo here would be a setting that never applies, which is why
+ * `saveConfig` refuses it loudly instead of writing it.
+ */
+const FLAGS = ["NOTIFY_SUCCESS", "NOTIFY_FAILURES", "NOTIFY_BANNER"] as const;
 
 export type WritableKey = (typeof WRITABLE)[number];
 
@@ -124,6 +141,13 @@ export function configStatus(): ConfigStatus {
     geminiModel: env.geminiModel,
     shadowed: WRITABLE.filter(shadowedByEnvironment),
     proxy: getProxySettings(),
+    // Read live, not from `env`: `saveConfig` writes process.env and reloads,
+    // and a switch whose saved value did not appear in the answer would make
+    // the Settings checkbox snap back on every save.
+    notify: {
+      success: process.env.NOTIFY_SUCCESS !== "0",
+      failures: process.env.NOTIFY_FAILURES !== "0",
+    },
   };
 }
 
@@ -171,6 +195,9 @@ export async function saveConfig(patch: Partial<Record<WritableKey, string | nul
   for (const [key, value] of entries) {
     if (key === "ARCHIVE_HOST" && value !== null && !(HOST_VALUES as readonly string[]).includes(value)) {
       throw new Error(`${value} is not a host this server can bind; use one of ${HOST_VALUES.join(", ")}`);
+    }
+    if ((FLAGS as readonly string[]).includes(key) && value !== null && value !== "0" && value !== "1") {
+      throw new Error(`${value} is not a switch value; use 1 (on) or 0 (off)`);
     }
   }
 

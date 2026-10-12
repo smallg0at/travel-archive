@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dataFile } from "../paths.js";
 import { withArchiveLock } from "../lock.js";
+import { notifyJobFinished } from "../notify.js";
 import { randomUUID } from "node:crypto";
 import { GraphError } from "../graph.js";
 import type { JobKind, JobProgress, JobRecord } from "@travel-archive/shared";
@@ -257,6 +258,11 @@ export function start<R extends object>(opts: StartOptions<R>): JobRecord {
       // stream to send its last frame and close itself.
       emit(job);
       await persist(record);
+      // After `persist`, never before: a toast announcing a job whose record is
+      // not on disk yet would be a claim about work that could still be lost.
+      // And never awaited — announcing a job is the softest thing this server
+      // does, and it decides for itself what is worth saying (see notify.ts).
+      notifyJobFinished(record, { watched: job.subscribers.size > 0 });
     }
   })();
 

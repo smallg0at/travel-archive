@@ -29,6 +29,7 @@ import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
+import { sendTestNotification } from "./notify.js";
 import { autostartStatus, runtimePath, setAutostart, warmAutostartCache } from "./autostart.js";
 import { remoteAccessStatus, runningExposed, runningHost, runningPassword, setRemoteAccess } from "./remoteAccess.js";
 import { appDistIndex, serveApp } from "./staticApp.js";
@@ -594,6 +595,28 @@ const routes: [RegExp, string, Handler][] = [
       }
       try {
         json(res, 200, await saveConfig(patch));
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+    },
+  ],
+
+  /**
+   * One toast on demand — the Settings "send a test" button.
+   *
+   * A POST, so the write rule already in force applies: this machine only. It
+   * posts on the *server's* desktop, which is the point — a remote reader
+   * ringing the owner's bell on request would be the wrong half of the
+   * feature. The answer carries the reason when Windows refuses, because a
+   * button that cannot fail cannot confirm anything.
+   */
+  [
+    /^\/notify\/test$/,
+    "POST",
+    async (_req, res) => {
+      try {
+        await sendTestNotification();
+        json(res, 200, { ok: true });
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }
@@ -1717,6 +1740,7 @@ server.listen(env.servePort, HOST, () => {
   console.log(`  GET  /archive/status`);
   console.log(`  GET  /config              generation settings; never returns keys`);
   console.log(`  POST /config              {AI_PROVIDER,GEMINI_API_KEY,...}`);
+  console.log(`  POST /notify/test         one toast on this machine, for the Settings button`);
   console.log(`  GET  /prefs               the app's theme, density, sidebar width, language`);
   console.log(`  POST /prefs               {theme,density,sidebarWidth,contentLang,navOpenGroups}`);
   console.log(`  POST /jobs/scan           {mode,from,to}    free, Graph listing only`);

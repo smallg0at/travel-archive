@@ -385,6 +385,19 @@ export function saveConfig(patch: Record<string, string>): Promise<ConfigStatus>
 }
 
 /**
+ * Asks the server for one toast on its own machine.
+ *
+ * It rejects with the server's reason (no PowerShell, Windows refused, a
+ * non-Windows host) rather than returning a flag, because the button exists to
+ * *confirm* the machine will show one — "failed: <why>" is the only answer a
+ * reader can act on, and a silent success would be the lie the button is meant
+ * to prevent.
+ */
+export function testNotification(): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>("/notify/test", {});
+}
+
+/**
  * Whether the job server starts itself at sign-in (pipeline/src/autostart.ts).
  *
  * Null when there is no server to ask — the phone, or a browser — which is the

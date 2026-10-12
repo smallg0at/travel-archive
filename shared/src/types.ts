@@ -721,6 +721,16 @@ export interface ConfigStatus {
    */
   shadowed: string[];
   proxy: ProxySettings;
+  /**
+   * Desktop notifications, as a pair of switches rather than one mode.
+   *
+   * They are separate because they answer different questions: interrupt me
+   * when work I started finishes, versus tell me when something broke. Folding
+   * them into a single "off/on" would silently swallow the second one, which is
+   * the half a reader finds out about a week late. A fact about the server's
+   * own machine, which is the only place a toast can appear.
+   */
+  notify: { success: boolean; failures: boolean };
 }
 
 /**

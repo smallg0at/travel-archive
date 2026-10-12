@@ -327,6 +327,14 @@ export const en = {
     backgroundWhere: (command: string) => `Registered to start: ${command}`,
     backgroundForeign: (command: string) =>
       `Registered for a different archive home — signing in starts that one, not this: ${command}`,
+    notify: "Notifications",
+    notifyNote:
+      "Sent by the job server on its own machine, so they appear only where it runs — no window needed, and nothing leaves the network. Work you started announces itself when it finishes; a job that failed announces itself whatever started it.",
+    notifySuccess: "Announce work I started when it finishes",
+    notifyFailures: "Announce a job that failed",
+    notifyTest: "Send a test notification",
+    notifyTested: "Sent — it should be in your notifications now.",
+    notifyTestFailed: "Not sent:",
     remote: "Remote access",
     remoteNote:
       "What the job server is bound to. Reading elsewhere needs the shared password; writing is this machine's either way. Saved changes wait for a restart.",

@@ -25,6 +25,7 @@ import {
   startSync,
   startScan,
   syncStatus,
+  testNotification,
   validateGeneration,
   watchJob,
   type ConflictChoice,
@@ -297,6 +298,10 @@ export async function showSettings(): Promise<void> {
     frag.appendChild(photosFolderSection());
     frag.appendChild(scanSection(sync));
     frag.appendChild(backgroundSection());
+    // Notifications belong next to the section that makes the server a
+    // background thing: this is the switch for what it says when nobody is
+    // looking at it.
+    frag.appendChild(notifySection());
     frag.appendChild(remoteSection());
     frag.appendChild(generationSection());
     frag.appendChild(proxySection());
@@ -1066,6 +1071,91 @@ function appearanceSection(): HTMLElement {
  * machine — and unknown until it says. Until then the row stays hidden, so a
  * control that cannot work is never drawn (the same rule as `canWrite`).
  */
+/**
+ * Desktop notifications — two switches and one button that proves them.
+ *
+ * Two rows rather than one three-state mode, because "finished" and "broke"
+ * are different appetites for interruption: the quiet a reader wants while a
+ * long batch runs is exactly when they still want to hear that something
+ * failed, and folding both into one switch is how a failure goes unannounced
+ * for a week. The banner choice is deliberately absent (see notify.ts — the
+ * switch exists, it just has not earned a row in the form yet).
+ *
+ * The button is what makes the rest trustworthy. A toast can be blocked per
+ * machine, in more ways than this page could detect, so the only honest
+ * answer is one real notification — and when Windows refuses, the reason comes
+ * back verbatim rather than a shrug.
+ */
+function notifySection(): HTMLElement {
+  const s = section(ui.settings.notify);
+  const body = s.querySelector(".set-body")!;
+  body.appendChild(el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.notifyNote}</p>`));
+
+  const makeSwitch = (label: string) => {
+    const wrap = el<HTMLLabelElement>(
+      `<label class="set-check" hidden><input type="checkbox"><span></span></label>`,
+    );
+    wrap.querySelector("span")!.textContent = label;
+    return { wrap, box: wrap.querySelector("input") as HTMLInputElement };
+  };
+  const success = makeSwitch(ui.settings.notifySuccess);
+  const failures = makeSwitch(ui.settings.notifyFailures);
+
+  const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
+  const testNote = el<HTMLParagraphElement>(`<p class="set-note" hidden></p>`);
+  const testActions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  const test = button(ui.settings.notifyTest, () => void runTest(), "primary");
+  testActions.appendChild(test);
+
+  body.append(success.wrap, failures.wrap, testActions, testNote, problem);
+
+  // Fetched rather than known: these switches are facts about the server, and
+  // a row drawn before it answers is a control that cannot work (the rule
+  // `canWrite` and autostart already follow).
+  let saved: ConfigStatus | null = null;
+  const apply = (next: ConfigStatus) => {
+    saved = next;
+    success.wrap.hidden = failures.wrap.hidden = false;
+    success.box.checked = next.notify.success;
+    failures.box.checked = next.notify.failures;
+  };
+
+  const save = async (key: "NOTIFY_SUCCESS" | "NOTIFY_FAILURES", on: boolean, box: HTMLInputElement) => {
+    problem.hidden = true;
+    try {
+      apply(await saveConfig({ [key]: on ? "1" : "0" }));
+    } catch (err) {
+      // Snap back: a switch that stays where it was pushed after a refused
+      // save is worse than one that returns to what the server is doing.
+      box.checked = !on;
+      problem.textContent = (err as Error).message;
+      problem.hidden = false;
+    }
+  };
+  success.box.addEventListener("change", () => void save("NOTIFY_SUCCESS", success.box.checked, success.box));
+  failures.box.addEventListener("change", () => void save("NOTIFY_FAILURES", failures.box.checked, failures.box));
+
+  const runTest = async () => {
+    problem.hidden = testNote.hidden = true;
+    test.disabled = true;
+    try {
+      await testNotification();
+      testNote.textContent = ui.settings.notifyTested;
+      testNote.hidden = false;
+    } catch (err) {
+      problem.textContent = `${ui.settings.notifyTestFailed} ${(err as Error).message}`;
+      problem.hidden = false;
+    } finally {
+      test.disabled = false;
+    }
+  };
+
+  void getConfig().then((next) => {
+    if (next) apply(next);
+  });
+  return s;
+}
+
 /**
  * Who may reach the job server — and the button that restarts it.
  *
