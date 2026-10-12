@@ -357,9 +357,17 @@ export async function printView(name?: string): Promise<void> {
   const { box, setText } = overlay(() => controller.abort());
   const signal = controller.signal;
 
-  /** Still the page this export started on? */
+  /**
+   * Still the page this export started on?
+   *
+   * When it is not, the run simply stops — no print, and no notice either. A page
+   * that changed is one the reader changed, and exporting whatever they are
+   * looking at now is something they can ask for on that page; a message telling
+   * them what they had just done themselves was noise. The progress box going
+   * away is the signal that nothing was exported.
+   */
   const viewChanged = (): boolean => route !== location.hash || images.some((img) => !img.isConnected);
-  /** Set when the view changed mid-run, so the loops stop and the reader is told why. */
+  /** Set when the view changed mid-run, so the loops can stop at the next image. */
   let viewGone = false;
 
   const label = (line: (done: number, total: number) => string) => (done: number, total: number) => {
@@ -376,25 +384,16 @@ export async function printView(name?: string): Promise<void> {
   };
   label(ui.print.preparing)(0, images.length);
 
-  /** Said out loud rather than printing the wrong page, and long enough to read. */
-  const stopForViewChange = async (): Promise<void> => {
-    setText(ui.print.viewChanged);
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-  };
-
   let swapped: Swapped[] = [];
   try {
     await hydrateAll(images, label(ui.print.preparing), signal);
-    // `await` on the message matters: `return promise` runs the `finally` below
-    // immediately (hiding the box) instead of waiting for it, which is how the
-    // cancellation notice ended up invisible.
-    if (viewGone || viewChanged()) return await stopForViewChange();
+    if (viewGone || viewChanged()) return;
     if (signal.aborted) return;
 
     // Downscaling before printing, not after: Chrome embeds whatever is in the
     // DOM when the dialog opens.
     swapped = await rasteriseAll(images, label(ui.print.sizing), signal);
-    if (viewGone || viewChanged()) return await stopForViewChange();
+    if (viewGone || viewChanged()) return;
     if (signal.aborted) return;
 
     // A hidden page cannot be captured: Chrome defers painting (and rAF) for it,

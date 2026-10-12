@@ -179,7 +179,6 @@ export const zhHans: Messages = {
     openingPrint: "正在打开打印对话框…",
     waitingForWindow: "请把这个窗口切到前台后继续——页面不可见时无法打印。",
     exportFailed: (error) => `导出失败：${error}`,
-    viewChanged: "准备期间页面被切换了，导出已取消——它打印的会是切换后的那一页。请回到要导出的页面重新导出。",
   },
 
   server: {
