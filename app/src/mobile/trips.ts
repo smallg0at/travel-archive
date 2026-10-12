@@ -121,7 +121,7 @@ async function fillMap(slot: HTMLElement, trip: TripRecord): Promise<void> {
   const photos: Record<string, PhotoRecord> = {};
   for (const shard of shards) if (shard) Object.assign(photos, shard.photos);
   const map = await renderTripMap(trip, photos, (anchor) => {
-    // "stop-2026-08-19-s3": the day, then the stop.
+    // "stop-2025-01-01-s3": the day, then the stop.
     // Picked from the full-screen map: close it first, so the day opens on a
     // settled history rather than having the map's step popped under it.
     const match = /^stop-(\d{4}-\d{2}-\d{2})-(.+)$/.exec(anchor);

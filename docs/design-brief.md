@@ -31,7 +31,7 @@ Design desktop first; do not lead with phone screens.
 **A day is a page, not a grid.** The hierarchy inside a trip is:
 
 ```
-Day  (2026-08-19 · a city · day summary, ~70 words)
+Day  (2025-01-01 · a city · day summary, ~70 words)
  └── Place  ("the museum", 12:52–15:20, 99 photos, place summary)
       ├── Cards        the things worth describing, sized by how much they matter
       └── "N more photos"   everything else, collapsed

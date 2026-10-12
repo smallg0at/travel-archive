@@ -4,8 +4,12 @@ The open-item list is **not in this repository**. It lives in a private,
 user-owned GitHub Project, because the entries carry measurements that name real
 places, devices and dates, and this repository is meant to be public.
 
-**the private project** — project `travel-archive`,
-`public=false`, deliberately **not** linked to this repo.
+Its address and its ids are deliberately **not** written down here. This
+repository is public, they would identify the owner, and an outsider could not
+open a private project anyway. The machine-readable copy is `private/todo.json`
+(gitignored): the project id, and the `Status` and `area` field ids with their
+option ids. `scripts/todo.mjs` reads it and says so if it is missing; set
+`TODO_CONFIG` to keep it somewhere else.
 
 ## Using it
 
@@ -17,16 +21,14 @@ one item, a read-back after every write, and failures that name the valid
 options.
 
 ```powershell
-# the agent shell has no PATH, so call node by absolute path
-$node = "%APPDATA%\fnm\node-versions\<version>\installation\node.exe"
-
-& $node scripts\todo.mjs list                      # id, status, area, title — every item
-& $node scripts\todo.mjs list --json
-& $node scripts\todo.mjs show     <item-id>        # title, status, area, body
-& $node scripts\todo.mjs add      --title "One-line summary" --area app --body-file tmp.md
-& $node scripts\todo.mjs set-area <item-id> app
-& $node scripts\todo.mjs set-body <item-id> --body-file evidence.md --append   # keep the body, add to it
-& $node scripts\todo.mjs close    <item-id>
+# in an agent shell there is no PATH; docs/environment.md says how to reach node
+node scripts\todo.mjs list                      # id, status, area, title — every item
+node scripts\todo.mjs list --json
+node scripts\todo.mjs show     <item-id>        # title, status, area, body
+node scripts\todo.mjs add      --title "One-line summary" --area app --body-file tmp.md
+node scripts\todo.mjs set-area <item-id> app
+node scripts\todo.mjs set-body <item-id> --body-file evidence.md --append   # keep the body, add to it
+node scripts\todo.mjs close    <item-id>
 ```
 
 Exit codes: `0` **verified** · `1` failed · `2` usage · `3` written but not
@@ -41,13 +43,8 @@ measured, what it means, what the fix is.
 
 ## Under the hood
 
-Only needed to extend the script, or to go around it.
-
-| | |
-|---|---|
-| project id | `PVT_the_private_project` |
-| `Status` field | `PVTSSF_lAHOAdS-ts4BmFV8zhkvuIo` — Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657` |
-| `area` field | `PVTSSF_lAHOAdS-ts4BmFV8zhkvvRs` — analyze `a436d721`, app `790b78b7`, desktop `219cbb8c`, map `a42e6712`, phone `d5e4b3f9`, print `9518c8d3`, providers `394afc3f`, remote `f92357ae`, scan `3cd4cc4f`, server `58c019bd`, summarize `fdc08c84`, sync `edea46cd`, trips `154eac38`, ui `24dc71d2` |
+Only needed to extend the script, or to go around it. The field and option ids
+live in `private/todo.json`, next to the script that consumes them.
 
 `--owner @me` does **not** work on this machine (`unknown owner type`); always
 pass the login. And the item listing is **eventually consistent** — right after a

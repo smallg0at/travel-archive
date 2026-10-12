@@ -3,7 +3,7 @@
  *
  * GeoNames tags most Chinese names `zh-Hans` or `zh-CN`, but some places carry
  * only a generic `zh` entry, and a fair number of those are Traditional: the
- * trim came out with 維也納 and 紐波特 beside 城市 and 纽伦堡. The archive reads
+ * trim came out with traditional forms (維, 紐) beside simplified ones (纽, 龙). The archive reads
  * 简体中文, so they are converted once here rather than left mixed.
  *
  * OpenCC's table is build-time only — nothing at runtime depends on it, and

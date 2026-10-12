@@ -4,15 +4,17 @@
     {
       "name": "app",
       "runtimeExecutable": "powershell.exe",
-      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "C:\\Code\\proj\\run-preview.ps1"],
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "run-preview.ps1"],
       "port": 4173
     },
     {
       "name": "app-17923",
       "runtimeExecutable": "powershell.exe",
       "runtimeArgs": [
-        "-ExecutionPolicy", "Bypass", "-Command",
-        "$env:PATH = '%APPDATA%\\fnm\\node-versions\<version>\\installation;' + $env:PATH; npm run preview --workspace app -- --port 17923 --strictPort"
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$d = (Get-ChildItem $env:APPDATA\\fnm\\node-versions\\*\\installation -Directory | Sort-Object { [version]($_.Parent.Name -replace '^v','') } | Select-Object -Last 1).FullName; $env:PATH = \"$d;$env:PATH\"; npm run preview --workspace app -- --port 17923 --strictPort"
       ],
       "port": 17923
     }

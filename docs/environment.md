@@ -58,6 +58,9 @@ node's absolute path is what makes that possible without `fnm env` at all:
 %APPDATA%\fnm\node-versions\<version>\installation\node.exe
 ```
 
+Take the newest directory under `node-versions`: the version is machine state,
+and writing one down goes stale on the next upgrade.
+
 **Roaming, not `Local`**, and the same path is what the login launcher pins.
 `fnm` itself lives under WinGet
 (`…\WinGet\Packages\Schniz.fnm_…\fnm.exe`); `fnm list` still answers when the

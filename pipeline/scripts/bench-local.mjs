@@ -19,7 +19,7 @@
  *   node scripts/bench-local.mjs --n 12 --random 100 --days 3 --seed 20261007
  *   node scripts/bench-local.mjs --sets naming,doc      # resume subsets
  *   node scripts/bench-local.mjs --concurrency 4        # throughput, not latency
- *   node scripts/bench-local.mjs --dates 2026-08-31 --max-context 65536
+ *   node scripts/bench-local.mjs --dates 2025-01-01 --max-context 65536
  *
  * What it measures, each with its denominator and the cloud figure beside it:
  *
@@ -87,7 +87,7 @@ const concurrency = Math.max(1, Number(arg("concurrency", "1")));
  */
 const maxBytes = Number(arg("max-bytes", "2000000"));
 /**
- * `--dates 2026-08-31,...` pins both the caption pools and the day set to those
+ * `--dates 2025-01-01,...` pins both the caption pools and the day set to those
  * dates, so one day can be examined on its own (a museum day, say) without
  * taking whatever the seed shuffle hands out.
  */

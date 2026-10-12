@@ -135,7 +135,7 @@ async function main() {
   console.log(`wrote ${OUT} — ${(statSync(OUT).size / 1e6).toFixed(1)}MB`);
   console.log(`  own-language name: ${withLocal}, Chinese name: ${withZh}, of ${cities.size}`);
 
-  // Countries, the second half of every place string ("a city, Österreich").
+  // Countries, the second half of every place string ("City, Country").
   const countries = ["cc\tlocal\ten\tzh"];
   for (const [id, iso] of countryIds) {
     const slot = picked.get(id) ?? {};

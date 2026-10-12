@@ -270,7 +270,7 @@ export function contextSources(index: ArchiveIndexFile): ContextSources {
  * zone and stored as an instant (exif.ts), so formatting it back in the same
  * zone returns what the camera showed — on a trip, local time wherever the
  * phone was set. Words rather than an ISO string: "Tuesday … 21:40" says
- * evening, where "2026-08-18T20:40:00.000Z" says nothing a model reliably uses.
+ * evening, where "2025-01-01T20:40:00.000Z" says nothing a model reliably uses.
  */
 const CLOCK = new Intl.DateTimeFormat("en-GB", {
   weekday: "long",

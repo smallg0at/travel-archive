@@ -21,44 +21,49 @@
  *   2. a read-back after every write, so success is measured, not assumed;
  *   3. loud, specific failure — an unknown area lists the valid ones.
  *
- * In the agent shell there is no PATH, so call node by absolute path (see
- * HANDOFF.md, "Running it"):
+ * In the agent shell there is no PATH; see docs/environment.md for how to reach
+ * node. This script runs *under* node, so there is nothing to look up here:
  *
- *   %APPDATA%\fnm\node-versions\<version>\installation\node.exe ^
- *     scripts\todo.mjs list
+ *   node scripts/todo.mjs list
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// --- the project, and the two fields this script sets ------------------------
+// --- the project, from a file that is not committed --------------------------
+//
+// The Project is private and its ids identify its owner, so they live in
+// `private/todo.json` (gitignored) rather than in this file: a repository meant
+// to be public should not carry a pointer to somebody's private project, and an
+// outsider could not use it anyway. Set TODO_CONFIG to keep the file elsewhere.
 
-const PROJECT_ID = "PVT_the_private_project";
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+const CONFIG_PATH = process.env.TODO_CONFIG ?? join(REPO, "private", "todo.json");
 
-const STATUS = {
-  field: "PVTSSF_lAHOAdS-ts4BmFV8zhkvuIo",
-  options: { todo: "f75ad846", "in progress": "47fc9ee4", done: "98236657" },
-};
+function loadConfig() {
+  if (!existsSync(CONFIG_PATH)) {
+    fail(
+      `no ${CONFIG_PATH}. That file holds the private Project's ids and is not ` +
+        `committed; see TODO.md for what it contains. Set TODO_CONFIG to point elsewhere.`,
+    );
+  }
+  try {
+    return JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
+  } catch (err) {
+    fail(`could not parse ${CONFIG_PATH}: ${err.message}`);
+  }
+}
 
-const AREA = {
-  field: "PVTSSF_lAHOAdS-ts4BmFV8zhkvvRs",
-  options: {
-    analyze: "a436d721",
-    app: "790b78b7",
-    desktop: "219cbb8c",
-    map: "a42e6712",
-    phone: "d5e4b3f9",
-    print: "9518c8d3",
-    providers: "394afc3f",
-    remote: "f92357ae",
-    scan: "3cd4cc4f",
-    server: "58c019bd",
-    summarize: "fdc08c84",
-    sync: "edea46cd",
-    trips: "154eac38",
-    ui: "24dc71d2",
-  },
-};
+const config = loadConfig();
+const PROJECT_ID = config.projectId;
+const STATUS = config.status;
+const AREA = config.area;
+
+if (!PROJECT_ID || !STATUS?.field || !STATUS.options || !AREA?.field || !AREA.options) {
+  fail(`${CONFIG_PATH} needs projectId, status.{field,options} and area.{field,options}`);
+}
 
 // --- talking to GitHub -------------------------------------------------------
 

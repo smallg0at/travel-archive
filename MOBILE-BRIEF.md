@@ -8,11 +8,11 @@
 > it there, and some of its "what is already true" is no longer true — notably
 > the cold-start and persistence notes below.
 
-You are picking up one strand of an ongoing personal photo-archive project at
-`C:\Code\proj`. Another session is working in the same repo on unrelated
-features (a home page, place-name quality). **Do not commit files you did not
-change, and do not restart or kill the job server or the Electron shell
-without asking the owner first** — long jobs run inside them.
+You are picking up one strand of an ongoing personal photo-archive project, in
+this checkout. Another session may be working in the same repo on unrelated
+features. **Do not commit files you did not change, and do not restart or kill
+the job server or the Electron shell without asking the owner first** — long jobs
+run inside them.
 
 ## The repo in one paragraph
 
@@ -26,8 +26,8 @@ it goes straight to Graph. That second path is the phone's path and it already
 works — see `app/src/archiveData.ts`.
 
 Build and check with `npx tsc --noEmit -p app` and
-`npm run build --workspace app`. PATH needs
-`%APPDATA%/fnm/node-versions/<version>/installation`.
+`npm run build --workspace app`. PATH needs the newest
+`%APPDATA%\fnm\node-versions\<version>\installation`.
 
 ## What is already true (verified 2026-09-18, don't re-derive)
 
