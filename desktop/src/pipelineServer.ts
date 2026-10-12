@@ -57,8 +57,10 @@ export interface StartOptions {
  * via fnm, which puts it on `PATH` only for shells that have run its init — and
  * an app launched from an icon has run no shell at all. `process.execPath` with
  * `ELECTRON_RUN_AS_NODE` runs the same JavaScript on the Node that Electron
- * already bundles, so the shell depends on nothing outside itself. (This is
- * also why `run-preview.ps1` has to hardcode an absolute node path.)
+ * already bundles, so the shell depends on nothing outside itself. (A script
+ * that must use fnm's node — `run-preview.ps1`, say — has to go and find it
+ * itself, and is at the mercy of the version directory; the shell sidesteps the
+ * question entirely.)
  *
  * **`ARCHIVE_HOME` decides where state goes**, not the working directory. That
  * used to be the other way round — `.env` was read from `process.cwd()` and the
