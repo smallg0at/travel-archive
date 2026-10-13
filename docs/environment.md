@@ -322,3 +322,37 @@ download). Useful when a throughput change coincides with an app start — but
 check the copy count first: selecting the older 2.53.0 here measured *worse*
 (89,784 ms against 36,319 ms), which turned out to be the double-copy bug, not
 the runtime.
+
+
+## Local engines, when they die (2026-10-14)
+
+**`llama-server.exe` died mid-run with `0xC0000409` in `ucrtbase.dll`.** At 00:13,
+while the screenshot pass was describing with Qwen3.5-9B at ctx 8192 / parallel 2,
+the LM Studio CUDA backend from
+`~\.lmstudio\extensions\backends\llama.cpp-win-x86_64-nvidia-cuda12-avx2-2.56.0`
+failed fast — the code Windows gives any process whose CRT catches a buffer
+overflow (WER bucket `BEX64`). No TDR and no display-driver reset in the System
+log, so this was not the GPU falling over. LM Studio restarted itself two minutes
+later with **no model loaded**, and every call after that answered
+`400 No models loaded` — which the pass counted as ordinary failures and kept
+going through the queue, so a cancelled run reads `Described 264, 24 failed,
+2068 still waiting` rather than an error.
+
+Two things to keep from it. `/v1/models` lists what is *available*, not what is
+*loaded* — a crashed engine and a working one look identical through that endpoint,
+and `lms ps` is the one that tells the truth. And LM Studio's llama.cpp runtime
+**auto-updated from 2.53.0 to 2.56.0 that same day**, which is the only variable
+that changed; 2.53.0 is still on disk under `extensions\backends\` if the crash
+recurs and wants pinning.
+
+**The Electron shell can also exit with `0xC0000409`, and it writes nothing.**
+Happened once at 00:11, right after `Job server ready in 44ms` — so at
+`mainWindow.loadURL` — and a retry worked, which makes it a race. That code is
+Windows' generic fail-fast (Chromium raises it when one of its own CHECKs fails);
+no dump and no Event Log entry were produced, and it never reaches
+`uncaughtException`. The shell now logs `Opening <url>` *before* the load and
+reports `child-process-gone` / `render-process-gone`, so the next occurrence names
+the dead child — and if none fires, that absence points at the browser process.
+If it is the GPU child, the window's `backgroundMaterial: "mica"`, transparent
+background and `titleBarOverlay` are the first suspects; Electron has a long
+history of Windows bugs in exactly that trio.
