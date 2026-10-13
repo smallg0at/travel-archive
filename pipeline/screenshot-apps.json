@@ -16,7 +16,14 @@
     "passenger's full name by design. Rail apps stay: their ticket screens do",
     "not, on this library.",
     "",
-    "Run `npm run --workspace pipeline scan` after editing to re-apply."
+    "Run `npm run --workspace pipeline scan` after editing to re-apply.",
+    "",
+    "Extended 2026-10-13 with travel and utility tools whose screens carry no",
+    "personal identifiers: rail booking and timetables, maps, a museum guide,",
+    "weather, a compass, the system gallery. The rule used was 'would a screenshot",
+    "of this screen ever hold a name, a payment, a message or an ID?' — airlines,",
+    "ticket resellers, banks, browsers, shopping, social and games stay out for",
+    "that reason, and so does the launcher (notification banners carry messages)."
   ],
 
   "include": [
@@ -34,6 +41,24 @@
     "nl.ns.android",
     "seatfrog",
     "flightradar24",
-    "speedviewgps"
+    "speedviewgps",
+    "ch.sbb",
+    "com.vsct.vsc.mobile.horaireetresa.android",
+    "com.thetrainline",
+    "com.firstgreatwestern",
+    "com.lltskb.lltskb",
+    "com.autonavi.minimap",
+    "com.baidu.BaiduMap",
+    "me.gfuil.bmap",
+    "ch.admin.swisstopo",
+    "com.xinlukou.metroman",
+    "com.ycl.beijingsubwaymap",
+    "com.fluxguide.deutschesmuseum",
+    "com.guidebook.apps.kcl",
+    "nl.watertaxirotterdam.app",
+    "bbc.mobile.weather",
+    "com.miui.weather2",
+    "com.miui.compass",
+    "com.miui.gallery"
   ]
 }

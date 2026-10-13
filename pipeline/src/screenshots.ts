@@ -6,9 +6,10 @@ import type { PhotoRecord, ScreenshotPolicy } from "@travel-archive/shared";
  * Decides which screenshots may be described by an AI model, from a
  * user-maintained allowlist of source apps.
  *
- * Screenshots are 5.7% of this library and the part most likely to hold private
- * data — WeChat threads, Outlook, SMS, banking, rail tickets carrying names and
- * ID numbers, and browser captures that could contain literally anything.
+ * Screenshots are 8.5% of this library (2,801 of 32,831, measured 2026-10-13) and
+ * the part most likely to hold private data — WeChat threads, Outlook, SMS,
+ * banking, rail tickets carrying names and ID numbers, and browser captures that
+ * could contain literally anything.
  *
  * This replaced a local vision model that was asked to judge each screenshot.
  * Two things killed that idea. The runtime was unusable: Ollama crashed on
