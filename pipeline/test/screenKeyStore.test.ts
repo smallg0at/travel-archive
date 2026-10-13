@@ -17,6 +17,7 @@ import {
   hasStoredPassphrase,
   importLegacyPassphrase,
   readStoredPassphrase,
+  readStoredPassphrases,
   screenKeyFile,
   useKeyWrapper,
   writeStoredPassphrase,
@@ -50,7 +51,10 @@ describe("the key store", () => {
 
     const raw = readFileSync(screenKeyFile(), "utf-8");
     expect(raw).not.toContain("a good long passphrase");
-    expect(JSON.parse(raw)).toMatchObject({ v: 1, protection: "dpapi-user" });
+    expect(JSON.parse(raw)).toMatchObject({ v: 2, protection: "dpapi-user" });
+    const stored = JSON.parse(raw) as { current: string; previous?: string };
+    expect(stored.current).toBeTruthy();
+    expect(stored.previous).toBeUndefined();
   });
 
   it("normalises on the way in and on the way out", async () => {
@@ -72,6 +76,28 @@ describe("the key store", () => {
       },
     });
     await expect(readStoredPassphrase()).rejects.toThrow(/not the Windows account/);
+  });
+
+  it("keeps the old passphrase readable during a rotation, then drops it", async () => {
+    await writeStoredPassphrase("the first passphrase");
+    await writeStoredPassphrase("the second passphrase", { previous: "the first passphrase" });
+    // Mid-rotation: whichever half landed, one of these opens the file.
+    expect(await readStoredPassphrases()).toEqual(["the second passphrase", "the first passphrase"]);
+    // The rotation finishes and the old key stops working, which is the point.
+    await writeStoredPassphrase("the second passphrase");
+    expect(await readStoredPassphrases()).toEqual(["the second passphrase"]);
+  });
+
+  it("does not keep a previous value identical to the new one", async () => {
+    await writeStoredPassphrase("the same passphrase", { previous: "  the same passphrase  " });
+    expect(await readStoredPassphrases()).toEqual(["the same passphrase"]);
+  });
+
+  it("reads a v1 file written before the ring existed", async () => {
+    // The shape the pre-ring code wrote: `wrapped`, no `current`.
+    const { writeFileSync: write } = await import("node:fs");
+    write(screenKeyFile(), `${JSON.stringify({ v: 1, protection: "dpapi-user", wrapped: Buffer.from("wrapped:an older passphrase").toString("base64") })}\n`, "utf-8");
+    expect(await readStoredPassphrases()).toEqual(["an older passphrase"]);
   });
 
   it("reports that a platform without a store cannot keep one", async () => {

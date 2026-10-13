@@ -520,8 +520,8 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   const screensState = screensForm.querySelector<HTMLElement>(".job-screens-state")!;
   const screensSubmit = screensForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
 
-  const paintScreens = async () => {
-    const [config, status, described] = await Promise.all([getConfig(), screensStatus(), screensEntries()]);
+  const paintScreens = async (opts: { quiet?: boolean } = {}) => {
+    const [config, status] = await Promise.all([getConfig(), screensStatus()]);
     const local = localOptions(config?.providers ?? []);
     const chosen = status?.provider ?? local[0]?.id ?? "";
     screensProvider.replaceChildren(
@@ -533,27 +533,41 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         return item;
       }),
     );
-    const count = "entries" in described ? Object.keys(described.entries).length : null;
     screensPass.placeholder = status?.hasKey
       ? ui.generate.screensPassSaved
       : status?.canStore === false
         ? ui.generate.screensNoKeyStore
         : ui.generate.screensPassNew;
+
+    // The count lives behind a decrypt, so it is only asked for when nothing else
+    // is going on. Two reasons, and the second one bit: a poll landing in the
+    // middle of a passphrase change reads a store that already holds the new key
+    // against a file that still holds the old one, and reports a mismatch that is
+    // true for a few hundred milliseconds and confusing for the rest of the
+    // session. `quiet` lets a repaint that followed an action leave the sentence
+    // that action produced alone.
+    let described: { entries: Record<string, unknown> } | { error: string } | null = null;
+    if (!status?.running && !opts.quiet) {
+      described = await screensEntries();
+    }
+    const count = described && "entries" in described ? Object.keys(described.entries).length : null;
+    const trouble = described && "error" in described ? described.error : null;
+
     // A run in flight, an unreadable file (a changed key), no passphrase yet, no
     // local service, no key store on this platform — each is a different
     // sentence, and the last three stop the button.
-    const trouble = "error" in described ? described.error : null;
-    screensState.textContent = trouble
-      ? trouble
-      : status?.running
+    screensState.textContent =
+      status?.running
         ? ui.generate.screensRunning
-        : local.length === 0
-          ? ui.generate.screensNoLocal
-          : status?.canStore === false
-            ? ui.generate.screensNoKeyStore
-            : count !== null
-              ? ui.generate.screensDescribed(count)
-              : ui.generate.screensNoPassphrase;
+        : trouble
+          ? trouble
+          : local.length === 0
+            ? ui.generate.screensNoLocal
+            : status?.canStore === false
+              ? ui.generate.screensNoKeyStore
+              : count !== null
+                ? ui.generate.screensDescribed(count)
+                : ui.generate.screensNoPassphrase;
     const blocked = local.length === 0 || !!trouble || status?.canStore === false;
     screensState.classList.toggle("tone-warn", blocked || !status?.hasKey);
     screensSubmit.disabled = blocked;

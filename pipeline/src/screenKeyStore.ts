@@ -36,10 +36,22 @@ const PROTECTION = "dpapi-user";
 const HELPER_TIMEOUT_MS = 20_000;
 
 interface StoredKey {
-  v: 1;
+  v: 2;
   protection: typeof PROTECTION;
-  /** The canonical passphrase, DPAPI-wrapped, then base64 for JSON. */
-  wrapped: string;
+  /** The passphrase in use, DPAPI-wrapped, then base64 for JSON. */
+  current: string;
+  /**
+   * The previous one, present only while a rekey is in flight.
+   *
+   * A rotation writes two things — this file and the encrypted descriptions — and
+   * there is no way to write both at once. For the moment between them, and for
+   * the case where the second write fails outright, the *ring* is what keeps the
+   * archive readable: reading tries `current` then `previous`, so whichever half
+   * of the rotation landed, one of them opens the file. It is dropped as soon as
+   * the new descriptions are uploaded, so the old passphrase stops working then,
+   * which is the point of rotating at all.
+   */
+  previous?: string;
 }
 
 /** Wrap/unwrap raw bytes. Swapped in tests, because DPAPI is Windows-only and CI is not. */
@@ -103,21 +115,41 @@ export const screenKeyFile = (): string => dataFile(KEY_FILE);
 export const canStorePassphrase = (): boolean => wrapper.available();
 
 /**
- * The passphrase, or null when nothing is stored or it cannot be unwrapped.
+ * The passphrases this machine holds, current first.
  *
- * A failure to unwrap is **not** reported as "no passphrase": that would read as
- * a fresh archive and start describing over the top of work that exists. The
- * caller decides how to say it.
+ * A list rather than one value because of the rekey window the ring exists for —
+ * see `StoredKey.previous`. An empty list means nothing is stored; a *failure* to
+ * unwrap **throws** rather than returning an empty list, because "nothing stored"
+ * and "cannot read what is stored" must not look the same: the first is a fresh
+ * archive, the second is a key that belongs to another Windows account.
  */
-export async function readStoredPassphrase(): Promise<string | null> {
-  let stored: StoredKey;
+export async function readStoredPassphrases(): Promise<string[]> {
+  let stored: StoredKey & { wrapped?: string };
   try {
-    stored = JSON.parse(await readFile(screenKeyFile(), "utf-8")) as StoredKey;
+    stored = JSON.parse(await readFile(screenKeyFile(), "utf-8")) as StoredKey & { wrapped?: string };
   } catch {
-    return null;
+    return [];
   }
-  if (!stored || stored.v !== 1 || typeof stored.wrapped !== "string") return null;
-  return normalizePassphrase((await wrapper.unwrap(Buffer.from(stored.wrapped, "base64"))).toString("utf-8"));
+  // `wrapped` is the v1 shape, before the ring existed: read it as the current
+  // one. Installs written before this change keep working without a migration.
+  const blobs = [stored?.current ?? stored?.wrapped, stored?.previous].filter((b): b is string => typeof b === "string");
+  const out: string[] = [];
+  for (const blob of blobs) {
+    try {
+      out.push(normalizePassphrase((await wrapper.unwrap(Buffer.from(blob, "base64"))).toString("utf-8")));
+    } catch (err) {
+      // Every blob failing is a real failure; one of two failing is not, as long
+      // as the other opens the file.
+      if (blobs.length === 1) throw err;
+    }
+  }
+  if (blobs.length > 0 && out.length === 0) throw new Error(`no stored passphrase could be unwrapped by ${wrapper.name}`);
+  return out;
+}
+
+/** The passphrase in use, or null when nothing is stored. */
+export async function readStoredPassphrase(): Promise<string | null> {
+  return (await readStoredPassphrases())[0] ?? null;
 }
 
 export async function hasStoredPassphrase(): Promise<boolean> {
@@ -129,7 +161,7 @@ export async function hasStoredPassphrase(): Promise<boolean> {
   }
 }
 
-export async function writeStoredPassphrase(passphrase: string): Promise<void> {
+export async function writeStoredPassphrase(passphrase: string, options: { previous?: string } = {}): Promise<void> {
   if (!wrapper.available()) {
     throw new Error(
       `This machine has no key store (${wrapper.name} is Windows-only), so the passphrase cannot be kept here. ` +
@@ -137,7 +169,10 @@ export async function writeStoredPassphrase(passphrase: string): Promise<void> {
     );
   }
   const wrapped = await wrapper.wrap(Buffer.from(normalizePassphrase(passphrase), "utf-8"));
-  const stored: StoredKey = { v: 1, protection: PROTECTION, wrapped: wrapped.toString("base64") };
+  const stored: StoredKey = { v: 2, protection: PROTECTION, current: wrapped.toString("base64") };
+  if (options.previous && normalizePassphrase(options.previous) !== normalizePassphrase(passphrase)) {
+    stored.previous = (await wrapper.wrap(Buffer.from(normalizePassphrase(options.previous), "utf-8"))).toString("base64");
+  }
   await mkdir(dataDir(), { recursive: true });
   await writeFile(screenKeyFile(), `${JSON.stringify(stored)}\n`, "utf-8");
 }

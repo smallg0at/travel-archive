@@ -27,7 +27,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dataFile, dataDir } from "./paths.js";
 import { downloadMetadataJson, fetchItemMeta, uploadMetadataJson } from "./graph.js";
 import { env } from "./env.js";
-import { readStoredPassphrase, writeStoredPassphrase } from "./screenKeyStore.js";
+import { readStoredPassphrases, writeStoredPassphrase } from "./screenKeyStore.js";
 import { deriveKey, keyFingerprint } from "./screenKey.js";
 
 /** One described screen. Coarse by construction — see `providers/screenshotPrompt.ts`. */
@@ -73,9 +73,9 @@ const KDF = { N: 1 << 15, r: 8, p: 1 };
 
 export const emptyScreenCaptions = (): ScreenCaptions => ({ version: 1, entries: {} });
 
-/** The passphrase, from the machine's key store, or a message that says what to do. */
-export async function screenshotPassphrase(): Promise<string> {
-  const stored = await readStoredPassphrase().catch((err: Error) => {
+/** The passphrases this machine holds, current first — a list because a rekey keeps the old one briefly. */
+async function storedPassphrases(): Promise<string[]> {
+  const store = await readStoredPassphrases().catch((err: Error) => {
     // Unwrapping failed — a different Windows account, or a restored file. Say
     // that, rather than let it read as "never set up", which is what starting
     // over on top of existing work would look like.
@@ -84,13 +84,37 @@ export async function screenshotPassphrase(): Promise<string> {
         `It is protected per Windows user, so a copy from another account or machine cannot open it.`,
     );
   });
-  if (!stored) {
+  if (store.length === 0) {
     throw new Error(
       "No passphrase is stored on this machine, so the encrypted screenshot descriptions cannot be read or written. " +
         "Set one in the Screens tab (it is kept in the Windows key store, not in .env).",
     );
   }
-  return stored;
+  return store;
+}
+
+/** The passphrase to write with: the current one. */
+async function screenshotPassphrase(): Promise<string> {
+  return (await storedPassphrases())[0];
+}
+
+/**
+ * Decrypt with whichever stored passphrase opens it.
+ *
+ * During a rotation the file may still be the old one while the store already
+ * holds the new one (or the other way round), and this is what makes that window
+ * harmless instead of a scary message: try the current key, then the previous.
+ */
+function decryptWithStored(envelope: ScreenCaptionsEnvelope, passphrases: string[]): ScreenCaptions {
+  let last: unknown;
+  for (const passphrase of passphrases) {
+    try {
+      return decryptScreenCaptions(envelope, passphrase);
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last instanceof Error ? last : new Error(`Could not decrypt ${SCREEN_CAPTIONS_FILE}.`);
 }
 
 export function encryptScreenCaptions(file: ScreenCaptions, passphrase: string): ScreenCaptionsEnvelope {
@@ -155,15 +179,15 @@ async function fileMtime(path: string): Promise<number | null> {
  * An absent file is an empty one: that is what a fresh archive looks like.
  */
 export async function loadScreenCaptions(token: string): Promise<ScreenCaptions> {
-  const passphrase = await screenshotPassphrase();
+  const passphrases = await storedPassphrases();
   const local = await readLocalEnvelope();
   if (local) {
     const meta = await fetchItemMeta(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
     const remote = meta?.lastModifiedDateTime ? Date.parse(meta.lastModifiedDateTime) : 0;
-    if (remote <= local.mtime + 5000) return decryptScreenCaptions(local.envelope, passphrase);
+    if (remote <= local.mtime + 5000) return decryptWithStored(local.envelope, passphrases);
   }
   const remote = await downloadMetadataJson<ScreenCaptionsEnvelope>(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
-  return remote ? decryptScreenCaptions(remote, passphrase) : emptyScreenCaptions();
+  return remote ? decryptWithStored(remote, passphrases) : emptyScreenCaptions();
 }
 
 /** Encrypts, writes the local mirror, then uploads. A failed upload costs a re-upload, not the work. */
@@ -199,11 +223,21 @@ export async function rekeyScreenCaptions(
   next: string,
 ): Promise<{ described: number; fingerprint: string }> {
   const file = await loadScreenCaptions(token);
-  await writeStoredPassphrase(next);
+  const [current] = await readStoredPassphrases();
+  // Step 1 of 3: the store, keeping the old key as a net. If the write of the
+  // descriptions fails after this — a die during encoding, an OneDrive refusal —
+  // the archive is still readable, because reading tries `current` then
+  // `previous`. The old passphrase stops working at step 3, not here.
+  await writeStoredPassphrase(next, current ? { previous: current } : {});
+
   const envelope = encryptScreenCaptions(file, next);
   await mkdir(dataDir(), { recursive: true });
   await writeFile(dataFile(SCREEN_CAPTIONS_FILE), `${JSON.stringify(envelope)}\n`, "utf-8");
   await uploadMetadataJson(token, env.metadataFolder, SCREEN_CAPTIONS_FILE, envelope);
+
+  // Step 3 of 3: the new descriptions are uploaded, so the old key has no reason
+  // to remain. Dropping it is what makes the rotation final.
+  await writeStoredPassphrase(next);
   return { described: Object.keys(file.entries).length, fingerprint: envelope.fp ?? "" };
 }
 
