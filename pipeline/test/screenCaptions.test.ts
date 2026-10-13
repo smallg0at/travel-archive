@@ -130,9 +130,11 @@ describe("where a description is kept", () => {
 
   it("refuses a wrong passphrase instead of reading as empty", () => {
     // Silently starting over would look exactly like a fresh archive and would
-    // throw away hours of work, so this has to be the loud failure.
+    // throw away hours of work, so this has to be the loud failure. The envelope
+    // now names the key it wants, so the message can be the specific one: "this
+    // is a different passphrase", not "corrupt or damaged".
     const envelope = encryptScreenCaptions(emptyScreenCaptions(), "right");
-    expect(() => decryptScreenCaptions(envelope, "wrong")).toThrow(/different SCREENSHOT_PASSPHRASE/);
+    expect(() => decryptScreenCaptions(envelope, "wrong")).toThrow(/is not the one/);
   });
 
   it("refuses a tampered envelope", () => {

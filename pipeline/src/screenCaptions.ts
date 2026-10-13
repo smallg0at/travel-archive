@@ -22,12 +22,13 @@
  * made again. Losing the *file* costs the same. Neither is a reason to keep the
  * plaintext anywhere.
  */
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dataFile, dataDir } from "./paths.js";
 import { downloadMetadataJson, fetchItemMeta, uploadMetadataJson } from "./graph.js";
 import { env, settingNow, shadowedByEnvironment } from "./env.js";
 import { saveConfig } from "./configStore.js";
+import { deriveKey, keyFingerprint, normalizePassphrase } from "./screenKey.js";
 
 /** One described screen. Coarse by construction — see `providers/screenshotPrompt.ts`. */
 export interface ScreenCaptionEntry {
@@ -57,6 +58,12 @@ export interface ScreenCaptionsEnvelope {
   tag: string;
   /** Ciphertext, base64. */
   ct: string;
+  /**
+   * Which key this file wants, as `keyFingerprint`. Optional because envelopes
+   * written before it existed are still valid — its absence means "try the
+   * decryption and see", which is what every reader did until now.
+   */
+  fp?: string;
 }
 
 export const SCREEN_CAPTIONS_FILE = "screen-captions.enc";
@@ -73,18 +80,18 @@ export function screenshotPassphrase(value = settingNow("SCREENSHOT_PASSPHRASE")
       "SCREENSHOT_PASSPHRASE is not set, so the encrypted screenshot descriptions cannot be read or written. Set it in Settings or pipeline/.env — without it this pass has nowhere safe to put its output.",
     );
   }
-  return value;
-}
-
-function deriveKey(passphrase: string, salt: Buffer, params: { N: number; r: number; p: number }): Buffer {
-  return scryptSync(passphrase, salt, 32, { ...params, maxmem: 128 * 1024 * 1024 });
+  // Normalised at the door: everything downstream works with the canonical form,
+  // so a passphrase that arrived with an invisible character cannot derive a
+  // different key than the same passphrase typed on another device (screenKey.ts).
+  return normalizePassphrase(value);
 }
 
 export function encryptScreenCaptions(file: ScreenCaptions, passphrase: string): ScreenCaptionsEnvelope {
   const salt = randomBytes(16);
   const iv = randomBytes(12);
   const kdf = { ...KDF };
-  const cipher = createCipheriv("aes-256-gcm", deriveKey(passphrase, salt, kdf), iv);
+  const key = deriveKey(passphrase, salt, kdf);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
   cipher.setAAD(Buffer.from(AAD));
   const ct = Buffer.concat([cipher.update(JSON.stringify(file), "utf-8"), cipher.final()]);
   return {
@@ -93,16 +100,22 @@ export function encryptScreenCaptions(file: ScreenCaptions, passphrase: string):
     iv: iv.toString("base64"),
     tag: cipher.getAuthTag().toString("base64"),
     ct: ct.toString("base64"),
+    // The name of the key that opens this file, so another device can say "wrong
+    // passphrase" instead of "corrupt or damaged".
+    fp: keyFingerprint(key),
   };
 }
 
 export function decryptScreenCaptions(envelope: ScreenCaptionsEnvelope, passphrase: string): ScreenCaptions {
   const salt = Buffer.from(envelope.kdf.salt, "base64");
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    deriveKey(passphrase, salt, envelope.kdf),
-    Buffer.from(envelope.iv, "base64"),
-  );
+  const key = deriveKey(passphrase, salt, envelope.kdf);
+  if (envelope.fp && envelope.fp !== keyFingerprint(key)) {
+    throw new Error(
+      `This passphrase is not the one ${SCREEN_CAPTIONS_FILE} was written with (it wants ${envelope.fp}, this derives ${keyFingerprint(key)}). ` +
+        `Enter the passphrase that wrote it, or delete the file to start the descriptions over.`,
+    );
+  }
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(envelope.iv, "base64"));
   decipher.setAAD(Buffer.from(AAD));
   decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
   try {
@@ -111,7 +124,8 @@ export function decryptScreenCaptions(envelope: ScreenCaptionsEnvelope, passphra
     return { version: 1, entries: parsed.entries ?? {} };
   } catch {
     // GCM cannot tell a wrong key from a flipped byte, and neither can we — but
-    // "this is not the passphrase that wrote it" is the actionable half.
+    // "this is not the passphrase that wrote it" is the actionable half. (For
+    // envelopes carrying `fp` that case is already caught above.)
     throw new Error(
       `Could not decrypt ${SCREEN_CAPTIONS_FILE}: it was written with a different SCREENSHOT_PASSPHRASE, or is damaged. ` +
         `Restore the passphrase, or delete the file to start the descriptions over.`,
