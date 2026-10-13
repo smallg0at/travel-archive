@@ -122,6 +122,12 @@ export interface OpenAiCompatConfig {
   tokenParam?: "max_tokens" | "max_completion_tokens";
   /** JSON mode: send OpenAI's `response_format`, or rely on the prompt alone. */
   jsonMode?: "response_format" | "prompt";
+  /**
+   * What to ask a reasoning model for. Sent as `reasoning_effort`; unset sends
+   * nothing at all, so a service that never heard of the field is not surprised
+   * by it. See `resolveReasoningEffort` for why the local presets set "none".
+   */
+  reasoningEffort?: string;
 }
 
 async function chat(
@@ -143,6 +149,11 @@ async function chat(
         temperature: 0,
         [cfg.tokenParam ?? "max_tokens"]: opts.maxTokens,
       };
+      // Only when a provider asked for it. An unknown field is ignored by every
+      // OpenAI-compatible server, but a *known* one changes behaviour, and the
+      // cloud services do not all accept the same vocabulary — so this stays
+      // opt-in per preset rather than a blanket default.
+      if (cfg.reasoningEffort) payload.reasoning_effort = cfg.reasoningEffort;
       // The prompts already say "one JSON object"; OpenAI keeps the rule that
       // json_object mode also needs the word JSON in the prompt, which they do.
       // Some endpoints reject the field outright, hence the switch.

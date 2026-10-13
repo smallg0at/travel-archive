@@ -42,6 +42,12 @@ export interface ProviderPreset {
   jsonMode?: "response_format" | "prompt";
   tokenParam?: "max_tokens" | "max_completion_tokens";
   /**
+   * OpenAI-compatible only: what to ask a reasoning model for, sent as
+   * `reasoning_effort`. The local services default to `"none"` — see
+   * `resolveReasoningEffort` for the measurement behind that.
+   */
+  reasoningEffort?: string;
+  /**
    * The path `validateProvider` probes to ask whether the key is real.
    * Default `models` — but only where `GET /models` is auth-bound: a
    * provider whose list is public (OpenRouter) would answer 200 to
@@ -130,6 +136,7 @@ const RAW_PRESETS: ProviderPreset[] = [
     apiKeyEnv: "OLLAMA_API_KEY",
     // A local server has no key; the field exists only so the form has
     // something to write. Model and URL are the parts that matter here.
+    reasoningEffort: "none",
   },
   {
     // LM Studio is not Ollama with a different port: it speaks the same
@@ -150,6 +157,7 @@ const RAW_PRESETS: ProviderPreset[] = [
     model: "google/gemma-4-e4b",
     apiKeyEnv: "LMSTUDIO_API_KEY",
     jsonMode: "prompt",
+    reasoningEffort: "none",
   },
 ];
 
@@ -241,7 +249,35 @@ function openAiConfig(preset: ProviderPreset): OpenAiCompatConfig {
     model: process.env[`${prefix}_MODEL`] || preset.model,
     jsonMode: preset.jsonMode,
     tokenParam: preset.tokenParam,
+    reasoningEffort: resolveReasoningEffort(preset),
   };
+}
+
+/**
+ * What to ask a reasoning model for, sent as `reasoning_effort`.
+ *
+ * Measured on the local Qwen3.5-9B (2026-10-13): thinking costs about 170 tokens
+ * and 12-14 seconds on a question whose answer is the single word "ok". With
+ * `reasoning_effort: "none"` the same call is 2 tokens and 0.6 seconds with zero
+ * reasoning tokens — and the obvious alternatives are no-ops there: top-level
+ * `enable_thinking`, `chat_template_kwargs`, `thinking`, `enable_reasoning`, and
+ * `/no_think` in either a user or a system turn were all ignored. LM Studio's own
+ * control for this is a per-model "Reasoning Budget" (0 = end thinking at once);
+ * `reasoning_effort` is the same switch reachable over the API, which is what a
+ * pipeline can set. Captioning is not a reasoning job, so the local presets ask
+ * for none by default.
+ *
+ * Resolution: `<PROVIDER>_REASONING_EFFORT` wins (the literal "auto" means send
+ * nothing), else the preset's own value, else nothing at all — so a cloud service
+ * that never heard of the field is unaffected.
+ */
+export function resolveReasoningEffort(
+  preset: ProviderPreset,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const override = (env[`${preset.id.toUpperCase()}_REASONING_EFFORT`] ?? "").trim().toLowerCase();
+  if (override === "auto") return undefined;
+  return override || preset.reasoningEffort;
 }
 
 /**
