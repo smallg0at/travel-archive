@@ -83,7 +83,7 @@ interface ChatMessage {
  * second copy under a comment claiming it was "the same brief Gemini gets",
  * which is exactly the kind of sameness nothing was checking.
  */
-import { CAPTION_JSON, CAPTION_PROMPT } from "./captionPrompt.js";
+import { briefFor, CAPTION_JSON, CAPTION_PROMPT } from "./captionPrompt.js";
 
 function dataUrl(input: CaptionPhotoInput): string {
   return `data:${input.mediaType};base64,${input.imageBase64}`;
@@ -291,7 +291,7 @@ async function captionPhoto(cfg: OpenAiCompatConfig, input: CaptionPhotoInput): 
       {
         role: "user",
         content: [
-          { type: "text", text: `${CAPTION_PROMPT}${captionContextBlock(input.context)}\n\n${CAPTION_JSON}` },
+          { type: "text", text: `${briefFor(input)}${captionContextBlock(input.context)}\n\n${CAPTION_JSON}` },
           { type: "image_url", image_url: { url: dataUrl(input) } },
         ],
       },
@@ -322,7 +322,7 @@ async function captionPhotos(cfg: OpenAiCompatConfig, inputs: CaptionPhotoInput[
     {
       type: "text",
       text:
-        `${CAPTION_PROMPT}\n\nYou are given ${inputs.length} images, in order. ` +
+        `${briefFor(inputs[0])}\n\nYou are given ${inputs.length} images, in order. ` +
         `Reply with ONE JSON object: {"results":[ exactly ${inputs.length} objects, in the SAME order as the images, ` +
         `each {"content_type":...,"caption":...,"tags":[...],"extracted_text":...,"notable":...} ]}` +
         (contexts ? `\n\nPer-image context (use only to name what the image already shows):\n${contexts}` : ""),

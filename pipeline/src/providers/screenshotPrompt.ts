@@ -24,14 +24,20 @@
  * same day: on the doc pool it suppressed a train ticket screen entirely,
  * halved a school activity list and an exhibition display, and dropped naming
  * from 42% to 25% — costs paid on material that is not private at all.
+ *
+ * The reply shape is the caption brief's, because the pass reuses the caption
+ * path: `contentType` is always `screenshot`, `tags` name the kind of screen
+ * rather than its subject, `extracted_text` is always null and `notable` false.
  */
 
 /** What the screen is, never what it says. */
-export const SCREENSHOT_PROMPT = `You are describing a phone screenshot for a personal archive. It may hold private material, so describe the screen itself and not its contents.
-- what: what kind of screen this is, at most 8 words — "a chat conversation", "a bank screen", "a photo viewer".
-- caption: one plain sentence about the screen as an object: the kind of interface, the app it belongs to, how it is laid out. Never what it says.
-- personal content: never summarise, characterise, quote or transcribe a conversation, a message, an email, a notification or a personal record — a name beside an address, a phone number, an account, a booking or ID number, a health note. Name the kind of screen it is and stop there.
-- extracted_text: always null. Nothing on an unknown screen is transcribed.`;
+export const SCREENSHOT_PROMPT = `You are describing a phone screenshot for a personal archive. It may hold private material, so describe the screen itself and never its contents.
+- what: what kind of screen this is, at most 8 words.
+- caption: one coarse sentence about the screen as an object — the kind of interface, the app it belongs to when that is visible, how it is laid out. Where the screen holds private material, name only its kind: "a chat conversation", "a photographed ID card", "a passport page", "a document showing account numbers", "a banking screen". Never a word of what it says.
+- tags: 2-4 short lowercase tags naming the kind of screen, from the same coarse vocabulary — "chat", "id-card", "passport", "document-numbers", "banking", "map", "timetable", "boarding-pass", "receipt", "game", "browser", "photo". Never its subject matter.
+- personal content: never summarise, characterise, quote or transcribe a conversation, a message, an email, a notification or a personal record — a name beside an address, a phone number, an account, a booking or ID number, a health note, a face with a name. Name the kind of screen it is and stop there.
+- extracted_text: always null. Nothing on a screen like this is transcribed.
+- notable: always false.`;
 
 /**
  * The companion question, asked separately: should this screen be described at

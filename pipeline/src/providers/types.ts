@@ -11,6 +11,14 @@ export interface CaptionPhotoInput {
    * nothing known about it, which is the pre-context behaviour exactly.
    */
   context: CaptionContext | null;
+  /**
+   * The cataloguing brief to follow instead of the default one. Used by the
+   * local screenshot pass, whose instruction is the opposite of the caption
+   * brief's — name the kind of screen and nothing on it, transcribe nothing —
+   * while the reply shape stays the same, so everything downstream is unchanged.
+   * Absent means the ordinary caption brief.
+   */
+  brief?: string;
 }
 
 /**

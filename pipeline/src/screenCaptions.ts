@@ -1,0 +1,170 @@
+/**
+ * What the local model said about a screenshot nobody has vouched for —
+ * encrypted, and then treated like any other file in the archive.
+ *
+ * The first design kept this on the machine and never uploaded it. That dodged a
+ * crypto dependency and cost a second data path: a file that exists on one
+ * computer, is lost with it, and adds a branch to every reader. Partial sync plus
+ * a separate store is maintenance debt, and the owner said so. So the
+ * descriptions travel with the archive like everything else, and what keeps them
+ * private is that they are **encrypted under a passphrase the archive does not
+ * carry**: the OneDrive copy is opaque, and this server is the one thing that can
+ * read it.
+ *
+ * AES-256-GCM over the whole file, key = `scrypt(passphrase, salt)`. The envelope
+ * is what gets uploaded; the plaintext is never written to disk. The ciphertext
+ * is authenticated against this file's identity as associated data, so one blob
+ * cannot be swapped for another, and a wrong passphrase **fails loudly** rather
+ * than reading as "nothing described yet" — silently starting over would destroy
+ * hours of work, and it would look exactly like a fresh archive.
+ *
+ * Losing the passphrase costs a re-run, not the archive: the descriptions can be
+ * made again. Losing the *file* costs the same. Neither is a reason to keep the
+ * plaintext anywhere.
+ */
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dataFile, dataDir } from "./paths.js";
+import { downloadMetadataJson, fetchItemMeta, uploadMetadataJson } from "./graph.js";
+import { env, settingNow } from "./env.js";
+
+/** One described screen. Coarse by construction — see `providers/screenshotPrompt.ts`. */
+export interface ScreenCaptionEntry {
+  /** The kind of screen, in one sentence. Never what it says. */
+  caption: string;
+  /** Coarse kind tags ("chat", "id-card"), the searchable handle. Never the subject. */
+  tags: string[];
+  /** The preset id that wrote it, so a re-run can tell one model's work from another's. */
+  model: string;
+  /** When it was written, ISO. */
+  at: string;
+}
+
+export interface ScreenCaptions {
+  version: 1;
+  /** Keyed by photo id — the same id the shards use. */
+  entries: Record<string, ScreenCaptionEntry>;
+}
+
+/** What is uploaded: unreadable without the passphrase. */
+export interface ScreenCaptionsEnvelope {
+  v: 1;
+  kdf: { salt: string; N: number; r: number; p: number };
+  /** AES-GCM nonce, base64. */
+  iv: string;
+  /** GCM authentication tag, base64. */
+  tag: string;
+  /** Ciphertext, base64. */
+  ct: string;
+}
+
+export const SCREEN_CAPTIONS_FILE = "screen-captions.enc";
+const AAD = "travel-archive/screen-captions/v1";
+/** `N` is the work factor: 2^15 costs about a tenth of a second here, once per load. */
+const KDF = { N: 1 << 15, r: 8, p: 1 };
+
+export const emptyScreenCaptions = (): ScreenCaptions => ({ version: 1, entries: {} });
+
+/** The passphrase, or a message that says how to set one. */
+export function screenshotPassphrase(value = settingNow("SCREENSHOT_PASSPHRASE")): string {
+  if (!value) {
+    throw new Error(
+      "SCREENSHOT_PASSPHRASE is not set, so the encrypted screenshot descriptions cannot be read or written. Set it in Settings or pipeline/.env — without it this pass has nowhere safe to put its output.",
+    );
+  }
+  return value;
+}
+
+function deriveKey(passphrase: string, salt: Buffer, params: { N: number; r: number; p: number }): Buffer {
+  return scryptSync(passphrase, salt, 32, { ...params, maxmem: 128 * 1024 * 1024 });
+}
+
+export function encryptScreenCaptions(file: ScreenCaptions, passphrase: string): ScreenCaptionsEnvelope {
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const kdf = { ...KDF };
+  const cipher = createCipheriv("aes-256-gcm", deriveKey(passphrase, salt, kdf), iv);
+  cipher.setAAD(Buffer.from(AAD));
+  const ct = Buffer.concat([cipher.update(JSON.stringify(file), "utf-8"), cipher.final()]);
+  return {
+    v: 1,
+    kdf: { salt: salt.toString("base64"), ...kdf },
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    ct: ct.toString("base64"),
+  };
+}
+
+export function decryptScreenCaptions(envelope: ScreenCaptionsEnvelope, passphrase: string): ScreenCaptions {
+  const salt = Buffer.from(envelope.kdf.salt, "base64");
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    deriveKey(passphrase, salt, envelope.kdf),
+    Buffer.from(envelope.iv, "base64"),
+  );
+  decipher.setAAD(Buffer.from(AAD));
+  decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
+  try {
+    const text = Buffer.concat([decipher.update(Buffer.from(envelope.ct, "base64")), decipher.final()]).toString("utf-8");
+    const parsed = JSON.parse(text) as ScreenCaptions;
+    return { version: 1, entries: parsed.entries ?? {} };
+  } catch {
+    // GCM cannot tell a wrong key from a flipped byte, and neither can we — but
+    // "this is not the passphrase that wrote it" is the actionable half.
+    throw new Error(
+      `Could not decrypt ${SCREEN_CAPTIONS_FILE}: it was written with a different SCREENSHOT_PASSPHRASE, or is damaged. ` +
+        `Restore the passphrase, or delete the file to start the descriptions over.`,
+    );
+  }
+}
+
+async function fileMtime(path: string): Promise<number | null> {
+  try {
+    return (await stat(path)).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The descriptions, for a **write** path: the local mirror when it is provably
+ * safe, Graph otherwise — the same rule `loadIndexForWriting` keeps, and for the
+ * same reason (the mirror is trusted only when the remote is not clearly newer).
+ * An absent file is an empty one: that is what a fresh archive looks like.
+ */
+export async function loadScreenCaptions(token: string): Promise<ScreenCaptions> {
+  const local = await readLocalEnvelope();
+  if (local) {
+    const meta = await fetchItemMeta(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
+    const remote = meta?.lastModifiedDateTime ? Date.parse(meta.lastModifiedDateTime) : 0;
+    if (remote <= local.mtime + 5000) return decryptScreenCaptions(local.envelope, screenshotPassphrase());
+  }
+  const remote = await downloadMetadataJson<ScreenCaptionsEnvelope>(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
+  return remote ? decryptScreenCaptions(remote, screenshotPassphrase()) : emptyScreenCaptions();
+}
+
+/** Encrypts, writes the local mirror, then uploads. A failed upload costs a re-upload, not the work. */
+export async function saveScreenCaptions(token: string, file: ScreenCaptions): Promise<void> {
+  const envelope = encryptScreenCaptions(file, screenshotPassphrase());
+  await mkdir(dataDir(), { recursive: true });
+  await writeFile(dataFile(SCREEN_CAPTIONS_FILE), `${JSON.stringify(envelope)}\n`, "utf-8");
+  await uploadMetadataJson(token, env.metadataFolder, SCREEN_CAPTIONS_FILE, envelope);
+}
+
+async function readLocalEnvelope(): Promise<{ envelope: ScreenCaptionsEnvelope; mtime: number } | null> {
+  try {
+    const text = await readFile(dataFile(SCREEN_CAPTIONS_FILE), "utf-8");
+    const mtime = (await fileMtime(dataFile(SCREEN_CAPTIONS_FILE))) ?? 0;
+    return { envelope: JSON.parse(text) as ScreenCaptionsEnvelope, mtime };
+  } catch {
+    return null;
+  }
+}
+
+/** Where the file lives — beside `.env`, in the mirrored `data/` tree. For tests and for the settings page to name. */
+export const screenCaptionsFile = (): string => dataFile(SCREEN_CAPTIONS_FILE);
+
+/** Test seam: forget nothing is cached here, but this keeps the old call site honest. */
+export function forgetScreenCaptions(): void {
+  /* no cache to drop */
+}

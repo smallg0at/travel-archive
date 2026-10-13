@@ -1,4 +1,5 @@
-import { config as loadDotenv } from "dotenv";
+import { readFileSync } from "node:fs";
+import { config as loadDotenv, parse } from "dotenv";
 import { homeFile } from "./paths.js";
 import { levelFromLegacyBudget, parseThinkingLevel } from "./providers/geminiConfig.js";
 
@@ -133,7 +134,26 @@ function readEnv() {
     // Which providers/*.ts implementation of AiProvider to use. Any id from
     // providers/index.ts's PRESETS; a new OpenAI-compatible service is a table
     // entry there plus `AI_PROVIDER=<id>`. Names are validated in getProvider.
+    // A batch is one brief: the images in a single request are all from the same
+    // pass, and mixing briefs inside one reply would make the result order the
+    // only thing telling them apart.
     aiProvider: fromEnv("AI_PROVIDER") ?? "deepseek",
+    /**
+     * Which provider describes the screenshots nobody has vouched for — the ones
+     * the allowlist keeps off the wire. It has to be a local service: the point
+     * is that the image never leaves the machine, so the pass refuses a cloud id
+     * out loud rather than quietly sending them (jobs/screenCaptions.ts). Unset
+     * means the pass is off, and says so when asked to run.
+     */
+    screenshotProvider: fromEnv("SCREENSHOT_PROVIDER"),
+    /**
+     * The passphrase the local screenshot descriptions are encrypted under before
+     * they are uploaded. Deliberately its own secret rather than reusing
+     * `ARCHIVE_PASSWORD`: that one is the LAN gate, and a gate word plus a copy of
+     * the file would then decrypt the screenshots. Losing it costs a re-run, not
+     * the archive. See screenCaptions.ts.
+     */
+    screenshotPassphrase: fromEnv("SCREENSHOT_PASSPHRASE"),
     geminiApiKey: fromEnv("GEMINI_API_KEY"),
     // 3.7 over 3.8: tied on caption quality in the bake-off, marginally faster
     // (2093ms vs 2255ms median), 27% fewer thinking tokens, and it read a
@@ -183,6 +203,32 @@ function readEnv() {
  * which is why the providers construct their clients lazily.
  */
 export const env = readEnv();
+
+/**
+ * A setting read from disk **now**, not from the snapshot this process booted
+ * with.
+ *
+ * Most settings can wait for a restart — they describe how the archive is
+ * scanned or synced, and a restart is part of changing them. Two cannot: the
+ * local screenshot pass's provider and passphrase, which are edited on the
+ * Settings page and would otherwise need a server restart to take effect for no
+ * reason at all.
+ *
+ * Precedence matches the loader's: a real environment variable wins over `.env`,
+ * because that is the rule `loadDotenv` keeps at boot and two different rules for
+ * the same key would be worse than the surprise.
+ */
+export function settingNow(key: string): string | undefined {
+  const fromProcess = process.env[key];
+  if (fromProcess) return fromProcess;
+  try {
+    const parsed = parse(readFileSync(homeFile(".env"), "utf-8")) as Record<string, string>;
+    return parsed[key] || undefined;
+  } catch {
+    // No .env at all is a normal state (a packaged build has none).
+    return undefined;
+  }
+}
 
 /**
  * Re-reads configuration after `.env` has been written at runtime.

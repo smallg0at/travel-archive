@@ -91,6 +91,13 @@ const WRITABLE = [
   "NOTIFY_SUCCESS",
   "NOTIFY_FAILURES",
   "NOTIFY_BANNER",
+  // The local screenshot pass: which service on this machine describes the
+  // screens nobody has vouched for, and the passphrase their descriptions are
+  // encrypted under before they are uploaded. Read live by the job at the moment
+  // it starts (settingNow), so saving them takes effect on the next run rather
+  // than at a restart.
+  "SCREENSHOT_PROVIDER",
+  "SCREENSHOT_PASSPHRASE",
 ] as const;
 
 /**
@@ -107,9 +114,12 @@ export type WritableKey = (typeof WRITABLE)[number];
  *
  * Every provider's key variable ends in `_API_KEY`, so it is matched by that
  * suffix rather than listed — a new service added to PRESETS cannot be
- * forgotten here and leak its key into a response.
+ * forgotten here and leak its key into a response. The screenshot passphrase is
+ * named separately because it is the other kind of secret in this file: not a
+ * key for a service, but the thing that makes the uploaded descriptions
+ * unreadable.
  */
-const SECRET = WRITABLE.filter((k) => k.endsWith("_API_KEY")) as WritableKey[];
+const SECRET = WRITABLE.filter((k) => k.endsWith("_API_KEY") || k === "SCREENSHOT_PASSPHRASE") as WritableKey[];
 
 export function configStatus(): ConfigStatus {
   const provider = env.aiProvider;

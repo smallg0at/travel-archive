@@ -65,14 +65,30 @@ describe("the captioning brief", () => {
 describe("the screenshot brief", () => {
   it("names the kind of screen and nothing on it", () => {
     expect(SCREENSHOT_PROMPT).toMatch(/what kind of screen this is/);
-    expect(SCREENSHOT_PROMPT).toMatch(/describe the screen itself and not its contents/);
-    expect(SCREENSHOT_PROMPT).toMatch(/Never what it says/);
+    expect(SCREENSHOT_PROMPT).toMatch(/describe the screen itself and never its contents/);
+    expect(SCREENSHOT_PROMPT).toMatch(/Never a word of what it says/);
+  });
+
+  it("names the sensitive kinds in coarse words rather than describing them", () => {
+    // The owner's rule: for material that is genuinely private, say only what
+    // kind of thing it is — 聊天记录 / 身份证 / 护照 / 关键证件号 — and nothing inside
+    // it. A reader searches for the kind; nobody needs the contents.
+    expect(SCREENSHOT_PROMPT).toMatch(/a chat conversation/);
+    expect(SCREENSHOT_PROMPT).toMatch(/a photographed ID card/);
+    expect(SCREENSHOT_PROMPT).toMatch(/a passport page/);
+    expect(SCREENSHOT_PROMPT).toMatch(/a document showing account numbers/);
+  });
+
+  it("tags from a fixed coarse vocabulary, so a search has something to match", () => {
+    expect(SCREENSHOT_PROMPT).toMatch(/"chat", "id-card", "passport", "document-numbers"/);
+    expect(SCREENSHOT_PROMPT).toMatch(/Never its subject matter/);
   });
 
   it("forbids summarising or transcribing personal correspondence", () => {
     expect(SCREENSHOT_PROMPT).toMatch(/never summarise, characterise, quote or transcribe/);
     expect(SCREENSHOT_PROMPT).toMatch(/a conversation, a message, an email, a notification/);
     expect(SCREENSHOT_PROMPT).toMatch(/always null/);
+    expect(SCREENSHOT_PROMPT).toMatch(/Nothing on a screen like this is transcribed/);
   });
 
   it("keeps the verdict question separate from the description", () => {

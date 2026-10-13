@@ -23,7 +23,7 @@ import {
 } from "./thumbStore.js";
 import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { readPrefs, writePrefs } from "./prefsStore.js";
-import { env } from "./env.js";
+import { env, settingNow } from "./env.js";
 import { getCachedAccessToken, getAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
 import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
@@ -48,6 +48,8 @@ import {
   submitAnalyzeBatch,
 } from "./jobs/analyzeBatch.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
+import { runScreenCaptions } from "./jobs/screenCaptions.js";
+import { loadScreenCaptions } from "./screenCaptions.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
@@ -671,6 +673,42 @@ const routes: [RegExp, string, Handler][] = [
   ],
 
   /**
+   * How far the local screenshot pass has got — and whether it could run.
+   *
+   * Local only, like the sign-in start-up row above and for a stronger reason:
+   * these descriptions exist because the screens they describe are nobody
+   * else's business, so a remote reader does not get the count, the provider,
+   * or even whether a passphrase is set. The panel that shows this is inside the
+   * writable block, so a remote Settings page never asks.
+   */
+  [
+    /^\/screens\/status$/,
+    "GET",
+    async (req, res) => {
+      if (!access.isLocal(req)) {
+        return json(res, 403, { error: "Local screenshot descriptions belong to the machine the server is running on" });
+      }
+      const provider = settingNow("SCREENSHOT_PROVIDER") ?? null;
+      const hasPassphrase = !!settingNow("SCREENSHOT_PASSPHRASE");
+      const job = jobs.runningJob();
+      let described = 0;
+      let error: string | undefined;
+      if (hasPassphrase) {
+        try {
+          const token = await getAccessToken();
+          described = Object.keys((await loadScreenCaptions(token)).entries).length;
+        } catch (err) {
+          // A passphrase that cannot decrypt the file is worth saying out loud:
+          // reporting zero would read as "nothing described yet", which is the
+          // one thing a wrong passphrase must never look like.
+          error = (err as Error).message;
+        }
+      }
+      json(res, 200, { described, provider, hasPassphrase, error, running: job?.kind === "screens" });
+    },
+  ],
+
+  /**
    * Who may reach this server, as it is running and as it is saved.
    *
    * Readable by anyone who can read the archive — it says whether a password
@@ -1250,6 +1288,26 @@ const routes: [RegExp, string, Handler][] = [
       // the deletion rule it interacts with, rather than in the page.
       const range = await resolveRange(body.mode ?? "full", { from: body.from ?? null, to: body.to ?? null });
       json(res, 202, jobs.start({ kind: "scan", run: (onProgress, signal) => runScan(range, onProgress, signal) }));
+    },
+  ],
+  [
+    // Describing the screenshots the allowlist keeps off the wire, on a model in
+    // this machine. Its own route rather than a flag on /jobs/analyze: the two
+    // jobs write to different places (the shards, which are uploaded, against a
+    // local-only file), and a reader should have to mean this one.
+    /^\/jobs\/screens$/,
+    "POST",
+    async (req, res) => {
+      if (refuseIfBusy(res)) return;
+      const body = await readJsonBody<{ limit?: number }>(req);
+      json(
+        res,
+        202,
+        jobs.start({
+          kind: "screens",
+          run: (onProgress, signal) => runScreenCaptions({ limit: body.limit }, onProgress, signal),
+        }),
+      );
     },
   ],
   [

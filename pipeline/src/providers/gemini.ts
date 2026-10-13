@@ -134,7 +134,7 @@ const CAPTION_SCHEMA = {
 };
 
 /** Shared with the OpenAI-compatible providers; see `captionPrompt.ts` for why it lives in one file. */
-import { CAPTION_PROMPT } from "./captionPrompt.js";
+import { briefFor, CAPTION_PROMPT } from "./captionPrompt.js";
 
 /**
  * How much the model thinks is decided in `geminiConfig.ts`: Google retired
@@ -214,7 +214,7 @@ async function captionPhoto(model: string, thinkingLevel: ThinkingLevel | undefi
     contents: [
       {
         role: "user",
-        parts: [{ inlineData: { mimeType: input.mediaType, data: input.imageBase64 } }, { text: CAPTION_PROMPT + captionContext(input) }],
+        parts: [{ inlineData: { mimeType: input.mediaType, data: input.imageBase64 } }, { text: briefFor(input) + captionContext(input) }],
       },
     ],
     config: {
@@ -470,7 +470,7 @@ export function captionBatchRequest(input: CaptionPhotoInput): object {
     contents: [
       {
         role: "user",
-        parts: [{ inlineData: { mimeType: input.mediaType, data: input.imageBase64 } }, { text: CAPTION_PROMPT + captionContext(input) }],
+        parts: [{ inlineData: { mimeType: input.mediaType, data: input.imageBase64 } }, { text: briefFor(input) + captionContext(input) }],
       },
     ],
     generationConfig: {

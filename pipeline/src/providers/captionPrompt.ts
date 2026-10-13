@@ -32,3 +32,14 @@ export const CAPTION_PROMPT = `You are cataloging a personal photo library that 
 /** The OpenAI-compatible providers' JSON shape. Gemini carries the same contract as a schema. */
 export const CAPTION_JSON = `Reply with ONE JSON object and nothing else:
 {"content_type":"scene|document|food|landscape|screenshot|other","caption":"one plain sentence","tags":["3-6 short lowercase tags"],"extracted_text":"full transcribed text, or null","notable":true|false}`;
+
+/**
+ * The brief one call should follow: the caller's, or the ordinary caption one.
+ *
+ * The only caller that passes its own is the local screenshot pass
+ * (`screenshotPrompt.ts`), whose instruction is the opposite of this brief's —
+ * name the kind of screen and nothing on it — while the reply shape stays the
+ * same, so nothing downstream has to know which was used. Keeping the choice
+ * here means neither provider can drift into honouring only one of them.
+ */
+export const briefFor = (input: { brief?: string }): string => input.brief ?? CAPTION_PROMPT;

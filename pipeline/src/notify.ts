@@ -35,7 +35,7 @@ import type { JobKind, JobRecord } from "@travel-archive/shared";
  */
 
 /** Jobs whose success is worth interrupting for. */
-const WORTH_A_TOAST: ReadonlySet<JobKind> = new Set(["analyze", "organize", "trip", "translate"]);
+const WORTH_A_TOAST: ReadonlySet<JobKind> = new Set(["analyze", "organize", "trip", "translate", "screens"]);
 
 /**
  * The identity the toast is filed under.
