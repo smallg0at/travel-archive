@@ -122,7 +122,8 @@ const CAPTION_SCHEMA = {
     extracted_text: {
       type: Type.STRING,
       nullable: true,
-      description: "Full transcribed text if this is a sign, plaque, menu, or other document. Null otherwise.",
+      description:
+        "Text transcribed from a sign, plaque, menu, ticket or timetable. Null otherwise, and always null for a conversation, a message, an email or a personal record.",
     },
     notable: {
       type: Type.BOOLEAN,
@@ -133,12 +134,8 @@ const CAPTION_SCHEMA = {
   required: ["content_type", "caption", "tags", "extracted_text", "notable"],
 };
 
-const CAPTION_PROMPT = `You are cataloging a personal photo library that mixes travel photos, everyday snapshots, and phone screenshots. There are no people to identify — focus on place, subject, and content.
-- content_type: scene, document (signs/plaques/menus/text-heavy), food, landscape, screenshot (a screen capture, not a camera photo), or other.
-- caption: one plain sentence, no preamble.
-- tags: 3-6 short lowercase tags.
-- extracted_text: if this is primarily a sign, museum plaque, menu, or document, transcribe its text in full. Otherwise null.
-- notable: true only if this photo should get its own write-up; false for routine snapshots that can be folded into a day summary.`;
+/** Shared with the OpenAI-compatible providers; see `captionPrompt.ts` for why it lives in one file. */
+import { CAPTION_PROMPT } from "./captionPrompt.js";
 
 /**
  * How much the model thinks is decided in `geminiConfig.ts`: Google retired

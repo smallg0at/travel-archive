@@ -78,16 +78,12 @@ interface ChatMessage {
   content: string | Part[];
 }
 
-/** The same cataloguing brief Gemini gets, so a switch of provider does not also switch what a caption means. */
-const CAPTION_PROMPT = `You are cataloging a personal photo library that mixes travel photos, everyday snapshots, and phone screenshots. There are no people to identify — focus on place, subject, and content.
-- content_type: scene, document (signs/plaques/menus/text-heavy), food, landscape, screenshot (a screen capture, not a camera photo), or other.
-- caption: one plain sentence, no preamble.
-- tags: 3-6 short lowercase tags.
-- extracted_text: if this is primarily a sign, museum plaque, menu, or document, transcribe its text in full. Otherwise null.
-- notable: true only if this photo should get its own write-up; false for routine snapshots that can be folded into a day summary.`;
-
-const CAPTION_JSON = `Reply with ONE JSON object and nothing else:
-{"content_type":"scene|document|food|landscape|screenshot|other","caption":"one plain sentence","tags":["3-6 short lowercase tags"],"extracted_text":"full transcribed text, or null","notable":true|false}`;
+/**
+ * The cataloguing brief lives in `captionPrompt.ts`. It used to sit here as a
+ * second copy under a comment claiming it was "the same brief Gemini gets",
+ * which is exactly the kind of sameness nothing was checking.
+ */
+import { CAPTION_JSON, CAPTION_PROMPT } from "./captionPrompt.js";
 
 function dataUrl(input: CaptionPhotoInput): string {
   return `data:${input.mediaType};base64,${input.imageBase64}`;

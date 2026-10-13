@@ -261,3 +261,49 @@ both ways, with nothing else differing, gave `error` against `open`. `watchJob`
 now passes `{ withCredentials: true }`. The harness is
 `scripts/remote-reader-probe.mjs`; `--keep` leaves the facade up so the real app
 can be hand-driven through it.
+
+## Operations on this machine (2026-10-13)
+
+**Two copies of a model on an 8 GiB card look exactly like an engine that got
+2–4× slower.** `lms unload` takes **no `-y`** — it answers
+`error: unknown option '-y'` and unloads *nothing*, so the next `lms load`
+quietly creates a **second instance** (`google/gemma-4-e4b` and
+`google/gemma-4-e4b:2`) instead of replacing the first. Each copy is ~4.3 GB of
+Q4_K_M weights plus its own BF16 vision tower, so two overflow the card, spill to
+shared memory, and generation falls to 9–11 t/s against 34–36 for one copy. Half
+a day went into blaming the runtime version and the GPU before the LM Studio
+window itself showed both models listed.
+
+The commands: `lms unload <identifier>` (or `lms unload --all`), then **verify
+before trusting any timing** — `lms ps` must show exactly one row, and nvidia-smi
+about 4,354 MiB used with one copy loaded (209 MiB with none). A sweep or bench
+that reloads models must assert that count; a load that silently adds a copy
+invalidates every number after it. Note also that `lms unload --all -y` can hang
+on an interactive prompt rather than erroring out, which is how one sweep sat
+idle for eleven minutes with the GPU at 1.5 W.
+
+**Where the engine's own timings are.** `%USERPROFILE%\.lmstudio\server-logs\<YYYY-MM>\*.log`
+holds a `slot print_timing` block per request:
+
+```
+prompt eval time =  1309.78 ms / 517 tokens ( 394.72 t/s)   ← prefill: fast, and often
+        eval time = 89455.19 ms / 831 tokens (   9.28 t/s)   ← decode: the slow half
+```
+
+Prefill commonly reports only 5 tokens because the prefix cache hit. And the wall
+time is dominated by **how much the model writes**, including its reasoning:
+`raw-caption.json` in the bakeoff output carries `reasoningLen`, and caption calls
+routinely spend 550–650 tokens thinking before one sentence — which is both the
+explanation for a 25-second caption and the reason the caption prompt forbids
+transcribing or summarising personal screens (the model's thinking quotes the
+screen's text verbatim when nothing stops it).
+
+**LM Studio auto-updates its llama.cpp runtime at start-up and keeps the old
+builds.** `~/.lmstudio/extensions/backends/` held 2.51.0, 2.53.0 (installed
+2026-10-07), 2.55.0 and 2.56.0 (installed 2026-10-13 16:06, the minute the app
+started); the selection lives in `~/.lmstudio/.internal/backend-preferences-v1.json`
+and can be changed with `lms runtime ls` / `lms runtime select <alias>` (no
+download). Useful when a throughput change coincides with an app start — but
+check the copy count first: selecting the older 2.53.0 here measured *worse*
+(89,784 ms against 36,319 ms), which turned out to be the double-copy bug, not
+the runtime.
