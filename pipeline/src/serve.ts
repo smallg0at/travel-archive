@@ -52,6 +52,19 @@ import { runScreenCaptions } from "./jobs/screenCaptions.js";
 import { loadScreenCaptions, rekeyScreenCaptions } from "./screenCaptions.js";
 import { canStorePassphrase, hasStoredPassphrase, importLegacyPassphrase } from "./screenKeyStore.js";
 import { passphraseProblem } from "./screenKey.js";
+import { isScreenError } from "./screenErrors.js";
+
+/**
+ * How a screenshot-passphrase failure is reported.
+ *
+ * The English text *and* a name for it. The app words these for its own language
+ * — see `screenErrors.ts` for why the sentence cannot be written on the server —
+ * and falls back to the text when it meets a code it does not know.
+ */
+function screenFailure(err: unknown): { error: string; code?: string; params?: Record<string, string | number> } {
+  if (isScreenError(err)) return { error: err.message, code: err.code, params: err.params };
+  return { error: err instanceof Error ? err.message : String(err) };
+}
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
@@ -749,7 +762,7 @@ const routes: [RegExp, string, Handler][] = [
       } catch (err) {
         // Never an empty map: that reads as "nothing described yet" and is the
         // one thing a wrong or unreadable key must not look like.
-        json(res, 409, { error: (err as Error).message });
+        json(res, 409, screenFailure(err));
       }
     },
   ],
@@ -774,12 +787,21 @@ const routes: [RegExp, string, Handler][] = [
       const body = await readJsonBody<{ passphrase?: unknown }>(req);
       const raw = typeof body.passphrase === "string" ? body.passphrase : "";
       const problem = passphraseProblem(raw);
-      if (problem) return json(res, 400, { error: problem });
+      if (problem) return json(res, 400, screenFailure(problem));
+      // `?check=1` answers "would this be accepted, and does the key in use still
+      // open the file" and writes nothing. Added after a *test* rotated the real
+      // passphrase: a mutation endpoint should not be the only way to ask whether
+      // a value is acceptable.
+      const checkOnly = new URL(req.url ?? "/", "http://local").searchParams.get("check") === "1";
       try {
         const token = await getAccessToken();
+        if (checkOnly) {
+          const file = await loadScreenCaptions(token);
+          return json(res, 200, { ok: true, described: Object.keys(file.entries).length });
+        }
         json(res, 200, await rekeyScreenCaptions(token, raw));
       } catch (err) {
-        json(res, 400, { error: (err as Error).message });
+        json(res, checkOnly ? 409 : 400, screenFailure(err));
       }
     },
   ],

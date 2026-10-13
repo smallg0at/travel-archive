@@ -492,6 +492,21 @@ export const zhHans: Messages = {
     screensPassSave: "保存",
     screensPassWarning: "更改会重新加密所有描述，旧口令立即失效；新口令只保存在这个 Windows 账户下。丢了就只能重新描述一遍。",
     screensPassDone: (count: number, fingerprint: string) => `已更改——${count} 条描述已重新加密（钥匙 ${fingerprint}）`,
+    /**
+     * 口令的规则与拒绝理由，写在这里而不是服务端。服务端只发代码和参数
+     * （见 screenErrors.ts），这里把它们变成人话；遇到不认识的代码就退回服务端
+     * 原文，所以新服务端不会显示成空白。
+     */
+    screensErr: {
+      tooShort: (min: number) => `至少要 ${min} 位——它是保护这些描述的唯一东西。`,
+      tooLong: (max: number) => `最多 ${max} 位。`,
+      tooCommon: "这是任何人第一批就会试的密码——字典或者同一个字符重复，一碰就开。",
+      tooFamous: "这是全互联网被引用最多的那句话。形状是好形状——改成只属于你的吧。",
+      mismatch: (wants: string, derives: string) => `不是写这个文件时用的口令：它要的是 ${wants}，这里算出 ${derives}。`,
+      damaged: "文件解不开——要么是别的口令写的，要么已损坏。",
+      noPassphrase: "这台机器还没有存入口令。",
+      keyStoreUnreadable: (reason: string) => `这个 Windows 账户读不出已存的口令（${reason}）。它按用户和机器保护。`,
+    },
     screensCheck: "校验",
     screensStart: "开始描述",
     screensDescribed: (n: number) => `已描述 ${n} 张`,

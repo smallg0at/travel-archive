@@ -553,6 +553,39 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     screensKeyResult.textContent = "";
   };
 
+  /**
+   * A failure from the server, in this reader's language.
+   *
+   * The server sends a code and its parameters; the sentence is written in the
+   * i18n tables. An unknown code — a newer server than this page — falls back to
+   * the text that came with it, so the answer is never blank.
+   */
+  const screenErrorText = (failure: { error: string; code?: string; params?: Record<string, string | number> }): string => {
+    const p = failure.params ?? {};
+    switch (failure.code) {
+      case "passphrase-too-short":
+        return ui.generate.screensErr.tooShort(Number(p.min ?? 12));
+      case "passphrase-too-long":
+        return ui.generate.screensErr.tooLong(Number(p.max ?? 256));
+      case "passphrase-too-common":
+        return ui.generate.screensErr.tooCommon;
+      case "passphrase-too-famous":
+        return ui.generate.screensErr.tooFamous;
+      case "passphrase-mismatch":
+        return ui.generate.screensErr.mismatch(String(p.wants ?? "?"), String(p.derives ?? "?"));
+      case "descriptions-damaged":
+        return ui.generate.screensErr.damaged;
+      case "no-passphrase":
+        return ui.generate.screensErr.noPassphrase;
+      case "key-store-unavailable":
+        return ui.generate.screensNoKeyStore;
+      case "key-store-unreadable":
+        return ui.generate.screensErr.keyStoreUnreadable(String(p.reason ?? ""));
+      default:
+        return failure.error;
+    }
+  };
+
   const paintScreens = async (opts: { quiet?: boolean } = {}) => {
     const [config, status] = await Promise.all([getConfig(), screensStatus()]);
     const local = localOptions(config?.providers ?? []);
@@ -590,7 +623,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       described = await screensEntries();
     }
     const count = described && "entries" in described ? Object.keys(described.entries).length : null;
-    const trouble = described && "error" in described ? described.error : null;
+    const trouble = described && "error" in described ? screenErrorText(described) : null;
 
     // A run in flight, an unreadable file (a changed key), no passphrase yet, no
     // local service, no key store on this platform — each is a different
@@ -643,7 +676,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     try {
       const keyed = await rekeyScreens(passphrase);
       if ("error" in keyed) {
-        screensKeyResult.textContent = keyed.error;
+        screensKeyResult.textContent = screenErrorText(keyed);
         screensKeyResult.classList.add("tone-warn");
         return;
       }

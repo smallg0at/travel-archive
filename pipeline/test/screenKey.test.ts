@@ -17,6 +17,7 @@ import { randomBytes } from "node:crypto";import {
   normalizePassphrase,
   passphraseProblem,
 } from "../src/screenKey.js";
+import { ScreenError, isScreenError } from "../src/screenErrors.js";
 import {
   decryptScreenCaptions,
   encryptScreenCaptions,
@@ -55,11 +56,37 @@ describe("normalizePassphrase", () => {
 
 describe("passphraseProblem", () => {
   it("refuses what is too short, too long, or nothing but invisibles", () => {
-    expect(passphraseProblem("short")).toMatch(/at least 12/);
-    expect(passphraseProblem("              ")).toMatch(/at least 12/);
-    expect(passphraseProblem("\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b")).toMatch(/at least 12/);
-    expect(passphraseProblem("x".repeat(MAX_PASSPHRASE_CHARS + 1))).toMatch(/at most/);
-    expect(passphraseProblem("x".repeat(MIN_PASSPHRASE_CHARS))).toBeNull();
+    expect(passphraseProblem("short")?.code).toBe("passphrase-too-short");
+    expect(passphraseProblem("short")?.params).toEqual({ min: MIN_PASSPHRASE_CHARS });
+    expect(passphraseProblem("              ")?.code).toBe("passphrase-too-short");
+    expect(passphraseProblem("\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b\u200b")?.code).toBe("passphrase-too-short");
+    expect(passphraseProblem("x".repeat(MAX_PASSPHRASE_CHARS + 1))?.code).toBe("passphrase-too-long");
+    expect(passphraseProblem("x".repeat(MAX_PASSPHRASE_CHARS + 1))?.params).toEqual({ max: MAX_PASSPHRASE_CHARS });
+    expect(passphraseProblem("xv9Kp2mQ4wZr")).toBeNull();
+    // A single character repeated is long enough and still hopeless, so it is
+    // caught by the same rule as the dictionary words rather than by length.
+    expect(passphraseProblem("x".repeat(MIN_PASSPHRASE_CHARS))?.code).toBe("passphrase-too-common");
+  });
+
+  it("catches the passphrases a form asking for 12 characters produces", () => {
+    // Everything here is long enough; length is not what is wrong with it.
+    for (const value of ["password1234", "123456789012", "qwertyuiop12", "Welcome123456", "aaaaaaaaaaaa"]) {
+      expect(passphraseProblem(value)?.code, value).toBe("passphrase-too-common");
+    }
+  });
+
+  it("recognises the famous one by name, and does not call it weak", () => {
+    expect(passphraseProblem("correct horse battery staple")?.code).toBe("passphrase-too-famous");
+    // It is long, so nothing else would have caught it; the message is a
+    // compliment with a suggestion, not a rejection on strength.
+    expect(passphraseProblem("correct horse battery staple")?.message).toMatch(/good shape/);
+  });
+
+  it("names the failure so a client can word it in its own language", () => {
+    // The code travels with the sentence: the app renders Chinese, the server
+    // only knows English, and the numbers have to survive the trip.
+    expect(passphraseProblem("short")).toBeInstanceOf(ScreenError);
+    expect(isScreenError(passphraseProblem("short"))).toBe(true);
   });
 });
 

@@ -25,6 +25,7 @@
  * transformation — asserted by a test against the real file's shape.
  */
 import { createHash, scryptSync } from "node:crypto";
+import { ScreenError } from "./screenErrors.js";
 
 /** 256 characters is generous for something a human types, and bounds a paste. */
 export const MAX_PASSPHRASE_CHARS = 256;
@@ -44,16 +45,60 @@ export function normalizePassphrase(raw: string): string {
 }
 
 /** The canonical passphrase, or the reason it cannot be one. */
-export function passphraseProblem(raw: string): string | null {
+export function passphraseProblem(raw: string): ScreenError | null {
   const value = normalizePassphrase(raw);
   if (value.length < MIN_PASSPHRASE_CHARS) {
-    return `The passphrase must be at least ${MIN_PASSPHRASE_CHARS} characters — it is the only thing protecting these descriptions.`;
+    return new ScreenError(
+      "passphrase-too-short",
+      `The passphrase must be at least ${MIN_PASSPHRASE_CHARS} characters — it is the only thing protecting these descriptions.`,
+      { min: MIN_PASSPHRASE_CHARS },
+    );
   }
   if (value.length > MAX_PASSPHRASE_CHARS) {
-    return `The passphrase must be at most ${MAX_PASSPHRASE_CHARS} characters.`;
+    return new ScreenError("passphrase-too-long", `The passphrase must be at most ${MAX_PASSPHRASE_CHARS} characters.`, {
+      max: MAX_PASSPHRASE_CHARS,
+    });
+  }
+  if (TOO_COMMON.has(value.toLowerCase()) || /^(.)\1+$/.test(value)) {
+    return new ScreenError(
+      "passphrase-too-common",
+      "That passphrase is one of the first ones anybody would try — it would fall to a dictionary or a repeated character.",
+    );
+  }
+  if (TOO_FAMOUS.has(value.toLowerCase())) {
+    return new ScreenError(
+      "passphrase-too-famous",
+      "That is the most-quoted passphrase on the internet. It is a good shape — make it yours instead.",
+    );
   }
   return null;
 }
+
+/**
+ * Passphrases that are long enough and still hopeless, plus the one that is
+ * famously *good* and therefore famous.
+ *
+ * The length rule catches the eight-character classics on its own; everything
+ * listed here has been padded to twelve or more, which is exactly the shape a
+ * person produces when a form tells them "at least 12 characters". Kept short and
+ * hand-picked — a real breach list belongs in a strength meter, not in a rule
+ * that refuses the value outright.
+ */
+const TOO_COMMON = new Set([
+  "password1234",
+  "password12345",
+  "passwordpassword",
+  "123456789012",
+  "1234567890123",
+  "qwertyuiop12",
+  "qwerty123456",
+  "letmein12345",
+  "iloveyou12345",
+  "admin1234567",
+  "welcome123456",
+]);
+
+const TOO_FAMOUS = new Set(["correct horse battery staple", "correcthorsebatterystaple"]);
 
 /**
  * scrypt over the canonical passphrase. `maxmem` is raised because the default

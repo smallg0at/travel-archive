@@ -516,6 +516,24 @@ export const en = {
       "Changing it re-encrypts every description; the old one stops working at once, and the new one is kept for this Windows user only. Lose it and the only way back is describing them again.",
     screensPassDone: (count: number, fingerprint: string) =>
       `changed — ${count} descriptions re-encrypted (key ${fingerprint})`,
+    /**
+     * The passphrase rules and refusals, worded here rather than on the server.
+     * The server sends a code and its parameters (screenErrors.ts); these turn
+     * them into a sentence. An unknown code falls back to the server's own text,
+     * so a newer server never renders nothing.
+     */
+    screensErr: {
+      tooShort: (min: number) => `At least ${min} characters — this is the only thing protecting the descriptions.`,
+      tooLong: (max: number) => `At most ${max} characters.`,
+      tooCommon: "That is one of the first things anyone would try — a dictionary, or the same character over and over.",
+      tooFamous: "That is the most-quoted passphrase on the internet. It is a good shape — make it yours instead.",
+      mismatch: (wants: string, derives: string) =>
+        `Not the passphrase this file was written with: it wants key ${wants}, this derives ${derives}.`,
+      damaged: "The file could not be decrypted — written with a different passphrase, or damaged.",
+      noPassphrase: "No passphrase is stored on this machine yet.",
+      keyStoreUnreadable: (reason: string) =>
+        `The stored passphrase cannot be read on this Windows account (${reason}). It is protected per user and per machine.`,
+    },
     screensCheck: "Check",
     screensStart: "Describe screens",
     screensDescribed: (n: number) => (n === 1 ? "1 screen described" : `${n} screens described`),

@@ -29,6 +29,7 @@ import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { dataDir, dataFile } from "./paths.js";
 import { normalizePassphrase } from "./screenKey.js";
+import { ScreenError } from "./screenErrors.js";
 import { saveConfig } from "./configStore.js";
 
 const KEY_FILE = "screen-key.json";
@@ -163,9 +164,11 @@ export async function hasStoredPassphrase(): Promise<boolean> {
 
 export async function writeStoredPassphrase(passphrase: string, options: { previous?: string } = {}): Promise<void> {
   if (!wrapper.available()) {
-    throw new Error(
+    throw new ScreenError(
+      "key-store-unavailable",
       `This machine has no key store (${wrapper.name} is Windows-only), so the passphrase cannot be kept here. ` +
         `Set SCREENSHOT_PASSPHRASE in pipeline/.env before starting the server, or run the server on Windows.`,
+      { store: wrapper.name },
     );
   }
   const wrapped = await wrapper.wrap(Buffer.from(normalizePassphrase(passphrase), "utf-8"));

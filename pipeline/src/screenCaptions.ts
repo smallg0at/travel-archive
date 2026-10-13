@@ -29,6 +29,7 @@ import { downloadMetadataJson, fetchItemMeta, uploadMetadataJson } from "./graph
 import { env } from "./env.js";
 import { readStoredPassphrases, writeStoredPassphrase } from "./screenKeyStore.js";
 import { deriveKey, keyFingerprint } from "./screenKey.js";
+import { ScreenError } from "./screenErrors.js";
 
 /** One described screen. Coarse by construction — see `providers/screenshotPrompt.ts`. */
 export interface ScreenCaptionEntry {
@@ -79,13 +80,16 @@ async function storedPassphrases(): Promise<string[]> {
     // Unwrapping failed — a different Windows account, or a restored file. Say
     // that, rather than let it read as "never set up", which is what starting
     // over on top of existing work would look like.
-    throw new Error(
+    throw new ScreenError(
+      "key-store-unreadable",
       `The stored passphrase could not be read on this account: ${err.message}. ` +
         `It is protected per Windows user, so a copy from another account or machine cannot open it.`,
+      { reason: err.message },
     );
   });
   if (store.length === 0) {
-    throw new Error(
+    throw new ScreenError(
+      "no-passphrase",
       "No passphrase is stored on this machine, so the encrypted screenshot descriptions cannot be read or written. " +
         "Set one in the Screens tab (it is kept in the Windows key store, not in .env).",
     );
@@ -141,9 +145,11 @@ export function decryptScreenCaptions(envelope: ScreenCaptionsEnvelope, passphra
   const salt = Buffer.from(envelope.kdf.salt, "base64");
   const key = deriveKey(passphrase, salt, envelope.kdf);
   if (envelope.fp && envelope.fp !== keyFingerprint(key)) {
-    throw new Error(
+    throw new ScreenError(
+      "passphrase-mismatch",
       `This passphrase is not the one ${SCREEN_CAPTIONS_FILE} was written with (it wants ${envelope.fp}, this derives ${keyFingerprint(key)}). ` +
         `Enter the passphrase that wrote it, or delete the file to start the descriptions over.`,
+      { wants: envelope.fp, derives: keyFingerprint(key) },
     );
   }
   const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(envelope.iv, "base64"));
@@ -157,7 +163,8 @@ export function decryptScreenCaptions(envelope: ScreenCaptionsEnvelope, passphra
     // GCM cannot tell a wrong key from a flipped byte, and neither can we — but
     // "this is not the passphrase that wrote it" is the actionable half. (For
     // envelopes carrying `fp` that case is already caught above.)
-    throw new Error(
+    throw new ScreenError(
+      "descriptions-damaged",
       `Could not decrypt ${SCREEN_CAPTIONS_FILE}: it was written with a different SCREENSHOT_PASSPHRASE, or is damaged. ` +
         `Restore the passphrase, or delete the file to start the descriptions over.`,
     );

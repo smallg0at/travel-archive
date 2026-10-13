@@ -634,6 +634,12 @@ export interface ScreensStatus {
   running: boolean;
 }
 
+export interface ScreensFailure {
+  error: string;
+  code?: string;
+  params?: Record<string, string | number>;
+}
+
 /**
  * The descriptions, decrypted by the server for this machine only.
  *
@@ -642,12 +648,12 @@ export interface ScreensStatus {
  * wrong key must not look like.
  */
 export async function screensEntries(): Promise<
-  { entries: Record<string, { caption: string; tags: string[]; model: string; at: string }> } | { error: string }
+  { entries: Record<string, { caption: string; tags: string[]; model: string; at: string }> } | ScreensFailure
 > {
   try {
     const res = await apiFetch("/screens/entries");
-    const body = (await res.json()) as { entries?: Record<string, { caption: string; tags: string[]; model: string; at: string }>; error?: string };
-    return res.ok && body.entries ? { entries: body.entries } : { error: body.error ?? `HTTP ${res.status}` };
+    const body = (await res.json()) as { entries?: Record<string, { caption: string; tags: string[]; model: string; at: string }> } & ScreensFailure;
+    return res.ok && body.entries ? { entries: body.entries } : { error: body.error ?? `HTTP ${res.status}`, code: body.code, params: body.params };
   } catch (err) {
     return { error: (err as Error).message };
   }
@@ -672,17 +678,17 @@ export function startScreens(body: { limit?: number } = {}): Promise<JobRecord> 
  * is already there. Separate from `saveConfig` because the file has to be rewritten
  * in the same breath — see the route and `rekeyScreenCaptions`.
  */
-export async function rekeyScreens(passphrase: string): Promise<{ described: number; fingerprint: string } | { error: string }> {
+export async function rekeyScreens(passphrase: string): Promise<{ described: number; fingerprint: string } | ScreensFailure> {
   try {
     const res = await apiFetch("/screens/rekey", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ passphrase }),
     });
-    const body = (await res.json()) as { described?: number; fingerprint?: string; error?: string };
+    const body = (await res.json()) as { described?: number; fingerprint?: string } & ScreensFailure;
     return res.ok && typeof body.described === "number"
       ? { described: body.described, fingerprint: body.fingerprint ?? "" }
-      : { error: body.error ?? `HTTP ${res.status}` };
+      : { error: body.error ?? `HTTP ${res.status}`, code: body.code, params: body.params };
   } catch (err) {
     return { error: (err as Error).message };
   }
