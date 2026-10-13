@@ -26,7 +26,8 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dataFile, dataDir } from "./paths.js";
 import { downloadMetadataJson, fetchItemMeta, uploadMetadataJson } from "./graph.js";
-import { env, settingNow } from "./env.js";
+import { env, settingNow, shadowedByEnvironment } from "./env.js";
+import { saveConfig } from "./configStore.js";
 
 /** One described screen. Coarse by construction — see `providers/screenshotPrompt.ts`. */
 export interface ScreenCaptionEntry {
@@ -144,11 +145,36 @@ export async function loadScreenCaptions(token: string): Promise<ScreenCaptions>
 }
 
 /** Encrypts, writes the local mirror, then uploads. A failed upload costs a re-upload, not the work. */
-export async function saveScreenCaptions(token: string, file: ScreenCaptions): Promise<void> {
-  const envelope = encryptScreenCaptions(file, screenshotPassphrase());
+export async function saveScreenCaptions(token: string, file: ScreenCaptions, passphrase = screenshotPassphrase()): Promise<void> {
+  const envelope = encryptScreenCaptions(file, passphrase);
   await mkdir(dataDir(), { recursive: true });
   await writeFile(dataFile(SCREEN_CAPTIONS_FILE), `${JSON.stringify(envelope)}\n`, "utf-8");
   await uploadMetadataJson(token, env.metadataFolder, SCREEN_CAPTIONS_FILE, envelope);
+}
+
+/**
+ * Set a new passphrase without losing what is already described.
+ *
+ * Load with the old one, write the setting, save with the new one. Without this,
+ * changing the passphrase is indistinguishable from losing it: the entries become
+ * unreadable, the only way forward is to delete the file, and hours of describing
+ * are the price of a decision. The load also means a *wrong current* passphrase
+ * cannot sail through — if the file cannot be read, nothing is re-encrypted and
+ * the error says so.
+ *
+ * The new value is used explicitly rather than by re-reading the setting, because
+ * a real environment variable beats `.env` (`shadowedByEnvironment`): writing the
+ * file and then encrypting with the value that actually won would produce a file
+ * the reader believes the new passphrase opens.
+ */
+export async function rekeyScreenCaptions(
+  token: string,
+  next: string,
+): Promise<{ described: number; shadowed: boolean }> {
+  const file = await loadScreenCaptions(token);
+  await saveConfig({ SCREENSHOT_PASSPHRASE: next });
+  await saveScreenCaptions(token, file, next);
+  return { described: Object.keys(file.entries).length, shadowed: shadowedByEnvironment("SCREENSHOT_PASSPHRASE") };
 }
 
 async function readLocalEnvelope(): Promise<{ envelope: ScreenCaptionsEnvelope; mtime: number } | null> {

@@ -143,8 +143,17 @@ export async function runScreenCaptions(
     if (queue.length >= total) break;
   }
 
+  /**
+   * How many failures in a row mean the engine is gone rather than these
+   * photographs being bad. One bad call is ordinary — an odd image, a transient
+   * 500 — and five in a row with two streams running is not.
+   */
+  const FAIL_STREAK_LIMIT = 5;
+  let streak = 0;
+  let aborted = false;
+
   const work = async (record: PhotoRecord): Promise<void> => {
-    if (signal?.aborted) return;
+    if (signal?.aborted || aborted) return;
     try {
       const image = await downloadThumbnailBuffer(token, record.id);
       if (!image) {
@@ -165,6 +174,7 @@ export async function runScreenCaptions(
         at: new Date().toISOString(),
       };
       result.described += 1;
+      streak = 0;
       // Uploaded every so often, not per photo: the envelope is the whole file,
       // and 2,365 round trips of it would cost more than the model calls do.
       // A cancel keeps whatever the last save caught, which is why this is a
@@ -175,7 +185,22 @@ export async function runScreenCaptions(
       }
     } catch (err) {
       result.failed += 1;
+      streak += 1;
       onProgress({ message: `failed ${record.fileName}: ${(err as Error).message}` });
+      if (streak >= FAIL_STREAK_LIMIT) {
+        // The engine being gone and these photographs being bad look the same one
+        // call at a time, and they are not the same. On 2026-10-14 llama-server
+        // died mid-run, every call after it answered "No models loaded", and the
+        // pass went on marking the rest of the queue failed — 2,068 photographs
+        // that had done nothing wrong. Stop instead, and say what to check: the
+        // ones already described are saved and the rest stay waiting.
+        aborted = true;
+        throw new Error(
+          `${FAIL_STREAK_LIMIT} failures in a row — the local service looks gone rather than these photos being bad. ` +
+            `Last error: ${(err as Error).message}. Check that it is running with a model loaded (\`lms ps\` / \`ollama ps\`), then start again: ` +
+            `nothing already described is repeated.`,
+        );
+      }
     }
   };
 

@@ -487,7 +487,7 @@ export const zhHans: Messages = {
     screensService: "服务（本机）",
     screensPassphrase: "口令",
     screensPassSaved: "已设置——留空则沿用",
-    screensPassNew: "上传前用它加密这些描述",
+    screensPassNew: "上传前用它加密这些描述（至少 12 位）",
     screensCheck: "校验",
     screensStart: "开始描述",
     screensDescribed: (n: number) => `已描述 ${n} 张`,

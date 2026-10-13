@@ -49,7 +49,7 @@ import {
 } from "./jobs/analyzeBatch.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { runScreenCaptions } from "./jobs/screenCaptions.js";
-import { loadScreenCaptions } from "./screenCaptions.js";
+import { loadScreenCaptions, rekeyScreenCaptions } from "./screenCaptions.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
@@ -709,6 +709,39 @@ const routes: [RegExp, string, Handler][] = [
         }
       }
       json(res, 200, { described, provider, hasPassphrase, error, running: job?.kind === "screens" });
+    },
+  ],
+
+  /**
+   * Change the passphrase the descriptions are encrypted under.
+   *
+   * Its own route rather than a key in `/config`, because it is not a setting
+   * that can simply be overwritten: the file on OneDrive is encrypted with the
+   * old value, so the change has to re-encrypt it in the same breath. Saving the
+   * setting alone would leave entries nobody can read, which is what a lost
+   * passphrase looks like — see `rekeyScreenCaptions`.
+   *
+   * Local only, like everything else about this pass: the value travels one way
+   * (it is never sent back) and a remote reader has no business here.
+   */
+  [
+    /^\/screens\/rekey$/,
+    "POST",
+    async (req, res) => {
+      if (!access.isLocal(req)) {
+        return json(res, 403, { error: "Local screenshot descriptions belong to the machine the server is running on" });
+      }
+      const body = await readJsonBody<{ passphrase?: unknown }>(req);
+      const passphrase = typeof body.passphrase === "string" ? body.passphrase.trim() : "";
+      if (passphrase.length < 12) {
+        return json(res, 400, { error: "The passphrase must be at least 12 characters — it is the only thing protecting these descriptions." });
+      }
+      try {
+        const token = await getAccessToken();
+        json(res, 200, await rekeyScreenCaptions(token, passphrase));
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
     },
   ],
 

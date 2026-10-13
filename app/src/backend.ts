@@ -650,6 +650,27 @@ export function startScreens(body: { limit?: number } = {}): Promise<JobRecord> 
   return post<JobRecord>("/jobs/screens", body);
 }
 
+/**
+ * Change the passphrase the descriptions are encrypted under, re-encrypting what
+ * is already there. Separate from `saveConfig` because the file has to be rewritten
+ * in the same breath — see the route and `rekeyScreenCaptions`.
+ */
+export async function rekeyScreens(passphrase: string): Promise<{ described: number; shadowed: boolean } | { error: string }> {
+  try {
+    const res = await apiFetch("/screens/rekey", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ passphrase }),
+    });
+    const body = (await res.json()) as { described?: number; shadowed?: boolean; error?: string };
+    return res.ok && typeof body.described === "number"
+      ? { described: body.described, shadowed: !!body.shadowed }
+      : { error: body.error ?? `HTTP ${res.status}` };
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+}
+
 /** Merges finished batches now instead of at the server's next ten-minute check. */
 export function startCollect(): Promise<JobRecord> {
   return post<JobRecord>("/jobs/analyze/collect", {});

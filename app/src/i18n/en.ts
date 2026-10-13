@@ -509,7 +509,7 @@ export const en = {
     screensService: "Service (this machine)",
     screensPassphrase: "Passphrase",
     screensPassSaved: "set — leave blank to keep it",
-    screensPassNew: "encrypts the descriptions before upload",
+    screensPassNew: "encrypts the descriptions before upload (12+ characters)",
     screensCheck: "Check",
     screensStart: "Describe screens",
     screensDescribed: (n: number) => (n === 1 ? "1 screen described" : `${n} screens described`),

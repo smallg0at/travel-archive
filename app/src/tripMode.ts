@@ -15,6 +15,7 @@ import {
   planTranslate,
   rememberJob,
   rememberedJob,
+  rekeyScreens,
   saveConfig,
   screensStatus,
   startAnalyze,
@@ -564,14 +565,20 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     event.preventDefault();
     const passphrase = screensPass.value.trim();
     void start(async () => {
-      // Saved first and deliberately: the pass reads these values when it starts
-      // (settingNow), so this is what makes the choice the run's, and what keeps
-      // it after a restart. A blank passphrase means "keep the saved one".
-      await saveConfig(
-        passphrase
-          ? { SCREENSHOT_PROVIDER: screensProvider.value, SCREENSHOT_PASSPHRASE: passphrase }
-          : { SCREENSHOT_PROVIDER: screensProvider.value },
-      );
+      // A typed passphrase goes through the rekey route, which re-encrypts what
+      // is already described under the new one; a settings save alone would leave
+      // the file's entries unreadable, which is indistinguishable from losing the
+      // passphrase. A blank field means "keep the saved one" and the provider is
+      // saved the ordinary way — the pass reads both when it starts.
+      if (passphrase) {
+        const keyed = await rekeyScreens(passphrase);
+        if ("error" in keyed) {
+          screensState.textContent = keyed.error;
+          screensState.classList.add("tone-warn");
+          throw new Error(keyed.error);
+        }
+      }
+      await saveConfig({ SCREENSHOT_PROVIDER: screensProvider.value });
       screensPass.value = "";
       return startScreens();
     });
