@@ -759,7 +759,6 @@ if (!app.requestSingleInstanceLock()) {
   app.on("render-process-gone", (_event, webContents, details) => {
     log(`Renderer gone: ${details.reason} — exit code ${details.exitCode} — ${webContents.getURL()}`);
   });
-  app.on("unresponsive", (_event, webContents) => log(`Renderer unresponsive: ${webContents.getURL()}`));
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

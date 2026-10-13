@@ -30,5 +30,10 @@ jobs:
       - run: npm ci
       - run: npm run --workspace @travel-archive/pipeline typecheck
       - run: npm run --workspace @travel-archive/app typecheck
+      # The desktop shell was the one workspace CI did not check, and a commit
+      # that did not compile went through it: `app.on("unresponsive")` is not an
+      # `app` event, and nothing said so until a local build. It needs no display
+      # to typecheck — electron's own types come from npm ci.
+      - run: npm run --workspace @travel-archive/desktop typecheck
       - run: npm run --workspace @travel-archive/pipeline test
       - run: npm run --workspace @travel-archive/pipeline build

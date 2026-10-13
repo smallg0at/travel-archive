@@ -6,6 +6,7 @@
   "description": "Desktop shell: serves the built app, runs the job server, opens one window.",
   "main": "dist/main.js",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
     "icon": "node scripts/make-icon.mjs",
     "bundle": "node scripts/bundle-pipeline.mjs",
