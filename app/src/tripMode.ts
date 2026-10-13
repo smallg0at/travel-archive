@@ -208,14 +208,34 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
            run a pass over the archive, watch it, cancel it. -->
       <form class="job-form" data-mode="screens" hidden>
         <p class="job-note">${ui.generate.screensNote}</p>
+        <!--
+          The key above the run, because it is the prerequisite: without one
+          there is nowhere safe to put the output. It is deliberately *not* a
+          field in the run's form — setting a passphrase re-encrypts everything
+          already described, which is a different act from starting a pass, and
+          folding the two into one control made "type a passphrase and press
+          start" do two unrelated things at once.
+        -->
+        <div class="job-row job-scope">
+          <label class="job-field">
+            <span>${ui.generate.screensPassphrase}</span>
+            <span class="job-key-state"></span>
+          </label>
+          <button type="button" class="job-screens-rekey">${ui.generate.screensPassChange}</button>
+        </div>
+        <div class="job-key-box" hidden>
+          <p class="job-note">${ui.generate.screensPassWarning}</p>
+          <input type="password" name="passphrase" autocomplete="new-password" spellcheck="false" />
+          <div class="job-buttons">
+            <button type="button" class="job-screens-rekey-cancel">${ui.common.cancel}</button>
+            <button type="button" class="job-screens-rekey-save">${ui.generate.screensPassSave}</button>
+          </div>
+          <p class="job-note job-key-result"></p>
+        </div>
         <div class="job-row job-scope">
           <label class="job-field">
             <span>${ui.generate.screensService}</span>
             <select name="provider" class="job-select"></select>
-          </label>
-          <label class="job-field">
-            <span>${ui.generate.screensPassphrase}</span>
-            <input type="password" name="passphrase" autocomplete="new-password" spellcheck="false" />
           </label>
         </div>
         <p class="job-note job-screens-state"></p>
@@ -516,9 +536,22 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
    */
   const screensForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="screens"]')!;
   const screensProvider = screensForm.querySelector<HTMLSelectElement>('select[name="provider"]')!;
-  const screensPass = screensForm.querySelector<HTMLInputElement>('input[name="passphrase"]')!;
   const screensState = screensForm.querySelector<HTMLElement>(".job-screens-state")!;
   const screensSubmit = screensForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  const screensKeyState = screensForm.querySelector<HTMLElement>(".job-key-state")!;
+  const screensKeyBox = screensForm.querySelector<HTMLElement>(".job-key-box")!;
+  const screensKeyResult = screensForm.querySelector<HTMLElement>(".job-key-result")!;
+  const screensRekey = screensForm.querySelector<HTMLButtonElement>(".job-screens-rekey")!;
+  const screensRekeySave = screensForm.querySelector<HTMLButtonElement>(".job-screens-rekey-save")!;
+  const screensRekeyCancel = screensForm.querySelector<HTMLButtonElement>(".job-screens-rekey-cancel")!;
+  const screensPass = screensForm.querySelector<HTMLInputElement>('input[name="passphrase"]')!;
+
+  /** Close the key box and leave no stale sentence in it. */
+  const closeKeyBox = () => {
+    screensKeyBox.hidden = true;
+    screensPass.value = "";
+    screensKeyResult.textContent = "";
+  };
 
   const paintScreens = async (opts: { quiet?: boolean } = {}) => {
     const [config, status] = await Promise.all([getConfig(), screensStatus()]);
@@ -533,11 +566,17 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         return item;
       }),
     );
-    screensPass.placeholder = status?.hasKey
-      ? ui.generate.screensPassSaved
-      : status?.canStore === false
+
+    // The key is a prerequisite, so it says where it stands and offers the one
+    // thing that changes it. Changing it is not part of starting a pass.
+    screensKeyState.textContent =
+      (!status?.canStore
         ? ui.generate.screensNoKeyStore
-        : ui.generate.screensPassNew;
+        : status.hasKey
+          ? ui.generate.screensKeySet
+          : ui.generate.screensKeyUnset) + (keyNotice ? ` · ${keyNotice}` : "");
+    screensKeyState.classList.toggle("tone-warn", status?.canStore === false || !status?.hasKey);
+    screensRekey.hidden = status?.canStore === false;
 
     // The count lives behind a decrypt, so it is only asked for when nothing else
     // is going on. Two reasons, and the second one bit: a poll landing in the
@@ -568,8 +607,8 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
               : count !== null
                 ? ui.generate.screensDescribed(count)
                 : ui.generate.screensNoPassphrase;
-    const blocked = local.length === 0 || !!trouble || status?.canStore === false;
-    screensState.classList.toggle("tone-warn", blocked || !status?.hasKey);
+    const blocked = local.length === 0 || !!trouble || status?.canStore === false || !status?.hasKey;
+    screensState.classList.toggle("tone-warn", blocked);
     screensSubmit.disabled = blocked;
   };
 
@@ -584,25 +623,48 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     screensState.classList.toggle("tone-warn", result.warn);
   });
 
+  /** Said next to the passphrase row until the next change, since the box is gone by then. */
+  let keyNotice = "";
+
+  screensRekey.addEventListener("click", () => {
+    screensKeyBox.hidden = false;
+    screensKeyResult.textContent = "";
+    screensKeyResult.classList.remove("tone-warn");
+    screensPass.focus();
+  });
+  screensRekeyCancel.addEventListener("click", closeKeyBox);
+
+  screensRekeySave.addEventListener("click", async () => {
+    const passphrase = screensPass.value.trim();
+    if (!passphrase) return;
+    screensKeyResult.classList.remove("tone-warn");
+    screensKeyResult.textContent = ui.settings.providerCheckBusy;
+    screensRekeySave.disabled = true;
+    try {
+      const keyed = await rekeyScreens(passphrase);
+      if ("error" in keyed) {
+        screensKeyResult.textContent = keyed.error;
+        screensKeyResult.classList.add("tone-warn");
+        return;
+      }
+      closeKeyBox();
+      keyNotice = ui.generate.screensPassDone(keyed.described, keyed.fingerprint);
+      await paintScreens({ quiet: true });
+    } catch (err) {
+      screensKeyResult.textContent = (err as Error).message;
+      screensKeyResult.classList.add("tone-warn");
+    } finally {
+      screensRekeySave.disabled = false;
+    }
+  });
+
   screensForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const passphrase = screensPass.value.trim();
+    // Starting a pass never touches the passphrase: the key is already in the
+    // machine's store, and rotating it is the button above. One control doing
+    // both was the whole muddle.
     void start(async () => {
-      // A typed passphrase goes through the rekey route, which re-encrypts what
-      // is already described under the new one; a settings save alone would leave
-      // the file's entries unreadable, which is indistinguishable from losing the
-      // passphrase. A blank field means "keep the saved one" and the provider is
-      // saved the ordinary way — the pass reads both when it starts.
-      if (passphrase) {
-        const keyed = await rekeyScreens(passphrase);
-        if ("error" in keyed) {
-          screensState.textContent = keyed.error;
-          screensState.classList.add("tone-warn");
-          throw new Error(keyed.error);
-        }
-      }
       await saveConfig({ SCREENSHOT_PROVIDER: screensProvider.value });
-      screensPass.value = "";
       return startScreens();
     });
   });

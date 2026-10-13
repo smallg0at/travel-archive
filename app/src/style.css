@@ -2790,6 +2790,65 @@ html.desktop-shell #nav-tools {
 .job-scope {
   align-items: flex-end;
 }
+/*
+ * The passphrase row: a label, a sentence about where it stands, and one button
+ * that changes it. Laid out on one line — the value is short and the button is an
+ * aside, not the point of the tab (that is the pass below it).
+ *
+ * Qualified with `.job-field` because that is what styles the label's spans in
+ * the first place; unqualified, the label rule wins on specificity and this
+ * sentence comes out as an 11px grey caption.
+ */
+.job-field span.job-key-state {
+  font-size: 12px;
+  color: var(--text);
+}
+.job-field span.job-key-state.tone-warn {
+  color: var(--warn);
+}
+.job-form .job-screens-rekey {
+  align-self: flex-end;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+}
+/*
+ * The box that opens for a change. Indented and set off by a rule so it reads as
+ * a detour from the row above rather than another step of the pass — the two are
+ * deliberately not the same act. `:not([hidden])` because an author `display`
+ * beats the `hidden` attribute's `display: none`, which is how this was open at
+ * rest the first time it was drawn.
+ */
+.job-key-box:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 10px;
+  padding: 8px 0 4px 10px;
+  border-left: 2px solid var(--border);
+}
+.job-key-box .job-note {
+  font-size: 11px;
+}
+.job-key-box input {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 4px 6px;
+  width: 100%;
+}
+.job-key-box input:focus {
+  outline: none;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+.job-key-result:empty {
+  display: none;
+}
+.job-key-result.tone-warn {
+  color: var(--warn);
+}
 .job-select {
   font: inherit;
   font-size: 12px;

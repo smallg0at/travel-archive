@@ -508,8 +508,14 @@ export const en = {
       "Describes the screenshots nobody has vouched for — the private ones the allowlist keeps away from the cloud model, so <strong>nothing on your archive page and nobody else's sees them</strong>. A model on this machine does the looking, and it is told to name only <em>what kind of screen</em> it is: a chat conversation, an ID card, a passport page, a screen showing account numbers. Nothing on it is transcribed. The descriptions are encrypted with the passphrase below before they are uploaded, so the copy on OneDrive is unreadable — this machine is the only thing that can read them.",
     screensService: "Service (this machine)",
     screensPassphrase: "Passphrase",
-    screensPassSaved: "set — leave blank to keep it",
-    screensPassNew: "encrypts the descriptions before upload (12+ characters)",
+    screensKeySet: "set · kept in this machine's key store",
+    screensKeyUnset: "not set",
+    screensPassChange: "Change",
+    screensPassSave: "Save",
+    screensPassWarning:
+      "Changing it re-encrypts every description; the old one stops working at once, and the new one is kept for this Windows user only. Lose it and the only way back is describing them again.",
+    screensPassDone: (count: number, fingerprint: string) =>
+      `changed — ${count} descriptions re-encrypted (key ${fingerprint})`,
     screensCheck: "Check",
     screensStart: "Describe screens",
     screensDescribed: (n: number) => (n === 1 ? "1 screen described" : `${n} screens described`),
