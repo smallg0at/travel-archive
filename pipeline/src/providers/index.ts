@@ -132,7 +132,7 @@ const RAW_PRESETS: ProviderPreset[] = [
     kind: "openai",
     scope: "local",
     baseUrl: "http://127.0.0.1:11434/v1",
-    model: "gemma4:e4b",
+    model: "qwen3.5:9b",
     apiKeyEnv: "OLLAMA_API_KEY",
     // A local server has no key; the field exists only so the form has
     // something to write. Model and URL are the parts that matter here.
@@ -154,7 +154,7 @@ const RAW_PRESETS: ProviderPreset[] = [
     kind: "openai",
     scope: "local",
     baseUrl: "http://127.0.0.1:1234/v1",
-    model: "google/gemma-4-e4b",
+    model: "qwen/qwen3.5-9b",
     apiKeyEnv: "LMSTUDIO_API_KEY",
     jsonMode: "prompt",
     reasoningEffort: "none",

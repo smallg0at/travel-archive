@@ -14,7 +14,7 @@
  * nothing — no Gemini call is made at all.
  *
  *   node scripts/bench-local.mjs --provider lmstudio \
- *       --base-url http://127.0.0.1:1234/v1 --model google/gemma-4-e4b
+ *       --base-url http://127.0.0.1:1234/v1 --model qwen/qwen3.5-9b
  *
  *   node scripts/bench-local.mjs --n 12 --random 100 --days 3 --seed 20261007
  *   node scripts/bench-local.mjs --sets naming,doc      # resume subsets
@@ -58,7 +58,7 @@ const arg = (name, fallback) => {
 
 const providerName = arg("provider", "lmstudio");
 const baseUrl = arg("base-url", process.env[`${providerName.toUpperCase()}_BASE_URL`] ?? "http://127.0.0.1:1234/v1");
-const model = arg("model", process.env[`${providerName.toUpperCase()}_MODEL`] ?? "google/gemma-4-e4b");
+const model = arg("model", process.env[`${providerName.toUpperCase()}_MODEL`] ?? "qwen/qwen3.5-9b");
 const nNamed = Number(arg("n", "12"));
 const nDoc = Number(arg("doc", String(nNamed)));
 const nRandom = Number(arg("random", "100"));
@@ -581,7 +581,7 @@ if (sets.has("days")) {
   const scoped = onlyDates.size ? eligible.filter((d) => onlyDates.has(d.date)) : eligible;
   /**
    * The loaded context is the binding constraint, not the model's ceiling:
-   * LM Studio JIT-loads `google/gemma-4-e4b` at 8192 tokens by default while the
+   * LM Studio JIT-loads a model at 8192 tokens by default while the
    * model supports 131072, so a whole day — every stop's every caption — does
    * not fit. Days are pre-sized here so the run measures the summary and not
    * the overflow; the skipped ones are counted and reported.

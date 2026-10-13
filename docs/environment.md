@@ -276,11 +276,26 @@ window itself showed both models listed.
 
 The commands: `lms unload <identifier>` (or `lms unload --all`), then **verify
 before trusting any timing** — `lms ps` must show exactly one row, and nvidia-smi
-about 4,354 MiB used with one copy loaded (209 MiB with none). A sweep or bench
-that reloads models must assert that count; a load that silently adds a copy
-invalidates every number after it. Note also that `lms unload --all -y` can hang
-on an interactive prompt rather than erroring out, which is how one sweep sat
-idle for eleven minutes with the GPU at 1.5 W.
+about 4,354 MiB used with one copy of a 7.5B model loaded (209 MiB with none;
+`qwen/qwen3.5-9b` at ctx 8192 is 6,166 MiB). A sweep or bench that reloads models
+must assert that count; a load that silently adds a copy invalidates every number
+after it. Note also that `lms unload --all -y` can hang on an interactive prompt
+rather than erroring out, which is how one sweep sat idle for eleven minutes with
+the GPU at 1.5 W.
+
+**A reasoning model thinks by default, and on this engine that is the whole wall
+clock.** Qwen3.5-9B spent 168–192 tokens to answer "ok"; one caption generation
+reached 2,387 tokens before it was stopped, at 12 t/s. LM Studio's own control is
+a per-model **Reasoning Budget** (0 = end thinking at once, off = unrestricted),
+and the same switch over the API is `reasoning_effort: "none"` — which the local
+presets now send. Everything else was measured as a no-op there:
+`enable_thinking`, `chat_template_kwargs: {enable_thinking: false}`, a top-level
+`thinking`/`enable_reasoning`, and `/no_think` in a user or a system turn. The
+last is worth knowing about: it spent the entire output budget thinking and
+returned an empty string, so a low `max_tokens` is not a safe way to bound this
+either. Per provider, not per model: gemma-4-e4b's transcription loses a quarter
+of its volume without thinking, so `LMSTUDIO_REASONING_EFFORT=auto` restores it
+for that model — see `docs/history.md`.
 
 **Where the engine's own timings are.** `%USERPROFILE%\.lmstudio\server-logs\<YYYY-MM>\*.log`
 holds a `slot print_timing` block per request:

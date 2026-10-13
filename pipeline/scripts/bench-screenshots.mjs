@@ -59,7 +59,7 @@ initProxyDispatcher();
 
 const provider = getProvider();
 const localBase = (process.env.LMSTUDIO_BASE_URL || "http://127.0.0.1:1234/v1").replace(/\/$/, "");
-const localModel = process.env.LMSTUDIO_MODEL || "google/gemma-4-e4b";
+const localModel = process.env.LMSTUDIO_MODEL || "qwen/qwen3.5-9b";
 console.log(`provider: ${process.env.AI_PROVIDER}   verdict calls: ${localBase} (${localModel})`);
 console.log(`per-app ${perApp}   max-apps ${maxApps}   group ${group}   files ${existsSync(path.join(ROOT, "..", "data", "index.json")) ? "ok" : "MISSING"}\n`);
 
@@ -213,7 +213,10 @@ async function one(photo, position) {
 
     console.log(`${label}`);
     console.log(`   caption(${(row.captionMs / 1000).toFixed(1)}s): ${row.caption}`);
-    console.log(`   verdict(${(row.verdictMs / 1000).toFixed(1)}s): sensitive=${row.verdict?.sensitive}  what=${row.verdict?.what}  why=${row.verdict?.why}`);
+    // Only when one was actually asked for: `--captions-only` skips the verdict
+    // call, and printing `sensitive=undefined` for it reads like a model failure.
+    if (!captionsOnly)
+      console.log(`   verdict(${(row.verdictMs / 1000).toFixed(1)}s): sensitive=${row.verdict?.sensitive}  what=${row.verdict?.what}  why=${row.verdict?.why}`);
   } catch (err) {
     row.error = err.message;
     console.log(`${label}\n   FAILED: ${err.message}`);
@@ -240,7 +243,8 @@ const esc = (s) => String(s ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
 const lines = [];
 lines.push(`# Screenshots through a local model — ${new Date().toISOString().slice(0, 16).replace("T", " ")}`);
 lines.push("");
-lines.push(`Model \`${localModel}\` (local, ${localModel === "gemma4-e2b" ? "4.6B" : "7.5B"}), context 8192, parallel 2.`);
+const LOCAL_SIZES = { "gemma4-e2b": "4.6B", "google/gemma-4-e4b": "7.5B", "qwen/qwen3.5-9b": "9B" };
+lines.push(`Model \`${localModel}\` (local, ${LOCAL_SIZES[localModel] ?? "size unrecorded"}), context 8192, parallel 2.`);
 lines.push(`${chosen.length} screenshots: ${group === "both" ? "allowlisted + withheld" : group}, up to ${perApp} per source app, ${((Date.now() - t0) / 60000).toFixed(1)} min total.`);
 lines.push("");
 lines.push("**Two hand-filled columns are the point of this file.** 描述: would you accept this caption in the archive? 判断: was the sensitive/not verdict right?");

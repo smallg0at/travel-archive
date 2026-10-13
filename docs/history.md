@@ -187,3 +187,79 @@ pipeline consequences (it runs four, and a 400 carrying `fetch failed` is not
 retried).
 
 Raw JSON: under `data/bakeoff/` (gitignored).
+
+
+---
+
+## A local captioner that is good enough (2026-10-13)
+
+The 2026-10-07 pass asked whether a local model could stand in for the cloud on a
+whole job and answered no. This one asks the narrower question the screenshot
+pass actually needs — can a local model describe a photograph, and transcribe
+what is written on it, without the photograph leaving the machine — and two
+things changed the answer: a better model fits the card, and its thinking can be
+turned off.
+
+`qwen/qwen3.5-9b` (9B dense, vision, Apache 2.0, 5.4 GB at Q4_K_M) loads at
+`ctx 8192 / parallel 2` in **6,166 MiB**, leaving about 1.7 GiB of the 8 GiB
+card free. Measured against the same stored Gemini captions, same seed and pools,
+one instance loaded, `reasoning_effort: "none"`:
+
+| | n | cloud | gemma-4-e4b (thinking on) | gemma-4-e4b (off) | qwen3.5-9b (off) |
+|---|---|---|---|---|---|
+| naming: the stop title's key word named | 12 | 8 (67%) | 4–5 (33–42%) | 3 (25%) | **5 (42%)** |
+| naming: any title word named | 12 | 10 (83%) | — | 5 (42%) | **8 (67%)** |
+| document transcript, word-set Jaccard | 12 | — | 0.83–0.88 | 0.94 | **1.00** |
+| transcript length, against the cloud's | 12 | 1.00 | 0.87–0.88 | 0.76 | **0.95** |
+| documents that produced no text at all | 12 | 0 | 0 | 1 | **0** |
+| median seconds for one caption | 12 | — | 24–33 | 5.6–8.0 | 11.5–12.3 |
+
+The local path is no longer the weak one at transcription: Jaccard 1.00 and 0.95
+of the cloud's length means it reads a page the way the cloud does. It loses
+nothing measured here except wall clock, and it beats gemma-4-e4b on every
+quality row. The 32-screenshot set says the same thing in prose —
+`RJX13479 from a main station to a city Airport`,
+`a scenic express from a junction to a city`, `a Google Maps route from the
+a museum to the a museum` — against gemma's
+`a train journey schedule`. (The thinking-on columns ran one sentence of the
+brief earlier; that is not a controlled pair, though a sentence about script
+fidelity does not explain 0.87 against 0.76.)
+
+**Thinking is nearly all of the cost and none of the value here.** A question
+whose answer is one word costs 168–192 completion tokens and 12–14 seconds with
+thinking, 2 tokens and 0.6 seconds without; one caption generation passed **2,387
+tokens** in the engine log before it was stopped, and our own `MAX_OUTPUT` ceiling
+of 16,384 for a single caption would have let it run on. Four plausible ways to
+turn it off are no-ops on this engine — `enable_thinking`, `chat_template_kwargs`,
+`thinking`/`enable_reasoning`, and `/no_think` in a user or a system turn — and the
+last is worse than nothing: the model spends the entire budget thinking and
+answers with an empty string, which is also why a low `max_tokens` is not a safe
+bound. `reasoning_effort: "none"` works, and is what the local presets now send.
+
+**Do not turn it off for gemma.** Without thinking its transcription lost a
+quarter of its volume (0.87 → 0.76 of the cloud's length) and one document in
+twelve produced nothing. The knob is per provider rather than per model, so the
+preset default is `none` — right for the recommended local model — with
+`LMSTUDIO_REASONING_EFFORT=auto` as the escape hatch.
+
+Two script-fidelity defects, both from the local model and neither present in the
+archive's cloud-written Chinese (665,353 Han characters, of which 415 are
+Traditional-only — and those are Qing-dynasty steles photographed in museums,
+Traditional by nature):
+
+- 舒适度 came back as 舒 followed by U+CF8C, a Hangul syllable: a cross-lingual
+  look-alike, valid UTF-8, so a decode bug it is not.
+- A 2017 Simplified school notice came back as 活動教室 / 體能 / 護膚 / 藝術 where
+  the cloud read 活动教室 / 体能 / 护肤 / 艺术.
+
+Both matter for the same reason — `extracted_text` is what content search matches
+on, and 活動教室 can never match 活动教室. The caption brief now asks for the
+script *and* the form (Chinese stays Chinese, never look-alike kana or Hangul,
+never a Simplified↔Traditional conversion), and `test/captionPrompt.test.ts`
+carries both examples so the sentences cannot quietly disappear.
+
+The brief that cannot leak a chat moved to `screenshotPrompt.ts` the same day,
+after being tried inside the ordinary caption brief and measured as too expensive
+there: naming 42% → 25%, transcription 0.88 → 0.73 of the cloud's with one train
+ticket suppressed outright, 24 → 32–37 seconds a call — paid on material that is
+not private at all.
