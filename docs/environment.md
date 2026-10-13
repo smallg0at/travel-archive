@@ -327,23 +327,48 @@ the runtime.
 ## Local engines, when they die (2026-10-14)
 
 **`llama-server.exe` died mid-run with `0xC0000409` in `ucrtbase.dll`.** At 00:13,
-while the screenshot pass was describing with Qwen3.5-9B at ctx 8192 / parallel 2,
-the LM Studio CUDA backend from
+while the screenshot pass was describing with Qwen3.5-9B, the LM Studio CUDA
+backend from
 `~\.lmstudio\extensions\backends\llama.cpp-win-x86_64-nvidia-cuda12-avx2-2.56.0`
-failed fast — the code Windows gives any process whose CRT catches a buffer
-overflow (WER bucket `BEX64`). No TDR and no display-driver reset in the System
-log, so this was not the GPU falling over. LM Studio restarted itself two minutes
-later with **no model loaded**, and every call after that answered
-`400 No models loaded` — which the pass counted as ordinary failures and kept
-going through the queue, so a cancelled run reads `Described 264, 24 failed,
-2068 still waiting` rather than an error.
+failed fast — the code Windows gives a process whose CRT raises on an invalid
+operation, an allocation failure among them (WER bucket `BEX64`).
 
-Two things to keep from it. `/v1/models` lists what is *available*, not what is
-*loaded* — a crashed engine and a working one look identical through that endpoint,
-and `lms ps` is the one that tells the truth. And LM Studio's llama.cpp runtime
-**auto-updated from 2.53.0 to 2.56.0 that same day**, which is the only variable
-that changed; 2.53.0 is still on disk under `extensions\backends\` if the crash
-recurs and wants pinning.
+**It was memory, and Windows said so first.** `Microsoft-Windows-Resource-Exhaustion-Detector`
+logged id 2004 three times that evening — 20:01, 00:10 and 00:23 — naming
+`llama-server.exe` as the largest consumer each time: **17.3 GB, 17.3 GB and 14.4 GB
+of private memory**. The 00:10:43 entry came with an "Out of Virtual Memory" pop-up,
+and the crash followed 2.5 minutes later. This machine has 31.7 GB of RAM and a
+**fixed 16 GB page file**, so the commit limit is 47.7 GB — with the engine at
+10–17 GB, VS Code, a browser and the agent itself, that ceiling is reachable, and
+the memory pressure shows up in the engine's own log long before it shows up as an
+error: `alloc: - making room for prompt cache entry, removing oldest entry (size =
+173 MiB)`, 89 times in one evening.
+
+So the earlier suspicion here — the runtime auto-updating 2.53.0 → 2.56.0 — was
+wrong, and the version is not implicated. What the failure looked like from the
+client, in the engine's log:
+
+```
+{"code":500,"message":"got exception: bad allocation","type":"server_error"}   x7
+Error: Channel Error                                                          x11
+No engine protocol runtime is registered for '<id>'                            x5
+fetch failed / TypeError: terminated                                          x9
+```
+
+`bad allocation` is the sporadic 400/500 that appears **without** the engine having
+crashed; the rest are what a restart looks like from a client that still holds the
+old engine handle. Two consequences to keep:
+
+- `/v1/models` lists what is *available*, not what is *loaded* — after a crash it
+  looks healthy, and `lms ps` is the one that tells the truth.
+- Raising the page file (16 → 32 GB) is the lever that buys headroom for the engine,
+  Electron and everything else at once. Failing that, `--parallel 1` roughly halves
+  the engine's KV and compute buffers (measured here as ~2× wall time per call).
+
+The Electron shell's own `0xC0000409` at 00:11 fits the same story: one minute after
+the 00:10:43 out-of-memory pop-up, and a retry that worked once memory was free. The
+`Opening <url>` line and the `-gone` handlers added to the shell are still worth
+having, but the mica/transparency guess was not the cause.
 
 **The Electron shell can also exit with `0xC0000409`, and it writes nothing.**
 Happened once at 00:11, right after `Job server ready in 44ms` — so at
