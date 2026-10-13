@@ -511,6 +511,9 @@ export const en = {
     screensKeySet: "set · kept in this machine's key store",
     screensKeyUnset: "not set",
     screensPassChange: "Change",
+    screensPassNew: "new passphrase",
+    screensPassRepeat: "repeat it",
+    screensPassMismatch: "The two do not match yet.",
     screensPassSave: "Save",
     screensPassWarning:
       "Changing it re-encrypts every description; the old one stops working at once, and the new one is kept for this Windows user only. Lose it and the only way back is describing them again.",

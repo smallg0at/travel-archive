@@ -2829,6 +2829,12 @@ html.desktop-shell #nav-tools {
 .job-key-box .job-note {
   font-size: 11px;
 }
+/* The two fields and their buttons: the same column rhythm as the box itself. */
+.job-key-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .job-key-box input {
   font: inherit;
   font-size: 12px;

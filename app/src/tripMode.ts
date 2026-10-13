@@ -225,10 +225,21 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         </div>
         <div class="job-key-box" hidden>
           <p class="job-note">${ui.generate.screensPassWarning}</p>
-          <input type="password" name="passphrase" autocomplete="new-password" spellcheck="false" />
-          <div class="job-buttons">
-            <button type="button" class="job-screens-rekey-cancel">${ui.common.cancel}</button>
-            <button type="button" class="job-screens-rekey-save">${ui.generate.screensPassSave}</button>
+          <!--
+            A div, not a form: this sits inside the run's form, and HTML does not
+            allow a form within a form — the parser drops the inner one and its
+            fields end up owned by the outer. Enter is handled by hand instead
+            (and must be: an Enter in a text field inside a form submits it, which
+            here would start a pass).
+          -->
+          <div class="job-key-form">
+            <input type="password" name="passphrase" autocomplete="new-password" spellcheck="false" placeholder="${ui.generate.screensPassNew}" />
+            <input type="password" name="passphrase2" autocomplete="new-password" spellcheck="false" placeholder="${ui.generate.screensPassRepeat}" />
+            <p class="job-note job-key-mismatch" hidden>${ui.generate.screensPassMismatch}</p>
+            <div class="job-buttons">
+              <button type="button" class="job-screens-rekey-cancel">${ui.common.cancel}</button>
+              <button type="button" class="job-screens-rekey-save">${ui.generate.screensPassSave}</button>
+            </div>
           </div>
           <p class="job-note job-key-result"></p>
         </div>
@@ -545,12 +556,36 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   const screensRekeySave = screensForm.querySelector<HTMLButtonElement>(".job-screens-rekey-save")!;
   const screensRekeyCancel = screensForm.querySelector<HTMLButtonElement>(".job-screens-rekey-cancel")!;
   const screensPass = screensForm.querySelector<HTMLInputElement>('input[name="passphrase"]')!;
+  const screensPass2 = screensForm.querySelector<HTMLInputElement>('input[name="passphrase2"]')!;
+  const screensKeyMismatch = screensForm.querySelector<HTMLElement>(".job-key-mismatch")!;
+  const screensKeyForm = screensForm.querySelector<HTMLElement>(".job-key-form")!;
+
+  /**
+   * Typed twice because there is no undo: a passphrase the typist got wrong by
+   * one character silently re-encrypts every description under a key nobody can
+   * reproduce. Compared after trimming, because a trailing space is invisible and
+   * the server trims too — anything stricter than the server would refuse a value
+   * the server would have accepted.
+   */
+  const keyMatch = () => {
+    const first = screensPass.value.trim();
+    const second = screensPass2.value.trim();
+    return { first, ok: first.length > 0 && first === second, both: second.length > 0 };
+  };
+  const refreshKeySave = () => {
+    const { ok, both } = keyMatch();
+    screensRekeySave.disabled = !ok;
+    screensKeyMismatch.hidden = !both || ok;
+  };
 
   /** Close the key box and leave no stale sentence in it. */
   const closeKeyBox = () => {
     screensKeyBox.hidden = true;
     screensPass.value = "";
+    screensPass2.value = "";
     screensKeyResult.textContent = "";
+    screensKeyResult.classList.remove("tone-warn");
+    refreshKeySave();
   };
 
   /**
@@ -663,18 +698,33 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     screensKeyBox.hidden = false;
     screensKeyResult.textContent = "";
     screensKeyResult.classList.remove("tone-warn");
+    refreshKeySave();
     screensPass.focus();
   });
   screensRekeyCancel.addEventListener("click", closeKeyBox);
+  for (const field of [screensPass, screensPass2]) {
+    field.addEventListener("input", refreshKeySave);
+    // Enter is the way anyone finishes a two-field dialog, and inside the run's
+    // form it would otherwise submit *that* and start a pass.
+    field.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      void saveKey();
+    });
+  }
 
-  screensRekeySave.addEventListener("click", async () => {
-    const passphrase = screensPass.value.trim();
-    if (!passphrase) return;
+  /**
+   * The only path that rotates: both fields agree, so the value is deliberate
+   * rather than a typo carried into the key store.
+   */
+  async function saveKey(): Promise<void> {
+    const { first, ok } = keyMatch();
+    if (!ok || screensRekeySave.disabled) return;
     screensKeyResult.classList.remove("tone-warn");
     screensKeyResult.textContent = ui.settings.providerCheckBusy;
     screensRekeySave.disabled = true;
     try {
-      const keyed = await rekeyScreens(passphrase);
+      const keyed = await rekeyScreens(first);
       if ("error" in keyed) {
         screensKeyResult.textContent = screenErrorText(keyed);
         screensKeyResult.classList.add("tone-warn");
@@ -687,9 +737,11 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
       screensKeyResult.textContent = (err as Error).message;
       screensKeyResult.classList.add("tone-warn");
     } finally {
-      screensRekeySave.disabled = false;
+      refreshKeySave();
     }
-  });
+  }
+
+  screensKeyForm.querySelector<HTMLButtonElement>(".job-screens-rekey-save")!.addEventListener("click", () => void saveKey());
 
   screensForm.addEventListener("submit", (event) => {
     event.preventDefault();
