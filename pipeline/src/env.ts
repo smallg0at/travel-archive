@@ -26,6 +26,26 @@ export function shadowedByEnvironment(name: string): boolean {
   return SHELL_ENV.has(name);
 }
 
+/**
+ * The environment as the **shell** set it, without anything `.env` contributed.
+ *
+ * Used when this process replaces itself (`serve.ts`'s `handOver`). Passing the
+ * whole of `process.env` carries `.env`'s values into the child, and `dotenv`
+ * never overrides an existing variable — so a setting edited in `.env` and then
+ * "applied" by a restart would be silently ignored, and the server would come
+ * back with exactly the value the reader was trying to change. That is the
+ * difference between "restart to apply" working and being a lie: the child reads
+ * the file itself and sees what is in it now.
+ *
+ * A variable truly exported by the shell still travels, because it beats `.env`
+ * at boot too — see `shadowedByEnvironment`, which exists to warn about it.
+ */
+export function shellEnvironment(): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const name of SHELL_ENV) out[name] = process.env[name];
+  return out;
+}
+
 loadDotenv({ path: homeFile(".env"), quiet: true });
 
 /**

@@ -23,7 +23,7 @@ import {
 } from "./thumbStore.js";
 import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
 import { readPrefs, writePrefs } from "./prefsStore.js";
-import { env, settingNow } from "./env.js";
+import { env, settingNow, shellEnvironment } from "./env.js";
 import { getCachedAccessToken, getAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
 import { makeAccess } from "./access.js";
 import { loadIndex } from "./archiveStore.js";
@@ -442,11 +442,15 @@ async function planRestart(): Promise<RestartPlan> {
  *      this one still listens gets EADDRINUSE and dies, which would be a
  *      restart that removes the server. The port has to be free *before* the
  *      new process starts, not when it tries.
- *   2. **Spawn detached, from the same entry and env**, so it does not care
- *      whether it was the desktop shell, the sign-in launcher or a terminal
- *      that started this one. No supervisor is introduced — the dying process
- *      is the only thing that has to work, and it works the same in the
- *      background case where there is no shell to fall back on.
+ *   2. **Spawn detached, from the same entry, with the shell's environment
+ *      rather than this process's**, so it does not care whether it was the
+ *      desktop shell, the sign-in launcher or a terminal that started this one.
+ *      Not this process's env: that carries `.env`'s values, `dotenv` will not
+ *      override them, and the replacement would come back holding the very
+ *      setting the reader just changed and asked to apply (`shellEnvironment`).
+ *      No supervisor is introduced — the dying process is the only thing that
+ *      has to work, and it works the same in the background case where there is
+ *      no shell to fall back on.
  *   3. **Wait for /health, up to 20 seconds, before exiting.** A replacement
  *      that failed to start must be followed by this one coming back up, not
  *      by nothing.
@@ -484,7 +488,7 @@ async function handOver(entry: string): Promise<void> {
   try {
     child = spawn(runtimePath(), [entry], {
       cwd: archiveHome(),
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      env: { ...shellEnvironment(), ELECTRON_RUN_AS_NODE: "1" },
       detached: true,
       // Not this process's stdout: the replacement writes `data/serve.log`
       // itself (logFile.ts), and handing it our stream as well would put every
