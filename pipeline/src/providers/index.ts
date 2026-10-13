@@ -287,7 +287,18 @@ export function resolveReasoningEffort(
  * should say so, not quietly caption with the wrong service.
  */
 export function getProvider(): AiProvider {
-  const id = env.aiProvider;
+  return providerById(env.aiProvider);
+}
+
+/**
+ * The provider for one preset id, whatever `AI_PROVIDER` says.
+ *
+ * Two are in play at once when the local screenshot pass runs: the cloud model
+ * describes the archive, and a service on this machine describes the screens the
+ * allowlist keeps off the wire. Same table, same construction — the second one
+ * just is not the default.
+ */
+export function providerById(id: string): AiProvider {
   const preset = presetById(id);
   if (!preset) {
     throw new Error(`Unknown AI_PROVIDER: "${id}" (known: ${PRESETS.map((p) => p.id).join(", ")})`);
