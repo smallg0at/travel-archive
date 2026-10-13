@@ -122,8 +122,7 @@ const CAPTION_SCHEMA = {
     extracted_text: {
       type: Type.STRING,
       nullable: true,
-      description:
-        "Text transcribed from a sign, plaque, menu, ticket or timetable. Null otherwise, and always null for a conversation, a message, an email or a personal record.",
+      description: "Full transcribed text if this is a sign, plaque, menu, or other document. Null otherwise.",
     },
     notable: {
       type: Type.BOOLEAN,

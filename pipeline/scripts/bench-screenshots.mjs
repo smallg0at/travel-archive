@@ -121,16 +121,10 @@ if (dryRun) process.exit(0);
 
 /* ---------- the sensitivity question (nothing in the pipeline asks it) --- */
 
-const VERDICT_PROMPT = [
-  "This is a phone screenshot. Do not transcribe any private content from it.",
-  'Answer with one JSON object and nothing else: {"what":"<what this screen is, max 8 words>","sensitive":true|false,"why":"<max 12 words>"}',
-  "",
-  'sensitive=true if the screen holds any of: a person\'s name, a chat or mail body,',
-  "a payment or bank detail, a booking or ID number together with a name, a phone",
-  "number or address, health information, or anything else you would not show a stranger.",
-  'sensitive=false if it is a map, a timetable, weather, a ticket with no name on it,',
-  "a settings screen, a game UI, or a photo of the screen with nothing personal in it.",
-].join("\n");
+// Hoisted into the provider layer, next to the description brief it belongs with
+// (`screenshotPrompt.ts`), so the pass that is eventually built and this bench
+// ask the same question the same way.
+const { SCREENSHOT_VERDICT_PROMPT: VERDICT_PROMPT } = await import("../dist/providers/screenshotPrompt.js");
 
 function looseJson(text) {
   const start = text.indexOf("{");
