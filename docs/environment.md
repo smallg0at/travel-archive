@@ -362,8 +362,14 @@ old engine handle. Two consequences to keep:
 - `/v1/models` lists what is *available*, not what is *loaded* — after a crash it
   looks healthy, and `lms ps` is the one that tells the truth.
 - Raising the page file (16 → 32 GB) is the lever that buys headroom for the engine,
-  Electron and everything else at once. Failing that, `--parallel 1` roughly halves
-  the engine's KV and compute buffers (measured here as ~2× wall time per call).
+  Electron and everything else at once. **Done on 2026-10-14**: the fixed page file
+  on C: is now 32768/32768 MB, which takes the commit limit from 47.7 GB to about
+  63.7 GB at the next restart. Note the page file was never actually *used* — peak
+  2.1 GB — so this was always a commit-*reservation* ceiling, not thrashing. C: had
+  36.2 GB free, so the file's 32 GB reserve leaves roughly 20 GB; "system managed"
+  is the alternative if that space matters more than a predictable limit.
+  Failing that, `--parallel 1` roughly halves the engine's KV and compute buffers
+  (measured here as ~2× wall time per call).
 
 The Electron shell's own `0xC0000409` at 00:11 fits the same story: one minute after
 the 00:10:43 out-of-memory pop-up, and a retry that worked once memory was free. The
