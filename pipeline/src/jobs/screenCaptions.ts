@@ -211,14 +211,19 @@ export async function runScreenCaptions(
   onProgress({ phase: "saving", message: "Saving descriptions..." });
   await saveScreenCaptions(token, done);
 
-  const left = waiting - result.described - result.deferred;
+  // What is left is what the limit cut off — *not* what went wrong. A failure and
+  // a missing thumbnail are both left out of the file on purpose, so they stay in
+  // the queue and are picked up by the next run; counting them here as well made
+  // the summary read "5 failed. 5 still waiting." and look like five more
+  // photographs to worry about. They are the same five.
+  const left = waiting - result.described - result.failed - result.skipped - result.deferred;
   onProgress({
     phase: "done",
     done: result.described,
     total,
     message:
       `Described ${result.described} screenshot(s)` +
-      (result.failed ? `, ${result.failed} failed` : "") +
+      (result.failed ? `, ${result.failed} failed — they stay in the queue for the next run` : "") +
       (result.skipped ? `, ${result.skipped} with no thumbnail` : "") +
       `. ${left > 0 ? `${left} still waiting` : "Nothing left waiting"}. Nothing left this machine.`,
   });
