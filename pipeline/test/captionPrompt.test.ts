@@ -46,6 +46,15 @@ describe("the captioning brief", () => {
     expect(CAPTION_PROMPT).toMatch(/leave it out rather than substituting/);
   });
 
+  it("keeps the form of the characters, not just the script", () => {
+    // Measured 2026-10-13 on the doc pool: the local model wrote a Simplified
+    // school notice as 活動教室 / 體能 / 護膚 / 藝術 where the cloud wrote
+    // 活动教室 / 体能 / 护肤 / 艺术. Correct for a Qing stele, a conversion for a
+    // 2017 notice, and either way search cannot match one against the other.
+    expect(CAPTION_PROMPT).toMatch(/never convert Simplified to Traditional/);
+    expect(CAPTION_PROMPT).toMatch(/and in the form it is written in/);
+  });
+
   it("does not carry the screenshot pass's privacy rules", () => {
     // Their home is screenshotPrompt.ts; here they cost more than they give.
     expect(CAPTION_PROMPT).not.toMatch(/never summarise, characterise, quote or transcribe/);

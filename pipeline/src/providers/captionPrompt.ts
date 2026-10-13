@@ -27,7 +27,7 @@ export const CAPTION_PROMPT = `You are cataloging a personal photo library that 
 - tags: 3-6 short lowercase tags.
 - extracted_text: if this is primarily a sign, museum plaque, menu, or document, transcribe its text in full. Otherwise null.
 - notable: true only if this photo should get its own write-up; false for routine snapshots that can be folded into a day summary.
-- script: transcribe in the script the text is really written in. Chinese stays Chinese — never look-alike Japanese kana or Korean Hangul. If a character is not legible, leave it out rather than substituting a similar one.`;
+- script: transcribe in the script the text is really written in, and in the form it is written in. Chinese stays Chinese — never look-alike Japanese kana or Korean Hangul — and its characters keep their own form: never convert Simplified to Traditional or Traditional to Simplified. A 2017 school notice photographed in Simplified came back as 活動教室 / 體能 / 護膚, and search cannot match that against 活动教室. If a character is not legible, leave it out rather than substituting a similar one.`;
 
 /** The OpenAI-compatible providers' JSON shape. Gemini carries the same contract as a schema. */
 export const CAPTION_JSON = `Reply with ONE JSON object and nothing else:
