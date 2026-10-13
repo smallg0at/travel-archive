@@ -276,6 +276,11 @@ let appLoadable = false;
 
 function loadApp(): void {
   appLoadable = true;
+  // Logged before the load, not after: the crash this is here for killed the
+  // process between these two lines with exit code 0xC0000409 (Windows' generic
+  // fail-fast) and left nothing else behind, so "how far did it get" was the
+  // whole question. See docs/environment.md.
+  log(`Opening ${APP_URL}`);
   void mainWindow?.loadURL(APP_URL);
 }
 
@@ -737,6 +742,24 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(startup);
+
+  /**
+   * Say when a Chromium child dies, because otherwise this is silent.
+   *
+   * The failure this was written for took the whole process down with exit code
+   * 0xC0000409 — Windows' generic fail-fast, which Chromium raises when one of
+   * its own CHECKs fails — and printed nothing after the job-server lines. If
+   * that was the GPU process, this handler names it; if it was the browser
+   * process failing its own check, nothing here fires and the absence is the
+   * clue. Neither reaches `uncaughtException`, so there is nowhere else to ask.
+   */
+  app.on("child-process-gone", (_event, details) => {
+    log(`Chromium child gone: ${details.type} — ${details.reason}${details.exitCode !== undefined ? ` (code ${details.exitCode})` : ""}`);
+  });
+  app.on("render-process-gone", (_event, webContents, details) => {
+    log(`Renderer gone: ${details.reason} — exit code ${details.exitCode} — ${webContents.getURL()}`);
+  });
+  app.on("unresponsive", (_event, webContents) => log(`Renderer unresponsive: ${webContents.getURL()}`));
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
