@@ -100,10 +100,14 @@ export async function runScreenCaptions(
   const done = await loadScreenCaptions(token);
 
   // Plan first, so the total is known before the first model call and the run can
-  // say how much is left rather than only what it did.
+  // say how much is left rather than only what it did. Each month's shard comes
+  // from Graph, so this phase is minutes long on a big archive — it says which
+  // month it is on, or a reader (and their own author, once) reads the silence as
+  // a hung job.
   const plan: { month: string; targets: PhotoRecord[] }[] = [];
-  for (const summary of index.months) {
+  for (const [i, summary] of index.months.entries()) {
     if (signal?.aborted) break;
+    onProgress({ phase: "loading", message: `Reading ${summary.month} (${i + 1}/${index.months.length})...` });
     const shard = await loadShard(token, summary.month);
     const targets = screenTargets(Object.values(shard.photos), done.entries);
     if (targets.length) plan.push({ month: summary.month, targets });
