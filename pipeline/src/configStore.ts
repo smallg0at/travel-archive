@@ -92,13 +92,24 @@ const WRITABLE = [
   "NOTIFY_FAILURES",
   "NOTIFY_BANNER",
   // The local screenshot pass: which service on this machine describes the
-  // screens nobody has vouched for, and the passphrase their descriptions are
-  // encrypted under before they are uploaded. Read live by the job at the moment
-  // it starts (settingNow), so saving them takes effect on the next run rather
-  // than at a restart.
+  // screens nobody has vouched for. Read live by the job at the moment it starts
+  // (settingNow), so saving it takes effect on the next run rather than at a
+  // restart.
+  //
+  // SCREENSHOT_PASSPHRASE is deliberately *not* here any more, and not merely
+  // unwritable through the form: it lives in the Windows key store (DPAPI, this
+  // user) because a passphrase lying in plaintext beside the ciphertext defeats
+  // the point of the ciphertext. See DEPRECATED.
   "SCREENSHOT_PROVIDER",
-  "SCREENSHOT_PASSPHRASE",
 ] as const;
+
+/**
+ * Keys that used to live in `.env` and must not come back.
+ *
+ * They can be *removed* through `saveConfig` — which is how the startup
+ * migration deletes the plaintext line it just imported — and nothing else.
+ */
+const DEPRECATED = ["SCREENSHOT_PASSPHRASE"] as const;
 
 /**
  * Values that are switches rather than text: `1` on, `0` off, absent meaning
@@ -114,12 +125,9 @@ export type WritableKey = (typeof WRITABLE)[number];
  *
  * Every provider's key variable ends in `_API_KEY`, so it is matched by that
  * suffix rather than listed — a new service added to PRESETS cannot be
- * forgotten here and leak its key into a response. The screenshot passphrase is
- * named separately because it is the other kind of secret in this file: not a
- * key for a service, but the thing that makes the uploaded descriptions
- * unreadable.
+ * forgotten here and leak its key into a response.
  */
-const SECRET = WRITABLE.filter((k) => k.endsWith("_API_KEY") || k === "SCREENSHOT_PASSPHRASE") as WritableKey[];
+const SECRET = WRITABLE.filter((k) => k.endsWith("_API_KEY")) as WritableKey[];
 
 export function configStatus(): ConfigStatus {
   const provider = env.aiProvider;
@@ -195,12 +203,33 @@ const HOST_VALUES = ["127.0.0.1", "localhost", "0.0.0.0"] as const;
  * rather than an empty string: `ARCHIVE_PASSWORD=""` would leave the gate on
  * with a password nobody could type.
  */
-export async function saveConfig(patch: Partial<Record<WritableKey, string | null>>): Promise<ConfigStatus> {
+/**
+ * A patch to `.env`.
+ *
+ * Writable keys take a value or `null` (remove the line); a deprecated key can
+ * only be removed — `null` is the sole thing its type accepts, so "write the
+ * old passphrase back into the file" cannot be expressed, let alone run.
+ */
+export type ConfigPatch = Partial<Record<WritableKey, string | null>> &
+  Partial<Record<(typeof DEPRECATED)[number], null>>;
+
+export async function saveConfig(patch: ConfigPatch): Promise<ConfigStatus> {
   const entries = Object.entries(patch).filter(([k, v]) => WRITABLE.includes(k as WritableKey) && v !== undefined) as [
     WritableKey,
     string | null,
   ][];
-  if (entries.length === 0) return configStatus();
+  // Deprecated keys can be *removed* and nothing else — the type says so, and so
+  // does this: `SCREENSHOT_PASSPHRASE` moved into the machine's key store, and a
+  // plaintext copy beside the ciphertext is the thing being removed.
+  const removals = Object.entries(patch).filter(
+    ([k, v]) => (DEPRECATED as readonly string[]).includes(k) && v === null,
+  ) as [string, null][];
+  for (const [key, value] of Object.entries(patch)) {
+    if ((DEPRECATED as readonly string[]).includes(key) && value !== null && value !== undefined) {
+      throw new Error(`${key} is no longer stored in .env; it is kept in the machine's key store.`);
+    }
+  }
+  if (entries.length === 0 && removals.length === 0) return configStatus();
 
   for (const [key, value] of entries) {
     if (key === "ARCHIVE_HOST" && value !== null && !(HOST_VALUES as readonly string[]).includes(value)) {
@@ -219,7 +248,7 @@ export async function saveConfig(patch: Partial<Record<WritableKey, string | nul
     // No file yet: a fresh install, which is the case this exists for.
   }
 
-  for (const [key, value] of entries) {
+  for (const [key, value] of [...entries, ...removals]) {
     const at = lines.findIndex((line) => new RegExp(`^\s*${key}\s*=`).test(line));
     if (value === null) {
       if (at >= 0) lines.splice(at, 1);

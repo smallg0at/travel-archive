@@ -26,9 +26,9 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dataFile, dataDir } from "./paths.js";
 import { downloadMetadataJson, fetchItemMeta, uploadMetadataJson } from "./graph.js";
-import { env, settingNow, shadowedByEnvironment } from "./env.js";
-import { saveConfig } from "./configStore.js";
-import { deriveKey, keyFingerprint, normalizePassphrase } from "./screenKey.js";
+import { env } from "./env.js";
+import { readStoredPassphrase, writeStoredPassphrase } from "./screenKeyStore.js";
+import { deriveKey, keyFingerprint } from "./screenKey.js";
 
 /** One described screen. Coarse by construction — see `providers/screenshotPrompt.ts`. */
 export interface ScreenCaptionEntry {
@@ -73,17 +73,24 @@ const KDF = { N: 1 << 15, r: 8, p: 1 };
 
 export const emptyScreenCaptions = (): ScreenCaptions => ({ version: 1, entries: {} });
 
-/** The passphrase, or a message that says how to set one. */
-export function screenshotPassphrase(value = settingNow("SCREENSHOT_PASSPHRASE")): string {
-  if (!value) {
+/** The passphrase, from the machine's key store, or a message that says what to do. */
+export async function screenshotPassphrase(): Promise<string> {
+  const stored = await readStoredPassphrase().catch((err: Error) => {
+    // Unwrapping failed — a different Windows account, or a restored file. Say
+    // that, rather than let it read as "never set up", which is what starting
+    // over on top of existing work would look like.
     throw new Error(
-      "SCREENSHOT_PASSPHRASE is not set, so the encrypted screenshot descriptions cannot be read or written. Set it in Settings or pipeline/.env — without it this pass has nowhere safe to put its output.",
+      `The stored passphrase could not be read on this account: ${err.message}. ` +
+        `It is protected per Windows user, so a copy from another account or machine cannot open it.`,
+    );
+  });
+  if (!stored) {
+    throw new Error(
+      "No passphrase is stored on this machine, so the encrypted screenshot descriptions cannot be read or written. " +
+        "Set one in the Screens tab (it is kept in the Windows key store, not in .env).",
     );
   }
-  // Normalised at the door: everything downstream works with the canonical form,
-  // so a passphrase that arrived with an invisible character cannot derive a
-  // different key than the same passphrase typed on another device (screenKey.ts).
-  return normalizePassphrase(value);
+  return stored;
 }
 
 export function encryptScreenCaptions(file: ScreenCaptions, passphrase: string): ScreenCaptionsEnvelope {
@@ -148,19 +155,25 @@ async function fileMtime(path: string): Promise<number | null> {
  * An absent file is an empty one: that is what a fresh archive looks like.
  */
 export async function loadScreenCaptions(token: string): Promise<ScreenCaptions> {
+  const passphrase = await screenshotPassphrase();
   const local = await readLocalEnvelope();
   if (local) {
     const meta = await fetchItemMeta(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
     const remote = meta?.lastModifiedDateTime ? Date.parse(meta.lastModifiedDateTime) : 0;
-    if (remote <= local.mtime + 5000) return decryptScreenCaptions(local.envelope, screenshotPassphrase());
+    if (remote <= local.mtime + 5000) return decryptScreenCaptions(local.envelope, passphrase);
   }
   const remote = await downloadMetadataJson<ScreenCaptionsEnvelope>(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
-  return remote ? decryptScreenCaptions(remote, screenshotPassphrase()) : emptyScreenCaptions();
+  return remote ? decryptScreenCaptions(remote, passphrase) : emptyScreenCaptions();
 }
 
 /** Encrypts, writes the local mirror, then uploads. A failed upload costs a re-upload, not the work. */
-export async function saveScreenCaptions(token: string, file: ScreenCaptions, passphrase = screenshotPassphrase()): Promise<void> {
-  const envelope = encryptScreenCaptions(file, passphrase);
+export async function saveScreenCaptions(
+  token: string,
+  file: ScreenCaptions,
+  passphrase?: string,
+): Promise<void> {
+  const key = passphrase ?? (await screenshotPassphrase());
+  const envelope = encryptScreenCaptions(file, key);
   await mkdir(dataDir(), { recursive: true });
   await writeFile(dataFile(SCREEN_CAPTIONS_FILE), `${JSON.stringify(envelope)}\n`, "utf-8");
   await uploadMetadataJson(token, env.metadataFolder, SCREEN_CAPTIONS_FILE, envelope);
@@ -169,26 +182,29 @@ export async function saveScreenCaptions(token: string, file: ScreenCaptions, pa
 /**
  * Set a new passphrase without losing what is already described.
  *
- * Load with the old one, write the setting, save with the new one. Without this,
- * changing the passphrase is indistinguishable from losing it: the entries become
+ * Load with the old one, store the new one, save with it. Without this, changing
+ * the passphrase is indistinguishable from losing it: the entries become
  * unreadable, the only way forward is to delete the file, and hours of describing
  * are the price of a decision. The load also means a *wrong current* passphrase
  * cannot sail through — if the file cannot be read, nothing is re-encrypted and
  * the error says so.
  *
- * The new value is used explicitly rather than by re-reading the setting, because
- * a real environment variable beats `.env` (`shadowedByEnvironment`): writing the
- * file and then encrypting with the value that actually won would produce a file
- * the reader believes the new passphrase opens.
+ * The new value is used explicitly rather than by re-reading the store, so what
+ * gets written is exactly what was validated: storing it first and then
+ * encrypting with "whatever the store says" could differ if the store cannot
+ * hold it on this platform.
  */
 export async function rekeyScreenCaptions(
   token: string,
   next: string,
-): Promise<{ described: number; shadowed: boolean }> {
+): Promise<{ described: number; fingerprint: string }> {
   const file = await loadScreenCaptions(token);
-  await saveConfig({ SCREENSHOT_PASSPHRASE: next });
-  await saveScreenCaptions(token, file, next);
-  return { described: Object.keys(file.entries).length, shadowed: shadowedByEnvironment("SCREENSHOT_PASSPHRASE") };
+  await writeStoredPassphrase(next);
+  const envelope = encryptScreenCaptions(file, next);
+  await mkdir(dataDir(), { recursive: true });
+  await writeFile(dataFile(SCREEN_CAPTIONS_FILE), `${JSON.stringify(envelope)}\n`, "utf-8");
+  await uploadMetadataJson(token, env.metadataFolder, SCREEN_CAPTIONS_FILE, envelope);
+  return { described: Object.keys(file.entries).length, fingerprint: envelope.fp ?? "" };
 }
 
 async function readLocalEnvelope(): Promise<{ envelope: ScreenCaptionsEnvelope; mtime: number } | null> {

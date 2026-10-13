@@ -492,6 +492,7 @@ export const zhHans: Messages = {
     screensStart: "开始描述",
     screensDescribed: (n: number) => `已描述 ${n} 张`,
     screensNoPassphrase: "还没有口令——描述要加密后才上传，所以必须先设一个。",
+    screensNoKeyStore: "这台机器没有钥匙串，无法在此运行截图描述：口令保存在 Windows 钥匙串（DPAPI）里，没有任何地方会从文件读取它。",
     screensNoLocal: "这台机器上没有可用的服务——请先安装并启动 Ollama 或 LM Studio。",
     screensRunning: "已有一次描述在运行，进度见「活动」。",
 

@@ -167,13 +167,14 @@ function readEnv() {
      */
     screenshotProvider: fromEnv("SCREENSHOT_PROVIDER"),
     /**
-     * The passphrase the local screenshot descriptions are encrypted under before
-     * they are uploaded. Deliberately its own secret rather than reusing
-     * `ARCHIVE_PASSWORD`: that one is the LAN gate, and a gate word plus a copy of
-     * the file would then decrypt the screenshots. Losing it costs a re-run, not
-     * the archive. See screenCaptions.ts.
+     * No longer read from `.env`, and `screenshotPassphrase` is gone from this
+     * type on purpose: the passphrase lives in the Windows key store (DPAPI, this
+     * user), because one lying in plaintext beside the ciphertext defeats the
+     * point of the ciphertext. `SCREENSHOT_PASSPHRASE` survives in the
+     * environment only long enough for the startup migration to move an existing
+     * value out of the file. See screenKeyStore.ts; losing it costs a re-run of
+     * the describing, not the archive.
      */
-    screenshotPassphrase: fromEnv("SCREENSHOT_PASSPHRASE"),
     geminiApiKey: fromEnv("GEMINI_API_KEY"),
     // 3.7 over 3.8: tied on caption quality in the bake-off, marginally faster
     // (2093ms vs 2255ms median), 27% fewer thinking tokens, and it read a

@@ -17,6 +17,7 @@ import {
   rememberedJob,
   rekeyScreens,
   saveConfig,
+  screensEntries,
   screensStatus,
   startAnalyze,
   startCollect,
@@ -520,7 +521,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   const screensSubmit = screensForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
 
   const paintScreens = async () => {
-    const [config, status] = await Promise.all([getConfig(), screensStatus()]);
+    const [config, status, described] = await Promise.all([getConfig(), screensStatus(), screensEntries()]);
     const local = localOptions(config?.providers ?? []);
     const chosen = status?.provider ?? local[0]?.id ?? "";
     screensProvider.replaceChildren(
@@ -532,21 +533,29 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         return item;
       }),
     );
-    screensPass.placeholder = status?.hasPassphrase ? ui.generate.screensPassSaved : ui.generate.screensPassNew;
-    // A run in flight, an unreadable file (a changed passphrase), a missing
-    // passphrase, no local service — each is a different sentence, and only the
-    // last two stop the button.
-    screensState.textContent = status?.error
-      ? status.error
+    const count = "entries" in described ? Object.keys(described.entries).length : null;
+    screensPass.placeholder = status?.hasKey
+      ? ui.generate.screensPassSaved
+      : status?.canStore === false
+        ? ui.generate.screensNoKeyStore
+        : ui.generate.screensPassNew;
+    // A run in flight, an unreadable file (a changed key), no passphrase yet, no
+    // local service, no key store on this platform — each is a different
+    // sentence, and the last three stop the button.
+    const trouble = "error" in described ? described.error : null;
+    screensState.textContent = trouble
+      ? trouble
       : status?.running
         ? ui.generate.screensRunning
         : local.length === 0
           ? ui.generate.screensNoLocal
-          : status?.hasPassphrase
-            ? ui.generate.screensDescribed(status.described)
-            : ui.generate.screensNoPassphrase;
-    const blocked = local.length === 0 || !!status?.error;
-    screensState.classList.toggle("tone-warn", blocked || !status?.hasPassphrase);
+          : status?.canStore === false
+            ? ui.generate.screensNoKeyStore
+            : count !== null
+              ? ui.generate.screensDescribed(count)
+              : ui.generate.screensNoPassphrase;
+    const blocked = local.length === 0 || !!trouble || status?.canStore === false;
+    screensState.classList.toggle("tone-warn", blocked || !status?.hasKey);
     screensSubmit.disabled = blocked;
   };
 

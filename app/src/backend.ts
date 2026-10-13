@@ -625,15 +625,32 @@ export async function listBatches(): Promise<AnalyzeBatchStatus[] | null> {
  * starts, and that is when the number is worth anything.
  */
 export interface ScreensStatus {
-  /** How many screens have a description in the encrypted file. */
-  described: number;
   /** The service set for the pass, or null. */
   provider: string | null;
-  /** Whether a passphrase is set — never the passphrase itself. */
-  hasPassphrase: boolean;
-  /** Set when the file could not be read: a changed passphrase, or damage. */
-  error?: string;
+  /** Whether a passphrase is held in this machine's key store — never the value. */
+  hasKey: boolean;
+  /** Whether this platform can keep one at all (the store is DPAPI, Windows only). */
+  canStore: boolean;
   running: boolean;
+}
+
+/**
+ * The descriptions, decrypted by the server for this machine only.
+ *
+ * Loopback-only on the other side, and it answers 409 rather than an empty map
+ * when the key cannot open the file: "nothing described yet" is exactly what a
+ * wrong key must not look like.
+ */
+export async function screensEntries(): Promise<
+  { entries: Record<string, { caption: string; tags: string[]; model: string; at: string }> } | { error: string }
+> {
+  try {
+    const res = await apiFetch("/screens/entries");
+    const body = (await res.json()) as { entries?: Record<string, { caption: string; tags: string[]; model: string; at: string }>; error?: string };
+    return res.ok && body.entries ? { entries: body.entries } : { error: body.error ?? `HTTP ${res.status}` };
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
 }
 
 export async function screensStatus(): Promise<ScreensStatus | null> {
@@ -655,16 +672,16 @@ export function startScreens(body: { limit?: number } = {}): Promise<JobRecord> 
  * is already there. Separate from `saveConfig` because the file has to be rewritten
  * in the same breath — see the route and `rekeyScreenCaptions`.
  */
-export async function rekeyScreens(passphrase: string): Promise<{ described: number; shadowed: boolean } | { error: string }> {
+export async function rekeyScreens(passphrase: string): Promise<{ described: number; fingerprint: string } | { error: string }> {
   try {
     const res = await apiFetch("/screens/rekey", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ passphrase }),
     });
-    const body = (await res.json()) as { described?: number; shadowed?: boolean; error?: string };
+    const body = (await res.json()) as { described?: number; fingerprint?: string; error?: string };
     return res.ok && typeof body.described === "number"
-      ? { described: body.described, shadowed: !!body.shadowed }
+      ? { described: body.described, fingerprint: body.fingerprint ?? "" }
       : { error: body.error ?? `HTTP ${res.status}` };
   } catch (err) {
     return { error: (err as Error).message };

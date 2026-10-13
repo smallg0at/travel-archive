@@ -514,6 +514,7 @@ export const en = {
     screensStart: "Describe screens",
     screensDescribed: (n: number) => (n === 1 ? "1 screen described" : `${n} screens described`),
     screensNoPassphrase: "No passphrase yet — the descriptions are encrypted before upload, so one is needed first.",
+    screensNoKeyStore: "This machine has no key store, so the screenshot pass cannot run here: the passphrase is kept in the Windows key store (DPAPI), and nothing reads it from a file.",
     screensNoLocal: "No service on this machine to use — install and start Ollama or LM Studio first.",
     screensRunning: "A run is going; its progress is in Activity.",
 

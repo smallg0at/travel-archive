@@ -50,6 +50,8 @@ import {
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { runScreenCaptions } from "./jobs/screenCaptions.js";
 import { loadScreenCaptions, rekeyScreenCaptions } from "./screenCaptions.js";
+import { canStorePassphrase, hasStoredPassphrase, importLegacyPassphrase } from "./screenKeyStore.js";
+import { passphraseProblem } from "./screenKey.js";
 import { planOrganize, runOrganize } from "./jobs/organize.js";
 import { editDay, type DayPatch } from "./jobs/dayEdit.js";
 import { setPhotoTakenAt, setPhotosTakenAt } from "./jobs/photoTime.js";
@@ -551,6 +553,23 @@ mirrorOutputToLog();
 // cache in autostart.ts: populating a checkbox should not spawn a process.
 warmAutostartCache();
 
+// An install from before the key store kept the passphrase in plaintext in .env,
+// beside the ciphertext it protects. Move it into DPAPI now, so nobody has to be
+// asked and the plaintext line stops existing. Deliberately not awaited into the
+// banner: if it fails, the server still runs — it will say so when the pass is
+// used.
+void importLegacyPassphrase()
+  .then(({ migrated, legacy }) => {
+    if (legacy) {
+      console.error(
+        "screen passphrase: SCREENSHOT_PASSPHRASE is set in the environment, not in .env — nothing reads it any more. " +
+          "Set the passphrase in the Screens tab, which keeps it in this machine's key store.",
+      );
+    }
+    void migrated;
+  })
+  .catch((err: Error) => console.error(`screen passphrase migration: ${err.message}`));
+
 const routes: [RegExp, string, Handler][] = [
   [
     /^\/health$/,
@@ -681,9 +700,12 @@ const routes: [RegExp, string, Handler][] = [
    *
    * Local only, like the sign-in start-up row above and for a stronger reason:
    * these descriptions exist because the screens they describe are nobody
-   * else's business, so a remote reader does not get the count, the provider,
-   * or even whether a passphrase is set. The panel that shows this is inside the
-   * writable block, so a remote Settings page never asks.
+   * else's business, so a remote reader is told nothing at all. The panel that
+   * shows this is inside the writable block, so a remote Settings page never asks.
+   *
+   * Nothing here decrypts any more: the count comes from `/screens/entries`,
+   * which the reader asks for itself. This route only answers "can this machine
+   * do the pass at all".
    */
   [
     /^\/screens\/status$/,
@@ -692,23 +714,43 @@ const routes: [RegExp, string, Handler][] = [
       if (!access.isLocal(req)) {
         return json(res, 403, { error: "Local screenshot descriptions belong to the machine the server is running on" });
       }
-      const provider = settingNow("SCREENSHOT_PROVIDER") ?? null;
-      const hasPassphrase = !!settingNow("SCREENSHOT_PASSPHRASE");
       const job = jobs.runningJob();
-      let described = 0;
-      let error: string | undefined;
-      if (hasPassphrase) {
-        try {
-          const token = await getAccessToken();
-          described = Object.keys((await loadScreenCaptions(token)).entries).length;
-        } catch (err) {
-          // A passphrase that cannot decrypt the file is worth saying out loud:
-          // reporting zero would read as "nothing described yet", which is the
-          // one thing a wrong passphrase must never look like.
-          error = (err as Error).message;
-        }
+      json(res, 200, {
+        provider: settingNow("SCREENSHOT_PROVIDER") ?? null,
+        hasKey: await hasStoredPassphrase(),
+        canStore: canStorePassphrase(),
+        running: job?.kind === "screens",
+      });
+    },
+  ],
+
+  /**
+   * The descriptions themselves, decrypted — for **this machine only**.
+   *
+   * This is the single place the archive's screenshots-withheld-from-the-cloud
+   * texts are legible to a client, and loopback is the whole of the access rule:
+   * the same `access.isLocal` that gates every write. A reader on the LAN gets
+   * 403, and could not use the answer anyway — the browser refuses WebCrypto
+   * outside a secure context (measured: an http://192.168.x.x origin has
+   * `crypto.subtle === undefined`). The phone is the one client that cannot ask
+   * here and decrypts for itself.
+   */
+  [
+    /^\/screens\/entries$/,
+    "GET",
+    async (req, res) => {
+      if (!access.isLocal(req)) {
+        return json(res, 403, { error: "Local screenshot descriptions belong to the machine the server is running on" });
       }
-      json(res, 200, { described, provider, hasPassphrase, error, running: job?.kind === "screens" });
+      try {
+        const token = await getAccessToken();
+        const file = await loadScreenCaptions(token);
+        json(res, 200, { version: 1, entries: file.entries });
+      } catch (err) {
+        // Never an empty map: that reads as "nothing described yet" and is the
+        // one thing a wrong or unreadable key must not look like.
+        json(res, 409, { error: (err as Error).message });
+      }
     },
   ],
 
@@ -717,12 +759,10 @@ const routes: [RegExp, string, Handler][] = [
    *
    * Its own route rather than a key in `/config`, because it is not a setting
    * that can simply be overwritten: the file on OneDrive is encrypted with the
-   * old value, so the change has to re-encrypt it in the same breath. Saving the
-   * setting alone would leave entries nobody can read, which is what a lost
-   * passphrase looks like — see `rekeyScreenCaptions`.
-   *
-   * Local only, like everything else about this pass: the value travels one way
-   * (it is never sent back) and a remote reader has no business here.
+   * old value, so the change has to re-encrypt it in the same breath — and the
+   * new value goes into the machine's key store, not into `.env`, where it would
+   * be plaintext beside the ciphertext. Local only, and it travels one way: it is
+   * never sent back.
    */
   [
     /^\/screens\/rekey$/,
@@ -732,13 +772,12 @@ const routes: [RegExp, string, Handler][] = [
         return json(res, 403, { error: "Local screenshot descriptions belong to the machine the server is running on" });
       }
       const body = await readJsonBody<{ passphrase?: unknown }>(req);
-      const passphrase = typeof body.passphrase === "string" ? body.passphrase.trim() : "";
-      if (passphrase.length < 12) {
-        return json(res, 400, { error: "The passphrase must be at least 12 characters — it is the only thing protecting these descriptions." });
-      }
+      const raw = typeof body.passphrase === "string" ? body.passphrase : "";
+      const problem = passphraseProblem(raw);
+      if (problem) return json(res, 400, { error: problem });
       try {
         const token = await getAccessToken();
-        json(res, 200, await rekeyScreenCaptions(token, passphrase));
+        json(res, 200, await rekeyScreenCaptions(token, raw));
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }
