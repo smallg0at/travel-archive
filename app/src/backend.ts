@@ -617,6 +617,39 @@ export async function listBatches(): Promise<AnalyzeBatchStatus[] | null> {
   }
 }
 
+/**
+ * How far the local screenshot pass has got, and whether it is ready to run.
+ *
+ * Deliberately no "waiting" count: that would mean walking 124 shards on a status
+ * request, which is the job's own planning work. The job reports it when it
+ * starts, and that is when the number is worth anything.
+ */
+export interface ScreensStatus {
+  /** How many screens have a description in the encrypted file. */
+  described: number;
+  /** The service set for the pass, or null. */
+  provider: string | null;
+  /** Whether a passphrase is set — never the passphrase itself. */
+  hasPassphrase: boolean;
+  /** Set when the file could not be read: a changed passphrase, or damage. */
+  error?: string;
+  running: boolean;
+}
+
+export async function screensStatus(): Promise<ScreensStatus | null> {
+  try {
+    const res = await apiFetch("/screens/status", { cache: "no-store" });
+    return res.ok ? ((await res.json()) as ScreensStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Describes the screenshots the allowlist keeps off the wire, on a service in this machine. */
+export function startScreens(body: { limit?: number } = {}): Promise<JobRecord> {
+  return post<JobRecord>("/jobs/screens", body);
+}
+
 /** Merges finished batches now instead of at the server's next ten-minute check. */
 export function startCollect(): Promise<JobRecord> {
   return post<JobRecord>("/jobs/analyze/collect", {});

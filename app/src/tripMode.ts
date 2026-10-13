@@ -8,15 +8,19 @@ import {
   forgetJob,
   getJob,
   archiveStatus,
+  getConfig,
   listBatches,
   planAnalyze,
   planOrganize,
   planTranslate,
   rememberJob,
   rememberedJob,
+  saveConfig,
+  screensStatus,
   startAnalyze,
   startCollect,
   startOrganize,
+  startScreens,
   startTranslate,
   startTrip,
   watchJob,
@@ -25,6 +29,7 @@ import { SUMMARY_MIN_PHOTOS } from "@travel-archive/shared";
 import { fmtDateTime, num, ui } from "./i18n";
 import { claimRefresh, jobLabel } from "./activity";
 import { mountTripSuggestions } from "./tripSuggestions";
+import { checkProvider, localOptions, providerName } from "./providerChoice";
 
 /**
  * The generation panel: pick a date range, name it or let the model name it,
@@ -131,6 +136,7 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
         <button type="button" data-mode="analyze">${ui.generate.tabs.analyze}</button>
         <button type="button" data-mode="organize">${ui.generate.tabs.organize}</button>
         <button type="button" data-mode="translate">${ui.generate.tabs.translate}</button>
+        <button type="button" data-mode="screens">${ui.generate.tabs.screens}</button>
       </div>
 
       <form class="job-form" data-mode="trip">
@@ -193,6 +199,28 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
           <button type="submit">${ui.generate.translate}</button>
         </div>
         <p class="job-note job-translate-plan" hidden></p>
+      </form>
+
+      <!-- Describing the screenshots nobody has vouched for. A tab here rather
+           than a row in Settings because it is one of the things Generate does:
+           run a pass over the archive, watch it, cancel it. -->
+      <form class="job-form" data-mode="screens" hidden>
+        <p class="job-note">${ui.generate.screensNote}</p>
+        <div class="job-row job-scope">
+          <label class="job-field">
+            <span>${ui.generate.screensService}</span>
+            <select name="provider" class="job-select"></select>
+          </label>
+          <label class="job-field">
+            <span>${ui.generate.screensPassphrase}</span>
+            <input type="password" name="passphrase" autocomplete="new-password" spellcheck="false" />
+          </label>
+        </div>
+        <p class="job-note job-screens-state"></p>
+        <div class="job-buttons">
+          <button type="button" class="job-screens-check">${ui.generate.screensCheck}</button>
+          <button type="submit">${ui.generate.screensStart}</button>
+        </div>
       </form>
 
       <div class="job-progress" hidden>
@@ -475,6 +503,78 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   translateForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void start(() => startTranslate(translateBody()));
+  });
+
+  /**
+   * The screenshots tab. Two things come from the server and both have to be
+   * current when the tab is opened, not when the page was: which services on
+   * this machine exist (the same list Settings shows, filtered by scope) and how
+   * much is already described. A stale count here would read as "it did
+   * nothing".
+   */
+  const screensForm = panel.querySelector<HTMLFormElement>('.job-form[data-mode="screens"]')!;
+  const screensProvider = screensForm.querySelector<HTMLSelectElement>('select[name="provider"]')!;
+  const screensPass = screensForm.querySelector<HTMLInputElement>('input[name="passphrase"]')!;
+  const screensState = screensForm.querySelector<HTMLElement>(".job-screens-state")!;
+  const screensSubmit = screensForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
+  const paintScreens = async () => {
+    const [config, status] = await Promise.all([getConfig(), screensStatus()]);
+    const local = localOptions(config?.providers ?? []);
+    const chosen = status?.provider ?? local[0]?.id ?? "";
+    screensProvider.replaceChildren(
+      ...local.map((option) => {
+        const item = el<HTMLOptionElement>(`<option></option>`);
+        item.value = option.id;
+        item.textContent = providerName(option);
+        item.selected = option.id === chosen;
+        return item;
+      }),
+    );
+    screensPass.placeholder = status?.hasPassphrase ? ui.generate.screensPassSaved : ui.generate.screensPassNew;
+    // A run in flight, an unreadable file (a changed passphrase), a missing
+    // passphrase, no local service — each is a different sentence, and only the
+    // last two stop the button.
+    screensState.textContent = status?.error
+      ? status.error
+      : status?.running
+        ? ui.generate.screensRunning
+        : local.length === 0
+          ? ui.generate.screensNoLocal
+          : status?.hasPassphrase
+            ? ui.generate.screensDescribed(status.described)
+            : ui.generate.screensNoPassphrase;
+    const blocked = local.length === 0 || !!status?.error;
+    screensState.classList.toggle("tone-warn", blocked || !status?.hasPassphrase);
+    screensSubmit.disabled = blocked;
+  };
+
+  panel.querySelector<HTMLButtonElement>('.job-tabs button[data-mode="screens"]')!.addEventListener("click", () => void paintScreens());
+  void paintScreens();
+
+  screensForm.querySelector<HTMLButtonElement>(".job-screens-check")!.addEventListener("click", async () => {
+    screensState.classList.remove("tone-warn");
+    screensState.textContent = ui.settings.providerCheckBusy;
+    const result = await checkProvider(screensProvider.value);
+    screensState.textContent = result.text;
+    screensState.classList.toggle("tone-warn", result.warn);
+  });
+
+  screensForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const passphrase = screensPass.value.trim();
+    void start(async () => {
+      // Saved first and deliberately: the pass reads these values when it starts
+      // (settingNow), so this is what makes the choice the run's, and what keeps
+      // it after a restart. A blank passphrase means "keep the saved one".
+      await saveConfig(
+        passphrase
+          ? { SCREENSHOT_PROVIDER: screensProvider.value, SCREENSHOT_PASSPHRASE: passphrase }
+          : { SCREENSHOT_PROVIDER: screensProvider.value },
+      );
+      screensPass.value = "";
+      return startScreens();
+    });
   });
 
   return panel;

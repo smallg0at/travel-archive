@@ -480,7 +480,7 @@ export const en = {
   },
 
   generate: {
-    tabs: { trip: "Trip", analyze: "Analyze", organize: "Day summaries", translate: "Translate" },
+    tabs: { trip: "Trip", analyze: "Analyze", organize: "Day summaries", translate: "Translate", screens: "Screens (local)" },
 
     suggest: {
       loading: "Looking for trips…",
@@ -503,6 +503,19 @@ export const en = {
     name: "Name (blank = let the model propose one)",
     writeNarrative: "Write the narrative",
     tripAllowMissing: "Write it anyway if most days have no summary yet",
+
+    screensNote:
+      "Describes the screenshots nobody has vouched for — the private ones the allowlist keeps away from the cloud model, so <strong>nothing on your archive page and nobody else's sees them</strong>. A model on this machine does the looking, and it is told to name only <em>what kind of screen</em> it is: a chat conversation, an ID card, a passport page, a screen showing account numbers. Nothing on it is transcribed. The descriptions are encrypted with the passphrase below before they are uploaded, so the copy on OneDrive is unreadable — this machine is the only thing that can read them.",
+    screensService: "Service (this machine)",
+    screensPassphrase: "Passphrase",
+    screensPassSaved: "set — leave blank to keep it",
+    screensPassNew: "encrypts the descriptions before upload",
+    screensCheck: "Check",
+    screensStart: "Describe screens",
+    screensDescribed: (n: number) => (n === 1 ? "1 screen described" : `${n} screens described`),
+    screensNoPassphrase: "No passphrase yet — the descriptions are encrypted before upload, so one is needed first.",
+    screensNoLocal: "No service on this machine to use — install and start Ollama or LM Studio first.",
+    screensRunning: "A run is going; its progress is in Activity.",
 
     analyzeNoteHtml:
       "Captions every photo in the range that has never been looked at, one model call each. <strong>This is the step that costs money</strong> — check the estimate first. Re-running is safe: photos that already have a caption are skipped. <em>Leave a date blank to leave that end open</em> — both blank means the whole archive.",
@@ -570,6 +583,9 @@ export const en = {
       translate: "translate",
       collect: "collect",
       locate: "locate",
+      // Not one word, unlike the others: this pass runs on this machine only,
+      // and the label is the only place a reader sees that.
+      screens: "screens (local)",
     } satisfies Record<JobKind, string>,
     jobStatus: {
       queued: "queued",

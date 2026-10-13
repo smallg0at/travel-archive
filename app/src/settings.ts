@@ -38,6 +38,7 @@ import { resetSidebarWidth } from "./chrome";
 import { renderThemeControl } from "./theme";
 import { renderContentLanguageControl } from "./contentLang";
 import { fmtDate, jobPhase, num, ui } from "./i18n";
+import { checkProvider, keyState, providerName } from "./providerChoice";
 
 /**
  * Settings, as a page rather than a popup.
@@ -120,18 +121,6 @@ function labelledInput(label: string, control: string): HTMLLabelElement {
   node.querySelector("span")!.textContent = label;
   node.insertAdjacentHTML("beforeend", control);
   return node;
-}
-
-/**
- * A provider's name in the reader's language.
- *
- * The server sends a `label` with every option and it is the fallback, so a
- * backend added to `PRESETS` before its name is translated still renders. The
- * map is keyed by the preset `id`, which is stable, not by the label, which is
- * prose that may change.
- */
-function providerName(option: ProviderOption): string {
-  return (ui.settings.providers as Record<string, string>)[option.id] ?? option.label;
 }
 
 /**
@@ -606,17 +595,12 @@ function generationSection(): HTMLElement {
         badge.classList.toggle("tone-ok", active);
         root.classList.toggle("is-active", active);
         // The collapsed header carries the one thing worth seeing without
-        // opening it: whether this backend can be used as it stands. A local
-        // service can, key or no key — a missing key is only a problem for the
-        // ones that call out.
-        const keyState = option.hasKey
-          ? ui.settings.providerKeySet
-          : option.scope === "local"
-            ? ui.settings.providerLocalNoKey
-            : ui.settings.providerKeyMissing;
-        const keyWarn = !option.hasKey && option.scope !== "local";
-        summary.textContent = keyState;
-        summary.classList.toggle("tone-warn", keyWarn);
+        // opening it: whether this backend can be used as it stands, key or no
+        // key. Shared with the Generate panel's screenshot tab so the same
+        // service cannot get two different stories.
+        const state = keyState(option);
+        summary.textContent = state.text;
+        summary.classList.toggle("tone-warn", state.warn);
         // The endpoint only means something for an OpenAI-compatible service —
         // Gemini's own client has it baked in.
         urlField.hidden = !option.editable.baseUrl;
@@ -625,8 +609,8 @@ function generationSection(): HTMLElement {
         urlInput.placeholder = option.baseUrl ?? "";
         keyInput.placeholder = option.hasKey ? ui.settings.keySaved : ui.settings.keyPaste;
         const batch = option.supportsBatch ? ui.settings.providerBatchOk : ui.settings.providerNoBatch;
-        note.textContent = `${keyState} · ${batch}`;
-        note.classList.toggle("tone-warn", keyWarn);
+        note.textContent = `${state.text} · ${batch}`;
+        note.classList.toggle("tone-warn", state.warn);
         getKey.hidden = !option.platformUrl;
         if (option.platformUrl) getKey.href = option.platformUrl;
         // Never disabled, not even for the backend already in use: its key or
@@ -638,23 +622,18 @@ function generationSection(): HTMLElement {
     /**
      * A check the reader asks for, not a gate: it reports what the provider
      * answered and never blocks saving — a wrong key is the reader's to fix,
-     * and a service that happens to be down should not stop them either.
+     * and a service that happens to be down should not stop them either. The
+     * wording and the rules live in providerChoice, because the Generate panel's
+     * screenshot tab asks the same question.
      */
     const check = async () => {
       const typed = keyInput.value.trim();
       status.hidden = false;
       status.classList.remove("tone-warn");
       status.textContent = ui.settings.providerCheckBusy;
-      const result = await validateGeneration(row.id, typed || undefined);
-      if (result.ok) {
-        status.textContent = ui.settings.providerCheckOk;
-      } else if (result.kind === "auth") {
-        status.textContent = ui.setup.keyRejected(result.detail);
-        status.classList.add("tone-warn");
-      } else {
-        status.textContent = ui.settings.providerCheckUnreachable(result.detail);
-        status.classList.add("tone-warn");
-      }
+      const result = await checkProvider(row.id, typed || undefined);
+      status.textContent = result.text;
+      status.classList.toggle("tone-warn", result.warn);
     };
 
     head.addEventListener("click", () => {

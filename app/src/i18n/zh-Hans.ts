@@ -458,7 +458,7 @@ export const zhHans: Messages = {
   },
 
   generate: {
-    tabs: { trip: "旅行", analyze: "分析", organize: "当天摘要", translate: "翻译" },
+    tabs: { trip: "旅行", analyze: "分析", organize: "当天摘要", translate: "翻译", screens: "截图（本机）" },
 
     suggest: {
       loading: "正在查找旅行…",
@@ -481,6 +481,19 @@ export const zhHans: Messages = {
     name: "旅行名称（留空则由模型自动建议）",
     writeNarrative: "撰写游记",
     tripAllowMissing: "即使大部分日期尚未生成摘要，仍继续撰写",
+
+    screensNote:
+      "描述那些从未获准外发的截图——被允许清单挡在云端模型之外的那批，<strong>档案页面里看不到，别人也看不到</strong>。由这台机器上的模型负责看图，并且只被要求说出<em>屏幕的种类</em>：聊天记录、身份证、护照页、显示账号数字的屏幕；屏幕上的内容一律不转写。描述在<strong>上传前</strong>用下面的口令加密，所以 OneDrive 上的那一份是读不懂的——只有这台机器能读。",
+    screensService: "服务（本机）",
+    screensPassphrase: "口令",
+    screensPassSaved: "已设置——留空则沿用",
+    screensPassNew: "上传前用它加密这些描述",
+    screensCheck: "校验",
+    screensStart: "开始描述",
+    screensDescribed: (n: number) => `已描述 ${n} 张`,
+    screensNoPassphrase: "还没有口令——描述要加密后才上传，所以必须先设一个。",
+    screensNoLocal: "这台机器上没有可用的服务——请先安装并启动 Ollama 或 LM Studio。",
+    screensRunning: "已有一次描述在运行，进度见「活动」。",
 
     analyzeNoteHtml:
       "为范围内所有尚未处理的照片生成说明，每张照片调用一次模型。<strong>此步骤会产生 API 费用</strong>——请先查看费用估算。重复运行是安全的：已有说明的照片会被自动跳过。<em>日期留空即表示该端不限</em>——两端都留空就是全库。",
@@ -546,6 +559,7 @@ export const zhHans: Messages = {
       translate: "翻译",
       collect: "收取结果",
       locate: "地理定位",
+      screens: "截图描述（本地）",
     },
     jobStatus: {
       queued: "排队中",
