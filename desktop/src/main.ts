@@ -7,7 +7,6 @@ import { execFile } from "node:child_process";
 import { join, resolve } from "node:path";
 import { serveApp } from "./static";
 import {
-  isDeviceCodePrompt,
   isHealthy,
   startPipelineServer,
   stopPipelineServer,
@@ -176,7 +175,6 @@ let pipeline: PipelineServer | null = null;
 let mainWindow: BrowserWindow | null = null;
 
 /** Device-code prompts are shown once; MSAL repeats the line while it polls. */
-let deviceCodeShown = false;
 
 /**
  * Recent child output, so a failure whose only trace was the console can
@@ -193,19 +191,13 @@ function log(line: string): void {
   serverTail.push(line);
   if (serverTail.length > 40) serverTail.shift();
 
-  if (isDeviceCodePrompt(line) && !deviceCodeShown) {
-    deviceCodeShown = true;
-    void dialog.showMessageBox({
-      type: "info",
-      title: "Sign in to OneDrive",
-      message: "The archive pipeline needs to be signed in.",
-      detail: line,
-      buttons: ["Open microsoft.com/devicelogin", "Later"],
-      defaultId: 0,
-    }).then(({ response }) => {
-      if (response === 0) void shell.openExternal("https://microsoft.com/devicelogin");
-    });
-  }
+  // The device-code prompt used to become a native dialog here, opening a
+  // hard-coded microsoft.com/devicelogin and showing no code of its own. It
+  // duplicated two in-app surfaces — the setup wizard's first page and the
+  // Activity page, both fed by `/oobe` — and the URL was not the one MSAL had
+  // just given for this attempt, so a code entered there was rejected. The line
+  // still reaches `serverTail` and `serve.log`; the app is where the code is
+  // shown, next to the thing that is waiting for it.
 }
 
 /**

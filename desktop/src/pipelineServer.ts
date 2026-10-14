@@ -110,19 +110,6 @@ export async function startPipelineServer(opts: StartOptions): Promise<PipelineS
   return { child, adopted: false };
 }
 
-/**
- * Matches the device-code prompt MSAL prints, so the shell can put it on screen.
- *
- * `pipeline/src/auth.ts` emits this with `console.log` and then blocks until
- * the user completes it. That is right for a CLI run somebody is watching, and
- * invisible here — with no terminal the first sign-in would simply appear to
- * hang forever. Matched on the URL rather than the wording, which MSAL has
- * changed before.
- */
-export function isDeviceCodePrompt(line: string): boolean {
-  return /microsoft\.com\/devicelogin/i.test(line) || /enter the code/i.test(line);
-}
-
 /** Stops a server this process started. An adopted one is left alone. */
 export function stopPipelineServer(server: PipelineServer | null): void {
   if (!server?.child || server.adopted) return;
