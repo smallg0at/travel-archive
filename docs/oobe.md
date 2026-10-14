@@ -129,12 +129,15 @@ is the *result* of the three answers, not a step among them.
    secondary action, not an exit from the wizard): scanning costs nothing, and
    generation can arrive later from Settings.
 
-4. **First scan — its own full-screen state.** Not a footer this time: the
-   wizard's chrome goes away and the scan owns the page, because this is the
-   one moment the user is waiting on the machine. On completion it shows the
-   two numbers every fresh archive wants — photos and months — and one action
-   that opens the archive, at which point `never-scanned` is false and the
-   wizard is over for good.
+4. **The last page — one of two runs, and its own full-screen state.** Not a
+   footer this time: the wizard's chrome goes away and the run owns the page,
+   because this is the one moment the user is waiting on the machine. A fresh
+   archive runs its first scan here; an account whose OneDrive already holds an
+   archive gets the other run — the page says so (`archiveExists`), runs the
+   ordinary metadata sync, and waits, because until the mirror lands there is
+   nothing local to paint and the first scan would rewrite a complete library.
+   Both end with one action that opens the archive; after a scan
+   `never-scanned` is false and the wizard is over for good.
 
 **Resuming** is client-side only: each step's completion is derivable from
 the server (`signedIn`, the folder probe, key set, `never-scanned`), so the
@@ -173,8 +176,9 @@ that remembers itself).
   The server asks the metadata folder for `index.json` — one item-metadata
   request, cached a minute, and only when everything local says fresh *and*
   somebody is signed in. The app's entry condition is now
-  `neverScanned && !archiveExists`, and a sign-in that reveals an archive hands
-  over to it instead of continuing the wizard.
+  `neverScanned && !archiveExists`; a sign-in that reveals an archive keeps the
+  wizard on its last page and shows the copy there, rather than handing over
+  wordlessly to an app with nothing local to paint.
 
 - Folder writes stay on `POST /config`; no second path to the same value.
   Folder **reads** need one new endpoint (a bounded listing for the picker —
@@ -280,7 +284,13 @@ The throwaway-home harness from the first from-scratch run is the base
 - wrong folder → one log line, no job, no 404 loop; picking the right path
   stamps `photosFolderValidatedAt` and page 4 unblocks;
 - AI step skipped → the scan still runs; Settings shows the key as unset;
-- configured archive → `/oobe` says nothing to do, `scanIfDue` unchanged;
+- configured archive on a fresh machine → `/oobe` answers `archiveExists: true`
+  while still saying `neverScanned: true` (`sync.json` is per machine), the
+  wizard's last page states the copy and waits for it, and `scanIfDue` is
+  unchanged: nothing scans. Verified 2026-10-14 on the installed build with the
+  mirror emptied — the page read 检测到云端已有档案 while the sync ran, then
+  "已复制 · 124 个月", and the mirror came back holding `index.json`,
+  `home.json`, shards and i18n;
 - remote reader (`canWrite` false) → no route, no card, no endpoint writes.
 
 ## Phasing
