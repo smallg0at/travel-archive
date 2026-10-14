@@ -11,7 +11,23 @@ and is the only thing that ever writes to the archive.
 
 > _A screenshot of the album belongs here._
 
-## Quick start
+## Get it
+
+[The latest release](https://github.com/OWNER/REPO/releases/latest) carries a
+Windows installer, `Photo Archive Setup <version>.exe`. Run it and start **Photo
+Archive** from the Start menu. The first run walks through the Microsoft sign-in
+and asks for the two folders the archive keeps — the photos, and the metadata it
+writes.
+
+**The installer is unsigned**, so Windows says "Windows protected your PC":
+*More info* → *Run anyway*. There is no code-signing certificate behind this
+release; the binary is built from this source, and building it yourself (below)
+is the alternative.
+
+Describing photos with an AI provider is a separate, opt-in step: set the
+provider key under **Settings → Generation**.
+
+## From source
 
 ```
 npm install
@@ -22,6 +38,8 @@ npm run desktop          # Electron shell: serves the app, starts the job server
 
 Without the shell: `npm run preview --workspace app -- --port 4173`, and
 `node pipeline/dist/serve.js` from `pipeline/`.
+
+`npm run package` builds the Windows installer into `desktop/release/`.
 
 Reading needs a Microsoft sign-in and an Azure app registration — see
 [One-time setup](#one-time-setup). Captioning additionally needs an AI provider
