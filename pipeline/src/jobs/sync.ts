@@ -389,7 +389,13 @@ export async function runSync(
         await mkdir(dataFile(`i18n/${lang}/photos`), { recursive: true });
         await writeFile(dataFile(`i18n/${lang}/index.json`), JSON.stringify(text, null, 2), "utf-8");
         result.metadataPulled++;
-        for (const month of text.parts ?? []) {
+        const parts = text.parts ?? [];
+        for (const [i, month] of parts.entries()) {
+          // The month loop above reports as it goes; this one stayed silent, so
+          // a page watching the bar sat at "124/124 · Pulled 2026-10" for as
+          // long as the captions took — measured ~3 minutes, indistinguishable
+          // from a hang.
+          onProgress({ done: i + 1, total: parts.length, message: `Pulled ${lang} ${month}` });
           const part = await downloadMetadataJson(token, env.metadataFolder, `i18n/${lang}/photos/${month}.json`);
           if (!part) continue;
           await writeFile(dataFile(`i18n/${lang}/photos/${month}.json`), JSON.stringify(part, null, 2), "utf-8");
