@@ -289,6 +289,13 @@ export const en = {
     retry: "Try again",
     scanDone: (photos: number, months: number) => `${photos.toLocaleString()} photos · ${months} months`,
     openArchive: "Open the archive",
+    existingTitle: "An archive already exists",
+    existingNote:
+      "This Microsoft account already has an archive in OneDrive, so this machine is taking a copy of its metadata first. Nothing is scanned again, and nothing already in the archive is overwritten.",
+    existingSyncing: "Bringing the archive to this machine…",
+    existingDone: (months: number | null) =>
+      months ? `Copied · ${months} months` : "Copied to this machine",
+    existingFailed: "The sync failed.",
     starting: "Starting…",
   },
   settings: {

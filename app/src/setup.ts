@@ -26,6 +26,7 @@ import {
   oobeState,
   saveConfig,
   startScan,
+  startSync,
   validateGeneration,
   watchJob,
   type OobeState,
@@ -55,6 +56,12 @@ interface State {
   validateFailed: boolean;
   saveError: string | null;
   scan: ScanState | null;
+  /**
+   * The account turned out to already have an archive in OneDrive, so the last
+   * page copies it here instead of running a first scan. Decided from
+   * `/oobe`'s `archiveExists`, and re-decided when a step is resumed.
+   */
+  existing: boolean;
 }
 
 let state: State = fresh();
@@ -74,6 +81,7 @@ function fresh(): State {
     validateFailed: false,
     saveError: null,
     scan: null,
+    existing: false,
   };
 }
 
@@ -133,6 +141,16 @@ export function showSetup(opts: { onDone: () => void }): void {
   state.step = resumedStep() ?? 1;
   document.body.classList.add("setup-active");
 
+  // A resumed step can be step 4, and step 4 is two different runs: the first
+  // scan for a fresh archive, the copy of an existing one otherwise. Guessing
+  // wrong is not cosmetic — the scan page's button is the one control that
+  // would run a full scan over a complete library — so ask which this is.
+  void oobeState().then((s) => {
+    if (!active || state.step !== 4 || !s?.archiveExists || state.existing) return;
+    state.existing = true;
+    void startExistingSync();
+  });
+
   const content = document.getElementById("content")!;
   content.replaceChildren(el(`<div class="loading">${ui.setup.loading}</div>`));
 
@@ -163,10 +181,15 @@ export function showSetup(opts: { onDone: () => void }): void {
     // Signing in is also the moment this account's own archive can first be
     // seen: a reinstall, a second PC, a new Windows profile — the local state
     // is fresh, OneDrive is not. The wizard exists because there is no data
-    // yet; once there is, hand over to the archive instead of running the
-    // first scan over it.
+    // yet, so this is the moment to fetch it: the last page copies the
+    // archive's metadata to this machine and waits for it, rather than either
+    // carrying on to a first scan (which would rewrite a complete library) or
+    // dropping the reader into an app with nothing local to paint.
     if (s.signedIn && s.archiveExists) {
-      exit(opts.onDone);
+      state.existing = true;
+      goto(4);
+      stopPoll();
+      void startExistingSync();
       return;
     }
     const before = `${state.signedIn}${state.deviceCode?.code ?? ""}`;
@@ -277,6 +300,59 @@ export function showSetup(opts: { onDone: () => void }): void {
 
     try {
       follow(await startScan({ mode: "incremental" }));
+    } catch (err) {
+      const health = await checkHealth().catch(() => null);
+      if (health?.running) {
+        follow(health.running);
+        return;
+      }
+      state.scan.error = (err as Error).message;
+      render();
+    }
+  };
+
+  // --- page 4, the other run: an archive that already exists ---------------
+  /**
+   * Copies an archive that already exists in OneDrive onto this machine.
+   *
+   * The wizard is here at all because the account turned out to have a library
+   * — the local state is fresh, the cloud is not — so the work is a metadata
+   * sync, not a scan: a scan re-lists every month folder and rewrites
+   * `index.json` over a complete archive, on a design that assumes one writer.
+   * The page waits for the sync because until the mirror lands there is
+   * nothing local to paint.
+   */
+  const startExistingSync = async (): Promise<void> => {
+    state.saveError = null;
+    state.scan = { job: null, stop: null, error: null, photos: null, months: null };
+    render();
+
+    const follow = (job: JobRecord): void => {
+      state.scan!.job = job;
+      render();
+      state.scan!.stop = watchJob(job.id, (update) => {
+        if (!state.scan) return;
+        state.scan.job = update;
+        if (update.status === "done" || update.status === "failed") {
+          state.scan.stop?.();
+          state.scan.stop = null;
+          if (update.status === "failed") state.scan.error = update.error ?? ui.setup.existingFailed;
+          else
+            void archiveStatus().then((s) => {
+              if (!state.scan) return;
+              // Only the months matter here: an existing archive already has
+              // its photo count, and 0 is this page's "done, count unknown".
+              state.scan.photos = s?.totals.photos ?? 0;
+              state.scan.months = s?.months.length ?? null;
+              render();
+            });
+        }
+        render();
+      });
+    };
+
+    try {
+      follow(await startSync({}));
     } catch (err) {
       const health = await checkHealth().catch(() => null);
       if (health?.running) {
@@ -519,19 +595,28 @@ export function showSetup(opts: { onDone: () => void }): void {
       };
       paintFooter3();
     } else {
-      // Page 4 — the scan owns the screen, per the design.
-      card.appendChild(el(`<h2>${ui.setup.scanTitle}</h2>`));
+      // Page 4 — the last page, and one of two runs. A fresh archive starts its
+      // first scan here; an account that already has one copies that archive's
+      // metadata to this machine and waits, because until it lands there is
+      // nothing local to paint and the alternative — a first scan — would
+      // rewrite a complete library. Both own the screen; the words differ.
+      const existing = state.existing;
       const scan = state.scan;
+      card.appendChild(el(`<h2>${existing ? ui.setup.existingTitle : ui.setup.scanTitle}</h2>`));
       if (!scan) {
-        card.appendChild(el(`<p class="set-note">${ui.setup.scanNote}</p>`));
-        primary(ui.setup.startScan, () => void startFirstScan());
+        card.appendChild(el(`<p class="set-note">${existing ? ui.setup.existingSyncing : ui.setup.scanNote}</p>`));
+        if (!existing) primary(ui.setup.startScan, () => void startFirstScan());
       } else if (scan.error) {
         card.appendChild(el(`<p class="set-note tone-warn">${scan.error}</p>`));
-        primary(ui.setup.retry, () => void startFirstScan());
+        primary(ui.setup.retry, () => void (existing ? startExistingSync() : startFirstScan()));
       } else if (scan.photos !== null) {
-        card.appendChild(el(`<p class="setup-done">${ui.setup.scanDone(scan.photos, scan.months ?? 0)}</p>`));
+        const done = existing
+          ? ui.setup.existingDone(scan.months)
+          : ui.setup.scanDone(scan.photos, scan.months ?? 0);
+        card.appendChild(el(`<p class="setup-done">${done}</p>`));
         primary(ui.setup.openArchive, () => exit(opts.onDone));
       } else {
+        if (existing) card.appendChild(el(`<p class="set-note">${ui.setup.existingNote}</p>`));
         const job = scan.job;
         const big = el(`<div class="setup-scan"></div>`);
         const phase = jobPhase(job?.progress.phase ?? "starting");
@@ -551,7 +636,10 @@ export function showSetup(opts: { onDone: () => void }): void {
       // is going, the page belongs to it — stepping back would reopen the
       // folder decision while photos are being written into months. A failure
       // is the one case where the folder is worth a second look.
-      if (!scan || scan.error) {
+      // No way back from the copy: pages 2 and 3 were never part of this path,
+      // and stepping into them would reopen a folder decision that has nothing
+      // to do with an archive that already exists.
+      if (!existing && (!scan || scan.error)) {
         secondary(ui.setup.back, () => {
           goto(3);
           render();

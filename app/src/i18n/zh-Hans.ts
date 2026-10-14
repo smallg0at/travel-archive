@@ -277,6 +277,11 @@ export const zhHans: Messages = {
     retry: "重试",
     scanDone: (photos, months) => `${photos.toLocaleString()} 张照片 · ${months} 个月`,
     openArchive: "打开档案",
+    existingTitle: "检测到云端已有档案",
+    existingNote: "这个 Microsoft 账号的 OneDrive 里已经有档案，先把它的元数据复制到这台机器。不会重新扫描，也不会覆盖档案里已有的内容。",
+    existingSyncing: "正在把档案复制到这台机器…",
+    existingDone: (months: number | null) => (months ? `已复制 · ${months} 个月` : "已复制到这台机器"),
+    existingFailed: "同步失败。",
     starting: "正在启动…",
   },
   settings: {
