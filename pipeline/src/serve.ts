@@ -2,16 +2,17 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
 import { readOobe, writeOobe } from "./oobeStore.js";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { get } from "node:http";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
+import { withArchiveLock } from "./lock.js";
 import { originAllowed } from "./originCheck.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
+import { downloadMetadataJson, downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
@@ -294,6 +295,47 @@ async function readLocalJson(relative: string): Promise<string | null> {
   try {
     return await readFile(dataFile(relative), "utf-8");
   } catch {
+    return null;
+  }
+}
+
+/**
+ * A metadata file from the mirror — and when the mirror does not have it yet,
+ * from OneDrive, written into the mirror on the way back.
+ *
+ * The mirror is filled by the pipeline, so a machine that has never run a scan
+ * or a sync has an empty one even when the account's OneDrive holds a whole
+ * archive. That state used to fall through to the *reader's* own Graph fetch,
+ * which needs the reader's Microsoft sign-in: an install pointed at an existing
+ * archive therefore asked the owner to sign in twice, with the server already
+ * signed in and perfectly able to answer. Measured 2026-10-14 on the installed
+ * build — empty mirror, `GET /archive/index` 404, the reader showed the sign-in
+ * banner while `/health` said `signedIn: true`.
+ *
+ * Skipped while a job runs, because a job is the mirror's other writer, and the
+ * write takes the archive lock so a CLI run sharing the home cannot be trodden
+ * on. Any failure returns null, which is exactly what this route did before:
+ * the reader falls back to Graph, and on a phone that is the normal path.
+ */
+async function mirrorOrFetch(relative: string): Promise<string | null> {
+  const local = await readLocalJson(relative);
+  if (local) return local;
+  if (jobs.runningJob()) return null;
+
+  const token = await getCachedAccessToken();
+  if (!token) return null;
+
+  try {
+    const doc = await downloadMetadataJson<unknown>(token, env.metadataFolder, relative);
+    if (doc === null) return null;
+    const text = JSON.stringify(doc, null, 2);
+    await withArchiveLock(`mirror ${relative}`, async () => {
+      await mkdir(dirname(dataFile(relative)), { recursive: true });
+      await writeFile(dataFile(relative), text, "utf-8");
+    });
+    return text;
+  } catch (err) {
+    console.log(`mirror: ${relative} not fetched: ${(err as Error).message}`);
     return null;
   }
 }
@@ -1051,9 +1093,9 @@ const routes: [RegExp, string, Handler][] = [
     /^\/archive\/index$/,
     "GET",
     async (_req, res) => {
-      const local = await readLocalJson("index.json");
-      if (!local) return json(res, 404, { error: "No local index.json — run scan" });
-      sendJsonText(res, local);
+      const body = await mirrorOrFetch("index.json");
+      if (!body) return json(res, 404, { error: "No index.json, in the mirror or in OneDrive" });
+      sendJsonText(res, body);
     },
   ],
   /** The searchable text of the whole archive — see jobs/searchIndex.ts. */
@@ -1061,9 +1103,9 @@ const routes: [RegExp, string, Handler][] = [
     /^\/archive\/search$/,
     "GET",
     async (_req, res) => {
-      const local = await readLocalJson("search.json");
-      if (!local) return json(res, 404, { error: "No local search.json — run organize" });
-      sendJsonText(res, local);
+      const body = await mirrorOrFetch("search.json");
+      if (!body) return json(res, 404, { error: "No search.json, in the mirror or in OneDrive" });
+      sendJsonText(res, body);
     },
   ],
   /** Where the library has been, for the home page — see jobs/homeIndex.ts. */
@@ -1071,18 +1113,18 @@ const routes: [RegExp, string, Handler][] = [
     /^\/archive\/home$/,
     "GET",
     async (_req, res) => {
-      const local = await readLocalJson("home.json");
-      if (!local) return json(res, 404, { error: "No local home.json — run organize" });
-      sendJsonText(res, local);
+      const body = await mirrorOrFetch("home.json");
+      if (!body) return json(res, 404, { error: "No home.json, in the mirror or in OneDrive" });
+      sendJsonText(res, body);
     },
   ],
   [
     /^\/archive\/shard\/(\d{4}-\d{2})$/,
     "GET",
     async (_req, res, [month]) => {
-      const local = await readLocalJson(`photos/${month}.json`);
-      if (!local) return json(res, 404, { error: `No local shard for ${month}` });
-      sendJsonText(res, local);
+      const body = await mirrorOrFetch(`photos/${month}.json`);
+      if (!body) return json(res, 404, { error: `No shard for ${month}, in the mirror or in OneDrive` });
+      sendJsonText(res, body);
     },
   ],
   /**
@@ -1094,18 +1136,18 @@ const routes: [RegExp, string, Handler][] = [
     /^\/archive\/i18n\/([a-z]{2}(?:-[A-Za-z]{2,4})?)\/index$/,
     "GET",
     async (_req, res, [lang]) => {
-      const local = await readLocalJson(`i18n/${lang}/index.json`);
-      if (!local) return json(res, 404, { error: `No local ${lang} text` });
-      sendJsonText(res, local);
+      const body = await mirrorOrFetch(`i18n/${lang}/index.json`);
+      if (!body) return json(res, 404, { error: `No ${lang} text, in the mirror or in OneDrive` });
+      sendJsonText(res, body);
     },
   ],
   [
     /^\/archive\/i18n\/([a-z]{2}(?:-[A-Za-z]{2,4})?)\/shard\/(\d{4}-\d{2})$/,
     "GET",
     async (_req, res, [lang, month]) => {
-      const local = await readLocalJson(`i18n/${lang}/photos/${month}.json`);
-      if (!local) return json(res, 404, { error: `No local ${lang} captions for ${month}` });
-      sendJsonText(res, local);
+      const body = await mirrorOrFetch(`i18n/${lang}/photos/${month}.json`);
+      if (!body) return json(res, 404, { error: `No ${lang} captions for ${month}, in the mirror or in OneDrive` });
+      sendJsonText(res, body);
     },
   ],
 
