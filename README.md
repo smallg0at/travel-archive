@@ -9,7 +9,9 @@ renders from sharded JSON. A small local **job server**, started by the desktop
 shell, does the parts that need a machine — indexing, captioning, summarizing —
 and is the only thing that ever writes to the archive.
 
-> _A screenshot of the album belongs here._
+![The album: a day page — photographs from one place, each with a written card](docs/screenshots/album.png)
+
+![One photograph: its description, its tags, and where it was taken](docs/screenshots/lightbox.png)
 
 ## Get it
 
