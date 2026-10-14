@@ -1,6 +1,6 @@
 {
   "name": "@travel-archive/pipeline",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -34,5 +34,6 @@
     "opencc-js": "^1.4.2",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
-  }
+  },
+  "license": "AGPL-3.0-or-later"
 }

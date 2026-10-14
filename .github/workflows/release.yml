@@ -1,0 +1,57 @@
+name: release
+
+# Manual on purpose. Building the installer needs Windows, and a release should
+# be a decision rather than a side effect of a push. Run it from the Actions tab,
+# or:
+#
+#     git tag v1.0.0 && git push origin v1.0.0      # CI runs on the tag first
+#     gh workflow run release.yml -f tag=v1.0.0
+#
+# It checks out the tag, builds the NSIS installer, and attaches it to a **draft**
+# release: read the generated notes, then publish. No secrets are involved — the
+# installer is unsigned, and nothing in a build talks to OneDrive or an AI
+# provider (CI's own note is that unit tests must pass with zero credentials).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build, e.g. v1.0.0 — must already exist"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run package` = app build + pipeline build + desktop dist
+      # (tsc, bundle the pipeline, then electron-builder → desktop/release/).
+      - run: npm run package
+
+      - name: Attach the installer to a draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $exe = Get-ChildItem desktop/release/*.exe | Select-Object -First 1
+          if (-not $exe) { throw "electron-builder produced no .exe" }
+          Write-Host "attaching $($exe.Name) ($([math]::Round($exe.Length/1MB,1)) MB)"
+          gh release create "${{ inputs.tag }}" `
+            --draft `
+            --title "${{ inputs.tag }}" `
+            --generate-notes `
+            "$($exe.FullName)"

@@ -13,7 +13,7 @@ and is the only thing that ever writes to the archive.
 
 ## Get it
 
-[The latest release](https://github.com/OWNER/REPO/releases/latest) carries a
+[The latest release](https://github.com/smallg0at/travel-archive/releases/latest) carries a
 Windows installer, `Photo Archive Setup <version>.exe`. Run it and start **Photo
 Archive** from the Start menu. The first run walks through the Microsoft sign-in
 and asks for the two folders the archive keeps — the photos, and the metadata it
