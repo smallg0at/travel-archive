@@ -104,16 +104,18 @@ const goto = (step: 1 | 2 | 3 | 4): void => {
  * Whether this machine is still owed the wizard.
  *
  * A fresh archive (server-computed `neverScanned`) **or** an unfinished step
- * in this tab (see `resumedStep`). Gated on write capability — a remote
- * reader has no route to any of this — and absent-on-error: a reader that
- * cannot ask should get the app it already knows, not a wizard nobody can
- * complete.
+ * in this tab (see `resumedStep`) — but never when the signed-in account
+ * already has an archive in OneDrive (`archiveExists`): the wizard's premise is
+ * then false, and its last page would re-scan a library that is already
+ * complete. Gated on write capability — a remote reader has no route to any of
+ * this — and absent-on-error: a reader that cannot ask should get the app it
+ * already knows, not a wizard nobody can complete.
  */
 export async function setupNeeded(): Promise<boolean> {
   try {
     if (!canWrite()) return false;
     const s = await oobeState();
-    return !!s && (s.neverScanned || resumedStep() !== null);
+    return !!s && ((s.neverScanned && !s.archiveExists) || resumedStep() !== null);
   } catch {
     return false;
   }
@@ -158,6 +160,15 @@ export function showSetup(opts: { onDone: () => void }): void {
   const refreshOobe = async (): Promise<void> => {
     const s = await oobeState();
     if (!s || !active) return;
+    // Signing in is also the moment this account's own archive can first be
+    // seen: a reinstall, a second PC, a new Windows profile — the local state
+    // is fresh, OneDrive is not. The wizard exists because there is no data
+    // yet; once there is, hand over to the archive instead of running the
+    // first scan over it.
+    if (s.signedIn && s.archiveExists) {
+      exit(opts.onDone);
+      return;
+    }
     const before = `${state.signedIn}${state.deviceCode?.code ?? ""}`;
     state.signedIn = s.signedIn;
     state.deviceCode = s.deviceCode;

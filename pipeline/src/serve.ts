@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { originAllowed } from "./originCheck.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
@@ -834,11 +834,17 @@ const routes: [RegExp, string, Handler][] = [
     "GET",
     async (req, res) => {
       if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      const signedIn = await hasCachedAccount();
+      const neverScanned = !(await readSync()).lastScanAt;
       return json(res, 200, {
-        signedIn: await hasCachedAccount(),
+        signedIn,
         deviceCode: getPendingDeviceCode(),
         photosFolderValidatedAt: (await readOobe()).photosFolderValidatedAt ?? null,
-        neverScanned: !(await readSync()).lastScanAt,
+        neverScanned,
+        // Only worth asking when everything local says "first run": an account
+        // that already has an archive is exactly what makes the wizard
+        // unnecessary, and it is the one fact this machine cannot answer alone.
+        archiveExists: neverScanned && signedIn ? await archiveAlreadyExists() : false,
         photosFolder: env.photosFolder,
       });
     },
@@ -2037,6 +2043,38 @@ const SCAN_EVERY_MS = 6 * 60 * 60 * 1000;
  * busy server and the scan never ran at all.
  */
 const SCAN_CHECK_MS = 5 * 60 * 1000;
+
+let archiveProbe: { value: boolean; at: number } | null = null;
+const ARCHIVE_PROBE_MS = 60_000;
+
+/**
+ * Whether the metadata folder already holds an archive.
+ *
+ * The wizard decides whether this machine is a first run from `sync.json`,
+ * which is per machine — so a reinstall, a second PC or a new Windows profile
+ * reads as a first run even when the account's OneDrive already holds the whole
+ * library. That mistake is not cosmetic: the wizard's last page runs the first
+ * scan, which re-lists every month folder and rewrites `index.json` against an
+ * archive that already exists, on a design that assumes exactly one writer.
+ *
+ * Asked only when everything local says fresh and somebody is signed in, and
+ * cached for a minute, because `/oobe` is polled every two seconds while the
+ * wizard is open. One item-metadata request, not the multi-megabyte download
+ * (see `fetchItemMeta`). Unanswerable counts as "fresh" — the behaviour before
+ * this existed.
+ */
+async function archiveAlreadyExists(): Promise<boolean> {
+  if (archiveProbe && Date.now() - archiveProbe.at < ARCHIVE_PROBE_MS) return archiveProbe.value;
+  let value = false;
+  try {
+    const token = await getCachedAccessToken();
+    if (token) value = (await fetchItemMeta(token, env.metadataFolder, "index.json")) !== null;
+  } catch {
+    value = false;
+  }
+  archiveProbe = { value, at: Date.now() };
+  return value;
+}
 
 /**
  * An incremental scan when the last one has aged out. Listing only: it reads

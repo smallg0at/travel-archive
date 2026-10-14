@@ -419,6 +419,13 @@ export interface OobeState {
   photosFolderValidatedAt: string | null;
   /** True until a scan has saved an index — a fresh archive. */
   neverScanned: boolean;
+  /**
+   * True when the signed-in account already has an archive in OneDrive even
+   * though this machine has never scanned one: a reinstall, a second PC, a new
+   * Windows profile. The local state is fresh, the library is not, and the
+   * wizard's premise (there is no data yet) no longer holds.
+   */
+  archiveExists: boolean;
   /** The configured value, whatever its source. */
   photosFolder: string;
 }

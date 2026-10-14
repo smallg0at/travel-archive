@@ -155,16 +155,26 @@ that remembers itself).
 
   ```jsonc
   {
-    "needed": true,                    // never-scanned && canWrite
-    "reasons": ["server-not-signed-in", "photos-folder-unverified", "never-scanned"],
-    "optional": ["ai-key"],            // blocks nothing that reads
-    "photosFolder": "图片/本机照片",     // current value, whatever its source
-    "folderState": "unknown",          // unknown | ok | not-found | no-months
-    "signedIn": false,
-    "language": "zh-Hans",
-    "deviceCode": null                 // { url, code, expiresAt } while pending
+    "signedIn": true,
+    "deviceCode": null,                  // { url, code, expiresAt } while pending
+    "photosFolderValidatedAt": null,     // stamped once a human agreed to the path
+    "neverScanned": true,                // sync.json has no lastScanAt *on this machine*
+    "archiveExists": true,               // ...but the account already has one in OneDrive
+    "photosFolder": "Pictures/Travel"    // current value, whatever its source
   }
   ```
+
+  `archiveExists` was added 2026-10-14, after the first real first-run test of
+  the packaged build. `neverScanned` comes from `sync.json`, which is per
+  machine, so a reinstall, a second PC or a new Windows profile read as a first
+  run even when the account's OneDrive already held the whole library — and the
+  wizard's last page would then have re-scanned it, re-listing every month
+  folder and rewriting `index.json`, against a design that assumes one writer.
+  The server asks the metadata folder for `index.json` — one item-metadata
+  request, cached a minute, and only when everything local says fresh *and*
+  somebody is signed in. The app's entry condition is now
+  `neverScanned && !archiveExists`, and a sign-in that reveals an archive hands
+  over to it instead of continuing the wizard.
 
 - Folder writes stay on `POST /config`; no second path to the same value.
   Folder **reads** need one new endpoint (a bounded listing for the picker —
