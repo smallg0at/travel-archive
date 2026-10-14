@@ -559,41 +559,6 @@ ipcMain.handle("print-to-pdf", async (event, name?: string) => {
   }
 });
 
-/**
- * A fresh install has no `.env`, so the job server cannot start.
- *
- * That is not a broken state — the app signs in and reads the whole archive
- * from OneDrive, because `VITE_AZURE_CLIENT_ID` is baked into the build at
- * compile time. Only *generation* needs the pipeline's own credentials. But
- * without a word of explanation the Generate controls would simply be absent,
- * which reads as a bug rather than as "not configured yet".
- *
- * This fires only when `ARCHIVE_HOME` is set, which is only in a packaged
- * build — and a packaged build has every non-secret setting baked in (see
- * desktop/scripts/bundle-pipeline.mjs), so the job server does start and the
- * one genuinely missing value is the AI provider's key. That is why this can
- * now send you to Settings > Generation instead of asking you to write a file:
- * the server that serves that form is already running.
- */
-async function warnIfUnconfigured(): Promise<void> {
-  if (!ARCHIVE_HOME || existsSync(join(ARCHIVE_HOME, ".env"))) return;
-
-  const { response } = await dialog.showMessageBox({
-    type: "info",
-    title: "Generation not configured",
-    message: "The archive will open, but summaries cannot be generated yet.",
-    detail:
-      `Add your AI provider's API key under Settings > Generation and you are ` +
-      `done — everything else is already configured in this build.\n\n` +
-      `Browsing and reading the archive works without it.`,
-    buttons: ["Continue", "Open the settings folder"],
-    defaultId: 0,
-  });
-  // The folder is the second button now rather than the first: it is the escape
-  // hatch for editing `.env` by hand, not the instruction it used to be.
-  if (response === 1) void shell.openPath(ARCHIVE_HOME);
-}
-
 async function startup(): Promise<void> {
   if (!existsSync(join(APP_DIST, "index.html"))) {
     dialog.showErrorBox(
@@ -711,8 +676,6 @@ async function startup(): Promise<void> {
       });
     }
   })();
-
-  void warnIfUnconfigured();
 }
 
 // Electron allows a second instance to launch by default, which here would mean
