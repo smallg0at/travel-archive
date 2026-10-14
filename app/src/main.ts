@@ -26,6 +26,16 @@ import { requireAccess } from "./gate";
 
 let panelMounted = false;
 
+/**
+ * Whether the local job server holds its own Microsoft session.
+ *
+ * Set from the single health read at startup. When it is true the server serves
+ * the metadata from the mirror and the images from `/thumb`, so the renderer
+ * needs no Microsoft session of its own — and a read that fails there is a gap
+ * in the mirror, not a missing sign-in.
+ */
+let serverHasGraph = false;
+
 function showSignInBanner(): void {
   document.getElementById("signin-banner")!.hidden = false;
 }
@@ -86,6 +96,14 @@ async function loadAndRender(): Promise<void> {
     }
   } catch (err) {
     if (err instanceof SignInRequiredError) {
+      // With the server signed in, a Microsoft session in the renderer is not
+      // what is missing: it is a month the mirror has not got yet, which the
+      // server is fetching as we speak. Prompting for a sign-in there is a lie
+      // the owner reads as "am I signed in or not?" (reported 2026-10-14).
+      if (serverHasGraph) {
+        showMessage(ui.app.loadGap);
+        return;
+      }
       showSignInBanner();
       showMessage(ui.app.signInToLoadArchive);
       return;
@@ -178,7 +196,11 @@ async function main() {
   // Photo/shard loads that hit an expired session ask for a re-auth click
   // via this event rather than popping a popup themselves — browsers block
   // popups that don't originate from a user gesture.
-  window.addEventListener("signin-required", showSignInBanner);
+  window.addEventListener("signin-required", () => {
+    // Only the reader's own Graph use raises this; when the server can serve it
+    // means a mirror gap, so the banner stays away.
+    if (!serverHasGraph) showSignInBanner();
+  });
 
   document.getElementById("signin-button")!.addEventListener("click", async () => {
     try {
@@ -214,7 +236,7 @@ async function main() {
   // remote reader is served by a signed-in job server and never talks to Graph,
   // so the Microsoft session is neither available nor wanted.
   if (isLocalMachine) {
-    const serverHasGraph = health.ok && health.health.signedIn;
+    serverHasGraph = health.ok && health.health.signedIn;
     if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
   }
 

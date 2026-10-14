@@ -20,6 +20,7 @@ export const en = {
     resizeHandle: "Drag to resize · double-click to reset",
     loadingArchive: "Loading archive…",
     signInToLoadArchive: "Sign in to load your archive.",
+    loadGap: "This part of the archive is not on this machine yet — it is being fetched from OneDrive. Reload in a moment.",
     failedToLoad: (message: string) => `Failed to load archive: ${message}`,
     failedToStart: (message: string) => `Failed to start: ${message}`,
     emptyArchiveHtml: `The archive is empty. The scan found no photos — check the photos folder under Settings → Library and scan again.`,

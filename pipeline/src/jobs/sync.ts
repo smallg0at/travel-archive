@@ -21,6 +21,8 @@ import type { ProgressFn } from "./analyze.js";
  */
 
 const INDEX_FILE = "index.json";
+const HOME_FILE = "home.json";
+const SEARCH_FILE = "search.json";
 
 /** Bytes of the local metadata mirror — index plus every month shard. */
 async function metadataBytes(): Promise<number> {
@@ -44,6 +46,29 @@ async function metadataBytes(): Promise<number> {
     /* no shards yet */
   }
   return total;
+}
+
+/**
+ * Whether the mirror really holds the archive its index describes.
+ *
+ * `index.json` alone is not a mirror: the read side fills single files from
+ * OneDrive on demand, so a machine can hold an index — or a handful of months —
+ * without ever having pulled the archive. Adopting a baseline for one of those
+ * declared it "in-sync", after which nothing pulled, every month fell back to
+ * Graph, and the reader was asked to sign in for data the server could fetch
+ * itself (measured 2026-10-14: `in-sync` with 4 of 124 shards, then a sign-in
+ * prompt the owner could not explain).
+ */
+async function mirrorIsComplete(index: ArchiveIndexFile): Promise<boolean> {
+  const { stat } = await import("node:fs/promises");
+  for (const month of index.months) {
+    try {
+      await stat(dataFile(`photos/${month.month}.json`));
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -185,8 +210,13 @@ export async function checkSync(): Promise<SyncStatus> {
     // adopt the current eTag as the baseline rather than reporting a
     // disagreement that does not exist. Reporting "ahead" here was wrong: local
     // and remote timestamps matched to the second.
+    //
+    // "Clean mirror" is the load-bearing word, and it means *complete*: a mirror
+    // the read side filled file by file was never uploaded, so it is behind, not
+    // in sync.
     if (!local) status.state = "never-synced";
     else if (state.dirty) status.state = "ahead";
+    else if (!(await mirrorIsComplete(local))) status.state = "behind";
     else {
       await markSynced(remote.eTag);
       status.state = "in-sync";
@@ -291,8 +321,17 @@ export async function runSync(
     );
   }
 
+  // `never-synced` means there is nothing here to lose: no marker, and in the
+  // case this exists for, no mirror either — while the account's OneDrive holds
+  // the archive (a reinstall, a second PC, a fresh Windows profile). Pulling is
+  // the whole point there, and skipping it made the wizard's copy page report
+  // "Sync complete" having fetched nothing, leaving every later read to fall
+  // back to Graph and the reader to be asked for a sign-in it did not need
+  // (measured 2026-10-14: metadataPulled 0 in 19ms, then a sign-in prompt).
   const shouldPull =
-    status.state === "behind" || (status.state === "conflict" && opts.resolve === "replace-mine");
+    status.state === "behind" ||
+    status.state === "never-synced" ||
+    (status.state === "conflict" && opts.resolve === "replace-mine");
 
   if (shouldPull) {
     // The lock covers only this phase. It writes data/, so a CLI run must not
@@ -311,6 +350,22 @@ export async function runSync(
       await mkdir(dataDir(), { recursive: true });
       await writeFile(dataFile(INDEX_FILE), JSON.stringify(index, null, 2), "utf-8");
       result.metadataPulled++;
+
+      // The home map and the searchable text are metadata too, and the read
+      // side asks for both. They are *generated* files, so only a pull can
+      // bring them: a machine that merely copies an archive has no job that
+      // would rebuild them, and without them its home page and search have to
+      // reach Graph.
+      for (const [file, label] of [
+        [HOME_FILE, "home"],
+        [SEARCH_FILE, "search"],
+      ] as const) {
+        const doc = await downloadMetadataJson<unknown>(token, env.metadataFolder, file);
+        if (!doc) continue;
+        await writeFile(dataFile(file), JSON.stringify(doc, null, 2), "utf-8");
+        result.metadataPulled++;
+        onProgress({ message: `Pulled ${label}` });
+      }
 
       // Shards follow the index: only the months it names can be reached.
       await mkdir(dataFile("photos"), { recursive: true });

@@ -18,6 +18,7 @@ export const zhHans: Messages = {
     resizeHandle: "拖动调整宽度 · 双击恢复默认",
     loadingArchive: "正在加载档案…",
     signInToLoadArchive: "登录后即可加载照片档案。",
+    loadGap: "档案的这一部分还没复制到这台机器，正在从 OneDrive 取——稍后刷新即可。",
     failedToLoad: (message) => `档案加载失败：${message}`,
     failedToStart: (message) => `启动失败：${message}`,
     emptyArchiveHtml: `照片档案为空。扫描没有找到照片——请在“设置 → 档案”检查照片目录后重新扫描。`,
