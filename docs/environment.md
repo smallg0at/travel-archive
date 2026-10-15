@@ -387,3 +387,34 @@ the dead child — and if none fires, that absence points at the browser process
 If it is the GPU child, the window's `backgroundMaterial: "mica"`, transparent
 background and `titleBarOverlay` are the first suspects; Electron has a long
 history of Windows bugs in exactly that trio.
+
+## Installing the packaged build in a sandbox (2026-10-15)
+
+Sandboxie is usable for "install it, launch it, watch the first run", with three
+things it does by design that cost an afternoon if you do not know them.
+
+**It injects a Chromium switch, and the job server dies on it.** Sandboxie hooks
+`GetCommandLineW`/`A` and inserts flags into any process it classifies as a
+Chromium browser, whatever the executable — its default value is
+`--disable-features=PrintCompositorLPAC`
+([CustomChromiumFlags](https://sandboxie-plus.com/sandboxie/customchromiumflags/)).
+The shell starts the server role by running the app's own binary as node, without
+`--type=`, so it counts as a "main" process and receives the flag; node then
+rejects the unknown option, no server starts, and the wizard is unreachable.
+Empty the setting in the box's ini to get it back:
+
+```ini
+[DefaultBox]
+CustomChromiumFlags=
+```
+
+Everything else about the app is correct there: the failure dialog names the
+option verbatim and the archive degrades to read-only.
+
+**It does not virtualise the network.** A boxed shell reaches the host's job
+server on loopback and adopts it, so the box looks like it works — and then
+behaves differently the moment the host's server stops. Stop the host server
+before launching in a box, or you are testing the host.
+
+**The NSIS installer hangs under `/S` inside a box.** Run the wizard
+interactively; `/S` is for real machines.
