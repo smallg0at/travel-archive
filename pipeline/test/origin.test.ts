@@ -40,7 +40,7 @@ describe("a server bound to loopback", () => {
     // Nothing outside can reach it, so nothing outside needs to be allowed to
     // call it — which is stricter than this used to be.
     for (const origin of [
-      "http://192.168.x.y:17923",
+      "http://192.168.7.7:17923",
       `http://${own}:17923`,
       `http://${own}.local:17923`,
       "http://mypc:17923",
@@ -53,7 +53,7 @@ describe("a server bound to loopback", () => {
 describe("an exposed server", () => {
   it("accepts every way it is addressed, on an app port", () => {
     for (const origin of [
-      "http://192.168.x.y:17923",
+      "http://192.168.7.7:17923",
       "http://10.1.2.3:5173",
       "http://172.20.10.2:4173",
       "http://169.254.7.7:17923",
@@ -79,7 +79,7 @@ describe("an exposed server", () => {
       "http://127.0.0.1.nip.io:17923",
       "http://localhost.localtest.eu:17923",
       "http://8.8.8.8:17923",
-      "http://192.168.x.y:8080",
+      "http://192.168.7.7:8080",
       "http://mypc:22",
       "null",
       "file:///etc/passwd",
