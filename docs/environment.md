@@ -199,6 +199,14 @@ origin has no reader session, so this reaches everything that renders before
 the archive loads — the setup wizard, offline and error states — and none of
 what sits behind the sign-in wall.
 
+One thing cannot be driven this way: **print.** In a browser `window.print()`
+blocks the renderer until the OS dialog is dismissed — by design, and
+`app/src/print.ts` relies on it to know when it may restore the page — so a tab
+being driven over CDP simply stalls there. Test print by hand. The desktop shell
+is not affected at all: where `electronAPI.printToPDF` exists (the packaged app)
+print goes through the main process straight to a PDF file, with no dialog and
+nothing that blocks.
+
 ## Operations on this machine (2026-10-10)
 
 **Backgrounded shells are ephemeral, and the ledger lies.** OpenCode's
