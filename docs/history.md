@@ -218,10 +218,10 @@ The local path is no longer the weak one at transcription: Jaccard 1.00 and 0.95
 of the cloud's length means it reads a page the way the cloud does. It loses
 nothing measured here except wall clock, and it beats gemma-4-e4b on every
 quality row. The 32-screenshot set says the same thing in prose —
-`RJX13479 from a main station to a city Airport`,
-`a scenic express from a junction to a city`, `a Google Maps route from the
-a museum to the a museum` — against gemma's
-`a train journey schedule`. (The thinking-on columns ran one sentence of the
+`RJX13479 from a main station to an airport`,
+`a scenic express from a junction to a city`, `a Google Maps route from one
+museum to another` — against gemma's `a train journey schedule`. (The thinking-on
+columns ran one sentence of the
 brief earlier; that is not a controlled pair, though a sentence about script
 fidelity does not explain 0.87 against 0.76.)
 
