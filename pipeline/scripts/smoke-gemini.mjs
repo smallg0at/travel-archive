@@ -26,7 +26,7 @@ console.log("\nTesting geminiProvider.summarizeDay()...");
 try {
   const summary = await geminiProvider.summarizeDay({
     date: "2024-04-15",
-    place: "a city, South Korea",
+    place: "Someplace, Country",
     timeUncertain: false,
     placeFromMetadataOnly: false,
     // Days are passed as the stops they were spent at, not as a flat photo

@@ -174,8 +174,8 @@ export async function offlinePlace(gps: GeoPoint): Promise<OfflinePlace | null> 
   for (let cells = 3; !near.length && cc && cells <= 24; cells *= 2) near = collect(cells, Infinity);
   if (!near.length) return null;
 
-  // The largest place whose reach covers the point — so a photo inside Beijing
-  // is Beijing rather than the neighbourhood it stands in, while one in a
+  // The largest place whose reach covers the point: a photo inside a big city
+  // is that city rather than the neighbourhood it stands in, while one in a
   // village that no city reaches keeps the village's name.
   let claimed: { i: number; d: number } | null = null;
   for (const c of near) {

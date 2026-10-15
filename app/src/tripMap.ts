@@ -95,8 +95,8 @@ const FALLBACK_CLUSTER_KM = 15;
  * join whatever cluster is open — so a long train ride with sparse indoor
  * signal looks stationary and is classified as a place. On the map that became
  * a city at the midpoint of the journey, named after a town it passed:
- * "a city to a city by ICE" appeared as **a city**, 156km from a city,
- * plotted near a city. Two more sat exactly on top of a city under other
+ * a route between two cities, by rail, appeared as a third, 156km from it,
+ * plotted near a fourth. Two more sat exactly on top of a fifth under other
  * towns' names.
  */
 const MAX_PLACE_SPAN_KM = 30;

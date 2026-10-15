@@ -186,7 +186,7 @@ function dayGeography(index: ArchiveIndexFile, shards: Map<string, PhotoShard>):
  * night was too, however late the last photo was taken. Only when the next
  * morning is unknown, or is itself away, does the evening decide.
  *
- * Getting this wrong went both ways: York and a city were offered as
+ * Getting this wrong went both ways: two cities were offered as
  * one-night trips, and genuine days out were hidden behind the same mistake.
  */
 function nightsAway(days: DayGeo[], homeAt: (day: number) => Fix | null): boolean[] {
@@ -419,7 +419,7 @@ export function findExcursions(index: ArchiveIndexFile, shards: Map<string, Phot
     if (!home) continue;
     // Home at both ends. Tonight at home is what separates a day out from the
     // first day of a trip; last night at home separates it from the last day
-    // of one, which also comes home — the a city trip's third day came back
+    // of one, which also comes home: one trip's third day came back
     // 224km and read as a day out until the night before was checked. Where
     // there is no photo the day before to judge by, the morning stands in.
     const previous = days[i - 1];

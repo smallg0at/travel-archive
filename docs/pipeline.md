@@ -133,7 +133,7 @@ longer has to be typed by hand — see **Trips propose themselves** below:
 
 ```json
 [
-  { "id": "trip-japan-korea-2024-04", "name": "a city, Japan & Korea", "startDate": "2024-04-12", "endDate": "2024-04-16" }
+  { "id": "trip-example-2025-01", "name": "An example trip", "startDate": "2025-01-01", "endDate": "2025-01-05" }
 ]
 ```
 
