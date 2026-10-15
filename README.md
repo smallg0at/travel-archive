@@ -94,9 +94,9 @@ Settings says so when it detects one.
 ## Known simplifications
 
 - **The desktop holds shards in memory for the session, not persisted client-side.** Flipping between month tabs is instant after first load, but a reload re-fetches. The phone does persist them (see [`docs/clients.md`](docs/clients.md)); on the desktop the job server's mirror is a ~34ms read, so there is less to gain.
-- **No cross-archive search.** Finding "everything tagged `temple` in 2023" means loading every shard. The fix when it's wanted is a third artifact — a compact `search.json` of `{id, tags, place, truncated text}`, ~1.5MB at 10k photos — not turning the store into a database.
-- **Model is configurable via `GEMINI_MODEL`** (default `gemini-3.6-flash`). For bulk tagging at this volume a cheaper tier (`gemini-3.6-flash-lite`) is worth considering.
-- **Trip ranges are edited by hand** (`pipeline/trips.json`); re-run `organize` after adding one.
+- **Search reads one generated file, not a database.** `search.json` holds ids, tags, places and truncated text — roughly 2.7MB at 10,000 photos — and the home page searches it in the browser. It is a third artifact to keep in step with the index, which is the price of having no search backend.
+- **Trip dates are the one thing the app will not edit.** Trips are defined and renamed in the app, and the file behind them is `pipeline/data/trips.json` (an older root-level `pipeline/trips.json` is moved into `data/` when it is seen). Changing a range still means editing that file and re-running `organize`.
+- **The captioning model is a setting, not a recommendation.** `GEMINI_MODEL` defaults to `gemini-3.7-flash`, the tier the throughput numbers in [`docs/history.md`](docs/history.md) were measured against; bulk tagging at this volume is the case for setting something cheaper.
 
 ## Licence and attribution
 
