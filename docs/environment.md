@@ -68,6 +68,31 @@ version directory needs finding after an upgrade.
 
 ---
 
+## Driving the phone app
+
+The Android app is the same TypeScript under `app/src`, built separately into
+`dist-mobile/` (`npm run --workspace app android:apk`: vite with
+`vite.mobile.config.ts`, then `npx cap sync`, then `gradlew assembleDebug`).
+About a minute; the APK lands in
+`app/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+- `adb install -r <apk>` keeps the app's data. The OneDrive metadata folder it
+  reads is baked at build time from `VITE_ONEDRIVE_METADATA_FOLDER` in `app/.env`
+  (`Apps/DayArchive`), so a build with that variable overridden points the app at
+  a folder that does not exist — the way to see what an account with no archive
+  gets without touching the owner's account.
+- Screenshots: `adb shell screencap -p /sdcard/x.png` then `adb pull`; do not
+  pipe `adb exec-out` into a file, PowerShell mangles the bytes.
+- The app's own console: `adb logcat -d | Select-String "Capacitor/Console"`.
+  `logcat --pid=` came back empty on this adb; filter on the message text.
+- The debug build is debuggable, so the WebView's state can be edited surgically:
+  `adb shell run-as com.travelarchive.photos rm -rf app_webview/Default/IndexedDB`
+  drops the kept archive and nothing else. The Microsoft session does **not**
+  live in the WebView's Local Storage — clearing that too left the app signed in.
+- A cold start with no kept archive is the case to be careful with: measured
+  2026-10-17 it can spin silently for over a minute before anything appears (see
+  the TODO item on the cold start), which is what a fresh install does.
+
 ## Operations on this machine (2026-10-07)
 
 **The job server starts itself at sign-in.** `HKCU\...\Run\PhotoArchiveServer`
