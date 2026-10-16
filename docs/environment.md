@@ -24,6 +24,19 @@ Check `fnm list` before concluding anything. Three ways, best first:
 3. Prefix a command with the selected version's directory — what the earlier
    sessions did, and it silently breaks when the version changes.
 
+**`npm run` needs the directory on `PATH`, not just an absolute path to
+`npm.cmd`.** A script's child processes (`tsc`, `vite`, `gradlew`) are launched
+through `cmd /c`, which resolves `node` from `PATH` — so calling npm by absolute
+path still dies with `'"node"' is not recognized`. Prepend the installation
+directory once, then run npm normally:
+
+```powershell
+$env:PATH = "$env:APPDATA\fnm\node-versions\v22.18.0\installation;$env:PATH"
+npm run --workspace app typecheck
+```
+
+(The version directory is machine state, like the absolute path above.)
+
 **Never put the `fnm env … | Invoke-Expression` prefix at the head of a long
 inline command.** That is the exact shape Defender kills, and it takes the whole
 command with it.
