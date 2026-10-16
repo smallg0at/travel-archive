@@ -2,6 +2,7 @@ import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, Tran
 import { loadHomeIndex, loadMonth } from "../archiveData";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "../msAuth";
+import { GRAPH_BYTES_TIMEOUT_MS, GRAPH_QUERY_TIMEOUT_MS, graphFetch } from "../graphHttp";
 import { rememberPhotos } from "./devicePhotos";
 import { contentLanguage, translatedMonths, useIndexTranslations, useMonthTranslations } from "../contentLang";
 
@@ -91,9 +92,7 @@ export async function currentEtag(): Promise<string | null> {
   try {
     const token = await getAccessToken();
     const path = encodeURI(`${METADATA_FOLDER}/${INDEX_KEY}`);
-    const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}?$select=eTag`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await graphFetch(`${GRAPH_BASE}/me/drive/root:/${path}?$select=eTag`, token, GRAPH_QUERY_TIMEOUT_MS);
     if (!res.ok) return null;
     return ((await res.json()) as { eTag?: string }).eTag ?? null;
   } catch {
@@ -163,9 +162,7 @@ async function writeKeptShard(month: string, shard: PhotoShard, etag: string | n
 async function graphShard(month: string, etag: string | null, token: string): Promise<PhotoShard | null> {
   try {
     const path = encodeURI(`${METADATA_FOLDER}/photos/${month}.json`);
-    const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await graphFetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, token, GRAPH_BYTES_TIMEOUT_MS);
     if (!res.ok) return null;
     const text = await res.text();
     const shard = JSON.parse(text) as PhotoShard;
@@ -207,9 +204,7 @@ async function remoteShardEtag(month: string): Promise<string | null> {
   try {
     const token = await getAccessToken();
     const path = encodeURI(`${METADATA_FOLDER}/photos/${month}.json`);
-    const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}?$select=eTag`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await graphFetch(`${GRAPH_BASE}/me/drive/root:/${path}?$select=eTag`, token, GRAPH_QUERY_TIMEOUT_MS);
     if (!res.ok) return null;
     return ((await res.json()) as { eTag?: string }).eTag ?? null;
   } catch {
@@ -320,7 +315,7 @@ async function listShardEtags(token: string): Promise<Map<string, string> | null
       `${GRAPH_BASE}/me/drive/root:/${encodeURI(`${METADATA_FOLDER}/photos`)}:/children?$top=200&$select=name,eTag`;
     const etags = new Map<string, string>();
     while (url) {
-      const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res: Response = await graphFetch(url, token, GRAPH_QUERY_TIMEOUT_MS);
       if (!res.ok) return etags.size ? etags : null;
       const body = (await res.json()) as { value?: { name?: string; eTag?: string }[]; "@odata.nextLink"?: string };
       for (const item of body.value ?? []) {
@@ -446,9 +441,7 @@ async function fetchMonthTranslation(month: string, token: string): Promise<Tran
   if (lang === "en") return null;
   try {
     const path = encodeURI(`${METADATA_FOLDER}/i18n/${lang}/photos/${month}.json`);
-    const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await graphFetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, token, GRAPH_BYTES_TIMEOUT_MS);
     if (!res.ok) return null;
     const file = (await res.json()) as TranslationFile;
     await run("readwrite", (s) => s.put(file, `i18n/${lang}/photos/${month}`)).catch(() => {});
@@ -497,9 +490,7 @@ export async function refreshTranslations(): Promise<void> {
 async function graphJson<T>(fileName: string): Promise<T | null> {
   const token = await getAccessToken();
   const path = encodeURI(`${METADATA_FOLDER}/${fileName}`);
-  const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await graphFetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, token, GRAPH_BYTES_TIMEOUT_MS);
   return res.ok ? ((await res.json()) as T) : null;
 }
 
@@ -596,6 +587,10 @@ export async function ensureSearchKept(): Promise<void> {
  * month whose records are current, so it never looks at the captions at all.
  * This closes that gap — one range read to see what is missing, then one fetch
  * each, once.
+ *
+ * It only knows *which* months to ask for through `translatedMonths()`, so it
+ * is only useful once the index's own translation has landed
+ * (`useIndexTranslations`); callers chain it after `refreshTranslations`.
  */
 export async function fillMonthTranslations(): Promise<void> {
   const lang = contentLanguage();
@@ -609,22 +604,4 @@ export async function fillMonthTranslations(): Promise<void> {
   const token = await graphToken().catch(() => null);
   if (!token) return;
   for (const month of missing) await fetchMonthTranslation(month, token);
-}
-
-/**
- * The reader's language for the archive's own words — trip names, places, day
- * summaries — applied from the copy kept last time when OneDrive cannot be
- * reached, refreshed from OneDrive, and then the month captions that are still
- * missing are fetched.
- *
- * Without this, a phone opening offline read half in Chinese: the interface
- * is compiled into the app and the archive's text is not, so the buttons
- * translated and the trips did not. Month captions are the other half — see
- * `fillMonthTranslations` — and the index has to be in hand first, because
- * `translatedMonths()` is what says which months even have a caption file.
- */
-export async function applyTranslationsKept(): Promise<void> {
-  await applyTranslationsKeptLocal();
-  await refreshTranslations();
-  await fillMonthTranslations();
 }

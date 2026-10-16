@@ -89,9 +89,14 @@ About a minute; the APK lands in
   `adb shell run-as com.travelarchive.photos rm -rf app_webview/Default/IndexedDB`
   drops the kept archive and nothing else. The Microsoft session does **not**
   live in the WebView's Local Storage — clearing that too left the app signed in.
-- A cold start with no kept archive is the case to be careful with: measured
-  2026-10-17 it can spin silently for over a minute before anything appears (see
-  the TODO item on the cold start), which is what a fresh install does.
+- A cold start with no kept archive is bounded now (fixed 2026-10-17, same day
+  it was measured spinning silently for over a minute — the closed TODO item on
+  the cold start holds both measurements). The wait says
+  "正在从 OneDrive 加载档案… N s" under the spinner, the token step and every
+  Graph fetch carry a timeout (`graphHttp.ts`, `msAuth.ts`), and a failed load
+  ends in a message with a Refresh button instead of a spinner. To reproduce
+  the no-archive shape, install a build with `VITE_ONEDRIVE_METADATA_FOLDER`
+  pointed at a folder that does not exist and clear the kept archive as above.
 
 ## Operations on this machine (2026-10-07)
 

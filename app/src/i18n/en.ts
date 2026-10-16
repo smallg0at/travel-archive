@@ -720,6 +720,7 @@ export const en = {
     signInAgain: "Sign in",
     archiveUpdated: "The archive has changed since this copy.",
     refresh: "Refresh",
+    loadingArchive: (seconds: number) => `Loading the archive from OneDrive… ${num(seconds)} s`,
     offline: "Offline — showing what this phone has kept.",
     trips: "Trips",
     daysOut: "Days out",

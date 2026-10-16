@@ -14,7 +14,6 @@ import { renderLibrary, renderMonth } from "./library";
 import { renderSearch, renderSettings } from "./more";
 import { ICONS, setArchive, spinner } from "./ui";
 import {
-  applyTranslationsKept,
   applyTranslationsKeptLocal,
   currentEtag,
   fillMonthTranslations,
@@ -81,9 +80,22 @@ function buildTabs(): (tab: Tab) => void {
   };
 }
 
-function message(text: string): void {
-  screens.replaceChildren(el(`<div class="m-center"></div>`));
-  screens.firstElementChild!.appendChild(Object.assign(document.createElement("p"), { className: "m-note", textContent: text }));
+/**
+ * A load that failed with the spinner already up: what went wrong, and the way
+ * back. Bounded waits (msAuth.ts, graphHttp.ts) make "timed out" a state this
+ * screen can actually reach, so it carries the same reload affordance the
+ * session banner offers mid-read — the app has no other way back from here.
+ */
+function failedScreen(text: string): void {
+  const view = el<HTMLElement>(`<div class="m-center"></div>`);
+  const note = document.createElement("p");
+  note.className = "m-note";
+  note.textContent = text;
+  const button = el<HTMLButtonElement>(`<button type="button" class="m-primary"></button>`);
+  button.textContent = ui.mobile.refresh;
+  button.addEventListener("click", () => location.reload());
+  view.append(note, button);
+  screens.replaceChildren(view);
 }
 
 /**
@@ -192,21 +204,42 @@ async function start(): Promise<void> {
       if (!account) showSessionBanner();
     });
   } else {
-    screens.replaceChildren(el(`<div class="m-center"></div>`));
-    screens.firstElementChild!.appendChild(spinner());
+    // A cold start has nothing to paint from: the token, the index and the
+    // eTag all have to cross the link first, and every one of them used to be
+    // able to wait forever — a wedged silent acquisition or a stalled fetch
+    // held a bare spinner with no words for a measured minute-plus (the
+    // cold-start item, 2026-10-17). Each step is bounded now (msAuth.ts,
+    // graphHttp.ts); the counter below is what says the app is alive while
+    // they run.
+    const view = el<HTMLElement>(`<div class="m-center"></div>`);
+    const status = document.createElement("p");
+    status.className = "m-note";
+    view.append(spinner(), status);
+    screens.replaceChildren(view);
+    const began = Date.now();
+    const tick = setInterval(() => {
+      status.textContent = ui.mobile.loadingArchive(Math.round((Date.now() - began) / 1000));
+    }, 1000);
+    status.textContent = ui.mobile.loadingArchive(0);
     try {
       // The eTag alongside, not after: it is what the next launch compares
       // against, and asking once the index has landed would add a round trip.
-      const [index, , etag] = await Promise.all([loadIndex(), applyTranslationsKept(), currentEtag()]);
+      // Translations stay local-only here — the kept path below shows why the
+      // network half must not hold the first screen — and the fetch that
+      // fills them runs behind the paint instead, captions after it.
+      const [index, , etag] = await Promise.all([loadIndex(), applyTranslationsKeptLocal().catch(() => {}), currentEtag()]);
       setArchive(index);
       void keepIndex(index, etag);
+      void refreshTranslations().then(fillMonthTranslations);
     } catch (err) {
       if (err instanceof SignInRequiredError) {
         signInScreen();
         return;
       }
-      message(ui.app.failedToLoad((err as Error).message));
+      failedScreen(ui.app.failedToLoad((err as Error).message));
       return;
+    } finally {
+      clearInterval(tick);
     }
   }
   if (started) return;
@@ -278,5 +311,5 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   console.error(err);
-  message(ui.app.failedToStart((err as Error).message));
+  failedScreen(ui.app.failedToStart((err as Error).message));
 });

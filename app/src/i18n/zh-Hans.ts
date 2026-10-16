@@ -669,6 +669,7 @@ export const zhHans: Messages = {
     signInAgain: "重新登录",
     archiveUpdated: "云端档案已有更新。",
     refresh: "刷新",
+    loadingArchive: (seconds) => `正在从 OneDrive 加载档案… ${num(seconds)} 秒`,
     offline: "处于离线状态——仅显示手机已保留的内容。",
     trips: "旅行",
     daysOut: "当日往返",

@@ -118,6 +118,36 @@ export class TokenRenewalError extends Error {
 }
 
 /**
+ * How long one silent acquisition may take.
+ *
+ * MSAL's own monitor window gives the hidden renewal iframe 60 seconds, and a
+ * frame that never comes back at all — the WebView case measured on the phone
+ * (the cold-start item, 2026-10-17) — holds the caller past that with nothing
+ * logged and nothing on screen. 15s is generous for the two round trips an
+ * iframe renewal needs, and it turns "forever" into a bounded, retried,
+ * *logged* failure: the timeout arrives here with its own name, so the console
+ * line says which suspect it was.
+ */
+const TOKEN_TIMEOUT_MS = 15_000;
+
+/**
+ * The loser of the race is handled too — its rejection lands on a no-op by
+ * the time it arrives — so an acquisition that fails after we gave up on it
+ * never surfaces as an unhandled rejection. And it is not wasted: a token it
+ * did manage to fetch is in MSAL's cache, which is what the next attempt reads.
+ */
+function withTimeout<T>(pending: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const err = new Error(`silent acquisition did not answer within ${Math.round(ms / 1000)} s`);
+      err.name = "TokenTimeout";
+      reject(err);
+    }, ms);
+    pending.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+/**
  * A valid Graph access token via silent renewal — no user gesture needed,
  * works as long as the cached session is still valid. Throws if there's no
  * signed-in account, or if silent renewal fails and interactive sign-in
@@ -136,7 +166,7 @@ export async function getAccessToken(): Promise<string> {
   if (!account) throw new Error("SIGN_IN_REQUIRED");
 
   try {
-    const result = await msal().acquireTokenSilent({ scopes: SCOPES, account });
+    const result = await withTimeout(msal().acquireTokenSilent({ scopes: SCOPES, account }), TOKEN_TIMEOUT_MS);
     return result.accessToken;
   } catch (err) {
     // Only these two mean the reader has to sign in again. `interaction_in_

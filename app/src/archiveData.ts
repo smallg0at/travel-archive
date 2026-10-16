@@ -1,6 +1,7 @@
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken, TokenRenewalError } from "./msAuth";
+import { GRAPH_BYTES_TIMEOUT_MS, graphFetch } from "./graphHttp";
 import { isLocalMachine } from "./backend";
 import { localArchiveJson } from "./backend";
 import type { TranslationFile } from "@travel-archive/shared";
@@ -110,9 +111,11 @@ async function fetchMetadataJson<T>(fileName: string, localPath: string): Promis
       throw new Error(`Failed to load ${fileName}: could not renew the Microsoft token`);
     }
 
-    const res = await fetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    // The download this bounds is index.json — 3.7MB and the whole first
+    // screen — and a stalled connection used to be able to hold it until the
+    // browser's own multi-minute TCP give-up. Bounded now, like every Graph
+    // fetch (graphHttp.ts).
+    const res = await graphFetch(`${GRAPH_BASE}/me/drive/root:/${path}:/content`, token, GRAPH_BYTES_TIMEOUT_MS);
 
     if (res.status === 404) return null;
     if (res.ok) return (await res.json()) as T;

@@ -229,6 +229,17 @@ the silent frame with one rule (a silent frame is treated like a popup); a
 `RouteProcessor` (which is never asked about an extensionless path), were both
 tried and dropped.
 
+**A Graph fetch is never bare.** Every call to graph.microsoft.com goes through
+`graphFetch` (`app/src/graphHttp.ts`), which carries the rule the health path
+already lived by: anything that may never resolve needs a timeout. A stalled
+CDN connection otherwise waits out the browser's own multi-minute TCP give-up,
+and a wedged MSAL silent acquisition used to hold a cold start with no kept
+archive on a bare spinner past a measured minute, with nothing in the console
+(2026-10-17). Small calls get 20s, downloads 60s; the token step is bounded
+separately (`msAuth.ts`, 15s per attempt) and logs its own `TokenTimeout`, so a
+recurrence attributes itself. A new fetch site that reaches for bare `fetch`
+re-opens the bug.
+
 **Clearing cookies/session resets the interface, but not the offline archive.**
 Measured 2026-09-22 by clearing the WebView's cookies, `localStorage` and
 `sessionStorage`: the MSAL keys go 7 → 0 and the app asks for a sign-in again,

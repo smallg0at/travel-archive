@@ -1,4 +1,5 @@
 import { getAccessToken } from "./msAuth";
+import { GRAPH_BYTES_TIMEOUT_MS, GRAPH_QUERY_TIMEOUT_MS, graphFetch } from "./graphHttp";
 import { getCached, putThumb, releaseObjectUrls } from "./thumbCache";
 import { localServerSource, thumbnailSource } from "./photoSource";
 
@@ -98,17 +99,25 @@ async function flush(): Promise<void> {
       return;
     }
 
-    const res = await fetch(`${GRAPH_BASE}/$batch`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        requests: batch.map((entry, i) => ({
-          id: String(i),
-          method: "GET",
-          url: `/me/drive/items/${entry.itemId}/thumbnails/0/${entry.size}`,
-        })),
-      }),
-    });
+    // One batch is a few hundred bytes either way, but it is the only request
+    // the whole thumbnail queue can have in flight — a batch that never
+    // answers would park every thumbnail behind it forever (graphHttp.ts).
+    const res = await graphFetch(
+      `${GRAPH_BASE}/$batch`,
+      token,
+      GRAPH_QUERY_TIMEOUT_MS,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: batch.map((entry, i) => ({
+            id: String(i),
+            method: "GET",
+            url: `/me/drive/items/${entry.itemId}/thumbnails/0/${entry.size}`,
+          })),
+        }),
+      },
+    );
 
     if (res.status === 429 || res.status === 503) {
       throttledUntil = Date.now() + backoffFrom(res);
@@ -188,12 +197,21 @@ async function thumbnail(itemId: string, size: Size): Promise<string | null> {
     const cdnUrl = await resolveCdnUrl(itemId, size);
     if (!cdnUrl) return null;
 
-    // The CDN link is already authenticated — sending our bearer token here
-    // would be both unnecessary and a leak of it to a different host.
-    const res = await fetch(cdnUrl);
-    if (!res.ok) return null;
+    try {
+      // The CDN link is already authenticated — sending our bearer token here
+      // would be both unnecessary and a leak of it to a different host.
+      const res = await graphFetch(cdnUrl, null, GRAPH_BYTES_TIMEOUT_MS);
+      if (!res.ok) return null;
 
-    return putThumb(key, await res.blob());
+      return putThumb(key, await res.blob());
+    } catch {
+      // A refusal or a timeout is a "no", not an error to escalate: the cell
+      // falls to its missing state, and the inFlight cleanup below lets a
+      // later scroll try again. Left uncaught, the rejection would sit in
+      // `inFlight` for the life of the page and answer the same failure to
+      // every future visit of this photo.
+      return null;
+    }
   })();
 
   inFlight.set(key, load);
@@ -238,9 +256,14 @@ export async function loadFullPhoto(itemId: string): Promise<string | null> {
     return null;
   }
 
-  const res = await fetch(`${GRAPH_BASE}/me/drive/items/${itemId}/content`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  let res: Response;
+  try {
+    res = await graphFetch(`${GRAPH_BASE}/me/drive/items/${itemId}/content`, token, GRAPH_BYTES_TIMEOUT_MS);
+  } catch {
+    // A 4.4MB original over a bad link can exceed the bound; that is a "no
+    // answer", which the lightbox treats exactly like a refused download.
+    return null;
+  }
   if (!res.ok) return null;
   return URL.createObjectURL(await res.blob());
 }
@@ -270,9 +293,12 @@ export async function loadVideoUrl(itemId: string): Promise<string | null> {
     return null;
   }
 
-  const res = await fetch(`${GRAPH_BASE}/me/drive/items/${itemId}?$select=@microsoft.graph.downloadUrl`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  let res: Response;
+  try {
+    res = await graphFetch(`${GRAPH_BASE}/me/drive/items/${itemId}?$select=@microsoft.graph.downloadUrl`, token, GRAPH_QUERY_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
   if (!res.ok) return null;
   const body = (await res.json()) as Record<string, string>;
   return body["@microsoft.graph.downloadUrl"] ?? null;
