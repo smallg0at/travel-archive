@@ -4,6 +4,7 @@ import { isLocalMachine } from "./backend";
 import { thumbnailSource } from "./photoSource";
 import { el, tagChip, transcript, transcriptOriginal } from "./photoUi";
 import { addPhotoTimeControl } from "./dayEdit";
+import { screenCaptionSlot } from "./screenCaptions";
 import { loc } from "./contentLang";
 import { fmtDateTime, ui } from "./i18n";
 
@@ -162,6 +163,16 @@ function renderPhotoPanel(photo: PhotoRecord): void {
     cap.textContent = loc(photo.caption);
     photoPanel.appendChild(cap);
   }
+
+  // The description of a withheld screenshot, in the place the caption would
+  // be. It was written by a model on this machine and says only what kind of
+  // screen the photograph is — nothing on it — so it is shown as the photo's
+  // own words about itself, and only when this reader holds the passphrase.
+  // The line fills itself in when the descriptions open, if they were not
+  // open yet when this photo was opened.
+  const screen = screenCaptionSlot(photo.id);
+  screen.classList.add("viewer-caption");
+  photoPanel.appendChild(screen);
 
   const meta = metaLine(photo);
   if (meta) {

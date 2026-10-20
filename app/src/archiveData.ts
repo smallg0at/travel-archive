@@ -130,6 +130,22 @@ async function fetchMetadataJson<T>(fileName: string, localPath: string): Promis
 }
 
 /**
+ * Any metadata file from the archive, read the way every other one is read.
+ *
+ * The local mirror first, then OneDrive — the same order `index.json` and the
+ * shards use, and the same reason: a file the pipeline has already written is
+ * on the disk, and asking OneDrive for it again costs a round trip.
+ *
+ * Exported because the archive now holds a file that is not JSON in the usual
+ * sense — the encrypted screenshot descriptions — and the reader needs it
+ * through exactly the same path as everything else, so that the phone (no
+ * server) and the desktop (server, mirror) read it identically.
+ */
+export function loadMetadataFile<T>(fileName: string, localPath: string): Promise<T | null> {
+  return fetchMetadataJson<T>(fileName, localPath);
+}
+
+/**
  * Held for the session, like the shards.
  *
  * It used to be fetched on every call, and the album, the home page and search

@@ -53,5 +53,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // server cannot be asked.
   startPipeline: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("start-pipeline"),
+  /**
+   * The passphrase that opens the encrypted screenshot descriptions.
+   *
+   * The only bridge that hands a secret back to the page, and it is here
+   * because the shell is the one surface with a key store: `safeStorage`
+   * encrypts with DPAPI, so the passphrase can be kept across restarts
+   * without ever sitting on the disk in the clear. A browser has no such
+   * store, which is why the same page in a browser keeps the passphrase in
+   * memory only (app/src/screenKey.ts).
+   */
+  screenKey: {
+    available: (): Promise<boolean> => ipcRenderer.invoke("screen-key-available"),
+    get: (): Promise<string | null> => ipcRenderer.invoke("screen-key-get"),
+    set: (passphrase: string): Promise<boolean> => ipcRenderer.invoke("screen-key-set", passphrase),
+    forget: (): Promise<void> => ipcRenderer.invoke("screen-key-forget"),
+  },
 });
 

@@ -547,11 +547,27 @@ export const en = {
     },
     screensCheck: "Check",
     screensStart: "Describe screens",
-    screensDescribed: (n: number) => (n === 1 ? "1 screen described" : `${n} screens described`),
     screensNoPassphrase: "No passphrase yet — the descriptions are encrypted before upload, so one is needed first.",
     screensNoKeyStore: "This machine has no key store, so the screenshot pass cannot run here: the passphrase is kept in the Windows key store (DPAPI), and nothing reads it from a file.",
     screensNoLocal: "No service on this machine to use — install and start Ollama or LM Studio first.",
     screensRunning: "A run is going; its progress is in Activity.",
+    screensReady: "Ready — the local service describes whatever is left.",
+    /**
+     * The read side: what this device can open. The descriptions are opened
+     * here rather than on the server, so the passphrase is asked for here and
+     * kept by this surface — the desktop shell's key store, or the session's
+     * memory where there is none.
+     */
+    screensOnDevice: "On this device",
+    screensOnDeviceCount: (n: number) => (n === 1 ? "1 description readable here" : `${n} descriptions readable here`),
+    screensUnlock: "Unlock",
+    screensForget: "Forget",
+    screensPassEnter: "the passphrase",
+    screensRemember: "Remember on this computer",
+    screensLocked: "Locked — enter the passphrase to read them here",
+    screensOpening: "Opening…",
+    screensNoCrypto:
+      "This connection cannot open them: the browser only offers WebCrypto in a secure context (https, or localhost).",
 
     analyzeNoteHtml:
       "Captions every photo in the range that has never been looked at, one model call each. <strong>This is the step that costs money</strong> — check the estimate first. Re-running is safe: photos that already have a caption are skipped. <em>Leave a date blank to leave that end open</em> — both blank means the whole archive.",
@@ -760,6 +776,9 @@ export const en = {
     autoCache: "Keep months offline",
     offlineGroup: "Offline",
     offlineKept: "Months kept",
+    screens: "Screenshot descriptions",
+    screensWhy:
+      "The screenshots nobody was allowed to show to a cloud model were described by a model on the computer that holds it, and the descriptions are encrypted before they are uploaded. This app reads them from OneDrive and opens them here, on this phone — the passphrase is needed once and is kept only while the app is open.",
     autoCacheWhy:
       "Downloads every month's photo records in the background, so the library opens at once and works with no signal. Pictures stay on OneDrive and load as you scroll.",
     cacheMonths: (kept: number, total: number) => `${num(kept)} of ${num(total)} months kept`,

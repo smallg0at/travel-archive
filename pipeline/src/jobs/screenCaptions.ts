@@ -105,10 +105,22 @@ export async function runScreenCaptions(
   // month it is on, or a reader (and their own author, once) reads the silence as
   // a hung job.
   const plan: { month: string; targets: PhotoRecord[] }[] = [];
+  let dated = 0;
   for (const [i, summary] of index.months.entries()) {
     if (signal?.aborted) break;
     onProgress({ phase: "loading", message: `Reading ${summary.month} (${i + 1}/${index.months.length})...` });
     const shard = await loadShard(token, summary.month);
+    // The day each description belongs to, filled in while the shard is in
+    // hand: it is the only place the date is written down, and it is what lets
+    // a reader find the description by searching for its day.
+    for (const photo of Object.values(shard.photos)) {
+      const entry = done.entries[photo.id];
+      if (!entry || entry.date) continue;
+      const date = photo.takenAt?.slice(0, 10) ?? null;
+      if (!date) continue;
+      entry.date = date;
+      dated += 1;
+    }
     const targets = screenTargets(Object.values(shard.photos), done.entries);
     if (targets.length) plan.push({ month: summary.month, targets });
   }
@@ -118,6 +130,12 @@ export async function runScreenCaptions(
   const result: ScreenCaptionsResult = { described: 0, failed: 0, skipped: 0, deferred: waiting - total };
 
   if (total === 0) {
+    // Nothing left to describe, but the days may still have been filled in —
+    // and a day that is not written down is a description a search cannot find.
+    if (dated > 0) {
+      onProgress({ phase: "saving", message: "Saving descriptions..." });
+      await saveScreenCaptions(token, done);
+    }
     onProgress({
       phase: "done",
       done: 0,
@@ -172,6 +190,10 @@ export async function runScreenCaptions(
         tags: caption.tags,
         model: providerId,
         at: new Date().toISOString(),
+        // The day, so a reader can group the description under it. Without it
+        // the description is shown on the photograph's own day page but cannot
+        // be found by searching for it — the search index is built by date.
+        date: record.takenAt?.slice(0, 10) ?? null,
       };
       result.described += 1;
       streak = 0;

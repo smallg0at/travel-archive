@@ -89,6 +89,56 @@ all** — a settlement lookup miss, not a venue miss.
 
 ---
 
+## The screenshot descriptions, and where the passphrase lives
+
+The archive carries a file of descriptions for the **2,352 screenshots** the
+allowlist keeps away from the cloud model (`pipeline/src/screenshots.ts`). It
+travels with everything else, sealed: AES-256-GCM over the whole file, key =
+`scrypt(passphrase, salt)`, and the ciphertext is authenticated against
+`travel-archive/screen-captions/v1` as associated data. The plaintext is never
+written to disk.
+
+**The read path is the reader's.** The app fetches the sealed envelope —
+from the local mirror on the desktop (`/archive/screens`), straight from
+OneDrive on the phone, the same route as `index.json` — and opens it **in the
+page** (`app/src/screenCrypto.ts`: WebCrypto for AES-GCM, `scrypt-js` for the
+KDF, which WebCrypto does not have). The plaintext therefore never crosses a
+network, and the phone reads the same descriptions as the desktop without a
+server. The server still holds the passphrase in its own key store
+(`data/screen-key.json`, DPAPI) because it has to *write* the file; it no
+longer hands it out.
+
+**Where the passphrase lives is the surface's business**
+(`app/src/screenKey.ts`):
+
+| surface | can keep it | where |
+|---|---|---|
+| the desktop shell | yes | Electron's `safeStorage` — DPAPI, per Windows account, per machine |
+| a browser on localhost | no | this session's memory, gone when the tab closes |
+| the phone | no | the same; a Keystore plugin is the follow-up |
+| a browser on the LAN | no | it cannot decrypt at all — WebCrypto needs a secure context |
+
+**A description says what kind of screen a photograph is** — a chat
+conversation, an ID card, a passport page — and nothing on it. The model was
+shown one picture and told to name the kind (`providers/screenshotPrompt.ts`).
+It is therefore safe to show in the reader, which is the point of it: the
+description appears under the photograph on a day's page and in the month
+album, and the coarse tags are searchable.
+
+**Each description also carries the day it belongs to.** The search index is
+built by day, so a description without a date cannot be grouped under one and
+does not come up in a search at all. The date is in the photograph's record,
+not in the description, so filling it in means walking the shards once and
+matching ids: `npm run --workspace pipeline screens:dates` (and the screenshot
+pass itself now fills it in as it goes). Done on 2026-10-21 for all 2,352.
+
+**What is left:** a Keystore plugin for the phone, so the phone can be asked
+once instead of every session; and moving the section out of Generate into
+Settings, next to the other sections (the position is decided, the move is
+not).
+
+---
+
 ## How captioning works, for when it is needed again
 
 - **Context.** The prompt carries the camera's clock in words, the trip, the

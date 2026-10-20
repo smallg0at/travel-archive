@@ -1319,6 +1319,40 @@ html.desktop-shell .nav-year:hover {
   cursor: zoom-in;
 }
 
+/* --- The description of a withheld screenshot --------------------------- */
+
+/* What a model on this machine said about a screenshot nobody was allowed to
+   show to anyone else: the *kind* of screen, and nothing on it. It is the
+   photograph's own caption, so it sits where a caption sits — under the
+   photograph in a day's grid, and over it in the album's dense cells, where
+   there is no room beneath. */
+.screen-caption {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+}
+/* The clamp needs a display, and a display beats `[hidden]` — so the rule that
+   shows the line says so itself, the way every other hidden thing here does. */
+.screen-caption:not([hidden]) {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.grid-cell > .screen-caption {
+  padding: 3px 2px 0;
+}
+.album-cell > .screen-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Room for the video mark in the corner. */
+  padding: 14px 22px 5px 6px;
+  color: rgb(255 255 255 / 0.92);
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.72));
+}
+
 /* Picking photos to retime — see retime.ts. While a selection exists a click
    toggles rather than opens, so the cursor stops promising a zoom, and the
    photos a rename cannot move (EXIF-dated) step back. */
@@ -2799,14 +2833,18 @@ html.desktop-shell #nav-tools {
  * the first place; unqualified, the label rule wins on specificity and this
  * sentence comes out as an 11px grey caption.
  */
-.job-field span.job-key-state {
+.job-field span.job-key-state,
+.job-field span.job-screens-local-state {
   font-size: 12px;
   color: var(--text);
 }
-.job-field span.job-key-state.tone-warn {
+.job-field span.job-key-state.tone-warn,
+.job-field span.job-screens-local-state.tone-warn {
   color: var(--warn);
 }
-.job-form .job-screens-rekey {
+.job-form .job-screens-rekey,
+.job-form .job-screens-unlock,
+.job-form .job-screens-lock {
   align-self: flex-end;
   flex: 0 0 auto;
   padding: 4px 10px;
@@ -2818,7 +2856,8 @@ html.desktop-shell #nav-tools {
  * beats the `hidden` attribute's `display: none`, which is how this was open at
  * rest the first time it was drawn.
  */
-.job-key-box:not([hidden]) {
+.job-key-box:not([hidden]),
+.job-unlock-box:not([hidden]) {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2826,16 +2865,19 @@ html.desktop-shell #nav-tools {
   padding: 8px 0 4px 10px;
   border-left: 2px solid var(--border);
 }
-.job-key-box .job-note {
+.job-key-box .job-note,
+.job-unlock-box .job-note {
   font-size: 11px;
 }
 /* The two fields and their buttons: the same column rhythm as the box itself. */
-.job-key-form {
+.job-key-form,
+.job-unlock-form {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.job-key-box input {
+.job-key-box input,
+.job-unlock-box input[type="password"] {
   font: inherit;
   font-size: 12px;
   color: var(--text);
@@ -2845,14 +2887,28 @@ html.desktop-shell #nav-tools {
   padding: 4px 6px;
   width: 100%;
 }
-.job-key-box input:focus {
+.job-key-box input:focus,
+.job-unlock-box input[type="password"]:focus {
   outline: none;
   box-shadow: inset 0 -2px 0 0 var(--accent);
 }
-.job-key-result:empty {
+/* "Remember on this computer" — a tick and a sentence, on one line. */
+.job-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.job-remember input {
+  width: auto;
+}
+.job-key-result:empty,
+.job-unlock-result:empty {
   display: none;
 }
-.job-key-result.tone-warn {
+.job-key-result.tone-warn,
+.job-unlock-result.tone-warn {
   color: var(--warn);
 }
 .job-select {

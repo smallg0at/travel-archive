@@ -41,6 +41,15 @@ export interface ScreenCaptionEntry {
   model: string;
   /** When it was written, ISO. */
   at: string;
+  /**
+   * The day the screenshot was taken, `YYYY-MM-DD`.
+   *
+   * Optional, because the files written before it existed do not carry it: the
+   * date is what lets a description be grouped under its day when the reader
+   * searches, and without it the description is still shown on the
+   * photograph's own day page — it simply cannot be found by searching.
+   */
+  date?: string | null;
 }
 
 export interface ScreenCaptions {
@@ -180,6 +189,27 @@ async function fileMtime(path: string): Promise<number | null> {
 }
 
 /**
+ * The sealed envelope, without opening it.
+ *
+ * The **read** path is the reader's: the app fetches this file and decrypts it
+ * where it is, so the plaintext never crosses a network and the phone — which
+ * has no server at all — reads the same descriptions as the desktop. This
+ * function is what that path needs: the bytes as they sit in the archive.
+ *
+ * The mirror is trusted on the same terms as everywhere else: the local copy
+ * unless OneDrive's copy is clearly newer.
+ */
+export async function loadScreenCaptionsEnvelope(token: string): Promise<ScreenCaptionsEnvelope | null> {
+  const local = await readLocalEnvelope();
+  if (local) {
+    const meta = await fetchItemMeta(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
+    const remote = meta?.lastModifiedDateTime ? Date.parse(meta.lastModifiedDateTime) : 0;
+    if (remote <= local.mtime + 5000) return local.envelope;
+  }
+  return downloadMetadataJson<ScreenCaptionsEnvelope>(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
+}
+
+/**
  * The descriptions, for a **write** path: the local mirror when it is provably
  * safe, Graph otherwise — the same rule `loadIndexForWriting` keeps, and for the
  * same reason (the mirror is trusted only when the remote is not clearly newer).
@@ -187,14 +217,8 @@ async function fileMtime(path: string): Promise<number | null> {
  */
 export async function loadScreenCaptions(token: string): Promise<ScreenCaptions> {
   const passphrases = await storedPassphrases();
-  const local = await readLocalEnvelope();
-  if (local) {
-    const meta = await fetchItemMeta(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
-    const remote = meta?.lastModifiedDateTime ? Date.parse(meta.lastModifiedDateTime) : 0;
-    if (remote <= local.mtime + 5000) return decryptWithStored(local.envelope, passphrases);
-  }
-  const remote = await downloadMetadataJson<ScreenCaptionsEnvelope>(token, env.metadataFolder, SCREEN_CAPTIONS_FILE);
-  return remote ? decryptWithStored(remote, passphrases) : emptyScreenCaptions();
+  const envelope = await loadScreenCaptionsEnvelope(token);
+  return envelope ? decryptWithStored(envelope, passphrases) : emptyScreenCaptions();
 }
 
 /** Encrypts, writes the local mirror, then uploads. A failed upload costs a re-upload, not the work. */

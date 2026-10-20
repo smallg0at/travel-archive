@@ -647,25 +647,18 @@ export interface ScreensFailure {
   params?: Record<string, string | number>;
 }
 
-/**
- * The descriptions, decrypted by the server for this machine only.
+/*
+ * The descriptions are no longer fetched from here.
  *
- * Loopback-only on the other side, and it answers 409 rather than an empty map
- * when the key cannot open the file: "nothing described yet" is exactly what a
- * wrong key must not look like.
+ * They used to come from `/screens/entries`, which decrypted them **on the
+ * server** and handed the plaintext over loopback. That is gone: the reader
+ * fetches the sealed envelope (the same bytes OneDrive holds) and opens it
+ * where it is, so the plaintext never crosses a network and the phone — which
+ * has no server — can read the same descriptions as the desktop. See
+ * `app/src/screenCaptions.ts`.
  */
-export async function screensEntries(): Promise<
-  { entries: Record<string, { caption: string; tags: string[]; model: string; at: string }> } | ScreensFailure
-> {
-  try {
-    const res = await apiFetch("/screens/entries");
-    const body = (await res.json()) as { entries?: Record<string, { caption: string; tags: string[]; model: string; at: string }> } & ScreensFailure;
-    return res.ok && body.entries ? { entries: body.entries } : { error: body.error ?? `HTTP ${res.status}`, code: body.code, params: body.params };
-  } catch (err) {
-    return { error: (err as Error).message };
-  }
-}
 
+/** Whether the local pass can run, and what it is set to. Loopback only. */
 export async function screensStatus(): Promise<ScreensStatus | null> {
   try {
     const res = await apiFetch("/screens/status", { cache: "no-store" });

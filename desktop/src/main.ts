@@ -1,10 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, session, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, safeStorage, session, shell, systemPreferences } from "electron";
 import type { Server } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { serveApp } from "./static";
 import {
   isHealthy,
@@ -456,6 +456,48 @@ function getSystemAccentColor(): string | null {
 }
 
 ipcMain.handle("get-system-accent", () => getSystemAccentColor());
+
+/**
+ * The passphrase that opens the encrypted screenshot descriptions.
+ *
+ * Kept in `safeStorage`, which encrypts with DPAPI: the value is bound to this
+ * Windows account on this machine, so it cannot be read by another program,
+ * copied to another disk, or unwrapped by another user. The file on disk holds
+ * the encrypted blob and nothing else.
+ *
+ * The shell is the only surface with such a store, and that is exactly why the
+ * reader asks the shell for the passphrase instead of keeping it: a browser on
+ * the same page has nowhere to put it (app/src/screenKey.ts).
+ */
+const screenKeyFile = (): string => join(app.getPath("userData"), "screen-key.json");
+
+ipcMain.handle("screen-key-available", () => safeStorage.isEncryptionAvailable());
+
+ipcMain.handle("screen-key-get", async (): Promise<string | null> => {
+  if (!safeStorage.isEncryptionAvailable()) return null;
+  try {
+    const stored = JSON.parse(await readFile(screenKeyFile(), "utf-8")) as { v?: number; value?: string };
+    if (!stored?.value) return null;
+    return safeStorage.decryptString(Buffer.from(stored.value, "base64"));
+  } catch {
+    // No file, an unreadable file, or a blob this account cannot unwrap — all
+    // three mean the same thing to the reader: there is no passphrase here.
+    return null;
+  }
+});
+
+ipcMain.handle("screen-key-set", async (_event, passphrase: unknown): Promise<boolean> => {
+  if (typeof passphrase !== "string" || !passphrase) return false;
+  if (!safeStorage.isEncryptionAvailable()) return false;
+  const blob = safeStorage.encryptString(passphrase);
+  await mkdir(dirname(screenKeyFile()), { recursive: true });
+  await writeFile(screenKeyFile(), `${JSON.stringify({ v: 1, value: blob.toString("base64") })}\n`, "utf-8");
+  return true;
+});
+
+ipcMain.handle("screen-key-forget", async () => {
+  await unlink(screenKeyFile()).catch(() => {});
+});
 
 /**
  * Starts the job server on demand — the action behind Settings' "start it

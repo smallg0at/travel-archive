@@ -374,3 +374,40 @@ branding icon" and every notification carried the old mark until the reinstall
 the toast anyway, and `SuppressPopup = $true` posts to the Action Center with
 **no banner at all** (confirmed by eye) — what `NOTIFY_BANNER=0` selects, a
 config-only switch on purpose until someone has lived with both.
+
+**The screenshot descriptions are opened in the reader, never on the server.**
+The file `screen-captions.enc` travels with the archive, sealed under a
+passphrase the archive does not carry, and it is decrypted **in the page**
+(`app/src/screenCrypto.ts`). The reason is the phone: it has no job server, so
+a design where the server opens the file leaves the phone unable to read the
+very thing the server was asked to protect. The consequence is a rule for
+everything else — **the plaintext of these descriptions never crosses a
+network**, so there is no route that returns them (`/screens/entries` was
+removed when this moved; `/screens/envelope` returns the ciphertext, which is
+the same bytes OneDrive holds), and they never enter `search.json`, which is
+uploaded. What the reader merges into its search index is its own copy, in
+memory, and only the descriptions it could open.
+
+**The passphrase is kept per surface, and only after it has opened
+something.** Where it lives is the surface's business (`app/src/screenKey.ts`):
+the desktop shell has Electron's `safeStorage` (DPAPI — per Windows account,
+per machine), a browser and the phone have the session's memory and nothing
+else, and a browser on the home network cannot decrypt at all (WebCrypto needs
+a secure context, which is the platform's rule and a good one). **Never
+`localStorage`** — that is plaintext, and the whole point is that the key does
+not sit beside the ciphertext. And the order matters: a passphrase is checked
+against the file's own fingerprint **before** it is written to a store, so a
+mistyped passphrase never replaces a good one — a store holding the wrong
+passphrase can only be emptied by hand, and the error gives no way to tell
+which of the two was wrong.
+
+**A wrong KDF parameter does not fail loudly.** `scrypt-js` takes its
+arguments positionally — `(password, salt, N, r, p, keyLength)` — and nothing
+checks them: swap `N` and the key length and it derives a *different key*
+without a word, so every description in the archive becomes unreadable on the
+phone with a message that says "wrong passphrase". Worse, a large `r` makes
+its progress limit `parseInt(1000 / r)` zero, and the work never advances — a
+hang with no output. The vector in `pipeline/test/screenKey.test.ts` (a
+passphrase, a salt, the key they must produce) and the cross-end test in
+`pipeline/test/screenCrypto.test.ts` (the server's envelope, opened by the
+reader's code) are what catch it; run them after touching either end.

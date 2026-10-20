@@ -518,11 +518,25 @@ export const zhHans: Messages = {
     },
     screensCheck: "校验",
     screensStart: "开始描述",
-    screensDescribed: (n: number) => `已描述 ${n} 张`,
     screensNoPassphrase: "还没有口令——描述要加密后才上传，所以必须先设一个。",
     screensNoKeyStore: "这台机器没有钥匙串，无法在此运行截图描述：口令保存在 Windows 钥匙串（DPAPI）里，没有任何地方会从文件读取它。",
     screensNoLocal: "这台机器上没有可用的服务——请先安装并启动 Ollama 或 LM Studio。",
     screensRunning: "已有一次描述在运行，进度见「活动」。",
+    screensReady: "可以开始——本机服务会描述剩下的部分。",
+    /**
+     * 读的一侧：这台设备能读到什么。描述是在页面里解开的，不是在服务端，
+     * 所以口令在这里输入、由这个界面保管——桌面壳有钥匙串，没有的地方就只
+     * 留在本次会话的内存里。
+     */
+    screensOnDevice: "本机可读",
+    screensOnDeviceCount: (n: number) => `本机可读 ${n} 条描述`,
+    screensUnlock: "解锁",
+    screensForget: "忘记",
+    screensPassEnter: "口令",
+    screensRemember: "在这台电脑上记住",
+    screensLocked: "已锁定——输入口令才能在这里读取",
+    screensOpening: "正在打开……",
+    screensNoCrypto: "这个连接无法解密：浏览器只在安全上下文（https 或 localhost）里提供 WebCrypto。",
 
     analyzeNoteHtml:
       "为范围内所有尚未处理的照片生成说明，每张照片调用一次模型。<strong>此步骤会产生 API 费用</strong>——请先查看费用估算。重复运行是安全的：已有说明的照片会被自动跳过。<em>日期留空即表示该端不限</em>——两端都留空就是全库。",
@@ -709,6 +723,9 @@ export const zhHans: Messages = {
     autoCache: "离线保存全部月份",
     offlineGroup: "离线",
     offlineKept: "已保留月份",
+    screens: "截图描述",
+    screensWhy:
+      "那些不获准外发的截图，由装着模型的电脑上的模型描述过，描述加密后才上传。这个应用从 OneDrive 取回它们，就在这台手机上解开——口令只需输入一次，只在应用打开期间保留。",
     autoCacheWhy:
       "在后台下载每个月的照片记录，让图库即开即用、无信号也能浏览。照片仍保存在 OneDrive，滚动时按需加载。",
     cacheMonths: (kept: number, total: number) => `已保留 ${num(kept)}/${num(total)} 个月`,

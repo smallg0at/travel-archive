@@ -2,6 +2,7 @@ import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "../graphPhoto";
 import { thumbnailSource } from "../photoSource";
 import { el, transcript, transcriptOriginal } from "../photoUi";
+import { screenCaptionSlot } from "../screenCaptions";
 import { contentLanguage, loc } from "../contentLang";
 import { fmtDateTime, ui } from "../i18n";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
@@ -260,6 +261,11 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     if (context) own.prepend(Object.assign(document.createElement("h3"), { textContent: ui.viewer.thisPhoto }));
     const text = loc(photo.caption);
     if (text) own.insertBefore(Object.assign(document.createElement("p"), { textContent: text }), own.querySelector("dl"));
+    // The description of a withheld screenshot, in the place the caption would
+    // be. It says only what kind of screen the photograph is — nothing on it —
+    // and only this reader's passphrase opens it. The line fills itself in if
+    // the descriptions open after this photo was opened.
+    own.insertBefore(screenCaptionSlot(photo.id), own.querySelector("dl"));
     const dl = own.querySelector("dl")!;
     const row = (term: string, value: string | null) => {
       if (!value) return;

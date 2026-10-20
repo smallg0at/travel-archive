@@ -22,6 +22,7 @@ import { healthResult } from "./backend";
 import { localServerSource, setThumbnailSource } from "./photoSource";
 import { initServerStatus } from "./serverStatus";
 import { initSearch, runSearch } from "./searchBar";
+import { ensureScreenCaptions } from "./screenCaptions";
 import { requireAccess } from "./gate";
 
 let panelMounted = false;
@@ -239,6 +240,12 @@ async function main() {
     serverHasGraph = health.ok && health.health.signedIn;
     if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
   }
+
+  // The screenshot descriptions, opened in the background if this surface holds
+  // the passphrase. Not on the critical path: the archive's photographs matter
+  // first, and the descriptions are a line under some of them. A surface with
+  // no passphrase does nothing here at all — it never even fetches the file.
+  void ensureScreenCaptions();
 
   // A fresh archive is configured before it is drawn: with no scan there is no
   // index to show, and the wizard's last page is what runs that scan. Only

@@ -50,7 +50,7 @@ import {
 } from "./jobs/analyzeBatch.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { runScreenCaptions } from "./jobs/screenCaptions.js";
-import { loadScreenCaptions, rekeyScreenCaptions } from "./screenCaptions.js";
+import { loadScreenCaptions, loadScreenCaptionsEnvelope, rekeyScreenCaptions, SCREEN_CAPTIONS_FILE } from "./screenCaptions.js";
 import { canStorePassphrase, hasStoredPassphrase, importLegacyPassphrase } from "./screenKeyStore.js";
 import { passphraseProblem } from "./screenKey.js";
 import { isScreenError } from "./screenErrors.js";
@@ -780,18 +780,20 @@ const routes: [RegExp, string, Handler][] = [
   ],
 
   /**
-   * The descriptions themselves, decrypted — for **this machine only**.
+   * The sealed descriptions — for **this machine only**, and still sealed.
    *
-   * This is the single place the archive's screenshots-withheld-from-the-cloud
-   * texts are legible to a client, and loopback is the whole of the access rule:
-   * the same `access.isLocal` that gates every write. A reader on the LAN gets
-   * 403, and could not use the answer anyway — the browser refuses WebCrypto
-   * outside a secure context (measured: an http://192.168.x.x origin has
-   * `crypto.subtle === undefined`). The phone is the one client that cannot ask
-   * here and decrypts for itself.
+   * The read path is the reader's: the page fetches this envelope and decrypts
+   * it where it is, so the plaintext never crosses a network and the phone —
+   * which has no server at all — reads the same descriptions as the desktop.
+   * What is served here is ciphertext: the same bytes OneDrive holds.
+   *
+   * Loopback is the whole of the access rule, the same `access.isLocal` that
+   * gates every write. A reader on the LAN gets 403, and could not use the
+   * answer anyway — the browser refuses WebCrypto outside a secure context
+   * (measured: an http://192.168.x.x origin has `crypto.subtle === undefined`).
    */
   [
-    /^\/screens\/entries$/,
+    /^\/screens\/envelope$/,
     "GET",
     async (req, res) => {
       if (!access.isLocal(req)) {
@@ -799,11 +801,10 @@ const routes: [RegExp, string, Handler][] = [
       }
       try {
         const token = await getAccessToken();
-        const file = await loadScreenCaptions(token);
-        json(res, 200, { version: 1, entries: file.entries });
+        const envelope = await loadScreenCaptionsEnvelope(token);
+        if (!envelope) return json(res, 404, { error: `No ${SCREEN_CAPTIONS_FILE} yet — nothing has been described` });
+        json(res, 200, envelope);
       } catch (err) {
-        // Never an empty map: that reads as "nothing described yet" and is the
-        // one thing a wrong or unreadable key must not look like.
         json(res, 409, screenFailure(err));
       }
     },
@@ -1115,6 +1116,23 @@ const routes: [RegExp, string, Handler][] = [
     async (_req, res) => {
       const body = await mirrorOrFetch("home.json");
       if (!body) return json(res, 404, { error: "No home.json, in the mirror or in OneDrive" });
+      sendJsonText(res, body);
+    },
+  ],
+  /**
+   * The sealed screenshot descriptions, from the mirror.
+   *
+   * The same route as the other archive files, for the same reason: the file
+   * the pipeline writes is on the disk, and asking OneDrive for it again costs
+   * a round trip. What it carries is ciphertext — the page decrypts it, so the
+   * plaintext never crosses this server.
+   */
+  [
+    /^\/archive\/screens$/,
+    "GET",
+    async (_req, res) => {
+      const body = await mirrorOrFetch(SCREEN_CAPTIONS_FILE);
+      if (!body) return json(res, 404, { error: `No ${SCREEN_CAPTIONS_FILE}, in the mirror or in OneDrive` });
       sendJsonText(res, body);
     },
   ],

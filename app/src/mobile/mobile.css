@@ -760,6 +760,29 @@ body.m .m-map.is-expanded .m-map-expand { display: none; }
 .m .m-device-photos .m-note { margin-top: 10px; }
 .m .m-settings-group .m-note { padding: 0 0 12px; font-size: 13px; }
 
+/* The passphrase box: a field, a button and the answer, under the row. */
+.m .m-unlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+.m .m-unlock input {
+  font: inherit;
+  font-size: 16px;
+  min-height: 44px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+}
+.m .m-unlock input:focus {
+  outline: none;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+.m .m-unlock .m-note { padding: 0; font-size: 13px; }
+
 /* --- Sheets ------------------------------------------------------------- */
 
 .m .m-sheet-wrap { position: fixed; inset: 0; z-index: 50; }

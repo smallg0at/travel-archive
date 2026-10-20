@@ -17,7 +17,6 @@ import {
   rememberedJob,
   rekeyScreens,
   saveConfig,
-  screensEntries,
   screensStatus,
   startAnalyze,
   startCollect,
@@ -32,6 +31,15 @@ import { fmtDateTime, num, ui } from "./i18n";
 import { claimRefresh, jobLabel } from "./activity";
 import { mountTripSuggestions } from "./tripSuggestions";
 import { checkProvider, localOptions, providerName } from "./providerChoice";
+import {
+  lockScreenCaptions,
+  onScreenCaptions,
+  screenCaptionsCount,
+  screenCaptionsState,
+  screenErrorText,
+  unlockScreenCaptions,
+} from "./screenCaptions";
+import { screenKeyCanPersist } from "./screenKey";
 
 /**
  * The generation panel: pick a date range, name it or let the model name it,
@@ -242,6 +250,33 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
             </div>
           </div>
           <p class="job-note job-key-result"></p>
+        </div>
+        <!--
+          Reading them here. The descriptions are sealed, and opening them is a
+          separate act from writing them: the reader asks for the passphrase and
+          the file is opened **in this page**, so the plaintext never goes back
+          to the server. Where the passphrase is kept is the surface's business
+          — the desktop shell has a key store, a browser has this session's
+          memory.
+        -->
+        <div class="job-row job-scope">
+          <label class="job-field">
+            <span>${ui.generate.screensOnDevice}</span>
+            <span class="job-screens-local-state"></span>
+          </label>
+          <button type="button" class="job-screens-unlock">${ui.generate.screensUnlock}</button>
+          <button type="button" class="job-screens-lock" hidden>${ui.generate.screensForget}</button>
+        </div>
+        <div class="job-unlock-box" hidden>
+          <div class="job-unlock-form">
+            <input type="password" name="unlock-passphrase" autocomplete="current-password" spellcheck="false" placeholder="${ui.generate.screensPassEnter}" />
+            <label class="job-remember" hidden><input type="checkbox" name="remember" checked /> ${ui.generate.screensRemember}</label>
+            <div class="job-buttons">
+              <button type="button" class="job-screens-unlock-cancel">${ui.common.cancel}</button>
+              <button type="button" class="job-screens-unlock-save">${ui.generate.screensUnlock}</button>
+            </div>
+          </div>
+          <p class="job-note job-unlock-result"></p>
         </div>
         <div class="job-row job-scope">
           <label class="job-field">
@@ -557,6 +592,17 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   const screensRekeyCancel = screensForm.querySelector<HTMLButtonElement>(".job-screens-rekey-cancel")!;
   const screensPass = screensForm.querySelector<HTMLInputElement>('input[name="passphrase"]')!;
   const screensPass2 = screensForm.querySelector<HTMLInputElement>('input[name="passphrase2"]')!;
+  /** The read side: what this device can open, and the box that opens it. */
+  const screensLocalState = screensForm.querySelector<HTMLElement>(".job-screens-local-state")!;
+  const screensUnlock = screensForm.querySelector<HTMLButtonElement>(".job-screens-unlock")!;
+  const screensLock = screensForm.querySelector<HTMLButtonElement>(".job-screens-lock")!;
+  const screensUnlockBox = screensForm.querySelector<HTMLElement>(".job-unlock-box")!;
+  const screensUnlockResult = screensForm.querySelector<HTMLElement>(".job-unlock-result")!;
+  const screensUnlockPass = screensForm.querySelector<HTMLInputElement>('input[name="unlock-passphrase"]')!;
+  const screensUnlockSave = screensForm.querySelector<HTMLButtonElement>(".job-screens-unlock-save")!;
+  const screensUnlockCancel = screensForm.querySelector<HTMLButtonElement>(".job-screens-unlock-cancel")!;
+  const screensRemember = screensForm.querySelector<HTMLInputElement>('input[name="remember"]')!;
+  const screensRememberRow = screensForm.querySelector<HTMLElement>(".job-remember")!;
   const screensKeyMismatch = screensForm.querySelector<HTMLElement>(".job-key-mismatch")!;
   const screensKeyForm = screensForm.querySelector<HTMLElement>(".job-key-form")!;
 
@@ -591,35 +637,12 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   /**
    * A failure from the server, in this reader's language.
    *
-   * The server sends a code and its parameters; the sentence is written in the
-   * i18n tables. An unknown code — a newer server than this page — falls back to
-   * the text that came with it, so the answer is never blank.
+   * The wording lives in `screenCaptions.ts`, because the phone has the same
+   * failures and must not drag this page in to say them: the codes are shared
+   * with the server's own (`pipeline/src/screenErrors.ts`), and an unknown
+   * code — a newer server than this page — falls back to the text that came
+   * with it, so the answer is never blank.
    */
-  const screenErrorText = (failure: { error: string; code?: string; params?: Record<string, string | number> }): string => {
-    const p = failure.params ?? {};
-    switch (failure.code) {
-      case "passphrase-too-short":
-        return ui.generate.screensErr.tooShort(Number(p.min ?? 12));
-      case "passphrase-too-long":
-        return ui.generate.screensErr.tooLong(Number(p.max ?? 256));
-      case "passphrase-too-common":
-        return ui.generate.screensErr.tooCommon;
-      case "passphrase-too-famous":
-        return ui.generate.screensErr.tooFamous;
-      case "passphrase-mismatch":
-        return ui.generate.screensErr.mismatch(String(p.wants ?? "?"), String(p.derives ?? "?"));
-      case "descriptions-damaged":
-        return ui.generate.screensErr.damaged;
-      case "no-passphrase":
-        return ui.generate.screensErr.noPassphrase;
-      case "key-store-unavailable":
-        return ui.generate.screensNoKeyStore;
-      case "key-store-unreadable":
-        return ui.generate.screensErr.keyStoreUnreadable(String(p.reason ?? ""));
-      default:
-        return failure.error;
-    }
-  };
 
   const paintScreens = async (opts: { quiet?: boolean } = {}) => {
     const [config, status] = await Promise.all([getConfig(), screensStatus()]);
@@ -646,42 +669,135 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
     screensKeyState.classList.toggle("tone-warn", status?.canStore === false || !status?.hasKey);
     screensRekey.hidden = status?.canStore === false;
 
-    // The count lives behind a decrypt, so it is only asked for when nothing else
-    // is going on. Two reasons, and the second one bit: a poll landing in the
-    // middle of a passphrase change reads a store that already holds the new key
-    // against a file that still holds the old one, and reports a mismatch that is
-    // true for a few hundred milliseconds and confusing for the rest of the
-    // session. `quiet` lets a repaint that followed an action leave the sentence
-    // that action produced alone.
-    let described: { entries: Record<string, unknown> } | { error: string } | null = null;
-    if (!status?.running && !opts.quiet) {
-      described = await screensEntries();
-    }
-    const count = described && "entries" in described ? Object.keys(described.entries).length : null;
-    const trouble = described && "error" in described ? screenErrorText(described) : null;
-
-    // A run in flight, an unreadable file (a changed key), no passphrase yet, no
-    // local service, no key store on this platform — each is a different
-    // sentence, and the last three stop the button.
+    // The **write** side: a run in flight, no local service, no key store on
+    // this platform, no passphrase in the server's store — each is a different
+    // sentence, and the last three stop the button. How many are already
+    // described is the reader's own business now, and is said on its own line
+    // (the count used to come from the server, which decrypted for anyone who
+    // asked; the reader's own number is the one it can actually read).
     screensState.textContent =
       status?.running
         ? ui.generate.screensRunning
-        : trouble
-          ? trouble
-          : local.length === 0
-            ? ui.generate.screensNoLocal
-            : status?.canStore === false
-              ? ui.generate.screensNoKeyStore
-              : count !== null
-                ? ui.generate.screensDescribed(count)
-                : ui.generate.screensNoPassphrase;
-    const blocked = local.length === 0 || !!trouble || status?.canStore === false || !status?.hasKey;
+        : local.length === 0
+          ? ui.generate.screensNoLocal
+          : status?.canStore === false
+            ? ui.generate.screensNoKeyStore
+            : !status?.hasKey
+              ? ui.generate.screensNoPassphrase
+              : ui.generate.screensReady;
+    const blocked = local.length === 0 || status?.canStore === false || !status?.hasKey;
     screensState.classList.toggle("tone-warn", blocked);
     screensSubmit.disabled = blocked;
+    paintLocal();
   };
 
   panel.querySelector<HTMLButtonElement>('.job-tabs button[data-mode="screens"]')!.addEventListener("click", () => void paintScreens());
+
+  /**
+   * The **read** side: what this device can open, and what it takes to open
+   * it.
+   *
+   * The descriptions are opened here, in the page, so the passphrase is asked
+   * for here and kept by the surface — the desktop shell's key store, or this
+   * session's memory where there is none. The state is drawn from the module
+   * rather than kept alongside it, so the line cannot disagree with what the
+   * pages are showing.
+   */
+  const paintLocal = (): void => {
+    const local = screenCaptionsState();
+    const line = screensLocalState;
+    line.classList.remove("tone-warn");
+    if (local.status === "unavailable") {
+      line.textContent = ui.generate.screensNoCrypto;
+      line.classList.add("tone-warn");
+    } else if (local.status === "failed") {
+      line.textContent = screenErrorText({
+        error: local.error.message,
+        code: local.error.code,
+        params: local.error.params,
+      });
+      line.classList.add("tone-warn");
+    } else if (local.status === "ready") {
+      line.textContent = ui.generate.screensOnDeviceCount(screenCaptionsCount());
+    } else if (local.status === "loading") {
+      line.textContent = ui.generate.screensOpening;
+    } else {
+      line.textContent = ui.generate.screensLocked;
+    }
+    const open = local.status === "ready";
+    screensUnlock.hidden = open || local.status === "unavailable";
+    screensLock.hidden = !open;
+  };
+
+  // The state can change without this panel being on screen — the reader may
+  // unlock the descriptions in another tab — so the line follows the module.
+  onScreenCaptions(() => paintLocal());
+
+  // The first paint, now that the read side can say its piece.
   void paintScreens();
+
+  screensUnlock.addEventListener("click", () => {
+    screensUnlockBox.hidden = false;
+    screensUnlockResult.textContent = "";
+    screensUnlockResult.classList.remove("tone-warn");
+    // "Remember" only means something where there is a key store to remember
+    // in; elsewhere the passphrase goes when the tab closes, and the checkbox
+    // would be a promise the surface cannot keep.
+    void screenKeyCanPersist().then((can) => {
+      screensRememberRow.hidden = !can;
+      screensRemember.checked = can;
+    });
+    screensUnlockPass.focus();
+  });
+  screensUnlockCancel.addEventListener("click", () => {
+    screensUnlockBox.hidden = true;
+    screensUnlockPass.value = "";
+  });
+  screensUnlockPass.addEventListener("keydown", (event) => {
+    // Enter must not submit the outer form — that would start a pass.
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void saveUnlock();
+  });
+  screensUnlockSave.addEventListener("click", () => void saveUnlock());
+
+  async function saveUnlock(): Promise<void> {
+    const passphrase = screensUnlockPass.value;
+    if (!passphrase) return;
+    screensUnlockSave.disabled = true;
+    screensUnlockResult.classList.remove("tone-warn");
+    screensUnlockResult.textContent = ui.generate.screensOpening;
+    try {
+      const result = await unlockScreenCaptions(passphrase, screensRemember.checked);
+      if (result.status === "ready") {
+        screensUnlockBox.hidden = true;
+        screensUnlockPass.value = "";
+        paintLocal();
+        return;
+      }
+      if (result.status === "failed") {
+        screensUnlockResult.textContent = screenErrorText({
+          error: result.error.message,
+          code: result.error.code,
+          params: result.error.params,
+        });
+        screensUnlockResult.classList.add("tone-warn");
+      }
+    } catch (err) {
+      screensUnlockResult.textContent = (err as Error).message;
+      screensUnlockResult.classList.add("tone-warn");
+    } finally {
+      screensUnlockSave.disabled = false;
+    }
+  }
+
+  screensLock.addEventListener("click", () => {
+    void lockScreenCaptions().then(() => {
+      screensUnlockBox.hidden = true;
+      screensUnlockPass.value = "";
+      paintLocal();
+    });
+  });
 
   screensForm.querySelector<HTMLButtonElement>(".job-screens-check")!.addEventListener("click", async () => {
     screensState.classList.remove("tone-warn");

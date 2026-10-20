@@ -26,6 +26,7 @@ import {
 import { followThemeInSystemBars, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
 import { initDevicePhotos } from "./devicePhotos";
 import { allMonths, initOfflineResume, startAutoCache, syncAndRefresh } from "./offline";
+import { ensureScreenCaptions } from "../screenCaptions";
 
 /** A popup where there can be one; the installed app always redirects — see signInRedirect. */
 const signInNow = (): Promise<unknown> => (isNative ? signInRedirect() : signIn());
@@ -271,6 +272,10 @@ async function main(): Promise<void> {
   initBackButton();
   followThemeInSystemBars();
   window.addEventListener("signin-required", showSessionBanner);
+  // The screenshot descriptions, opened in the background if this session holds
+  // the passphrase. The phone asks for it in Settings; until then this does
+  // nothing at all — it never even fetches the file.
+  void ensureScreenCaptions();
 
   // In a browser, the same two questions the desktop asks first, together: is
   // there a server to restore settings from, and to take thumbnails from.

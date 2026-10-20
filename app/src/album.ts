@@ -5,6 +5,7 @@ import { openPhoto } from "./viewer";
 import { renderDayBody } from "./render";
 import { addDayControls, isRetimable, setDayEditingAvailable } from "./dayEdit";
 import { selectionClick } from "./retime";
+import { screenCaptionSlot } from "./screenCaptions";
 import { contentLanguage, loc, locDay, locTrip } from "./contentLang";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
@@ -252,6 +253,11 @@ function renderAlbumGrid(photos: PhotoRecord[]): HTMLElement {
     });
     imgs.push(img);
     cell.appendChild(img);
+    // The description of a withheld screenshot, when this reader can open it.
+    // The month album is where those photographs live — they are never cards
+    // and never part of a day's summary — so this is the one page that shows
+    // all of them.
+    cell.appendChild(screenCaptionSlot(photo.id));
     grid.appendChild(cell);
   }
   return grid;

@@ -12,6 +12,13 @@ import { openViewer } from "./viewer";
 import { note, pageBar, screen } from "./ui";
 import { isNative } from "./native";
 import { allowDevicePhotos, deviceLibrarySize, deviceStatus } from "./devicePhotos";
+import {
+  onScreenCaptions,
+  screenCaptionsCount,
+  screenCaptionsState,
+  screenErrorText,
+  unlockScreenCaptions,
+} from "../screenCaptions";
 
 /**
  * Search and Settings — the two screens that are mostly someone else's
@@ -84,6 +91,86 @@ function devicePhotosRow(): HTMLElement {
   return section;
 }
 
+/**
+ * The encrypted screenshot descriptions.
+ *
+ * The phone reads them from OneDrive and opens them **here**, in the app — the
+ * same code the desktop uses (`app/src/screenCaptions.ts`), so the plaintext
+ * never crosses the network and the two surfaces cannot drift apart. The
+ * phone has no key store yet, so the passphrase is asked for once and kept for
+ * this session only; the row says so rather than implying it is safe.
+ */
+function screenCaptionsGroup(): HTMLElement {
+  const section = group(ui.mobile.screens);
+  const state = row(ui.generate.screensOnDevice, "…");
+  section.body.appendChild(state);
+  section.body.appendChild(Object.assign(document.createElement("p"), { className: "m-note", textContent: ui.mobile.screensWhy }));
+
+  const unlock = el<HTMLButtonElement>(`<button type="button" class="m-primary"></button>`);
+  unlock.textContent = ui.generate.screensUnlock;
+  section.body.appendChild(unlock);
+
+  const box = el<HTMLDivElement>(`<div class="m-unlock"></div>`);
+  box.hidden = true;
+  const input = el<HTMLInputElement>(`<input type="password" autocomplete="current-password" spellcheck="false" />`);
+  input.placeholder = ui.generate.screensPassEnter;
+  const go = el<HTMLButtonElement>(`<button type="button" class="m-primary"></button>`);
+  go.textContent = ui.generate.screensUnlock;
+  const result = Object.assign(document.createElement("p"), { className: "m-note" });
+  box.append(input, go, result);
+  section.body.appendChild(box);
+
+  const value = state.querySelector(".m-setting-value")!;
+  const paint = (): void => {
+    const s = screenCaptionsState();
+    if (s.status === "ready") {
+      value.textContent = ui.generate.screensOnDeviceCount(screenCaptionsCount());
+    } else if (s.status === "unavailable") {
+      value.textContent = ui.generate.screensNoCrypto;
+    } else if (s.status === "failed") {
+      value.textContent = screenErrorText({ error: s.error.message, code: s.error.code, params: s.error.params });
+    } else {
+      value.textContent = ui.generate.screensLocked;
+    }
+    unlock.hidden = s.status === "ready" || s.status === "unavailable";
+  };
+  onScreenCaptions(paint);
+  paint();
+
+  unlock.addEventListener("click", () => {
+    box.hidden = false;
+    result.textContent = "";
+    input.focus();
+  });
+  const tryUnlock = async (): Promise<void> => {
+    if (!input.value) return;
+    go.disabled = true;
+    result.textContent = ui.generate.screensOpening;
+    const opened = await unlockScreenCaptions(input.value, false);
+    go.disabled = false;
+    if (opened.status === "ready") {
+      box.hidden = true;
+      input.value = "";
+      paint();
+      return;
+    }
+    if (opened.status === "failed") {
+      result.textContent = screenErrorText({
+        error: opened.error.message,
+        code: opened.error.code,
+        params: opened.error.params,
+      });
+    }
+  };
+  go.addEventListener("click", () => void tryUnlock());
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void tryUnlock();
+  });
+  return section.section;
+}
+
 export function renderSettings(): HTMLElement {
   const page = screen("m-settings");
   page.appendChild(pageBar(ui.nav.settings, "", { alwaysTitled: true }));
@@ -150,6 +237,9 @@ export function renderSettings(): HTMLElement {
   offline.body.appendChild(download);
   offline.body.appendChild(Object.assign(document.createElement("p"), { className: "m-note", textContent: ui.mobile.autoCacheWhy }));
   page.appendChild(offline.section);
+
+  // The screenshot descriptions are sealed; this is where they are opened.
+  page.appendChild(screenCaptionsGroup());
 
   return page;
 }

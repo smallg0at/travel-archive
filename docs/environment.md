@@ -81,6 +81,30 @@ version directory needs finding after an upgrade.
 
 ---
 
+## The browser an agent drives is slow on large local responses
+
+The desktop browser an agent drives (the harness's own Chromium) reaches
+`127.0.0.1` **through the system proxy** — this machine runs one on
+`127.0.0.1:10808`, and AdGuard injects its own scripts into the pages it
+serves. The cost is roughly **1 MB/s on a large response**: the same
+`GET /archive/index` that answers in **828 ms** from PowerShell takes **6.8–9.8
+seconds** from the browser.
+
+That is not a bug in the app, but it collides with one of the app's rules: the
+local mirror is fetched with an **8-second timeout**
+(`HEALTH_TIMEOUT_MS` in `app/src/backend.ts`), so a 9.4MB index can exceed it
+and the app falls back to Graph and then says *"This part of the archive is not
+on this machine yet"*. A reader on the LAN, or the phone, is unaffected; the
+Electron shell is unaffected (it does not go through the proxy and answers in
+under a second).
+
+So: **a page that will not load in the harness browser is not evidence of
+anything.** Check the same request from PowerShell before believing the app is
+broken, and prefer the phone or the shell for anything that needs the whole
+archive.
+
+---
+
 ## Driving the phone app
 
 The Android app is the same TypeScript under `app/src`, built separately into
