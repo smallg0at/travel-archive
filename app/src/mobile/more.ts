@@ -112,6 +112,11 @@ function screenCaptionsGroup(): HTMLElement {
 
   const box = el<HTMLDivElement>(`<div class="m-unlock"></div>`);
   box.hidden = true;
+  // A password field, so the reader's own password manager may keep it if they
+  // want to — the archive's passphrase is theirs to place. The manager files it
+  // under the page's origin, which on the phone is the app's own (see
+  // docs/environment.md); what is *not* wanted here is a manager offering to
+  // save the cloud API key under the same name.
   const input = el<HTMLInputElement>(`<input type="password" autocomplete="current-password" spellcheck="false" />`);
   input.placeholder = ui.generate.screensPassEnter;
   const go = el<HTMLButtonElement>(`<button type="button" class="m-primary"></button>`);

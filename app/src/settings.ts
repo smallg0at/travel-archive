@@ -38,7 +38,9 @@ import { resetSidebarWidth } from "./chrome";
 import { renderThemeControl } from "./theme";
 import { renderContentLanguageControl } from "./contentLang";
 import { fmtDate, jobPhase, num, ui } from "./i18n";
-import { checkProvider, keyState, providerName } from "./providerChoice";
+import { checkProvider, keyState, providerChoice, providerName } from "./providerChoice";
+import { button, labelledInput, row, section, setPathValue, setRowValue } from "./settingsUi";
+import { screensSection } from "./screensSettings";
 
 /**
  * Settings, as a page rather than a popup.
@@ -76,51 +78,6 @@ function relative(iso: string | null): string {
   if (seconds < 3600) return ui.settings.minutesAgo(Math.round(seconds / 60));
   if (seconds < 86400) return ui.settings.hoursAgo(Math.round(seconds / 3600));
   return fmtDate(new Date(iso), {});
-}
-
-function section(title: string): HTMLElement {
-  const node = el<HTMLElement>(`<section class="set-section"><h3></h3><div class="set-body"></div></section>`);
-  node.querySelector("h3")!.textContent = title;
-  return node;
-}
-
-function row(label: string, value: string): HTMLElement {
-  const node = el<HTMLDivElement>(`<div class="set-row"><span></span><b></b></div>`);
-  node.querySelector("span")!.textContent = label;
-  node.querySelector("b")!.textContent = value;
-  return node;
-}
-
-/** Rewrites a row built by `row()`, so a refresh does not rebuild the section. */
-function setRowValue(node: HTMLElement, value: string): void {
-  node.querySelector("b")!.textContent = value;
-}
-
-/**
- * A row whose value is a file path. Machine text, so it wears `.is-path`
- * instead of the row's headline style: mono, muted, capped and ellipsised at
- * the tail — the head is the part that differs between archive homes, so it
- * is what survives truncation — with the whole line on hover for copying.
- */
-function setPathValue(node: HTMLElement, value: string): void {
-  setRowValue(node, value);
-  node.classList.add("is-path");
-  node.querySelector("b")!.title = value;
-}
-
-function button(label: string, onClick: () => void, kind = ""): HTMLButtonElement {
-  const b = el<HTMLButtonElement>(`<button type="button" class="set-btn ${kind}"></button>`);
-  b.textContent = label;
-  b.addEventListener("click", onClick);
-  return b;
-}
-
-/** A labelled input, for the provider rows. */
-function labelledInput(label: string, control: string): HTMLLabelElement {
-  const node = el<HTMLLabelElement>(`<label class="set-scan-field"><span></span></label>`);
-  node.querySelector("span")!.textContent = label;
-  node.insertAdjacentHTML("beforeend", control);
-  return node;
 }
 
 /**
@@ -293,6 +250,11 @@ export async function showSettings(): Promise<void> {
     frag.appendChild(notifySection());
     frag.appendChild(remoteSection());
     frag.appendChild(generationSection());
+    // The settings for describing the withheld screenshots: the passphrase the
+    // descriptions are sealed under, the service that writes them, and what
+    // this machine can open. Running the pass is a job, and jobs live in
+    // Generate.
+    frag.appendChild(screensSection());
     frag.appendChild(proxySection());
     frag.appendChild(syncSection(sync));
     frag.appendChild(offlineSection(sync));
@@ -472,259 +434,18 @@ function scanSection(status: SyncStatus): HTMLElement {
  * returns it, so this shows "saved" rather than a value.
  */
 /** A titled container the provider rows are grouped into (by `scope`). */
-function providerGroup(title: string): HTMLDivElement {
-  const root = el<HTMLDivElement>(`<div class="set-provider-group"></div>`);
-  const heading = el<HTMLHeadingElement>(`<h3 class="set-provider-group-title"></h3>`);
-  heading.textContent = title;
-  root.append(heading);
-  return root;
-}
-
 function generationSection(): HTMLElement {
   const s = section(ui.settings.generation);
   const body = s.querySelector(".set-body")!;
-
-  const state = el<HTMLElement>(`<div class="set-sync-state"></div>`);
-  body.appendChild(state);
-
-  const intro = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
-  intro.textContent = ui.settings.providerTableNote;
-  body.appendChild(intro);
-
-  /**
-   * One collapsible row per backend, grouped by where it runs and built once,
-   * then updated in place.
-   *
-   * This used to be every backend's full form, always open — nine blocks of
-   * endpoint, model and key, which buried the choice it was asking for and left
-   * a local service, which needs no key and never leaves the machine,
-   * indistinguishable from the ones that call out. A row is now a header (name,
-   * whether it is in force, whether it has a key) that opens in place to its
-   * fields; only one is open at a time. The group is the `scope` the server
-   * reports, not a guess from the id. Keeping the inputs mounted means one save
-   * can repaint the others without the reader losing half-typed text.
-   */
-  interface Row {
-    id: string;
-    scope: "local" | "cloud";
-    root: HTMLDivElement;
-    head: HTMLButtonElement;
-    panel: HTMLDivElement;
-    keyInput: HTMLInputElement;
-    note: HTMLElement;
-    summary: HTMLElement;
-    badge: HTMLElement;
-    button: HTMLButtonElement;
-    expanded: boolean;
-    paint: (option: ProviderOption, active: boolean) => void;
-  }
-  const rows: Row[] = [];
-
-  const groups = {
-    local: providerGroup(ui.settings.providersLocal),
-    cloud: providerGroup(ui.settings.providersCloud),
-  };
-  body.append(groups.local, groups.cloud);
-
-  let openRow: Row | null = null;
-  const setExpanded = (row: Row, expand: boolean) => {
-    row.expanded = expand;
-    row.panel.hidden = !expand;
-    row.head.setAttribute("aria-expanded", String(expand));
-    row.root.classList.toggle("is-open", expand);
-    if (expand) openRow = row;
-    else if (openRow === row) openRow = null;
-  };
-
-  const makeRow = (scope: "local" | "cloud"): Row => {
-    const root = el<HTMLDivElement>(`<div class="set-provider"></div>`);
-    const head = el<HTMLButtonElement>(
-      `<button type="button" class="set-provider-head" aria-expanded="false"></button>`,
-    );
-    const name = el<HTMLSpanElement>(`<span class="set-provider-name"></span>`);
-    const badge = el<HTMLSpanElement>(`<span class="set-provider-badge"></span>`);
-    const summary = el<HTMLSpanElement>(`<span class="set-provider-summary"></span>`);
-    const chevron = el<HTMLSpanElement>(`<span class="set-provider-chevron" aria-hidden="true">›</span>`);
-    head.append(name, badge, summary, chevron);
-
-    const panel = el<HTMLDivElement>(`<div class="set-provider-panel" hidden></div>`);
-    const fields = el<HTMLDivElement>(`<div class="set-provider-fields"></div>`);
-    const urlField = labelledInput(ui.settings.providerBaseUrl, `<input type="text" name="baseUrl" spellcheck="false" />`);
-    const modelField = labelledInput(ui.settings.providerModel, `<input type="text" name="model" spellcheck="false" />`);
-    const keyField = labelledInput(
-      ui.settings.apiKey,
-      `<input type="password" name="key" autocomplete="off" spellcheck="false" />`,
-    );
-    fields.append(urlField, modelField, keyField);
-
-    const note = el<HTMLElement>(`<p class="set-note"></p>`);
-    // Where the key comes from, the same link the wizard offers: a provider
-    // row asking for a key without saying where to get one is half a row.
-    const getKey = el<HTMLAnchorElement>(`<a class="setup-link" target="_blank" rel="noreferrer" hidden></a>`);
-    getKey.textContent = ui.setup.platformLink;
-    const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
-    const actions = el<HTMLDivElement>(`<div class="set-provider-actions"></div>`);
-    const checkButton = button(ui.settings.providerCheck, () => void check());
-    const useButton = button(ui.settings.providerSaveUse, () => {}, "primary");
-    actions.append(checkButton, useButton);
-    panel.append(fields, note, getKey, status, actions);
-    root.append(head, panel);
-    groups[scope].appendChild(root);
-
-    const urlInput = urlField.querySelector("input") as HTMLInputElement;
-    const modelInput = modelField.querySelector("input") as HTMLInputElement;
-    const keyInput = keyField.querySelector("input") as HTMLInputElement;
-
-    const row: Row = {
-      id: "",
-      scope,
-      root,
-      head,
-      panel,
-      keyInput,
-      note,
-      summary,
-      badge,
-      button: useButton,
-      expanded: false,
-      paint(option, active) {
-        row.id = option.id;
-        name.textContent = providerName(option);
-        badge.textContent = active ? ui.settings.providerActive : "";
-        badge.hidden = !active;
-        badge.classList.toggle("tone-ok", active);
-        root.classList.toggle("is-active", active);
-        // The collapsed header carries the one thing worth seeing without
-        // opening it: whether this backend can be used as it stands, key or no
-        // key. Shared with the Generate panel's screenshot tab so the same
-        // service cannot get two different stories.
-        const state = keyState(option);
-        summary.textContent = state.text;
-        summary.classList.toggle("tone-warn", state.warn);
-        // The endpoint only means something for an OpenAI-compatible service —
-        // Gemini's own client has it baked in.
-        urlField.hidden = !option.editable.baseUrl;
-        urlInput.value = option.baseUrl ?? "";
-        modelInput.value = option.model;
-        urlInput.placeholder = option.baseUrl ?? "";
-        keyInput.placeholder = option.hasKey ? ui.settings.keySaved : ui.settings.keyPaste;
-        const batch = option.supportsBatch ? ui.settings.providerBatchOk : ui.settings.providerNoBatch;
-        note.textContent = `${state.text} · ${batch}`;
-        note.classList.toggle("tone-warn", state.warn);
-        getKey.hidden = !option.platformUrl;
-        if (option.platformUrl) getKey.href = option.platformUrl;
-        // Never disabled, not even for the backend already in use: its key or
-        // model is exactly what one comes here to fix, and a disabled button
-        // with no reason reads as a broken page.
-      },
-    };
-
-    /**
-     * A check the reader asks for, not a gate: it reports what the provider
-     * answered and never blocks saving — a wrong key is the reader's to fix,
-     * and a service that happens to be down should not stop them either. The
-     * wording and the rules live in providerChoice, because the Generate panel's
-     * screenshot tab asks the same question.
-     */
-    const check = async () => {
-      const typed = keyInput.value.trim();
-      status.hidden = false;
-      status.classList.remove("tone-warn");
-      status.textContent = ui.settings.providerCheckBusy;
-      const result = await checkProvider(row.id, typed || undefined);
-      status.textContent = result.text;
-      status.classList.toggle("tone-warn", result.warn);
-    };
-
-    head.addEventListener("click", () => {
-      const expand = !row.expanded;
-      if (expand && openRow && openRow !== row) setExpanded(openRow, false);
-      setExpanded(row, expand);
-    });
-    keyInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") useButton.click();
-    });
-    return row;
-  };
-
-  let latest: ConfigStatus | null = null;
-
-  const render = () => {
-    if (!latest) {
-      state.textContent = ui.settings.unavailable;
-      state.className = "set-sync-state tone-muted";
-      return;
-    }
-    const active = latest.providers.find((p) => p.id === latest!.provider);
-    // A local service is ready without a key: saying "no key" of LM Studio is
-    // the same lie as asking it for one.
-    const usable = !!active && (active.hasKey || active.scope === "local");
-    state.textContent = usable
-      ? `${active ? providerName(active) : ""} · ${ui.settings.ready}`
-      : ui.settings.noKey;
-    state.className = `set-sync-state tone-${usable ? "ok" : "warn"}`;
-
-    // Rows exist for every provider the server knows, created on first sight
-    // into the group its scope names, so the order within a group is the
-    // server's.
-    for (const option of latest.providers) {
-      let row = rows.find((r) => r.id === option.id);
-      if (!row) {
-        row = makeRow(option.scope ?? "cloud");
-        rows.push(row);
-        row.button.addEventListener("click", () => void save(row!));
-      }
-      row.paint(option, option.id === latest.provider);
-    }
-    groups.local.hidden = !latest.providers.some((p) => p.scope === "local");
-    groups.cloud.hidden = !latest.providers.some((p) => p.scope === "cloud");
-  };
-
-  /**
-   * Writes one row. Only the fields that row uses, so saving DeepSeek cannot
-   * blank Gemini's model, and vice versa.
-   */
-  const save = async (row: Row) => {
-    if (!latest) return;
-    const option = latest.providers.find((p) => p.id === row.id);
-    if (!option) return;
-    const root = row.root;
-    const key = row.keyInput;
-    const url = root.querySelector<HTMLInputElement>('input[name="baseUrl"]')!;
-    const model = root.querySelector<HTMLInputElement>('input[name="model"]')!;
-    const status = root.querySelector<HTMLElement>(".set-progress")!;
-
-    const patch: Record<string, string> = { AI_PROVIDER: option.id };
-    const prefix = option.id.toUpperCase();
-    if (option.editable.baseUrl && url.value.trim()) patch[`${prefix}_BASE_URL`] = url.value.trim();
-    if (option.editable.model && model.value.trim()) patch[`${prefix}_MODEL`] = model.value.trim();
-    // Write a model for Gemini too, under the name its own code reads.
-    if (option.id === "gemini" && model.value.trim()) patch.GEMINI_MODEL = model.value.trim();
-    const typed = key.value.trim();
-    if (typed) patch[option.apiKeyEnv] = typed;
-
-    status.hidden = false;
-    status.textContent = ui.common.saving;
-    row.button.disabled = true;
-    try {
-      const next = await saveConfig(patch);
-      key.value = "";
-      status.textContent = next.ready ? ui.settings.savedReady : ui.settings.saved;
-      apply(next);
-      setExpanded(row, false);
-    } catch (err) {
-      status.textContent = (err as Error).message;
-      row.button.disabled = false;
-    }
-  };
-
-  const apply = (config: ConfigStatus | null) => {
-    latest = config;
-    render();
-  };
-
-  apply(null);
-  void getConfig().then(apply);
+  // The archive's model, chosen from every service the server knows. The
+  // chooser itself is the shared one — the same rows the screenshot section
+  // offers, over a smaller list — so a service cannot tell the reader two
+  // different stories depending on which page asked.
+  const choice = providerChoice({
+    envVar: "AI_PROVIDER",
+    value: (config) => config.provider,
+  });
+  body.appendChild(choice.el);
   return s;
 }
 

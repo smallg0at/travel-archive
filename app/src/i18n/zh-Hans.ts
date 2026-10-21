@@ -367,6 +367,7 @@ export const zhHans: Messages = {
     scanNow: "立即扫描",
 
     generation: "生成",
+    screens: "截图描述",
     provider: "AI 服务商",
     apiKey: "API 密钥",
     savedReady: "已保存。可以开始生成了。",
@@ -490,7 +491,9 @@ export const zhHans: Messages = {
 
     screensNote:
       "描述那些从未获准外发的截图——被允许清单挡在云端模型之外的那批，<strong>档案页面里看不到，别人也看不到</strong>。由这台机器上的模型负责看图，并且只被要求说出<em>屏幕的种类</em>：聊天记录、身份证、护照页、显示账号数字的屏幕；屏幕上的内容一律不转写。描述在<strong>上传前</strong>用下面的口令加密，所以 OneDrive 上的那一份是读不懂的——只有这台机器能读。",
+    screensRunNote: "描述截图是对全库跑一遍。服务和口令在设置里；这里是跑这一遍的地方。",
     screensService: "服务（本机）",
+    screensServiceNote: "负责写出描述的服务。它跑在这台机器上——照片就在原地被描述，不必送去任何地方被看。",
     screensPassphrase: "口令",
     screensKeySet: "已设置 · 保存在本机钥匙串",
     screensKeyUnset: "未设置",
@@ -529,7 +532,7 @@ export const zhHans: Messages = {
      * 留在本次会话的内存里。
      */
     screensOnDevice: "本机可读",
-    screensOnDeviceCount: (n: number) => `本机可读 ${n} 条描述`,
+    screensOnDeviceCount: (n: number) => `${n} 条描述`,
     screensUnlock: "解锁",
     screensForget: "忘记",
     screensPassEnter: "口令",

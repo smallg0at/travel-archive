@@ -384,6 +384,7 @@ export const en = {
     scanNow: "Scan now",
 
     generation: "Generation",
+    screens: "Screenshot descriptions",
     provider: "AI provider",
     apiKey: "API key",
     savedReady: "Saved. Generation is ready.",
@@ -514,7 +515,11 @@ export const en = {
 
     screensNote:
       "Describes the screenshots nobody has vouched for — the private ones the allowlist keeps away from the cloud model, so <strong>nothing on your archive page and nobody else's sees them</strong>. A model on this machine does the looking, and it is told to name only <em>what kind of screen</em> it is: a chat conversation, an ID card, a passport page, a screen showing account numbers. Nothing on it is transcribed. The descriptions are encrypted with the passphrase below before they are uploaded, so the copy on OneDrive is unreadable — this machine is the only thing that can read them.",
+    screensRunNote:
+      "Describing the screenshots is a pass over the archive. The service and the passphrase are set in Settings; this is where the pass is run.",
     screensService: "Service (this machine)",
+    screensServiceNote:
+      "The service that writes the descriptions. It runs on this machine, so the photographs are described where they already are and never travel to be looked at.",
     screensPassphrase: "Passphrase",
     screensKeySet: "set · kept in this machine's key store",
     screensKeyUnset: "not set",

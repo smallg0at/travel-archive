@@ -444,3 +444,22 @@ hang with no output. The vector in `pipeline/test/screenKey.test.ts` (a
 passphrase, a salt, the key they must produce) and the cross-end test in
 `pipeline/test/screenCrypto.test.ts` (the server's envelope, opened by the
 reader's code) are what catch it; run them after touching either end.
+
+**A page holds one kind of thing: Generate runs things, Settings holds what
+they are run with.** The screenshot pass is a job, so the pass itself belongs
+in Generate — the button, the state, the progress. The passphrase it is sealed
+under and the service that writes them are settings, so they belong in
+Settings, next to the other settings, where the phone has them too (the phone
+reads the descriptions; it never writes them, so it has only the reading
+half). The same rule put the passphrase in the Generate page at first, and it
+was wrong there twice over: a passphrase is not something a job form asks for,
+and the phone — which has no jobs at all — then had no place to unlock the
+descriptions at all.
+
+**A model service is chosen in one place.** `providerChoice.ts` owns the rows,
+the key state, the check and the wording, and `providerChoice({candidates,
+value, envVar})` builds them. Two instances: Settings' Generation table (every
+service, `AI_PROVIDER`) and Settings' screenshot section (the services on this
+machine, `SCREENSHOT_PROVIDER`). The only difference is the list, so a service
+cannot tell the reader one story in one place and another in the other.
+
