@@ -4,7 +4,6 @@ import { openCard, openPhoto } from "./viewer";
 import { anchorFor } from "./tripMap";
 import { addStopControls, isRetimable } from "./dayEdit";
 import { selectionClick } from "./retime";
-import { screenCaptionSlot } from "./screenCaptions";
 import { loc } from "./contentLang";
 import { ui } from "./i18n";
 
@@ -118,11 +117,6 @@ function renderGrid(photos: PhotoRecord[]): HTMLElement {
     imgs.push(img);
     const cell = el<HTMLDivElement>(`<div class="grid-cell"></div>`);
     cell.appendChild(img);
-    // The description of a withheld screenshot, when this reader can open it.
-    // A photograph the cloud model was allowed to see already has a caption of
-    // its own; this is the one nobody else was allowed to look at, and it says
-    // only what kind of screen it is.
-    cell.appendChild(screenCaptionSlot(photo.id));
     grid.appendChild(cell);
   }
   return grid;

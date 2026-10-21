@@ -368,7 +368,7 @@ onScreenCaptions((state) => {
  * more text.
  */
 export function screenCaptionSlot(photoId: string): HTMLElement {
-  const el = document.createElement("div");
+  const el = document.createElement("p");
   el.className = "screen-caption";
   el.hidden = true;
   const slot: CaptionSlot = { el, id: photoId };

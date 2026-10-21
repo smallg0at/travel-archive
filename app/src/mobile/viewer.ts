@@ -2,7 +2,7 @@ import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, releaseFullPhoto } from "../graphPhoto";
 import { thumbnailSource } from "../photoSource";
 import { el, transcript, transcriptOriginal } from "../photoUi";
-import { screenCaptionSlot } from "../screenCaptions";
+import { onScreenCaptions, screenCaptionFor, screenCaptionSlot } from "../screenCaptions";
 import { contentLanguage, loc } from "../contentLang";
 import { fmtDateTime, ui } from "../i18n";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
@@ -230,7 +230,11 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   function describe(i: number): void {
     const photo = photos[i];
     count.textContent = photos.length > 1 ? ui.mobile.counter(i + 1, photos.length) : "";
-    caption.textContent = context?.title ?? loc(photo.caption) ?? "";
+    // The caption's place, and the description is a caption: a photograph the
+    // cloud model was never allowed to see has no caption of its own, so the
+    // line under the picture says what kind of screen it is instead — and
+    // nothing on it.
+    caption.textContent = context?.title ?? loc(photo.caption) ?? screenCaptionFor(photo.id)?.caption ?? "";
     caption.parentElement!.hidden = !caption.textContent;
     // Nothing to offer when the original is already on screen from this phone.
     hd.hidden = fullUrls.has(i) || deviceFullUrl(photos[i].id) !== null;
@@ -391,7 +395,16 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     overrideSystemBars(null);
     document.body.classList.remove("m-locked");
     for (const url of fullUrls.values()) releaseFullPhoto(url);
+    stopWatching();
   }
+
+  // The descriptions need a passphrase and a fetch, so they arrive after the
+  // picture does. The line under it is drawn again when they land — otherwise
+  // a photograph opened first would keep an empty line for the whole session.
+  const stopWatching = onScreenCaptions((state) => {
+    if (state.status !== "ready" || current < 0) return;
+    describe(current);
+  });
 
   document.body.appendChild(root);
   overrideSystemBars("#000000");

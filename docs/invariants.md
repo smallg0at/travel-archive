@@ -423,6 +423,17 @@ cannot is the kind of difference nobody notices until it matters, and the
 first version of this had exactly that: the phone's search found the
 descriptions and the desktop's did not.
 
+**A thumbnail is a peek; the lightbox is where a picture is read.** Nothing
+is written over a thumbnail — a label across a picture is the one thing in
+the way of the thing the reader opened the picture for. The screenshot
+descriptions are the case in point: they are shown in the viewer, beside the
+photograph, in the place its caption would be, and not on the month's album
+cells (over the picture) and not under the picture in the day's grid (which
+made the whole row taller for one line: a CSS grid's row is as tall as its
+tallest cell — 137px became 180px, measured). A grid cell holds a picture and
+nothing else, and a caption that only some of the cells carry makes the grid
+ragged for all of them.
+
 **A wrong KDF parameter does not fail loudly.** `scrypt-js` takes its
 arguments positionally — `(password, salt, N, r, p, keyLength)` — and nothing
 checks them: swap `N` and the key length and it derives a *different key*

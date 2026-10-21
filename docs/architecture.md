@@ -122,8 +122,14 @@ longer hands it out.
 conversation, an ID card, a passport page — and nothing on it. The model was
 shown one picture and told to name the kind (`providers/screenshotPrompt.ts`).
 It is therefore safe to show in the reader, which is the point of it: the
-description appears under the photograph on a day's page and in the month
-album, and the coarse tags are searchable.
+description appears **in the viewer**, beside the photograph, in the place the
+photograph's own caption would be — and nowhere else. It is **not** on a
+thumbnail: the lightbox is where a picture is read, and a label over the
+picture is the one thing in the way of that. (It was tried on the month's
+album cells, over the picture, and under the picture in the day's grid — where
+it made the whole row 43px taller for one line, measured, because a CSS grid's
+row is as tall as its tallest cell.) The coarse tags are searchable, and that
+is where they earn their place.
 
 **Each description also carries the day it belongs to.** The search index is
 built by day, so a description without a date cannot be grouped under one and
