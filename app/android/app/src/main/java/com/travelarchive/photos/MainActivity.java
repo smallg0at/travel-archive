@@ -12,6 +12,15 @@ import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
 
+    /**
+     * The WebView's origin, from `server.hostname` in capacitor.config.ts.
+     *
+     * It is `archive.local`, not Capacitor's default `localhost`, so that MSAL's
+     * redirect URI (`${origin}/auth.html`) is the one registered in Azure and
+     * the app is not grouped with every other WebView under `localhost`.
+     */
+    private static final String APP_HOST = "archive.local";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // The app's own plugins register before the bridge is built.
@@ -23,7 +32,7 @@ public class MainActivity extends BridgeActivity {
         // A single-page app's refresh token lasts 24 hours. After that MSAL
         // renews silently from a hidden iframe on login.microsoftonline.com,
         // which only works if that frame can read Microsoft's own sign-in
-        // cookies — third-party ones here, under https://localhost, and
+        // cookies — third-party ones here, under https://archive.local, and
         // Android's WebView refuses those by default. Without this the app
         // would ask for a sign-in every day.
         CookieManager.getInstance().setAcceptThirdPartyCookies(bridge.getWebView(), true);
@@ -44,15 +53,15 @@ public class MainActivity extends BridgeActivity {
      * Brings the WebView back into the app when Microsoft's sign-in sends it
      * home.
      *
-     * The app is served from https://localhost by Capacitor intercepting
+     * The app is served from https://archive.local by Capacitor intercepting
      * requests to that host — there is no server behind it. Microsoft ends
      * every sign-in, cancelled or completed, with an HTTP redirect to
-     * https://localhost/auth/, and Chromium follows a redirect inside its
-     * network stack without offering the new request to shouldInterceptRequest.
-     * So that one hop went to the real network, found nothing listening, and
-     * showed "Webpage not available" — reproduced on the phone with a
-     * prompt=none request, whose immediate redirect failed exactly that way,
-     * while the same URL loaded directly worked.
+     * https://archive.local/auth.html, and Chromium follows a redirect inside
+     * its network stack without offering the new request to
+     * shouldInterceptRequest. So that one hop went to the real network, found
+     * nothing listening, and showed "Webpage not available" — reproduced on the
+     * phone with a prompt=none request, whose immediate redirect failed exactly
+     * that way, while the same URL loaded directly worked.
      *
      * The redirect is still offered here, flagged as one. Cancelling it and
      * loading the same URL afresh makes it an ordinary navigation, which the
@@ -72,7 +81,7 @@ public class MainActivity extends BridgeActivity {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            if ("localhost".equals(url.getHost()) && url.getPath() != null && url.getPath().startsWith("/_device/")) {
+            if (APP_HOST.equals(url.getHost()) && url.getPath() != null && url.getPath().startsWith("/_device/")) {
                 return LocalPhotosPlugin.serve(view.getContext(), url);
             }
             return super.shouldInterceptRequest(view, request);
@@ -81,7 +90,7 @@ public class MainActivity extends BridgeActivity {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            if (request.isRedirect() && request.isForMainFrame() && "localhost".equals(url.getHost())) {
+            if (request.isRedirect() && request.isForMainFrame() && APP_HOST.equals(url.getHost())) {
                 view.loadUrl(url.toString());
                 return true;
             }

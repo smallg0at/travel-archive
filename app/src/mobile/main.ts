@@ -280,8 +280,8 @@ async function main(): Promise<void> {
   // In a browser, the same two questions the desktop asks first, together: is
   // there a server to restore settings from, and to take thumbnails from.
   // The installed app skips both — its WebView is served from
-  // https://localhost, and a request to http://127.0.0.1 is mixed content it
-  // may not make at all.
+  // https://archive.local, and a request to http://127.0.0.1 is mixed content
+  // it may not make at all.
   if (!isNative) {
     const [restored, health] = await Promise.all([restorePrefs(), checkHealth()]);
     if (restored.theme) showTheme(readTheme());

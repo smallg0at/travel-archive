@@ -120,8 +120,15 @@ async function post<T>(path: string, body: unknown): Promise<T> {
  * reads as broken, while a grid without them reads as a photo archive. The
  * hostname is the test — served from `localhost`/`127.0.0.1` this is the owner's
  * own window; served from a LAN address it is somebody else's.
+ *
+ * `archive.local` is the phone's WebView (`server.hostname` in
+ * capacitor.config.ts). It has no job server at all, so the question only
+ * decides "guest or not" — the interface preferences stay on the phone and a
+ * kept archive is its own — and the name is not on the network either.
  */
-export const isLocalMachine = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname || "localhost");
+export const isLocalMachine = /^(localhost|127\.0\.0\.1|\[::1\]|archive\.local)$/i.test(
+  location.hostname || "localhost",
+);
 
 /** Whether the server wants a password, and whether this browser has given it. */
 export interface AccessStatus {

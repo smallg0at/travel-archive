@@ -139,7 +139,7 @@ vanished from the album because the shell was still running the previous
 reason. **After changing a derived file's shape, rebuild `pipeline/dist` and
 restart the shell before believing anything the app shows you.**
 Every feature needs that path to degrade rather than error. The installed phone
-app does not even ask: its WebView is `https://localhost`, and a request to
+app does not even ask: its WebView is `https://archive.local`, and a request to
 `http://127.0.0.1:18419` is mixed content.
 
 **A "which files exist" list must be read back from the files.** `parts` in a

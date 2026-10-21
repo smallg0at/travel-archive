@@ -99,7 +99,7 @@ What it does differently from the desktop, and why:
 - **Sign-in is a full-page redirect inside the app's WebView**, never a popup,
   and Microsoft's login hosts are in Capacitor's `allowNavigation`. The system
   browser cannot be used: a sign-in finished there lands on
-  `https://localhost/auth.html` in the browser, not in the app, and the SPA
+  `https://archive.local/auth.html` in the browser, not in the app, and the SPA
   platform in Azure accepts no custom-scheme redirect to return by. See
   `capacitor.config.ts` for the trade-off.
 - **Android's back button** closes the viewer or a sheet, then pops a page,
@@ -116,16 +116,24 @@ What it does differently from the desktop, and why:
   sign-in" in `docs/invariants.md` — without it the app signed out every time Android
   ended its process.
 
-**Before sign-in can work on a device**, add `https://localhost/auth.html` as a
-redirect URI under the *Single-page application* platform of the Azure app
+**Before sign-in can work on a device**, add `https://archive.local/auth.html`
+as a redirect URI under the *Single-page application* platform of the Azure app
 registration (iOS, once added, will need `capacitor://localhost/auth.html`).
+`https://localhost/auth.html` was the app's origin before `archive.local`; it
+stays registered only for builds older than that change, and the phone page in
+a desktop browser (`http://localhost:17923/mobile/`) uses its own entry below.
+
+**Changing the WebView's origin changes the store it reads.** Capacitor's
+WebView storage is keyed by origin, so moving from `https://localhost` to
+`https://archive.local` means a fresh Microsoft sign-in and a fresh kept
+archive, once. Nothing else on the phone is lost.
 
 ### Photographs from the phone's own storage
 
 `android/…/LocalPhotosPlugin.java` lists the phone's photo library — name, size
 and MediaStore id, nothing else — and `src/mobile/devicePhotos.ts` matches the
 archive against it. The bytes are served by MainActivity's `WebViewClient` from
-`https://localhost/_device/…`, so an `<img>` gets an ordinary same-origin URL
+`https://archive.local/_device/…`, so an `<img>` gets an ordinary same-origin URL
 and nothing leaves the phone. Photos are only read.
 
 **Matched on file name *and* exact byte size, never one alone.** This library
@@ -268,7 +276,7 @@ app is configured.
 
 - `app/src/msAuth.ts` — `loginPopup()` **requires a genuine user click**; popups opened from anywhere else (e.g. from an IntersectionObserver callback during lazy-loading) get silently blocked, confirmed live as `BrowserAuthError: popup_window_error`. That's *why* sign-in is a visible banner button rather than something that fires on its own. It also auto-clears MSAL's stale `interaction_in_progress` lock, which otherwise sticks on forever after an abandoned popup and blocks every future attempt.
 - `app/auth.html` (+ `app/auth/main.ts`) — a **dedicated redirect bridge page**, separate from the main app. `loginPopup()`'s popup has to land on a page that hands the response back to the opener via `BroadcastChannel` and closes itself; pointing `redirectUri` at the main app means the popup loads the whole UI and nothing does the handoff. It also answers msal-browser 5's **silent renewal**: that runs in a hidden iframe which lands on the same page and waits for the same broadcast (`waitForBridgeResponse`), so a silent frame is treated like a popup. `auth/main.ts` doesn't even construct a `PublicClientApplication` for the bridge handoff — an earlier fix attempt did, and still didn't work (popup landed on the right URL with a valid code and just sat there). Reading the installed package source (`node_modules/@azure/msal-browser/dist/redirect_bridge/index.mjs`) turned up the actual answer: `broadcastResponseToMainFrame` from the `@azure/msal-browser/redirect-bridge` subpath, which is the entire job of that page. `vite.config.ts` builds it as a second Rollup entry.
-- Redirect URIs are `…/auth.html` — **a real file, and the `.html` is load-bearing**. Every server here (Vite dev/preview, `desktop/src/static.ts`, `pipeline/src/staticApp.ts`, Capacitor) serves a real path as itself, so there is no trailing-slash or directory-index rule to get right. The old `/auth/` was not: Capacitor's local server runs in html5mode and serves *any* extensionless path as `index.html`, so `/auth/` booted the whole app inside msal-browser's hidden renewal iframe instead of the bridge, and silent renewal timed out once the SPA refresh token's 24 hours lapsed. Registered: `https://localhost/auth.html`, `http://localhost:17923/auth.html`, `http://localhost:5173/auth.html`, `http://localhost:4173/auth.html`; iOS, once added, `capacitor://localhost/auth.html`.
+- Redirect URIs are `…/auth.html` — **a real file, and the `.html` is load-bearing**. Every server here (Vite dev/preview, `desktop/src/static.ts`, `pipeline/src/staticApp.ts`, Capacitor) serves a real path as itself, so there is no trailing-slash or directory-index rule to get right. The old `/auth/` was not: Capacitor's local server runs in html5mode and serves *any* extensionless path as `index.html`, so `/auth/` booted the whole app inside msal-browser's hidden renewal iframe instead of the bridge, and silent renewal timed out once the SPA refresh token's 24 hours lapsed. Registered: `https://archive.local/auth.html` (the installed phone app), `http://localhost:17923/auth.html`, `http://localhost:5173/auth.html`, `http://localhost:4173/auth.html` (the desktop, Vite dev and preview); iOS, once added, `capacitor://localhost/auth.html` will need its own.
 
 The browser half is verified end-to-end, including a completed real sign-in:
 tokens land in `localStorage`, the banner disappears, and the app renders signed

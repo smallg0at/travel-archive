@@ -13,19 +13,24 @@ const config: CapacitorConfig = {
   appName: "Photo Archive",
   webDir: "dist-mobile",
   server: {
-    // Android serves the app from https://localhost (Capacitor's default,
-    // stated here because sign-in depends on it): MSAL's redirect URI is
-    // `${origin}/auth.html`, so https://localhost/auth.html is what has to be
-    // registered in Azure as a Single-page application redirect URI.
+    /**
+     * The WebView's origin. Not Capacitor's default `localhost`: MSAL derives
+     * its redirect URI from `window.location.origin`, and
+     * `https://archive.local/auth.html` is the one registered in Azure. The
+     * name is also why the app is not filed under "localhost" by Android's
+     * password managers and site settings, where every other WebView app
+     * shares that bucket.
+     */
+    hostname: "archive.local",
     androidScheme: "https",
     /**
      * Microsoft's sign-in pages, allowed to load inside the app.
      *
      * Capacitor sends every other site to the phone's browser, and a sign-in
      * finished there can never hand its code back: the redirect lands on
-     * https://localhost/auth/ in the browser, which is not this app. The SPA
-     * platform in Azure also only accepts https and localhost redirect URIs,
-     * so there is no custom-scheme deep link to return by instead.
+     * https://archive.local/auth.html in the browser, which is not this app.
+     * The SPA platform in Azure also only accepts https redirect URIs, so
+     * there is no custom-scheme deep link to return by instead.
      *
      * Capacitor's docs call this "not intended for production". The trade is
      * deliberate for a personal archive installed by its owner: the only pages
