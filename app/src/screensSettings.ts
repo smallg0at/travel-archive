@@ -13,10 +13,16 @@
  */
 import { ui } from "./i18n";
 import { el } from "./photoUi";
-import { rekeyScreens, screensStatus } from "./backend";
+import {
+  setScreensPassphrase,
+  screensStatus,
+  type ScreensSetResult,
+  type ScreensStatus,
+} from "./backend";
 import { providerChoice } from "./providerChoice";
 import { button, row, section, setRowValue } from "./settingsUi";
 import {
+  forgetScreenCaptions,
   onScreenCaptions,
   screenCaptionsCount,
   screenCaptionsState,
@@ -24,26 +30,39 @@ import {
   unlockScreenCaptions,
   lockScreenCaptions,
 } from "./screenCaptions";
-import { screenKeyCanPersist } from "./screenKey";
+import { recallScreenKey, screenKeyCanPersist } from "./screenKey";
 
 export function screensSection(): HTMLElement {
   const s = section(ui.settings.screens);
   const body = s.querySelector(".set-body")!;
 
-  const note = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
-  note.textContent = ui.generate.screensNote;
+  // The note carries emphasis, so it is set as HTML: the words are ours, and
+  // the difference between a warning and a paragraph is the whole point of
+  // having it. The key says so (`...Html`), like every other note that does.
+  const note = el<HTMLParagraphElement>(`<p class="set-note">${ui.generate.screensNoteHtml}</p>`);
   body.appendChild(note);
 
   // ---------------------------------------------------------------------
-  // The passphrase: the key the descriptions are sealed under. It is set on
-  // the machine that does the describing, and rotating it re-encrypts what is
-  // already there — a different act from starting a pass, which is why it has
-  // its own control and not a field in the run's form.
+  // The passphrase: the key the descriptions are sealed under.
+  //
+  // It has to be in two places on a machine that both writes and reads: the
+  // job server's key store (so a pass can seal what it describes) and this
+  // surface's own store (so this device can open it). They are separate files
+  // and either can be missing, so the row says which side it is reporting and
+  // the action covers the gap that made this row read "not set" for ever: when
+  // the server has no key but this device already holds one, the button hands
+  // that key over in one click instead of asking for it twice.
+  //
+  // Only a genuinely new passphrase re-encrypts anything. The server checks the
+  // typed value against the file first (see `planScreenPassphrase`), so the
+  // same phrase is adopted as it stands and a wrong one is refused before
+  // anything is written.
   // ---------------------------------------------------------------------
   const keyRow = row(ui.generate.screensPassphrase, "…");
   keyRow.classList.add("set-row-action");
-  const rekey = button(ui.generate.screensPassChange, () => {});
-  keyRow.appendChild(rekey);
+  const setKey = button(ui.generate.screensPassSet, () => {});
+  keyRow.appendChild(setKey);
+  const keyNote = el<HTMLParagraphElement>(`<p class="set-note" hidden></p>`);
   const keyBox = el<HTMLDivElement>(`<div class="set-box" hidden></div>`);
   const keyWarning = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
   keyWarning.textContent = ui.generate.screensPassWarning;
@@ -65,7 +84,7 @@ export function screensSection(): HTMLElement {
   keyForm.append(pass, pass2, mismatch, keyActions);
   const keyResult = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
   keyBox.append(keyWarning, keyForm, keyResult);
-  body.append(keyRow, keyBox);
+  body.append(keyRow, keyNote, keyBox);
 
   // ---------------------------------------------------------------------
   // The reading side: what this device can open, and what it takes.
@@ -103,12 +122,17 @@ export function screensSection(): HTMLElement {
   // The service: the same chooser the archive's own model uses, over the
   // services that run on this machine. Only the list of candidates differs.
   // ---------------------------------------------------------------------
-  let service: string | null = null;
+  // The service in force is `SCREENSHOT_PROVIDER` — a different variable from
+  // the archive's own model — so it comes from the server's own report of it,
+  // and the row is repainted from that report rather than from a copy this
+  // page kept. That is what makes the choice show up as in force at once
+  // instead of after a reload.
   const choice = providerChoice({
     envVar: "SCREENSHOT_PROVIDER",
     scope: "local",
-    value: () => service,
+    value: (config) => config.screenshotProvider,
     note: ui.generate.screensServiceNote,
+    unknownService: ui.generate.screensServiceUnset,
   });
   body.appendChild(choice.el);
 
@@ -116,25 +140,49 @@ export function screensSection(): HTMLElement {
   // Painting
   // ---------------------------------------------------------------------
 
+  /** The server's report, kept because the button's meaning depends on it. */
+  let server: ScreensStatus | null = null;
+  /** True when the button should hand the machine the key this device holds. */
+  let adopt = false;
+
+  /**
+   * What the button means right now.
+   *
+   * Three meanings, and the wrong label is how "I set it and nothing happened"
+   * starts: a machine with no key and this device holding one can be given that
+   * key in a click; a machine with no key and no device key needs the phrase
+   * typed; a machine that already has one is being changed.
+   */
+  const refreshKeyAction = (): void => {
+    const device = screenCaptionsState().status === "ready";
+    adopt = !!server && !server.hasKey && server.canStore && device;
+    setKey.hidden = !server?.canStore;
+    setKey.textContent = adopt
+      ? ui.generate.screensPassAdopt
+      : server?.hasKey
+        ? ui.generate.screensPassChange
+        : ui.generate.screensPassSet;
+  };
+
   /** The server's side: the passphrase is in its key store, the service is chosen. */
   const paintServer = async (): Promise<void> => {
-    const status = await screensStatus();
-    if (!status) {
+    server = await screensStatus();
+    if (!server) {
       setRowValue(keyRow, ui.settings.unavailable);
+      setKey.hidden = true;
       return;
     }
     setRowValue(
       keyRow,
-      status.hasKey
+      server.hasKey
         ? ui.generate.screensKeySet
-        : status.canStore
-          ? ui.generate.screensKeyUnset
-          : ui.generate.screensNoKeyStore,
+        : !server.canStore
+          ? ui.generate.screensNoKeyStore
+          : screenCaptionsState().status === "ready"
+            ? ui.generate.screensKeyOnDevice
+            : ui.generate.screensKeyUnset,
     );
-    // The change button is for the machine's own key store; where there is
-    // none, there is nothing to change.
-    rekey.hidden = !status.canStore;
-    service = status.provider;
+    refreshKeyAction();
     choice.refresh();
   };
 
@@ -162,6 +210,7 @@ export function screensSection(): HTMLElement {
     const open = local.status === "ready";
     unlock.hidden = open || local.status === "unavailable";
     forget.hidden = !open;
+    refreshKeyAction();
   };
 
   // The state can change without this page being on screen — the reader may
@@ -195,8 +244,59 @@ export function screensSection(): HTMLElement {
     keyResult.classList.remove("tone-warn");
   };
 
-  rekey.addEventListener("click", () => {
+  /** The outcome of a set, in the reader's language. */
+  const doneText = (result: ScreensSetResult): string =>
+    result.mode === "rotated"
+      ? ui.generate.screensPassDone(result.described, result.fingerprint)
+      : result.mode === "adopted"
+        ? ui.generate.screensPassDoneAdopted(result.described, result.fingerprint)
+        : ui.generate.screensPassDoneSet;
+
+  /**
+   * Hand the machine the passphrase this device already holds.
+   *
+   * The server still checks it against the file — so this cannot install a
+   * wrong key even if the device's copy were stale — and an adopt does not
+   * re-encrypt anything.
+   */
+  async function adoptFromDevice(): Promise<void> {
+    const key = await recallScreenKey();
+    if (!key) {
+      // The state moved under us (forgotten in another tab): repaint and let
+      // the button fall back to asking for the passphrase.
+      await paintServer();
+      return;
+    }
+    setKey.disabled = true;
+    keyNote.hidden = false;
+    keyNote.classList.remove("tone-warn");
+    keyNote.textContent = ui.common.saving;
+    try {
+      const result = await setScreensPassphrase(key);
+      if ("error" in result) {
+        keyNote.textContent = screenErrorText(result);
+        keyNote.classList.add("tone-warn");
+        return;
+      }
+      keyNote.textContent = doneText(result);
+      await paintServer();
+    } catch (err) {
+      keyNote.textContent = (err as Error).message;
+      keyNote.classList.add("tone-warn");
+    } finally {
+      setKey.disabled = false;
+    }
+  }
+
+  setKey.addEventListener("click", () => {
+    if (adopt) {
+      void adoptFromDevice();
+      return;
+    }
     keyBox.hidden = false;
+    keyWarning.textContent = server?.hasKey
+      ? ui.generate.screensPassWarning
+      : ui.generate.screensPassWarningSet;
     keyResult.textContent = "";
     keyResult.classList.remove("tone-warn");
     refreshKeySave();
@@ -213,8 +313,9 @@ export function screensSection(): HTMLElement {
   }
 
   /**
-   * The only path that rotates: both fields agree, so the value is deliberate
-   * rather than a typo carried into the key store.
+   * The one path that writes a passphrase: both fields agree, so the value is
+   * deliberate rather than a typo carried into the key store. The server then
+   * decides whether it is the file's key (adopt) or a new one (rotate).
    */
   async function saveKey(): Promise<void> {
     const { first, ok } = keyMatch();
@@ -223,14 +324,30 @@ export function screensSection(): HTMLElement {
     keyResult.textContent = ui.settings.providerCheckBusy;
     keySave.disabled = true;
     try {
-      const keyed = await rekeyScreens(first);
-      if ("error" in keyed) {
-        keyResult.textContent = screenErrorText(keyed);
+      const result = await setScreensPassphrase(first);
+      if ("error" in result) {
+        keyResult.textContent = screenErrorText(result);
         keyResult.classList.add("tone-warn");
         return;
       }
       closeKeyBox();
-      keyResult.textContent = ui.generate.screensPassDone(keyed.described, keyed.fingerprint);
+      keyNote.hidden = false;
+      keyNote.classList.remove("tone-warn");
+      keyNote.textContent = doneText(result);
+
+      // The machine has it now; this device should hold it too, so the two rows
+      // agree and the descriptions open here without a second prompt. A rotation
+      // rewrote the file, so the copy in hand has to go before re-opening it.
+      forgetScreenCaptions();
+      const opened = await unlockScreenCaptions(first, true);
+      if (opened.status === "failed") {
+        keyNote.textContent = screenErrorText({
+          error: opened.error.message,
+          code: opened.error.code,
+          params: opened.error.params,
+        });
+        keyNote.classList.add("tone-warn");
+      }
       await paintServer();
     } catch (err) {
       keyResult.textContent = (err as Error).message;

@@ -50,7 +50,7 @@ import {
 } from "./jobs/analyzeBatch.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { runScreenCaptions } from "./jobs/screenCaptions.js";
-import { loadScreenCaptions, rekeyScreenCaptions, SCREEN_CAPTIONS_FILE } from "./screenCaptions.js";
+import { planScreenPassphrase, setScreenPassphrase, SCREEN_CAPTIONS_FILE } from "./screenCaptions.js";
 import { canStorePassphrase, hasStoredPassphrase, importLegacyPassphrase } from "./screenKeyStore.js";
 import { passphraseProblem } from "./screenKey.js";
 import { isScreenError } from "./screenErrors.js";
@@ -780,17 +780,18 @@ const routes: [RegExp, string, Handler][] = [
   ],
 
   /**
-   * Change the passphrase the descriptions are encrypted under.
+   * Give this machine the passphrase the descriptions are encrypted under.
    *
    * Its own route rather than a key in `/config`, because it is not a setting
-   * that can simply be overwritten: the file on OneDrive is encrypted with the
-   * old value, so the change has to re-encrypt it in the same breath — and the
-   * new value goes into the machine's key store, not into `.env`, where it would
-   * be plaintext beside the ciphertext. Local only, and it travels one way: it is
-   * never sent back.
+   * that can simply be overwritten: the file on OneDrive is encrypted with a
+   * passphrase, so setting one is either the same one (the store was missing
+   * it, nothing to re-encrypt) or a new one (re-encrypt in the same breath) —
+   * `planScreenPassphrase` reads that from the file. The value goes into the
+   * machine's key store, not into `.env`, where it would be plaintext beside
+   * the ciphertext. Local only, and it travels one way: it is never sent back.
    */
   [
-    /^\/screens\/rekey$/,
+    /^\/screens\/passphrase$/,
     "POST",
     async (req, res) => {
       if (!access.isLocal(req)) {
@@ -800,18 +801,21 @@ const routes: [RegExp, string, Handler][] = [
       const raw = typeof body.passphrase === "string" ? body.passphrase : "";
       const problem = passphraseProblem(raw);
       if (problem) return json(res, 400, screenFailure(problem));
-      // `?check=1` answers "would this be accepted, and does the key in use still
-      // open the file" and writes nothing. Added after a *test* rotated the real
-      // passphrase: a mutation endpoint should not be the only way to ask whether
-      // a value is acceptable.
+      // `?check=1` answers "what would setting this do" and writes nothing.
+      // Added after a *test* rotated the real passphrase: a mutation endpoint
+      // should not be the only way to ask.
       const checkOnly = new URL(req.url ?? "/", "http://local").searchParams.get("check") === "1";
       try {
         const token = await getAccessToken();
         if (checkOnly) {
-          const file = await loadScreenCaptions(token);
-          return json(res, 200, { ok: true, described: Object.keys(file.entries).length });
+          const plan = await planScreenPassphrase(token, raw);
+          return json(res, 200, {
+            ok: true,
+            would: plan.mode,
+            described: plan.file ? Object.keys(plan.file.entries).length : 0,
+          });
         }
-        json(res, 200, await rekeyScreenCaptions(token, raw));
+        json(res, 200, await setScreenPassphrase(token, raw));
       } catch (err) {
         json(res, checkOnly ? 409 : 400, screenFailure(err));
       }

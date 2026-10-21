@@ -1,7 +1,7 @@
 import type { ConfigStatus, ProviderOption } from "@travel-archive/shared";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { env, reloadEnv, shadowedByEnvironment } from "./env.js";
+import { env, reloadEnv, settingNow, shadowedByEnvironment } from "./env.js";
 import { homeFile } from "./paths.js";
 import { getProxySettings, updateProxyDispatcher } from "./proxy.js";
 import { PRESETS } from "./providers/index.js";
@@ -131,6 +131,11 @@ const SECRET = WRITABLE.filter((k) => k.endsWith("_API_KEY")) as WritableKey[];
 
 export function configStatus(): ConfigStatus {
   const provider = env.aiProvider;
+  // Read live rather than from the `env` snapshot: this one is written from
+  // the Settings page and has to be in force for the next run, not the next
+  // restart. `settingNow` reads the file, and a real environment variable
+  // still wins — the same precedence the loader keeps.
+  const screenshotProvider = settingNow("SCREENSHOT_PROVIDER") ?? null;
   const keys = { gemini: Boolean(env.geminiApiKey) };
   const providers: ProviderOption[] = PRESETS.map((p) => ({
     id: p.id,
@@ -150,6 +155,7 @@ export function configStatus(): ConfigStatus {
     path: homeFile(".env"),
     exists: existsSync(homeFile(".env")),
     provider,
+    screenshotProvider,
     providers,
     ready: Boolean(selected?.hasKey),
     keys,

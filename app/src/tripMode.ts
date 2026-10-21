@@ -530,8 +530,18 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
   const paintScreens = async (): Promise<void> => {
     const [config, status] = await Promise.all([getConfig(), screensStatus()]);
     const local = localOptions(config?.providers ?? []);
-    const chosen = local.find((p) => p.id === status?.provider) ?? local[0];
-    screensService.textContent = chosen ? providerName(chosen) : ui.generate.screensNoLocal;
+    // The service in force, not "the first one that happens to exist". The job
+    // refuses to run without `SCREENSHOT_PROVIDER`, so showing a fallback here
+    // would promise a pass the server will not start.
+    const configured = config?.screenshotProvider ?? null;
+    const chosen = local.find((p) => p.id === configured);
+    screensService.textContent = chosen
+      ? providerName(chosen)
+      : configured
+        ? ui.generate.screensServiceUnset
+        : local.length
+          ? ui.settings.noServiceChosen
+          : ui.generate.screensNoLocal;
     screensKey.textContent = !status
       ? ui.settings.unavailable
       : status.hasKey
@@ -550,7 +560,9 @@ export function renderJobPanel(refresh: Refresh): HTMLElement {
           : !status.canStore
             ? ui.generate.screensNoKeyStore
             : !chosen
-              ? ui.generate.screensNoLocal
+              ? configured
+                ? ui.generate.screensServiceUnset
+                : ui.settings.noServiceChosen
               : ui.generate.screensReady;
     screensState.classList.toggle("tone-warn", blocked);
     screensSubmit.disabled = blocked;

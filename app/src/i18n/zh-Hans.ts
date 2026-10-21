@@ -373,6 +373,8 @@ export const zhHans: Messages = {
     savedReady: "已保存。可以开始生成了。",
     saved: "已保存。",
     unavailable: "不可用",
+    /** 还没选服务——和「不可用」不是一回事。 */
+    noServiceChosen: "还没有选服务",
     ready: "就绪",
     readyOnceSaved: "保存后即可使用",
     noKey: "未配置 API 密钥——无法使用生成功能",
@@ -489,21 +491,35 @@ export const zhHans: Messages = {
     writeNarrative: "撰写游记",
     tripAllowMissing: "即使大部分日期尚未生成摘要，仍继续撰写",
 
-    screensNote:
+    screensNoteHtml:
       "描述那些从未获准外发的截图——被允许清单挡在云端模型之外的那批，<strong>档案页面里看不到，别人也看不到</strong>。由这台机器上的模型负责看图，并且只被要求说出<em>屏幕的种类</em>：聊天记录、身份证、护照页、显示账号数字的屏幕；屏幕上的内容一律不转写。描述在<strong>上传前</strong>用下面的口令加密，所以 OneDrive 上的那一份是读不懂的——只有这台机器能读。",
     screensRunNote: "描述截图是对全库跑一遍。服务和口令在设置里；这里是跑这一遍的地方。",
     screensService: "服务（本机）",
+    /**
+     * 当前生效的服务不在这几行里。截图这一趟只能用跑在本机的服务，所以云端
+     * 那个得先换掉才能跑。
+     */
+    screensServiceUnset: "当前生效的服务不在这台机器上——这一趟只能用跑在本机的服务。",
     screensServiceNote: "负责写出描述的服务。它跑在这台机器上——照片就在原地被描述，不必送去任何地方被看。",
     screensPassphrase: "口令",
     screensKeySet: "已设置 · 保存在本机钥匙串",
     screensKeyUnset: "未设置",
+    /** 服务端还没有钥匙，但这台设备上的口令已经能打开文件。 */
+    screensKeyOnDevice: "未设置 · 这台设备上已有",
+    screensPassSet: "设置",
+    /** 一键：把这台设备已有的口令交给这台机器。 */
+    screensPassAdopt: "用它设置",
     screensPassChange: "更改",
     screensPassNew: "新口令",
     screensPassRepeat: "再输一次",
     screensPassMismatch: "两次输入还不一致。",
     screensPassSave: "保存",
     screensPassWarning: "更改会重新加密所有描述，旧口令立即失效；新口令只保存在这个 Windows 账户下。丢了就只能重新描述一遍。",
+    screensPassWarningSet:
+      "会先拿去解开已有的描述：解不开就不保存，也不会覆盖已有的钥匙。这台机器以后用它加密新写的描述——丢了就只能重新描述一遍。",
     screensPassDone: (count: number, fingerprint: string) => `已更改——${count} 条描述已重新加密（钥匙 ${fingerprint}）`,
+    screensPassDoneAdopted: (count: number, fingerprint: string) => `已保存——它能解开现有的 ${count} 条描述（钥匙 ${fingerprint}）`,
+    screensPassDoneSet: "已设置。",
     /**
      * 口令的规则与拒绝理由，写在这里而不是服务端。服务端只发代码和参数
      * （见 screenErrors.ts），这里把它们变成人话；遇到不认识的代码就退回服务端

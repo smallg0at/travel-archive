@@ -235,33 +235,127 @@ export async function saveScreenCaptions(
 }
 
 /**
- * Set a new passphrase without losing what is already described.
+ * Which of three things giving this machine a passphrase would do.
  *
- * Load with the old one, store the new one, save with it. Without this, changing
- * the passphrase is indistinguishable from losing it: the entries become
- * unreadable, the only way forward is to delete the file, and hours of describing
- * are the price of a decision. The load also means a *wrong current* passphrase
- * cannot sail through — if the file cannot be read, nothing is re-encrypted and
- * the error says so.
+ *  - `set`     nothing has been described yet, so this is a first passphrase.
+ *  - `adopted` the file already opens with it; only the key store was missing
+ *              it. The file is untouched, so its fingerprint does not change.
+ *  - `rotated` the file was sealed under another key, and is re-encrypted.
+ */
+export type ScreenPassphraseMode = "set" | "adopted" | "rotated";
+
+export interface ScreenPassphraseResult {
+  described: number;
+  fingerprint: string;
+  mode: ScreenPassphraseMode;
+}
+
+/**
+ * What giving the machine `next` would do, without writing anything.
+ *
+ * The file is the authority. If `next` opens it, this is not a change at all:
+ * the store is simply missing the key that wrote the file — which is the state
+ * a machine lands in when the phrase was kept by the reader (the desktop
+ * shell's own store) and never by the server. Re-encrypting there would buy
+ * nothing and would hand every other device a new fingerprint to compare
+ * against.
+ *
+ * If it does not open the file, this is a genuine rotation, and keeping what
+ * is already described needs the old passphrase — which only the key store can
+ * supply. With no file there is nothing to keep, so any acceptable passphrase
+ * is a first one.
+ *
+ * A failure to *read* the store or the archive throws rather than returning a
+ * plan: "cannot tell" must never quietly become "start over".
+ */
+export type PassphrasePlan =
+  | { mode: "set"; envelope: null; file: null; previous: null }
+  | { mode: "adopted"; envelope: ScreenCaptionsEnvelope; file: ScreenCaptions; previous: null }
+  | { mode: "rotated"; envelope: ScreenCaptionsEnvelope; file: ScreenCaptions; previous: string };
+
+/**
+ * The decision itself, with the envelope in hand and the key store behind a
+ * thunk (it is only read when the typed passphrase is not the file's key, and
+ * a store that cannot be read must not stop a *valid* adopt). Split out so the
+ * rules — adopt, rotate, refuse, never overwrite — are testable without Graph.
+ */
+export async function planPassphraseAgainst(
+  envelope: ScreenCaptionsEnvelope | null,
+  next: string,
+  stored: () => Promise<string[]>,
+): Promise<PassphrasePlan> {
+  if (!envelope) return { mode: "set", envelope: null, file: null, previous: null };
+  try {
+    const file = decryptScreenCaptions(envelope, next);
+    return { mode: "adopted", envelope, file, previous: null };
+  } catch (mismatch) {
+    // Not the file's key: a rotation, if this machine still holds the old one.
+    const keys = await stored();
+    for (const candidate of keys) {
+      try {
+        const file = decryptScreenCaptions(envelope, candidate);
+        return { mode: "rotated", envelope, file, previous: candidate };
+      } catch {
+        /* the next stored key */
+      }
+    }
+    // The mismatch names the two fingerprints, which is the actionable half:
+    // "enter the passphrase that wrote it" rather than a generic refusal.
+    throw mismatch instanceof Error
+      ? mismatch
+      : new ScreenError("descriptions-damaged", `Could not open ${SCREEN_CAPTIONS_FILE}.`);
+  }
+}
+
+export async function planScreenPassphrase(token: string, next: string): Promise<PassphrasePlan> {
+  const envelope = await loadScreenCaptionsEnvelope(token);
+  return planPassphraseAgainst(envelope, next, readStoredPassphrases);
+}
+
+/**
+ * Give this machine a passphrase — the first one, the one that wrote the file,
+ * or a new one — and never lose what is described.
+ *
+ * One path for all three because the alternative was a settings page that
+ * could rotate but not *set*: a machine with an empty key store and an existing
+ * file had no action that could fill it, so the row stayed "not set" for ever.
+ * (The reader's own store is a different file — see `app/src/screenKey.ts` —
+ * and it is why the machine can be able to *read* the descriptions and still
+ * have no key to seal them with.) The file decides which case this is; see
+ * `planScreenPassphrase`.
  *
  * The new value is used explicitly rather than by re-reading the store, so what
  * gets written is exactly what was validated: storing it first and then
  * encrypting with "whatever the store says" could differ if the store cannot
  * hold it on this platform.
  */
-export async function rekeyScreenCaptions(
-  token: string,
-  next: string,
-): Promise<{ described: number; fingerprint: string }> {
-  const file = await loadScreenCaptions(token);
-  const [current] = await readStoredPassphrases();
+export async function setScreenPassphrase(token: string, next: string): Promise<ScreenPassphraseResult> {
+  const plan = await planScreenPassphrase(token, next);
+
+  // Nothing described yet: there is no file to keep and nothing to re-encrypt.
+  if (plan.mode === "set") {
+    await writeStoredPassphrase(next);
+    return { described: 0, fingerprint: "", mode: "set" };
+  }
+
+  // The file already opens with this passphrase: storing it is the whole
+  // change. The descriptions are not touched.
+  if (plan.mode === "adopted") {
+    await writeStoredPassphrase(next);
+    return {
+      described: Object.keys(plan.file.entries).length,
+      fingerprint: plan.envelope.fp ?? "",
+      mode: "adopted",
+    };
+  }
+
   // Step 1 of 3: the store, keeping the old key as a net. If the write of the
   // descriptions fails after this — a die during encoding, an OneDrive refusal —
   // the archive is still readable, because reading tries `current` then
   // `previous`. The old passphrase stops working at step 3, not here.
-  await writeStoredPassphrase(next, current ? { previous: current } : {});
+  await writeStoredPassphrase(next, { previous: plan.previous });
 
-  const envelope = encryptScreenCaptions(file, next);
+  const envelope = encryptScreenCaptions(plan.file, next);
   await mkdir(dataDir(), { recursive: true });
   await writeFile(dataFile(SCREEN_CAPTIONS_FILE), `${JSON.stringify(envelope)}\n`, "utf-8");
   await uploadMetadataJson(token, env.metadataFolder, SCREEN_CAPTIONS_FILE, envelope);
@@ -269,7 +363,11 @@ export async function rekeyScreenCaptions(
   // Step 3 of 3: the new descriptions are uploaded, so the old key has no reason
   // to remain. Dropping it is what makes the rotation final.
   await writeStoredPassphrase(next);
-  return { described: Object.keys(file.entries).length, fingerprint: envelope.fp ?? "" };
+  return {
+    described: Object.keys(plan.file.entries).length,
+    fingerprint: envelope.fp ?? "",
+    mode: "rotated",
+  };
 }
 
 async function readLocalEnvelope(): Promise<{ envelope: ScreenCaptionsEnvelope; mtime: number } | null> {

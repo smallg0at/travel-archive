@@ -73,8 +73,20 @@ export interface ProviderChoiceOptions {
    * The service in force, if the caller knows it. It is given the settings the
    * server reported, because the archive's own model is one of them and the
    * caller should not have to fetch it a second time.
+   *
+   * It may name a service the server did not report — the screenshot section
+   * reads `SCREENSHOT_PROVIDER`, which is a different variable from the
+   * archive's own model — and then no row is drawn as in force and the status
+   * line says the service in force is not one of these, rather than calling it
+   * "unavailable", which would be false of a service this page cannot see.
    */
   value?: (config: ConfigStatus) => string | null;
+  /**
+   * What to say when the service in force is not one of the rows. Left out,
+   * the chooser says the service is unavailable, which is true of a service it
+   * cannot see and false of one the server simply has not been told about.
+   */
+  unknownService?: string;
   /** The line above the rows. */
   note?: string;
   /** Told after a service is saved, so the page can repaint. */
@@ -268,11 +280,17 @@ export function providerChoice(opts: ProviderChoiceOptions): ProviderChoice {
     // A local service is ready without a key: saying "no key" of LM Studio is
     // the same lie as asking it for one.
     const usable = !!active && (active.hasKey || active.scope === "local");
-    state.textContent = usable
-      ? `${active ? providerName(active) : ""} · ${ui.settings.ready}`
-      : active
-        ? ui.settings.noKey
-        : ui.settings.unavailable;
+    // Three states, not two: nothing chosen, a service the server named that
+    // is not on offer here, and a service that is in force and usable. The
+    // middle one is the screenshot section's — the service in force there is
+    // chosen in a different place, so it is not necessarily one of these rows.
+    state.textContent = !activeId
+      ? ui.settings.noServiceChosen
+      : usable
+        ? `${providerName(active)} · ${ui.settings.ready}`
+        : active
+          ? ui.settings.noKey
+          : (opts.unknownService ?? ui.settings.unavailable);
     state.className = `set-sync-state tone-${usable ? "ok" : "warn"}`;
 
     // Rows exist for every provider the server knows, created on first sight

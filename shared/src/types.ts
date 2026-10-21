@@ -706,6 +706,16 @@ export interface ConfigStatus {
   path: string;
   exists: boolean;
   provider: string;
+  /**
+   * The service that describes the withheld screenshots, if one is set.
+   *
+   * A second service, and a separate variable (`SCREENSHOT_PROVIDER`) from
+   * `provider` above: that one is the archive's own model, this one may only
+   * be a service on this machine. Settings shows both, so the server has to
+   * report both — otherwise the screenshot section cannot say which one is in
+   * force, and says it wrongly until the page is reloaded.
+   */
+  screenshotProvider: string | null;
   /** Every backend the server knows, in the order Settings should show them. */
   providers: ProviderOption[];
   /** Whether the *selected* provider has a key — what decides if generation works. */

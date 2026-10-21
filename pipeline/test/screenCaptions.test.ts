@@ -6,6 +6,7 @@ import {
   decryptScreenCaptions,
   encryptScreenCaptions,
   emptyScreenCaptions,
+  planPassphraseAgainst,
   screenCaptionsFile,
 } from "../src/screenCaptions.js";
 
@@ -152,5 +153,59 @@ describe("where a description is kept", () => {
     expect(a.kdf.salt).not.toBe(b.kdf.salt);
     expect(a.iv).not.toBe(b.iv);
     expect(a.ct).not.toBe(b.ct);
+  });
+});
+
+/**
+ * Setting the passphrase had three cases that used to look like one, and the
+ * machine in the field was in the second: the file existed, the reader's own
+ * store held the phrase, and the server's key store was empty — so the only
+ * action on offer was "change", which needs the old key from that empty store
+ * and failed every time. The file is the authority on which case this is, and
+ * the rules are here so a future change cannot quietly re-encrypt on an adopt
+ * or adopt on a wrong phrase.
+ */
+describe("giving the machine a passphrase", () => {
+  const wrote = "the passphrase that wrote the file";
+  const next = "a completely different passphrase";
+  const store = (keys: string[]) => async () => keys;
+
+  const described = () => {
+    const file = emptyScreenCaptions();
+    file.entries["photo-1"] = { caption: "a chat conversation", tags: ["chat"], model: "lmstudio", at: "2026-10-13T00:00:00.000Z" };
+    return file;
+  };
+
+  it("adopts the phrase that already opens the file, without touching it", async () => {
+    const envelope = encryptScreenCaptions(described(), wrote);
+    const plan = await planPassphraseAgainst(envelope, wrote, store([]));
+    expect(plan.mode).toBe("adopted");
+    // The same envelope, not a re-encryption: its fingerprint stays the one
+    // every other device compares against.
+    expect(plan.envelope).toBe(envelope);
+    expect(plan.file?.entries["photo-1"].caption).toBe("a chat conversation");
+  });
+
+  it("calls a phrase a first set when nothing has been described", async () => {
+    const plan = await planPassphraseAgainst(null, next, store([]));
+    expect(plan.mode).toBe("set");
+  });
+
+  it("rotates when the store still holds the key that wrote the file", async () => {
+    const plan = await planPassphraseAgainst(encryptScreenCaptions(described(), wrote), next, store([wrote]));
+    expect(plan.mode).toBe("rotated");
+    if (plan.mode !== "rotated") return;
+    expect(plan.previous).toBe(wrote);
+    expect(Object.keys(plan.file.entries)).toEqual(["photo-1"]);
+  });
+
+  it("refuses a different phrase when nothing stored can open the file", async () => {
+    // This is the state the field report was in, minus the key: no way to keep
+    // what is described exists, so the answer must not be "start over".
+    for (const keys of [[], ["some other passphrase entirely"]]) {
+      await expect(planPassphraseAgainst(encryptScreenCaptions(described(), wrote), next, store(keys))).rejects.toMatchObject({
+        code: "passphrase-mismatch",
+      });
+    }
   });
 });

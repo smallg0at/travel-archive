@@ -383,7 +383,7 @@ a design where the server opens the file leaves the phone unable to read the
 very thing the server was asked to protect. The consequence is a rule for
 everything else — **the plaintext of these descriptions never crosses a
 network**, so there is no route that returns them (`/screens/entries` was
-removed when this moved; `/screens/envelope` returns the ciphertext, which is
+removed when this moved; `/archive/screens` returns the ciphertext, which is
 the same bytes OneDrive holds), and they never enter `search.json`, which is
 uploaded. What the reader merges into its search index is its own copy, in
 memory, and only the descriptions it could open.
@@ -400,6 +400,20 @@ against the file's own fingerprint **before** it is written to a store, so a
 mistyped passphrase never replaces a good one — a store holding the wrong
 passphrase can only be emptied by hand, and the error gives no way to tell
 which of the two was wrong.
+
+**An empty key store is not "no passphrase".** There are two stores on a machine
+that both writes and reads — the server's (`data/screen-key.json`) for sealing
+new descriptions, and the surface's (the table above) for opening them — and
+either can be empty while the other is not. A device that can read 2,352
+descriptions and a machine that cannot seal the next one is a normal state, not
+a corruption; it is what "remember on this computer" produces when the server
+was never given the phrase. The row that reports it must say which side it
+means, and the action that fills the gap must ask the *file* first: a phrase
+that already opens it is **adopted** (stored, ciphertext untouched, fingerprint
+unchanged), and only a phrase that does not open it is a rotation — which needs
+the old one from the store and must refuse, rather than re-encrypt over what is
+there. Without this the only action was "change", which needs the key the empty
+store does not have, so the row could never leave "not set".
 
 **An opened set of descriptions is not closed by a later question about it.**
 The passphrase is kept for the session whatever the surface can also persist,

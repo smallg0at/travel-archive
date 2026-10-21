@@ -674,21 +674,32 @@ export function startScreens(body: { limit?: number } = {}): Promise<JobRecord> 
   return post<JobRecord>("/jobs/screens", body);
 }
 
+/** What giving the machine a passphrase did — see `planScreenPassphrase` on the server. */
+export interface ScreensSetResult {
+  described: number;
+  fingerprint: string;
+  /** `set` = first one, `adopted` = the file already opened with it, `rotated` = re-encrypted. */
+  mode: "set" | "adopted" | "rotated";
+}
+
 /**
- * Change the passphrase the descriptions are encrypted under, re-encrypting what
- * is already there. Separate from `saveConfig` because the file has to be rewritten
- * in the same breath — see the route and `rekeyScreenCaptions`.
+ * Give the machine the passphrase the descriptions are encrypted under.
+ *
+ * Separate from `saveConfig` because the file has to be re-encrypted when the
+ * passphrase is genuinely new — and because an empty key store next to an
+ * existing file has to *adopt* the phrase that wrote it rather than re-encrypt.
+ * The server decides which from the file; see `setScreenPassphrase`.
  */
-export async function rekeyScreens(passphrase: string): Promise<{ described: number; fingerprint: string } | ScreensFailure> {
+export async function setScreensPassphrase(passphrase: string): Promise<ScreensSetResult | ScreensFailure> {
   try {
-    const res = await apiFetch("/screens/rekey", {
+    const res = await apiFetch("/screens/passphrase", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ passphrase }),
     });
-    const body = (await res.json()) as { described?: number; fingerprint?: string } & ScreensFailure;
-    return res.ok && typeof body.described === "number"
-      ? { described: body.described, fingerprint: body.fingerprint ?? "" }
+    const body = (await res.json()) as Partial<ScreensSetResult> & ScreensFailure;
+    return res.ok && typeof body.described === "number" && body.mode
+      ? { described: body.described, fingerprint: body.fingerprint ?? "", mode: body.mode }
       : { error: body.error ?? `HTTP ${res.status}`, code: body.code, params: body.params };
   } catch (err) {
     return { error: (err as Error).message };

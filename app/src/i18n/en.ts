@@ -390,6 +390,8 @@ export const en = {
     savedReady: "Saved. Generation is ready.",
     saved: "Saved.",
     unavailable: "Unavailable",
+    /** No service is in force yet. Not the same as "unavailable". */
+    noServiceChosen: "No service chosen yet",
     ready: "Ready",
     readyOnceSaved: "Ready once saved",
     noKey: "No API key — generation is unavailable",
@@ -513,16 +515,27 @@ export const en = {
     writeNarrative: "Write the narrative",
     tripAllowMissing: "Write it anyway if most days have no summary yet",
 
-    screensNote:
+    screensNoteHtml:
       "Describes the screenshots nobody has vouched for — the private ones the allowlist keeps away from the cloud model, so <strong>nothing on your archive page and nobody else's sees them</strong>. A model on this machine does the looking, and it is told to name only <em>what kind of screen</em> it is: a chat conversation, an ID card, a passport page, a screen showing account numbers. Nothing on it is transcribed. The descriptions are encrypted with the passphrase below before they are uploaded, so the copy on OneDrive is unreadable — this machine is the only thing that can read them.",
     screensRunNote:
       "Describing the screenshots is a pass over the archive. The service and the passphrase are set in Settings; this is where the pass is run.",
     screensService: "Service (this machine)",
+    /**
+     * The service in force is not one of the rows on offer. The screenshot
+     * pass may only use a service that runs here, so a cloud one has to be
+     * replaced before the pass can run.
+     */
+    screensServiceUnset: "The service in force is not one on this machine — the pass may only use a service that runs here.",
     screensServiceNote:
       "The service that writes the descriptions. It runs on this machine, so the photographs are described where they already are and never travel to be looked at.",
     screensPassphrase: "Passphrase",
     screensKeySet: "set · kept in this machine's key store",
     screensKeyUnset: "not set",
+    /** The server has no key, but this device holds one that already opens the file. */
+    screensKeyOnDevice: "not set · this device already has it",
+    screensPassSet: "Set",
+    /** One click: hand the machine the passphrase this device already holds. */
+    screensPassAdopt: "Use it",
     screensPassChange: "Change",
     screensPassNew: "new passphrase",
     screensPassRepeat: "repeat it",
@@ -530,8 +543,13 @@ export const en = {
     screensPassSave: "Save",
     screensPassWarning:
       "Changing it re-encrypts every description; the old one stops working at once, and the new one is kept for this Windows user only. Lose it and the only way back is describing them again.",
+    screensPassWarningSet:
+      "It is checked against what is already described first: if it does not open it, nothing is saved and no existing key is replaced. This machine then seals new descriptions with it — lose it and they have to be described again.",
     screensPassDone: (count: number, fingerprint: string) =>
       `changed — ${count} descriptions re-encrypted (key ${fingerprint})`,
+    screensPassDoneAdopted: (count: number, fingerprint: string) =>
+      `saved — it opens the ${count === 1 ? "description" : `${count} descriptions`} already here (key ${fingerprint})`,
+    screensPassDoneSet: "set.",
     /**
      * The passphrase rules and refusals, worded here rather than on the server.
      * The server sends a code and its parameters (screenErrors.ts); these turn

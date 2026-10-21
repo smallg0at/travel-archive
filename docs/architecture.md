@@ -108,6 +108,18 @@ server. The server still holds the passphrase in its own key store
 (`data/screen-key.json`, DPAPI) because it has to *write* the file; it no
 longer hands it out.
 
+**Two stores, and either can be empty.** The machine that writes has the
+server's store; the surface that reads has its own (the table below). They are
+different files, so a machine can be able to *read* every description and have
+no key to seal the next one with — the state the Settings row used to read as
+"not set" for ever. Giving the machine a passphrase therefore has three cases,
+decided by the file rather than by a mode switch
+(`planScreenPassphrase`): nothing described yet (first set), the phrase already
+opens it (adopt — store it and leave the ciphertext alone), or it opens under a
+different key (rotate, which re-encrypts and needs the old phrase from the
+store). Settings offers one action whose label follows that state, and hands
+the machine the key the device already holds when there is one.
+
 **Where the passphrase lives is the surface's business**
 (`app/src/screenKey.ts`):
 
