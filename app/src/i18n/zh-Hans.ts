@@ -506,6 +506,9 @@ export const zhHans: Messages = {
     screensKeyUnset: "未设置",
     /** 服务端还没有钥匙，但这台设备上的口令已经能打开文件。 */
     screensKeyOnDevice: "未设置 · 这台设备上已有",
+    /** 这台机器能加密新描述，但这台设备还没把它们打开。 */
+    screensKeySetLocked: "已设置 · 这台设备尚未解锁",
+    screensKeySetOpen: "已设置 · 这台设备已解锁",
     screensPassSet: "设置",
     /** 一键：把这台设备已有的口令交给这台机器。 */
     screensPassAdopt: "用它设置",
@@ -551,6 +554,8 @@ export const zhHans: Messages = {
     screensOnDeviceCount: (n: number) => `${n} 条描述`,
     screensUnlock: "解锁",
     screensForget: "忘记",
+    screensForgetConfirm: "要在这台设备上忘记口令吗？描述仍然是加密的；要在这里读，得重新输入一次。",
+    screensForgetYes: "忘记口令",
     screensPassEnter: "口令",
     screensRemember: "在这台电脑上记住",
     screensLocked: "已锁定——输入口令才能在这里读取",

@@ -533,6 +533,9 @@ export const en = {
     screensKeyUnset: "not set",
     /** The server has no key, but this device holds one that already opens the file. */
     screensKeyOnDevice: "not set · this device already has it",
+    /** The machine can seal new descriptions; this device has not opened the old ones here. */
+    screensKeySetLocked: "set · this device is not unlocked yet",
+    screensKeySetOpen: "set · unlocked on this device",
     screensPassSet: "Set",
     /** One click: hand the machine the passphrase this device already holds. */
     screensPassAdopt: "Use it",
@@ -585,6 +588,9 @@ export const en = {
     screensOnDeviceCount: (n: number) => (n === 1 ? "1 description readable here" : `${n} descriptions readable here`),
     screensUnlock: "Unlock",
     screensForget: "Forget",
+    screensForgetConfirm:
+      "Forget the passphrase on this device? The descriptions stay encrypted; reading them here will need it typed again.",
+    screensForgetYes: "Forget it",
     screensPassEnter: "the passphrase",
     screensRemember: "Remember on this computer",
     screensLocked: "Locked — enter the passphrase to read them here",

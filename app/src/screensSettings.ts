@@ -118,6 +118,22 @@ export function screensSection(): HTMLElement {
   unlockBox.append(unlockForm, unlockResult);
   body.appendChild(unlockBox);
 
+  // Forgetting is not a toggle: it drops the key this device holds, and if the
+  // passphrase is not remembered elsewhere the descriptions go back behind a
+  // prompt. One inline question, not a browser dialog — the same "a popup is
+  // for confirmations only" rule the rest of the page keeps, without a modal.
+  const forgetBox = el<HTMLDivElement>(`<div class="set-box" hidden></div>`);
+  const forgetNote = el<HTMLParagraphElement>(`<p class="set-note"></p>`);
+  forgetNote.textContent = ui.generate.screensForgetConfirm;
+  const forgetActions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  const forgetCancel = button(ui.common.cancel, () => {
+    forgetBox.hidden = true;
+  });
+  const forgetYes = button(ui.generate.screensForgetYes, () => void doForget(), "primary");
+  forgetActions.append(forgetCancel, forgetYes);
+  forgetBox.append(forgetNote, forgetActions);
+  body.appendChild(forgetBox);
+
   // ---------------------------------------------------------------------
   // The service: the same chooser the archive's own model uses, over the
   // services that run on this machine. Only the list of candidates differs.
@@ -164,6 +180,29 @@ export function screensSection(): HTMLElement {
         : ui.generate.screensPassSet;
   };
 
+  /**
+   * The passphrase row's value: whether *this device* has opened them, which is
+   * the question "is it unlocked or not". The server's key store is a different
+   * file, so "set" and "locked" used to sit next to each other with nothing
+   * saying how both could be true.
+   */
+  const paintKeyValue = (): void => {
+    if (!server) return;
+    const device = screenCaptionsState().status === "ready";
+    setRowValue(
+      keyRow,
+      server.hasKey
+        ? device
+          ? ui.generate.screensKeySetOpen
+          : ui.generate.screensKeySetLocked
+        : !server.canStore
+          ? ui.generate.screensNoKeyStore
+          : device
+            ? ui.generate.screensKeyOnDevice
+            : ui.generate.screensKeyUnset,
+    );
+  };
+
   /** The server's side: the passphrase is in its key store, the service is chosen. */
   const paintServer = async (): Promise<void> => {
     server = await screensStatus();
@@ -172,16 +211,7 @@ export function screensSection(): HTMLElement {
       setKey.hidden = true;
       return;
     }
-    setRowValue(
-      keyRow,
-      server.hasKey
-        ? ui.generate.screensKeySet
-        : !server.canStore
-          ? ui.generate.screensNoKeyStore
-          : screenCaptionsState().status === "ready"
-            ? ui.generate.screensKeyOnDevice
-            : ui.generate.screensKeyUnset,
-    );
+    paintKeyValue();
     refreshKeyAction();
     choice.refresh();
   };
@@ -212,6 +242,7 @@ export function screensSection(): HTMLElement {
     // above it is the same action twice, and the reader has to guess which.
     unlock.hidden = open || local.status === "unavailable" || !unlockBox.hidden;
     forget.hidden = !open;
+    paintKeyValue();
     refreshKeyAction();
   };
 
@@ -422,11 +453,15 @@ export function screensSection(): HTMLElement {
   }
 
   forget.addEventListener("click", () => {
-    void lockScreenCaptions().then(() => {
-      closeUnlockBox();
-      paintDevice();
-    });
+    forgetBox.hidden = false;
+    forgetCancel.focus();
   });
+
+  async function doForget(): Promise<void> {
+    await lockScreenCaptions();
+    forgetBox.hidden = true;
+    closeUnlockBox();
+  }
 
   return s;
 }
