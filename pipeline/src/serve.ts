@@ -50,7 +50,7 @@ import {
 } from "./jobs/analyzeBatch.js";
 import { resolveRange, runScan, type ScanMode } from "./jobs/scan.js";
 import { runScreenCaptions } from "./jobs/screenCaptions.js";
-import { loadScreenCaptions, loadScreenCaptionsEnvelope, rekeyScreenCaptions, SCREEN_CAPTIONS_FILE } from "./screenCaptions.js";
+import { loadScreenCaptions, rekeyScreenCaptions, SCREEN_CAPTIONS_FILE } from "./screenCaptions.js";
 import { canStorePassphrase, hasStoredPassphrase, importLegacyPassphrase } from "./screenKeyStore.js";
 import { passphraseProblem } from "./screenKey.js";
 import { isScreenError } from "./screenErrors.js";
@@ -776,37 +776,6 @@ const routes: [RegExp, string, Handler][] = [
         canStore: canStorePassphrase(),
         running: job?.kind === "screens",
       });
-    },
-  ],
-
-  /**
-   * The sealed descriptions — for **this machine only**, and still sealed.
-   *
-   * The read path is the reader's: the page fetches this envelope and decrypts
-   * it where it is, so the plaintext never crosses a network and the phone —
-   * which has no server at all — reads the same descriptions as the desktop.
-   * What is served here is ciphertext: the same bytes OneDrive holds.
-   *
-   * Loopback is the whole of the access rule, the same `access.isLocal` that
-   * gates every write. A reader on the LAN gets 403, and could not use the
-   * answer anyway — the browser refuses WebCrypto outside a secure context
-   * (measured: an http://192.168.x.x origin has `crypto.subtle === undefined`).
-   */
-  [
-    /^\/screens\/envelope$/,
-    "GET",
-    async (req, res) => {
-      if (!access.isLocal(req)) {
-        return json(res, 403, { error: "Local screenshot descriptions belong to the machine the server is running on" });
-      }
-      try {
-        const token = await getAccessToken();
-        const envelope = await loadScreenCaptionsEnvelope(token);
-        if (!envelope) return json(res, 404, { error: `No ${SCREEN_CAPTIONS_FILE} yet — nothing has been described` });
-        json(res, 200, envelope);
-      } catch (err) {
-        json(res, 409, screenFailure(err));
-      }
     },
   ],
 

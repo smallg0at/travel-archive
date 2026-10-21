@@ -654,8 +654,9 @@ export interface ScreensFailure {
  * server** and handed the plaintext over loopback. That is gone: the reader
  * fetches the sealed envelope (the same bytes OneDrive holds) and opens it
  * where it is, so the plaintext never crosses a network and the phone — which
- * has no server — can read the same descriptions as the desktop. See
- * `app/src/screenCaptions.ts`.
+ * has no server — can read the same descriptions as the desktop. The file
+ * comes from the archive's own route (`/archive/screens`), like every other
+ * archive file. See `app/src/screenCaptions.ts`.
  */
 
 /** Whether the local pass can run, and what it is set to. Loopback only. */
