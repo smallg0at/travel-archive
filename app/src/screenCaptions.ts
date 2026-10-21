@@ -33,7 +33,7 @@ import {
   type ScreenCaptionEntry,
   type ScreenCaptionsEnvelope,
 } from "./screenCrypto";
-import { screenKeySurface } from "./screenKey";
+import { forgetScreenKey, rememberScreenKey, recallScreenKey } from "./screenKey";
 import { ui } from "./i18n";
 
 /**
@@ -158,6 +158,10 @@ async function fetchEnvelope(): Promise<ScreenCaptionsEnvelope | null> {
  * never fetches the file: there is nothing it could do with it.
  */
 export async function ensureScreenCaptions(): Promise<ScreenCaptionsState> {
+  // Already open: leave it open. A later call — a search asking for the file
+  // again, a second tab's worth of tidying — must not close what the reader
+  // has already opened, and it must not need the passphrase again either.
+  if (state.status === "ready") return state;
   if (pending) return pending;
   const run = (async (): Promise<ScreenCaptionsState> => {
     if (!cryptoAvailable()) {
@@ -165,7 +169,7 @@ export async function ensureScreenCaptions(): Promise<ScreenCaptionsState> {
       setState(next);
       return next;
     }
-    const passphrase = await screenKeySurface().recall();
+    const passphrase = await recallScreenKey();
     if (!passphrase) {
       const next: ScreenCaptionsState = { status: "locked" };
       setState(next);
@@ -210,10 +214,11 @@ export async function ensureScreenCaptions(): Promise<ScreenCaptionsState> {
  * has to be emptied by hand, and the error gives no way to tell which of the
  * two was wrong.
  *
- * `remember` is the surface's business: the desktop shell keeps it in the
- * Windows key store, a browser and the phone keep it for this session only.
+ * `persist` asks for the shell's key store as well as this session's memory.
+ * Without it the passphrase still stays for this session — that is what keeps
+ * the descriptions open — it just does not survive a restart.
  */
-export async function unlockScreenCaptions(passphrase: string, remember = true): Promise<ScreenCaptionsState> {
+export async function unlockScreenCaptions(passphrase: string, persist = false): Promise<ScreenCaptionsState> {
   if (!cryptoAvailable()) {
     const next: ScreenCaptionsState = { status: "unavailable" };
     setState(next);
@@ -230,7 +235,7 @@ export async function unlockScreenCaptions(passphrase: string, remember = true):
   try {
     const file = await fetchEnvelope();
     const entries = file ? (await decryptScreenCaptions(file, passphrase)).entries : {};
-    if (remember) await screenKeySurface().remember(passphrase);
+    await rememberScreenKey(passphrase, persist);
     const next: ScreenCaptionsState = { status: "ready", entries };
     setState(next);
     return next;
@@ -250,7 +255,7 @@ export async function unlockScreenCaptions(passphrase: string, remember = true):
  * pages that were showing them fill themselves back in as empty.
  */
 export async function lockScreenCaptions(): Promise<void> {
-  await screenKeySurface().forget();
+  await forgetScreenKey();
   forgetScreenCaptions();
 }
 
@@ -263,6 +268,57 @@ export async function lockScreenCaptions(): Promise<void> {
 export function screenCaptionsCount(): number {
   const entries = screenCaptionsEntries();
   return entries ? Object.keys(entries).length : 0;
+}
+
+/**
+ * The descriptions as search rows, in the shape the search index stores.
+ *
+ * They are **not** in `search.json` — that file is uploaded, and these
+ * descriptions exist because their photographs are nobody else's business. So
+ * they are merged into the index in this browser, at search time, and only the
+ * ones this reader could open: a description the reader holds no passphrase
+ * for is not in the index, and not in the results either.
+ *
+ * The photo id is shortened the way the index shortens it — every id in this
+ * archive is `<driveId>!<number>`, and storing the drive id 2,365 times would
+ * be a fifth of the file. The day comes from the description itself, which is
+ * why the pipeline records it: without it a description could not be grouped
+ * under its day, and a search that cannot say which day it found something in
+ * is not worth much.
+ *
+ * One function for **both** searches — the title bar's (`searchBar.ts`) and
+ * the page's (`search.ts`) — because they are two implementations of one
+ * search, and a description that one of them can find and the other cannot is
+ * the kind of difference nobody notices until it matters.
+ */
+export interface ScreenSearchRow {
+  /** The photo id, without the drive-id prefix the index drops. */
+  id: string;
+  /** The day it belongs to, `YYYY-MM-DD`. */
+  date: string;
+  /** The caption, lowercased. */
+  text: string;
+  /** The coarse tags, lowercased. */
+  tags: string;
+}
+
+/** Lowercased and whitespace-collapsed, the way the index stores its text. */
+function cleanText(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export function screenSearchRows(idPrefix: string): ScreenSearchRow[] {
+  const entries = screenCaptionsEntries();
+  if (!entries) return [];
+  const rows: ScreenSearchRow[] = [];
+  for (const [id, entry] of Object.entries(entries)) {
+    if (!entry.date) continue;
+    const text = cleanText(entry.caption);
+    const tags = cleanText((entry.tags ?? []).join(" "));
+    if (!text && !tags) continue;
+    rows.push({ id: id.startsWith(idPrefix) ? id.slice(idPrefix.length) : id, date: entry.date, text, tags });
+  }
+  return rows;
 }
 
 /**

@@ -2,8 +2,7 @@ import type { ArchiveIndexFile, PhotoRecord, SearchIndexFile } from "@travel-arc
 import { ServerUnavailableError, dayMeta, loadIndex, loadMonth, loadSearchIndex, needsSignIn } from "./archiveData";
 import { localizedDayText, loc } from "./contentLang";
 import { el, hydrateAll, lazyImg } from "./photoUi";
-import { ensureScreenCaptions, onScreenCaptions, screenCaptionsEntries } from "./screenCaptions";
-import type { ScreenCaptionEntry } from "./screenCrypto";
+import { ensureScreenCaptions, onScreenCaptions, screenSearchRows } from "./screenCaptions";
 import { ui } from "./i18n";
 
 /**
@@ -53,59 +52,10 @@ function rowParts(row: SearchIndexFile["photos"][number]): { text: string; tags:
   return { text: row[2] ?? "", tags: row[3] ?? "" };
 }
 
-/**
- * The searchable text of one photograph, in the shape the index stores it:
- * lowercased, whitespace collapsed.
- *
- * The same rule the pipeline applies when it builds the index (`clean` in
- * `jobs/searchIndex.ts`), because a query is lowercased on this side too and a
- * row that kept its capitals would answer differently from every other row.
- */
-function clean(parts: (string | null | undefined)[]): string {
-  return parts
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
-/**
- * The screenshot descriptions, as index rows.
- *
- * They are **not** in `search.json` — that file is uploaded, and these
- * descriptions exist because their photographs are nobody else's business. So
- * they are merged into the index in this browser, at search time, and only the
- * ones this reader could open: a description the reader holds no passphrase
- * for is not in the index, and not in the results either.
- *
- * The photo id is shortened the way the index shortens it — every id in this
- * archive is `<driveId>!<number>`, and storing the drive id 2,365 times would
- * be a fifth of the file. The day comes from the description itself, which is
- * why the pipeline records it: without it a description could not be grouped
- * under its day, and a search that cannot say which day it found something in
- * is not worth much.
- */
-function screenRows(
-  entries: Record<string, ScreenCaptionEntry>,
-  idPrefix: string,
-): { id: string; date: string; text: string; tags: string }[] {
-  const rows: { id: string; date: string; text: string; tags: string }[] = [];
-  for (const [id, entry] of Object.entries(entries)) {
-    if (!entry.date) continue;
-    const text = clean([entry.caption]);
-    const tags = clean([...(entry.tags ?? [])]);
-    if (!text && !tags) continue;
-    rows.push({ id: id.startsWith(idPrefix) ? id.slice(idPrefix.length) : id, date: entry.date, text, tags });
-  }
-  return rows;
-}
-
 function search(
   index: SearchIndexFile,
   archive: ArchiveIndexFile,
   query: string,
-  screens: Record<string, ScreenCaptionEntry> | null,
 ): { days: DayHit[]; trips: SearchIndexFile["trips"]; total: number } {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return { days: [], trips: [], total: 0 };
@@ -126,7 +76,7 @@ function search(
     if (row[1]) hit(row[1]).photos.push(cap);
   }
   // The screenshot descriptions, merged in here rather than in the index file.
-  for (const row of screenRows(screens ?? {}, index.idPrefix)) {
+  for (const row of screenSearchRows(index.idPrefix)) {
     if (!matches(`${row.text} ${row.tags}`, terms)) continue;
     total++;
     hit(row.date).photos.push(index.idPrefix + row.id);
@@ -285,7 +235,7 @@ export function mountSearch(opts: SearchOptions): HTMLElement {
       return;
     }
     const started = performance.now();
-    const { days, trips, total } = search(index, archive, query, screenCaptionsEntries());
+    const { days, trips, total } = search(index, archive, query);
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     status.textContent = ui.search.found(total, days.length, Math.max(1, Math.round(performance.now() - started)));
 

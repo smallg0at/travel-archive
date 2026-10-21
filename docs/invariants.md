@@ -401,6 +401,28 @@ mistyped passphrase never replaces a good one — a store holding the wrong
 passphrase can only be emptied by hand, and the error gives no way to tell
 which of the two was wrong.
 
+**An opened set of descriptions is not closed by a later question about it.**
+The passphrase is kept for the session whatever the surface can also persist,
+because that is what keeps the descriptions open: a page that re-reads the
+file — a search asking again, a second tab tidying up — must neither ask the
+reader for the passphrase again nor drop what was already opened. Two rules
+came out of getting this wrong: the *unlock* keeps the passphrase for the
+session even when "remember on this computer" is unticked (that box is about
+surviving a **restart**, not about the session), and `ensureScreenCaptions`
+returns what it has when the descriptions are already open. Without them a
+search silently closed the descriptions and then searched an index without
+them — which reads as "the feature does not work" rather than as a bug.
+
+**There are two searches, and they must agree.** The desktop's title-bar
+search (`searchBar.ts`) and the phone's page search (`search.ts`) are two
+implementations of one search — they were already separate before this — so
+anything that belongs in both belongs in one place: the screenshot
+descriptions' rows are built by `screenSearchRows` (`screenCaptions.ts`) and
+both searches merge them. A description that one search can find and the other
+cannot is the kind of difference nobody notices until it matters, and the
+first version of this had exactly that: the phone's search found the
+descriptions and the desktop's did not.
+
 **A wrong KDF parameter does not fail loudly.** `scrypt-js` takes its
 arguments positionally — `(password, salt, N, r, p, keyLength)` — and nothing
 checks them: swap `N` and the key length and it derives a *different key*

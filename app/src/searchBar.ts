@@ -2,6 +2,7 @@ import type { ArchiveIndexFile, SearchIndexFile } from "@travel-archive/shared";
 import { ServerUnavailableError, dayMeta, loadIndex, loadMonth, loadSearchIndex, needsSignIn } from "./archiveData";
 import { el, hydrateAll, lazyImg } from "./photoUi";
 import { localizedDayText, loc } from "./contentLang";
+import { ensureScreenCaptions, onScreenCaptions, screenSearchRows } from "./screenCaptions";
 import { ui } from "./i18n";
 import { openPhoto } from "./viewer";
 import { openDay } from "./album";
@@ -89,6 +90,16 @@ function search(
     total++;
     if (row[1]) hit(row[1]).photos.push(index.idPrefix + row[0]);
   }
+  // The screenshot descriptions, merged in here rather than in the index file —
+  // they are not in `search.json`, because that file is uploaded and these
+  // descriptions exist because their photographs are nobody else's business.
+  // The same rows the page's search uses (`search.ts`), so the two searches
+  // cannot disagree about what is findable.
+  for (const row of screenSearchRows(index.idPrefix)) {
+    if (!matches(`${row.text} ${row.tags}`, terms)) continue;
+    total++;
+    hit(row.date).photos.push(index.idPrefix + row.id);
+  }
   for (const [date, text] of index.days) {
     if (matches(text, terms)) hit(date).summaryMatched = true;
   }
@@ -152,9 +163,13 @@ async function render(query: string): Promise<void> {
   }
 
   if (!loaded) {
-    const pending = Promise.all([loadSearchIndex(), loadIndex()]).then(([index, archive]) =>
-      index ? { index, archive } : null,
-    );
+    const pending = Promise.all([loadSearchIndex(), loadIndex()]).then(([index, archive]) => {
+      // The screenshot descriptions are fetched and decrypted on their own, so
+      // they are asked for in the background: a search that finds nothing in
+      // the index may still find a screenshot once they arrive.
+      void ensureScreenCaptions();
+      return index ? { index, archive } : null;
+    });
     loaded = pending;
     // Not kept when it failed: the usual cause is a token that could not be
     // renewed, and the next attempt has to make a fresh one rather than keep
@@ -294,6 +309,17 @@ export function initSearch(): void {
       input.focus();
       input.select();
     }
+  });
+
+  /**
+   * The screenshot descriptions arrive on their own — fetched and decrypted
+   * apart from the index — so a query that found nothing a moment ago can
+   * find something now. The query is re-run when they open.
+   */
+  onScreenCaptions((state) => {
+    if (state.status !== "ready") return;
+    const current = input?.value.trim() ?? "";
+    if (current.length >= MIN_QUERY) void render(current);
   });
 }
 
