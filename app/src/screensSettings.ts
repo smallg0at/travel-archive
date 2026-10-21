@@ -208,7 +208,9 @@ export function screensSection(): HTMLElement {
       setRowValue(line, ui.generate.screensLocked);
     }
     const open = local.status === "ready";
-    unlock.hidden = open || local.status === "unavailable";
+    // While the form is open its own button is the only one: a second "unlock"
+    // above it is the same action twice, and the reader has to guess which.
+    unlock.hidden = open || local.status === "unavailable" || !unlockBox.hidden;
     forget.hidden = !open;
     refreshKeyAction();
   };
@@ -366,10 +368,14 @@ export function screensSection(): HTMLElement {
     unlockPass.value = "";
     unlockResult.textContent = "";
     unlockResult.classList.remove("tone-warn");
+    // The row's button comes back where it belongs, unless the descriptions are
+    // open now (then paintDevice hides it for that reason instead).
+    paintDevice();
   };
 
   unlock.addEventListener("click", () => {
     unlockBox.hidden = false;
+    unlock.hidden = true;
     unlockResult.textContent = "";
     unlockResult.classList.remove("tone-warn");
     void screenKeyCanPersist().then((can) => {

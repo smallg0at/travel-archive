@@ -37,8 +37,10 @@ and rebuild anything derived from it.
 **A `display` on an id beats `[hidden]`.** `#print-progress`, `.signin-banner`
 and `.lightbox` have each shipped a control that could not be dismissed because
 an unconditional `display: flex` outranks the browser's `[hidden] { display:
-none }`. Express it as `:not([hidden]) { display: flex }`, or the flag the code
-sets does nothing visible.
+none }`, and `.m-unlock` shipped a form that was never hidden at all — its own
+Unlock sitting beside the row's, which a reader sees as the same action twice.
+Express it as `:not([hidden]) { display: flex }`, or the flag the code sets does
+nothing visible.
 
 **Paths split two ways** (`pipeline/src/paths.ts`). Writable per-user state
 resolves from `ARCHIVE_HOME`; read-only config that ships with the build

@@ -121,11 +121,15 @@ function screenCaptionsGroup(): HTMLElement {
   input.placeholder = ui.generate.screensPassEnter;
   const go = el<HTMLButtonElement>(`<button type="button" class="m-primary"></button>`);
   go.textContent = ui.generate.screensUnlock;
+  const cancel = el<HTMLButtonElement>(`<button type="button" class="m-link"></button>`);
+  cancel.textContent = ui.common.cancel;
   const result = Object.assign(document.createElement("p"), { className: "m-note" });
-  box.append(input, go, result);
+  box.append(input, go, result, cancel);
   section.body.appendChild(box);
 
   const value = state.querySelector(".m-setting-value")!;
+  /** The form is open: its own button is the only one, so the row's is hidden. */
+  let asking = false;
   const paint = (): void => {
     const s = screenCaptionsState();
     if (s.status === "ready") {
@@ -137,16 +141,26 @@ function screenCaptionsGroup(): HTMLElement {
     } else {
       value.textContent = ui.generate.screensLocked;
     }
-    unlock.hidden = s.status === "ready" || s.status === "unavailable";
+    unlock.hidden = asking || s.status === "ready" || s.status === "unavailable";
   };
   onScreenCaptions(paint);
   paint();
 
   unlock.addEventListener("click", () => {
+    asking = true;
     box.hidden = false;
     result.textContent = "";
+    paint();
     input.focus();
   });
+  const closeBox = (): void => {
+    asking = false;
+    box.hidden = true;
+    input.value = "";
+    result.textContent = "";
+    paint();
+  };
+  cancel.addEventListener("click", closeBox);
   const tryUnlock = async (): Promise<void> => {
     if (!input.value) return;
     go.disabled = true;
@@ -154,9 +168,7 @@ function screenCaptionsGroup(): HTMLElement {
     const opened = await unlockScreenCaptions(input.value, false);
     go.disabled = false;
     if (opened.status === "ready") {
-      box.hidden = true;
-      input.value = "";
-      paint();
+      closeBox();
       return;
     }
     if (opened.status === "failed") {

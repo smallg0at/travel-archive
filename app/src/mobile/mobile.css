@@ -767,6 +767,9 @@ body.m .m-map.is-expanded .m-map-expand { display: none; }
   gap: 8px;
   padding: 0 0 12px;
 }
+/* An authored `display` outranks the browser's `[hidden] { display: none }`,
+   so the box was on screen from the start — its Unlock beside the row's. */
+.m .m-unlock[hidden] { display: none; }
 .m .m-unlock input {
   font: inherit;
   font-size: 16px;
