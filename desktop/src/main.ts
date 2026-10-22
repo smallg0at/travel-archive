@@ -471,14 +471,24 @@ ipcMain.handle("get-system-accent", () => getSystemAccentColor());
  */
 const screenKeyFile = (): string => join(app.getPath("userData"), "screen-key.json");
 
-ipcMain.handle("screen-key-available", () => safeStorage.isEncryptionAvailable());
+ipcMain.handle("screen-key-available", () => safeStorage.isAsyncEncryptionAvailable());
 
 ipcMain.handle("screen-key-get", async (): Promise<string | null> => {
-  if (!safeStorage.isEncryptionAvailable()) return null;
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
   try {
     const stored = JSON.parse(await readFile(screenKeyFile(), "utf-8")) as { v?: number; value?: string };
     if (!stored?.value) return null;
-    return safeStorage.decryptString(Buffer.from(stored.value, "base64"));
+    const decrypted = await safeStorage.decryptStringAsync(Buffer.from(stored.value, "base64"));
+    if (decrypted.shouldReEncrypt) {
+      // The key behind the blob has rotated. Rewriting it under the new key
+      // keeps the next read cheap, and a failed rewrite must not lose the
+      // passphrase, so the failure is swallowed rather than rethrown as null.
+      try {
+        const blob = await safeStorage.encryptStringAsync(decrypted.result);
+        await writeFile(screenKeyFile(), `${JSON.stringify({ v: 1, value: blob.toString("base64") })}\n`, "utf-8");
+      } catch {}
+    }
+    return decrypted.result;
   } catch {
     // No file, an unreadable file, or a blob this account cannot unwrap — all
     // three mean the same thing to the reader: there is no passphrase here.
@@ -488,8 +498,8 @@ ipcMain.handle("screen-key-get", async (): Promise<string | null> => {
 
 ipcMain.handle("screen-key-set", async (_event, passphrase: unknown): Promise<boolean> => {
   if (typeof passphrase !== "string" || !passphrase) return false;
-  if (!safeStorage.isEncryptionAvailable()) return false;
-  const blob = safeStorage.encryptString(passphrase);
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) return false;
+  const blob = await safeStorage.encryptStringAsync(passphrase);
   await mkdir(dirname(screenKeyFile()), { recursive: true });
   await writeFile(screenKeyFile(), `${JSON.stringify({ v: 1, value: blob.toString("base64") })}\n`, "utf-8");
   return true;
