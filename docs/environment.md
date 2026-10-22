@@ -31,7 +31,9 @@ path still dies with `'"node"' is not recognized`. Prepend the installation
 directory once, then run npm normally:
 
 ```powershell
-$env:PATH = "$env:APPDATA\fnm\node-versions\v22.18.0\installation;$env:PATH"
+$nodeDir = (Get-ChildItem "$env:APPDATA\fnm\node-versions\*\installation" -Directory |
+  Sort-Object { [version]($_.Parent.Name -replace '^v', '') } | Select-Object -Last 1).FullName
+$env:PATH = "$nodeDir;$env:PATH"
 npm run --workspace app typecheck
 ```
 
