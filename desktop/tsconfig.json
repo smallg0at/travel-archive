@@ -5,8 +5,8 @@
     // is one isolated file that nothing imports, so the safe module format is
     // worth more here than consistency with pipeline/ and app/.
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,

@@ -597,7 +597,7 @@ export function addPhotoTimeControl(host: HTMLElement, photo: PhotoRecord, onSav
   if (lastTimeSave?.id === photo.id) status.textContent = ui.time.savedAs(lastTimeSave.fileName);
 
   open.addEventListener("click", () => {
-    timeEditorOpen = editor.hidden;
+    timeEditorOpen = editor.hidden !== false;
     editor.hidden = !timeEditorOpen;
     if (timeEditorOpen) clock.focus();
   });
