@@ -30,6 +30,15 @@ repositories {
     }
 }
 
+// kotlinx-coroutines 1.6.4 still drags the pre-1.8 split stdlib artifacts
+// (kotlin-stdlib-jdk7/jdk8 1.6.21) next to kotlin-stdlib 1.8.22, and their jars
+// carry the same classes, so :app:checkDebugDuplicateClasses fails. Since Kotlin
+// 1.8 those two are empty shims and everything in them lives in kotlin-stdlib.
+configurations.all {
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+}
+
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
