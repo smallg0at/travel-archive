@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import type { DayRecord, PhotoRecord } from "@travel-archive/shared";
+import type { DayRecord, PhotoRecord, ArchiveIndexFile } from "@travel-archive/shared";
 import { getAccessToken } from "../auth.js";
 import { loadIndex, loadShard, loadIndexForReading, loadTranslations, saveIndex, saveTranslations } from "../archiveStore.js";
 import type { TripEdits } from "@travel-archive/shared";
@@ -107,8 +107,8 @@ function dayGeometry(photos: PhotoRecord[]): { centre: [number, number]; spanKm:
  * `trip-spring-2026-05-01` with identical ranges — and the narrative
  * was attached to the empty one.
  */
-async function upsertDefinition(def: TripDefinition): Promise<TripDefinition[]> {
-  const existing = await loadTripDefinitions();
+async function upsertDefinition(def: TripDefinition, index?: ArchiveIndexFile): Promise<TripDefinition[]> {
+  const existing = await loadTripDefinitions(index);
   const overlaps = (t: TripDefinition) => t.startDate <= def.endDate && t.endDate >= def.startDate;
   const next = existing.filter((t) => t.id !== def.id && !overlaps(t));
   next.push(def);
@@ -131,15 +131,15 @@ export async function renameTrip(id: string, name: string): Promise<void> {
   const clean = name.trim();
   if (!clean) throw new Error("A trip needs a name.");
   await withArchiveLock("rename trip", async () => {
-    const defs = await loadTripDefinitions();
-    const def = defs.find((d) => d.id === id);
-    if (!def) throw new Error(`There is no trip "${id}".`);
     const token = await getAccessToken();
     // From the mirror: the index is ~9MB and reading it locally rather than
     // downloading costs nothing but the upload that follows, which is
     // unavoidable. Single-writer, like the translate pass — see
     // loadIndexForReading. A rename touched one field of one section.
     const index = await loadIndexForReading(token);
+    const defs = await loadTripDefinitions(index);
+    const def = defs.find((d) => d.id === id);
+    if (!def) throw new Error(`There is no trip "${id}".`);
     const section = index.sections.find((s) => s.id === id);
     if (section) {
       section.name = clean;
@@ -215,13 +215,13 @@ function pruneTripEdits(edits: TripEdits): TripEdits | null {
  */
 export async function deleteTrip(id: string): Promise<void> {
   await withArchiveLock("delete trip", async () => {
-    const defs = await loadTripDefinitions();
-    const rest = defs.filter((d) => d.id !== id);
-    if (rest.length === defs.length) throw new Error(`There is no trip "${id}".`);
     const token = await getAccessToken();
     // From the mirror, for the same reason renameTrip is: ~9MB, read locally,
     // one upload after. See loadIndexForReading.
     const index = await loadIndexForReading(token);
+    const defs = await loadTripDefinitions(index);
+    const rest = defs.filter((d) => d.id !== id);
+    if (rest.length === defs.length) throw new Error(`There is no trip "${id}".`);
     index.sections = bucketDays(
       index.sections.flatMap((s) => s.days),
       rest,
@@ -250,13 +250,13 @@ export async function defineTrip(startDate: string, endDate: string, name: strin
     throw new Error("A trip needs a start and an end date, in order.");
   }
   return withArchiveLock("define trip", async () => {
-    const defs = await loadTripDefinitions();
+    const token = await getAccessToken();
+    const index = await loadIndex(token);
+    const defs = await loadTripDefinitions(index);
     const clash = defs.find((t) => t.startDate <= endDate && t.endDate >= startDate);
     if (clash) throw new Error(`That overlaps "${clash.name}" (${clash.startDate} to ${clash.endDate}).`);
     const def: TripDefinition = { id: idFor({ startDate, endDate, name: clean, notes: null, documents: [] }), name: clean, startDate, endDate };
     const next = [...defs, def].sort((a, b) => a.startDate.localeCompare(b.startDate));
-    const token = await getAccessToken();
-    const index = await loadIndex(token);
     index.sections = bucketDays(
       index.sections.flatMap((s) => s.days),
       next,
@@ -415,7 +415,7 @@ export async function runTrip(opts: TripOptions, onProgress: ProgressFn, signal?
   };
 
   onProgress({ phase: "saving", message: `Saving "${summary.name}"...` });
-  const defs = await upsertDefinition(def);
+  const defs = await upsertDefinition(def, index);
 
   // Re-sort every day against the updated definitions, so days joining this
   // trip leave the month buckets they were sitting in.

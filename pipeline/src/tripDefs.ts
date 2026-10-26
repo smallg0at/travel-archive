@@ -103,7 +103,7 @@ async function localIndex(): Promise<ArchiveIndexFile | null> {
  *  - An empty or missing file is recovered from the index's trip sections before
  *    anyone can rebuild sections from it.
  */
-export async function loadTripDefinitions(): Promise<TripDefinition[]> {
+export async function loadTripDefinitions(index?: ArchiveIndexFile): Promise<TripDefinition[]> {
   await migrateLegacyFile();
   let parsed: TripDefinition[] | null = null;
   try {
@@ -118,8 +118,10 @@ export async function loadTripDefinitions(): Promise<TripDefinition[]> {
   }
   if (parsed && Array.isArray(parsed) && parsed.length > 0) return parsed;
 
-  const index = await localIndex();
-  const recovered = index ? definitionsFromIndex(index) : [];
+  // Prefer the caller's index: a job has just loaded the authoritative copy,
+  // while the local mirror may not exist yet on a fresh machine.
+  const source = index ?? (await localIndex());
+  const recovered = source ? definitionsFromIndex(source) : [];
   if (recovered.length) {
     await mkdir(dataDir(), { recursive: true });
     await writeFile(TRIPS_FILE, `${JSON.stringify(recovered, null, 2)}\n`, "utf-8");

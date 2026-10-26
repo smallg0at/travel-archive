@@ -332,7 +332,7 @@ export async function planOrganize(opts: OrganizeOptions): Promise<OrganizePlan>
   for (const shard of shards.values()) Object.assign(photos, shard.photos);
 
   const existingDaysByDate = new Map(index.sections.flatMap((s) => s.days).map((d) => [d.date, d] as const));
-  const tripDefs = await loadTripDefinitions();
+  const tripDefs = await loadTripDefinitions(index);
 
   const byDay = new Map<string, PhotoRecord[]>();
   for (const photo of Object.values(photos)) {
@@ -402,7 +402,7 @@ export async function runOrganize(
   for (const shard of shards.values()) Object.assign(photos, shard.photos);
 
   const provider = getProvider();
-  const tripDefs = await loadTripDefinitions();
+  const tripDefs = await loadTripDefinitions(index);
   const existingDaysByDate = new Map(index.sections.flatMap((s) => s.days).map((d) => [d.date, d] as const));
 
   const byDay = new Map<string, string[]>();
