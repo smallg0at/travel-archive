@@ -17,5 +17,5 @@
     "package": "npm run --workspace app build && npm run --workspace pipeline build && npm run --workspace desktop dist",
     "smoke:package": "node scripts/smoke-package.mjs"
   },
-  "version": "1.0.2"
+  "version": "1.0.3"
 }
