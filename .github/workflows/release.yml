@@ -60,6 +60,10 @@ jobs:
       - name: Smoke-test the packaged build
         run: node scripts/smoke-package.mjs --self-check --require-clean --expect-version "${{ inputs.tag }}" --launch-shell
 
+      # Host-header and sign-in gates, against the server the package built.
+      - name: Check the request gates
+        run: node scripts/check-gates.mjs
+
       - name: Attach the installer to a draft release
         shell: pwsh
         env:

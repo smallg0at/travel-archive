@@ -15,7 +15,8 @@
     "desktop": "npm run --workspace desktop build && npm run --workspace desktop start",
     "desktop:offline": "npm run --workspace desktop build && npm run --workspace desktop start -- --no-pipeline",
     "package": "npm run --workspace app build && npm run --workspace pipeline build && npm run --workspace desktop dist",
-    "smoke:package": "node scripts/smoke-package.mjs"
+    "smoke:package": "node scripts/smoke-package.mjs",
+    "check:gates": "node scripts/check-gates.mjs"
   },
   "version": "1.0.3"
 }

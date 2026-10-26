@@ -76,6 +76,14 @@ CI runs `node scripts/smoke-package.mjs --self-check` after `npm run package`
 and before attaching the installer, so a payload-less build cannot reach a
 release.
 
+## Request gates
+
+`npm run check:gates` (also in the release workflow) starts the built server
+with a password and asks two questions a unit test cannot: a `Host:
+evil.example` request gets 421 while loopback and a private address get 200,
+and a sixth wrong password gets 429. It uses ports the OS picks and a throwaway
+home.
+
 ## What it still cannot see
 
 - OneDrive, tokens and AI providers: CI has no credentials and must not need
