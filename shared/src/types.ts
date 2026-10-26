@@ -35,8 +35,6 @@ export interface NearPlace {
  */
 export const SCHEMA_VERSION = 14;
 
-export { assertNoBrotli } from "./brotli.js";
-
 /**
  * Where the archive lives inside OneDrive, unless the user points elsewhere.
  *

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertNoBrotli } from "@travel-archive/shared";
+import { assertNoBrotli } from "@travel-archive/shared/brotli";
 
 /**
  * The guard for CVE-2026-111497. Node's Brotli decoder runs lazily when the

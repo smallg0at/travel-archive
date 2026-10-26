@@ -1,4 +1,4 @@
-import { assertNoBrotli } from "@travel-archive/shared";
+import { assertNoBrotli } from "@travel-archive/shared/brotli";
 import { env } from "../env.js";
 import { geminiProvider } from "./gemini.js";
 import { createOpenAiCompatProvider, type OpenAiCompatConfig } from "./openaiCompatible.js";

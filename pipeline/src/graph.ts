@@ -1,5 +1,5 @@
 import type { DateSource, GeoPoint } from "@travel-archive/shared";
-import { assertNoBrotli } from "@travel-archive/shared";
+import { assertNoBrotli } from "@travel-archive/shared/brotli";
 import { isNetworkError, parseDateFromFileName } from "./util.js";
 import { getAccessToken } from "./auth.js";
 import { BOX, renderImageThumbnail, renderVideoPoster } from "./localThumb.js";

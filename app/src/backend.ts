@@ -15,7 +15,7 @@ import type {
   SyncStatus,
 } from "@travel-archive/shared";
 
-import { assertNoBrotli } from "@travel-archive/shared";
+import { assertNoBrotli } from "@travel-archive/shared/brotli";
 
 /**
  * Client for `pipeline serve` — the local job server that runs analysis,

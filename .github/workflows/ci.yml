@@ -15,7 +15,13 @@ jobs:
 
       - name: Fail if private files are tracked
         run: |
-          tracked=$(git ls-files | grep -E '(^|/)\.env$|token-cache|redaction-terms\.json|(^|/)pipeline/data/' || true)
+          # `pipeline/data/` is archive content, with one deliberate exception:
+          # the generated gazetteer, which must ship inside the installer and
+          # therefore must be tracked. Everything else under data/ is private.
+          tracked=$(git ls-files \
+            | grep -E '(^|/)\.env$|token-cache|redaction-terms\.json|(^|/)pipeline/data/' \
+            | grep -vE '^pipeline/data/geo/(places\.tsv|countries\.tsv|countries\.geo\.json)$' \
+            || true)
           if [ -n "$tracked" ]; then
             echo "Private files must not be committed:"
             echo "$tracked"
@@ -37,3 +43,8 @@ jobs:
       - run: npm run --workspace @travel-archive/desktop typecheck
       - run: npm run --workspace @travel-archive/pipeline test
       - run: npm run --workspace @travel-archive/pipeline build
+      # The built output is executed, not just typechecked: a package export
+      # that Vite and esbuild resolve but Node does not (a `.js` re-export of a
+      # `.ts` file) passed every test and broke `node dist/...` until it was
+      # caught by hand.
+      - run: node --input-type=module -e "process.env.AZURE_CLIENT_ID='ci'; await import('./pipeline/dist/providers/index.js'); console.log('dist imports resolve')"

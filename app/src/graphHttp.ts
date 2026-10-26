@@ -21,7 +21,7 @@
  * `TimeoutError`.
  */
 
-import { assertNoBrotli } from "@travel-archive/shared";
+import { assertNoBrotli } from "@travel-archive/shared/brotli";
 
 /** How long a small Graph call may take: lookups, listings, $batch. */
 export const GRAPH_QUERY_TIMEOUT_MS = 20_000;

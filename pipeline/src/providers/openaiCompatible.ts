@@ -1,4 +1,4 @@
-import { assertNoBrotli } from "@travel-archive/shared";
+import { assertNoBrotli } from "@travel-archive/shared/brotli";
 import type {
   AiProvider,
   CallUsage,
