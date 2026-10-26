@@ -27,6 +27,39 @@ import type { FirewallAttempt, FirewallStatus } from "@travel-archive/shared";
 
 export const FIREWALL_RULE = "TravelArchive Remote Reader";
 
+/**
+ * The PowerShell that asks for elevation and runs the script.
+ *
+ * `-ArgumentList` is one string, not an array. Start-Process joins an array's
+ * elements with spaces and adds no quoting, so a user directory with a space
+ * (`C:\Users\First Last\AppData\Local\Temp\…`) arrived as two arguments and the
+ * elevated PowerShell reported that it could not find a script — the button
+ * failed only on machines whose profile name or temp path has a space, which
+ * is most Windows laptops and none of the machines this was written on.
+ *
+ * Exported so the quoting can be asserted without raising a UAC prompt.
+ */
+export function elevationScript(scriptPath: string): string {
+  const quoted = (value: string) => `'${value.replace(/'/g, "''")}'`;
+  const argumentList = [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    `"${scriptPath}"`,
+  ].join(" ");
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    "try {",
+    `  Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList ${quoted(argumentList)}`,
+    "} catch {",
+    "  [Console]::Error.WriteLine($_.Exception.Message)",
+    "  exit 1",
+    "}",
+  ].join("\n");
+}
+
 /** How long the UAC prompt may sit unanswered before the attempt gives up. */
 const ELEVATION_TIMEOUT_MS = 180_000;
 
@@ -309,15 +342,7 @@ export async function allowThroughFirewall(ports: number[]): Promise<FirewallAtt
     return { ok: false, output: null, error: `Could not write the elevation script: ${(err as Error).message}`, status };
   }
 
-  const outer = [
-    "$ErrorActionPreference = 'Stop'",
-    "try {",
-    `  Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',${quoted(scriptPath)})`,
-    "} catch {",
-    "  [Console]::Error.WriteLine($_.Exception.Message)",
-    "  exit 1",
-    "}",
-  ].join("\n");
+  const outer = elevationScript(scriptPath);
 
   const elevated = await powershell(outer, ELEVATION_TIMEOUT_MS);
   const rawOutput = await readFile(resultPath, "utf-8")

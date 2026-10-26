@@ -1858,7 +1858,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET") {
       return json(res, 200, {
         gated: access.gated,
-        exposed: access.gated,
+        exposed: access.exposed,
         signedIn: access.canRead(req),
         // The server's own answer to "may this client write", so the UI can
         // offer nothing it would then 403 on. Decided here, where the socket

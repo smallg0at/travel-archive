@@ -55,6 +55,15 @@ The check, in order:
    `/`, `/mobile/` and `/oobe` answer. Every `src`/`href` in the served HTML is
    resolved against the payload, so a missing chunk fails here rather than as a
    blank page.
+7. **The reader and the server name the same folder.** The app bakes
+   `VITE_ONEDRIVE_METADATA_FOLDER` at build time, the server bakes
+   `ONEDRIVE_METADATA_FOLDER`; if those differ the archive silently looks empty.
+   The check asserts the server's reported folder appears in the built app.
+8. **The shell starts** (`--launch-shell`, on by default in CI). Every other
+   probe uses `ELECTRON_RUN_AS_NODE` and never loads `dist/main.js`, so an
+   `app.asar` that exists but cannot run would pass them all. This one launches
+   the real app with `--user-data-dir=<temp>`, waits for the server it starts,
+   reads `/diagnostics`, and kills the tree.
 
 Options: `--staging` tests `desktop/staging` with the local node instead of the
 packed exe; `--self-check` copies the payload, deletes the gazetteer and proves

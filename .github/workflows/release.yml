@@ -53,7 +53,7 @@ jobs:
       # its first photo; this step fails the release instead. `--self-check`
       # also deletes the data from a copy and proves the check rejects it.
       - name: Smoke-test the packaged build
-        run: node scripts/smoke-package.mjs --self-check --require-clean --expect-version "${{ inputs.tag }}"
+        run: node scripts/smoke-package.mjs --self-check --require-clean --expect-version "${{ inputs.tag }}" --launch-shell
 
       - name: Attach the installer to a draft release
         shell: pwsh

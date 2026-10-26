@@ -41,6 +41,7 @@ const STAGING = argv.includes("--staging");
 const SELF_CHECK = argv.includes("--self-check");
 const REQUIRE_RENDER = argv.includes("--require-render");
 const REQUIRE_CLEAN = argv.includes("--require-clean");
+const LAUNCH_SHELL = argv.includes("--launch-shell");
 const versionArg = argv.indexOf("--expect-version");
 const EXPECT_VERSION = versionArg >= 0 ? argv[versionArg + 1].replace(/^v/, "") : null;
 const appArg = argv.indexOf("--app");
@@ -250,6 +251,73 @@ async function checkGazetteer({ exe, asNode }, label) {
   }
 }
 
+/**
+ * The reader and the server must name the same folder.
+ *
+ * They are baked by different builds — the app at `npm run build` from
+ * `VITE_ONEDRIVE_METADATA_FOLDER`, the server from `pipeline/.env` — and a
+ * mismatch is silent: the reader asks the server for one namespace, the server
+ * scans another, and the archive simply looks empty. The server's answer is
+ * authoritative here; the app bundle must contain that same string.
+ */
+async function checkNamespaceAgreement(folder) {
+  if (!folder) return;
+  const assets = STAGING ? join(ROOT, "app/dist") : join(resources(), "app-dist");
+  const files = await readdir(assets, { recursive: true }).catch(() => []);
+  let found = false;
+  for (const rel of files) {
+    if (!/\.(?:js|html)$/i.test(rel)) continue;
+    const text = await readFile(join(assets, rel), "utf-8").catch(() => "");
+    if (text.includes(folder)) {
+      found = true;
+      break;
+    }
+  }
+  if (found) pass("namespace: reader and server agree", folder);
+  else fail("namespace: reader and server agree", `the server uses "${folder}" but no app file contains it`);
+}
+
+/**
+ * Start the real shell, not the pipeline through `ELECTRON_RUN_AS_NODE`.
+ *
+ * Every other probe here bypasses `dist/main.js`: a payload with `app.asar`
+ * present but an entry point that throws would pass all of them and still show
+ * nothing when double-clicked. This launches the app with a throwaway user-data
+ * directory and asks the server it starts. It is opt-in because it opens a
+ * window and claims the default ports.
+ */
+async function checkShell({ exe }) {
+  const userData = await mkdtemp(join(tmpdir(), "pa-smoke-shell-"));
+  const before = Date.now();
+  const child = spawn(exe, [`--user-data-dir=${userData}`], {
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: false,
+  });
+  let log = "";
+  child.stdout.on("data", (d) => (log += d));
+  child.stderr.on("data", (d) => (log += d));
+  try {
+    const health = await waitForUrl("http://127.0.0.1:18419/health", 90_000);
+    const body = await health.json();
+    if (body.ok !== true) {
+      fail("shell: launched", JSON.stringify(body));
+      return;
+    }
+    const diag = await (await fetch("http://127.0.0.1:18419/diagnostics", { signal: AbortSignal.timeout(15_000) })).json();
+    const waiting = Math.round((Date.now() - before) / 1000);
+    if (child.exitCode !== null) fail("shell: still running", `exited with ${child.exitCode}`);
+    else if (!diag.build?.commit) fail("shell: launched", "its server answered without build-info");
+    else pass("shell: launched and served /health", `in ${waiting}s, commit ${diag.build.commit.slice(0, 7)}`);
+  } catch (error) {
+    fail("shell: launched", `${error.message}; ${log.split(/\r?\n/).slice(-3).join(" ").trim().slice(0, 160)}`);
+  } finally {
+    try {
+      execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {}
+    await rm(userData, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 async function checkServer({ exe, asNode }) {
   const home = await mkdtemp(join(tmpdir(), "pa-smoke-serve-"));
   const servePort = await freePort();
@@ -299,6 +367,8 @@ async function checkServer({ exe, asNode }) {
       if (diag.payload?.ffmpegBesideCode) pass("payload: ffmpeg ships beside the code");
       else if (diag.render?.ffmpeg) warn("payload: ffmpeg", `found at "${diag.render.ffmpeg}" on this machine's PATH, not in the payload`);
       else warn("payload: ffmpeg", "absent — video posters and DNG rely on it");
+
+      await checkNamespaceAgreement(diag.config?.metadataFolder);
     }
 
     if (STAGING) warn("server: local image rendering (sharp)", "not meaningful from the checkout runtime; run against the packaged build");
@@ -399,6 +469,7 @@ async function main() {
   await checkBuildInfo();
   await checkGazetteer(rt, "payload");
   await checkServer(rt);
+  if (LAUNCH_SHELL && !STAGING) await checkShell(rt);
   if (SELF_CHECK) await selfCheck();
 
   console.log("");

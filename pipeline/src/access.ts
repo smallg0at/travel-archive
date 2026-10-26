@@ -48,6 +48,8 @@ export interface Access {
   check(offered: string | undefined): boolean;
   /** Whether a password is configured at all — the shell reports this to the app. */
   readonly gated: boolean;
+  /** Whether the server listens on something other than loopback. */
+  readonly exposed: boolean;
 }
 
 /**
@@ -62,13 +64,25 @@ export function isLoopback(addr: string | undefined): boolean {
   return addr === "::1" || addr === "127.0.0.1" || addr === "::ffff:127.0.0.1";
 }
 
+function decodePart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    // A malformed escape (`%`, `%ZZ`) is a client sending garbage, not a
+    // reason to throw out of the request handler: the caller compares the
+    // result against a signed session and rejects it, which is the same
+    // outcome as a wrong cookie, with a response.
+    return value;
+  }
+}
+
 function parseCookies(header: string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!header) return out;
   for (const part of header.split(";")) {
     const at = part.indexOf("=");
     if (at < 0) continue;
-    out[part.slice(0, at).trim()] = decodeURIComponent(part.slice(at + 1).trim());
+    out[part.slice(0, at).trim()] = decodePart(part.slice(at + 1).trim());
   }
   return out;
 }
@@ -110,6 +124,7 @@ export function makeAccess(cfg: AccessConfig): Access {
   return {
     isLocal,
     gated: Boolean(cfg.password),
+    exposed: Boolean(cfg.exposed),
 
     canWrite: (req) => isLocal(req),
 
