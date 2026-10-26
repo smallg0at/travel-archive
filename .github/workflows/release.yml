@@ -47,6 +47,9 @@ jobs:
           # id is absent, because an installer without it cannot sign in.
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          # Optional, but the difference between a public default and this
+          # archive's real namespace. Unset is not wrong, just generic.
+          ONEDRIVE_METADATA_FOLDER: ${{ vars.ONEDRIVE_METADATA_FOLDER }}
 
       # Start the artifact and ask it questions before it can be attached. A
       # payload missing the gazetteer produced a 1.0.2 whose captioning died on

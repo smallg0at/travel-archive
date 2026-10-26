@@ -159,6 +159,13 @@ async function checkPayload() {
   if (existsSync(page)) pass(`payload: ${page.includes("app-dist") ? "app-dist" : "app/dist"}/index.html`);
   else fail("payload: app page (index.html)", `missing at ${page} — the installed app would answer API and show no page`);
 
+  if (!STAGING) {
+    const asar = join(resources(), "app.asar");
+    const size = existsSync(asar) ? (await stat(asar)).size : 0;
+    if (size > 0) pass("payload: app.asar", `${(size / 1024 / 1024).toFixed(1)} MB`);
+    else fail("payload: app.asar", "missing — the installed shell would not start");
+  }
+
   await checkPageAssets(STAGING ? join(ROOT, "app/dist") : join(resources(), "app-dist"));
 }
 
