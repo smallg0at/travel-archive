@@ -115,7 +115,8 @@ the owner's choosing.
 implementation of the `AiProvider` interface (`pipeline/src/providers/types.ts`)
 matches `AI_PROVIDER` in `.env`.
 
-- `providers/gemini.ts` — the only provider today, via `@google/genai`, structured JSON output. **Verified working** against the real API (`pipeline/scripts/smoke-gemini.mjs` — run it any time after changing this file to sanity-check without needing OneDrive access). Default model is `gemini-3.6-flash`; `gemini-2.5-flash` was retired and returns a 404 pointing at the replacement, which is how the current default was picked.
+- `providers/gemini.ts` — Google's SDK with a server-enforced `responseSchema`, and the only provider with a Batch API. **Verified working** against the real API (`pipeline/scripts/smoke-gemini.mjs` — run it any time after changing this file to sanity-check without needing OneDrive access). Default model is `gemini-3.7-flash`.
+- `providers/openaiCompatible.ts` — every service that speaks Chat Completions with `image_url` data URLs: DeepSeek (default when `AI_PROVIDER` is unset), SiliconFlow, DashScope, Zhipu, Moonshot, OpenRouter, and local Ollama / LM Studio. Adding one is an entry in the preset table in `providers/index.ts`, not a new module.
 
 To add another provider (a local model, a different vendor): implement
 `captionPhoto` and `summarizeDay` per the `AiProvider` interface in a new

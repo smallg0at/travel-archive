@@ -33,9 +33,12 @@ npm run geo:build --workspace pipeline
 ```
 
 which needs `cities500.txt`, `alternateNamesV2.txt` and `countryInfo.txt`
-downloaded into that folder first (see the script's header). The data folder is
-gitignored, so a fresh clone must run this before analyzing anything; without
-it, geocoding throws on the missing file. GeoNames is CC BY 4.0 — the credit
+downloaded into that folder first (see the script's header). The three generated
+files are **tracked in git and ship inside the installer**, because an installed
+app cannot run the build script; a fresh clone therefore works without running
+it. Regenerate them only when the GeoNames inputs change. If both the archive
+home and the shipped copy lack a file, geocoding throws with both paths and the
+command to run, rather than a bare `ENOENT`. GeoNames is CC BY 4.0 — the credit
 line in Settings (`settings.dataCredits`) is the attribution, and it must stay.
 
 Lookups are ~57µs, so locating a 4,000-photo round is about a second where

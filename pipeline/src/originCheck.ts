@@ -91,6 +91,59 @@ export interface OriginContext {
   exposed: boolean;
 }
 
+/**
+ * Whether a hostname is a name this server answers to.
+ *
+ * Shared by the Origin check and the Host check so the two cannot drift: an
+ * origin that is allowed to write but a Host that is refused would be a very
+ * confusing request to debug, and the reverse is a hole.
+ */
+function nameAllowed(host: string, ctx: OriginContext): boolean {
+  if (LOOPBACK.has(host)) return true;
+
+  // Nothing outside can reach a loopback-bound server, so nothing outside
+  // needs to be allowed to call it.
+  if (!ctx.exposed) return false;
+
+  if (ownNames().includes(host) || extraNames().includes(host)) return true;
+  // A literal address: private means "this network", as before.
+  if (isIpv4(host)) return isPrivateIpv4(host);
+  if (host.includes(":")) return isPrivateIpv6(host);
+  // Single-label and `.local` are what mDNS and a home router hand out; the
+  // public DNS namespace has neither, which is what makes them usable here.
+  if (!host.includes(".")) return true;
+  if (host.endsWith(".local")) return true;
+  return false;
+}
+
+/**
+ * Whether a `Host` header names this server.
+ *
+ * This is the defence against DNS rebinding, where a page on `evil.example`
+ * re-resolves that name to 127.0.0.1 and then talks to the loopback server
+ * with `Host: evil.example:18419`. The socket address looks local, and the
+ * Origin check only guards writes — so without this a rebound page can read
+ * whatever a browser will let it read and trigger every GET that costs work.
+ *
+ * The port is ignored: the phone types `http://192.168.1.9:17923` and sends
+ * exactly that, and the desktop shell uses a different port from the API.
+ */
+export function hostAllowed(header: string | undefined, ctx: OriginContext): boolean {
+  if (!header) return false;
+  let host = header.trim().toLowerCase();
+
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
+    if (end < 0) return false;
+    host = host.slice(1, end);
+  } else {
+    const colon = host.lastIndexOf(":");
+    if (colon >= 0 && /^\d+$/.test(host.slice(colon + 1))) host = host.slice(0, colon);
+  }
+
+  return nameAllowed(bare(host), ctx);
+}
+
 export function originAllowed(origin: string, ctx: OriginContext): boolean {
   let url: URL;
   try {
@@ -106,18 +159,7 @@ export function originAllowed(origin: string, ctx: OriginContext): boolean {
   // machine is named, and whatever port the page came from.
   if (LOOPBACK.has(host)) return true;
 
-  // Nothing outside can reach a loopback-bound server, so nothing outside
-  // needs to be allowed to call it.
   if (!ctx.exposed) return false;
-
   if (!APP_PORTS.has(url.port)) return false;
-  if (ownNames().includes(host) || extraNames().includes(host)) return true;
-  // A literal address: private means "this network", as before.
-  if (isIpv4(host)) return isPrivateIpv4(host);
-  if (host.includes(":")) return isPrivateIpv6(host);
-  // Single-label and `.local` are what mDNS and a home router hand out; the
-  // public DNS namespace has neither, which is what makes them usable here.
-  if (!host.includes(".")) return true;
-  if (host.endsWith(".local")) return true;
-  return false;
+  return nameAllowed(host, ctx);
 }

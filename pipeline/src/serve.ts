@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { withArchiveLock } from "./lock.js";
-import { originAllowed } from "./originCheck.js";
+import { originAllowed, hostAllowed } from "./originCheck.js";
+import { FailureThrottle, RateLimiter } from "./rateLimit.js";
 import { downloadMetadataJson, downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
@@ -1221,7 +1222,7 @@ const routes: [RegExp, string, Handler][] = [
   [
     /^\/thumb\/(medium|large|full)\/(.+)$/,
     "GET",
-    async (_req, res, [size, encodedId]) => {
+    async (req, res, [size, encodedId]) => {
       const itemId = decodeSegment(encodedId);
       if (!itemId) return json(res, 404, { error: "No such photo" });
       const sendImage = (bytes: Buffer) => {
@@ -1231,13 +1232,27 @@ const routes: [RegExp, string, Handler][] = [
           // No CORS header here: cors() has already set it with setHeader, and
           // headers passed to writeHead take precedence — repeating it would
           // overwrite a correct origin with an empty one.
-          "Cache-Control": "public, max-age=31536000, immutable",
+          //
+          // `public` only when the archive is open at all. With a password set
+          // this response was authorised by a cookie, and a shared cache must
+          // not be allowed to hand it to someone else; `private` keeps the
+          // browser's own cache, which is where the speed came from anyway.
+          "Cache-Control": access.gated
+            ? "private, max-age=31536000, immutable"
+            : "public, max-age=31536000, immutable",
         });
         res.end(bytes);
       };
 
       const cached = await readThumb(size as ThumbSize, itemId);
       if (cached) return sendImage(cached);
+
+      // Only a miss costs a Graph request and a disk write. Loopback is the
+      // owner's own machine and is not limited.
+      if (!access.isLocal(req) && !thumbLimiter.take(req.socket.remoteAddress ?? "unknown")) {
+        res.setHeader("Retry-After", "1");
+        return json(res, 429, { error: "Too many thumbnails at once; slow down." });
+      }
 
       let bytes: Buffer | null;
       try {
@@ -1837,6 +1852,21 @@ const server = createServer(async (req, res) => {
   }
 
   /**
+   * The Host header has to name this server.
+   *
+   * A page can point a public name at 127.0.0.1 (DNS rebinding) and then talk
+   * to this server with `Host: evil.example`. The socket looks local, so
+   * `canRead` says yes and `canWrite` says yes; the Origin check stops writes,
+   * but not reads or the GET routes that cost Graph traffic. Refusing an
+   * unknown name closes the whole class, and every legitimate caller — the
+   * shell, a phone typing `http://192.168.1.9:17923`, the demo proxy — sends
+   * a name this check already accepts.
+   */
+  if (!hostAllowed(req.headers.host, { exposed })) {
+    return json(res, 421, { error: `Unrecognised Host header: ${req.headers.host ?? "(none)"}` });
+  }
+
+  /**
    * A write may only come from a page this server would answer anyway.
    *
    * `cors()` refuses an origin by withholding `Access-Control-Allow-Origin`,
@@ -1879,8 +1909,18 @@ const server = createServer(async (req, res) => {
       });
     }
     if (req.method === "POST") {
+      const key = req.socket.remoteAddress ?? "unknown";
+      const retry = signInThrottle.retryAfter(key);
+      if (retry !== null) {
+        res.setHeader("Retry-After", String(retry));
+        return json(res, 429, { error: `Too many wrong passwords. Try again in ${retry}s.` });
+      }
       const body = await readJsonBody<{ password?: string }>(req);
-      if (!access.signIn(res, body.password)) return json(res, 401, { error: "Wrong password" });
+      if (!access.signIn(res, body.password)) {
+        signInThrottle.fail(key);
+        return json(res, 401, { error: "Wrong password" });
+      }
+      signInThrottle.succeed(key);
       return json(res, 200, { ok: true });
     }
   }
@@ -1995,6 +2035,18 @@ async function startAppServer(): Promise<void> {
 const HOST = runningHost;
 const exposed = runningExposed;
 const access = makeAccess({ password: runningPassword ?? null, exposed });
+
+/**
+ * Limits for the two paths an unauthenticated caller can make expensive.
+ *
+ * The bucket is per socket address and only counts cache misses: a phone
+ * scrolling a month should be able to request a hundred thumbnails, but one
+ * client asking for thousands is a different thing from a reader. Five wrong
+ * passwords from one address buys five minutes of silence; a correct one
+ * clears the record, so a household mistyping once is not locked out.
+ */
+const thumbLimiter = new RateLimiter(60, 4);
+const signInThrottle = new FailureThrottle(5, 5 * 60_000, 5 * 60_000);
 
 server.listen(env.servePort, HOST, () => {
   const where = exposed ? `http://${HOST}:${env.servePort}` : `http://127.0.0.1:${env.servePort} (loopback only)`;

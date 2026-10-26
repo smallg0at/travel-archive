@@ -1,6 +1,6 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { dataFile } from "./paths.js";
-import { dirname } from "node:path";
+import { writeFileAtomic } from "./atomicWrite.js";
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { downloadMetadataJson, fetchItemMeta, listFolderFileNames, uploadMetadataJson } from "./graph.js";
@@ -33,15 +33,15 @@ function emptyIndex(): ArchiveIndexFile {
 /** Mirrors everything written to OneDrive under pipeline/data/, pretty-printed for reading. */
 async function writeLocal(fileName: string, data: unknown): Promise<void> {
   const localPath = dataFile(fileName);
-  await mkdir(dirname(localPath), { recursive: true });
-  await writeFile(localPath, JSON.stringify(data, null, 2), "utf-8");
+  // Atomic: a crash mid-write must not leave a truncated index.json, because
+  // this local copy is what the next start reads. See atomicWrite.ts.
+  await writeFileAtomic(localPath, JSON.stringify(data, null, 2));
 }
 
 /** As writeLocal, without the indentation — for files that are read by machines only. */
 async function writeLocalCompact(fileName: string, data: unknown): Promise<void> {
   const localPath = dataFile(fileName);
-  await mkdir(dirname(localPath), { recursive: true });
-  await writeFile(localPath, JSON.stringify(data), "utf-8");
+  await writeFileAtomic(localPath, JSON.stringify(data));
 }
 
 /**

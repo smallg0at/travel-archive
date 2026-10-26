@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hostname } from "node:os";
-import { originAllowed } from "../src/originCheck.js";
+import { hostAllowed, originAllowed } from "../src/originCheck.js";
 
 /**
  * The rule that decides whether a page may talk to the server.
@@ -104,5 +104,40 @@ describe("an exposed server", () => {
       if (previous === undefined) delete process.env.ARCHIVE_EXTRA_HOSTS;
       else process.env.ARCHIVE_EXTRA_HOSTS = previous;
     }
+  });
+});
+
+describe("Host header", () => {
+  it("accepts how this server is actually addressed", () => {
+    for (const header of [
+      "127.0.0.1:18419",
+      "localhost:18419",
+      "[::1]:18419",
+      `192.168.1.9:17923`,
+      "192.168.1.9",
+      `${own}:17923`,
+      `${own.toLowerCase()}.local:17923`,
+    ]) {
+      expect(hostAllowed(header, EXPOSED), header).toBe(true);
+    }
+  });
+
+  it("refuses a public name, which is what DNS rebinding sends", () => {
+    // The attacker's page resolves evil.example to 127.0.0.1 and then asks the
+    // loopback server with this Host. The socket looks local; the name is not.
+    expect(hostAllowed("evil.example:18419", EXPOSED)).toBe(false);
+    expect(hostAllowed("evil.example", LOOPBACK_ONLY)).toBe(false);
+    expect(hostAllowed("127.0.0.1.nip.io:18419", EXPOSED)).toBe(false);
+  });
+
+  it("refuses any name but loopback when not exposed", () => {
+    expect(hostAllowed("192.168.1.9:18419", LOOPBACK_ONLY)).toBe(false);
+    expect(hostAllowed("othervm.local:18419", LOOPBACK_ONLY)).toBe(false);
+  });
+
+  it("refuses a missing or malformed header", () => {
+    expect(hostAllowed(undefined, EXPOSED)).toBe(false);
+    expect(hostAllowed("", EXPOSED)).toBe(false);
+    expect(hostAllowed("[::1:18419", EXPOSED)).toBe(false);
   });
 });

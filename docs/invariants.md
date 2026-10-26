@@ -62,6 +62,29 @@ those files could not exist. `bundle-pipeline.mjs` now refuses to build a
 package that is missing one, and `analyze` reads the gazetteer before it plans
 anything, so a broken install costs a message rather than money.
 
+**Every request must name this server.** The first thing the handler does is
+`hostAllowed(req.headers.host)` (`pipeline/src/originCheck.ts`). Without it a
+page on any domain can point that domain at `127.0.0.1` (DNS rebinding) and the
+socket looks local — `canRead` and `canWrite` both say yes, and the Origin check
+only guards writes. The allowed names are the same ones the Origin check
+accepts: loopback, this machine's name and `.local`, private address literals,
+and whatever `ARCHIVE_EXTRA_HOSTS` adds. A public domain never passes.
+
+**Two costs are rate-limited, and the correct password clears the record.** A
+thumbnail cache miss costs a Graph request and a disk write, so remote clients
+get 60 burst / 4 per second (`RateLimiter`); five wrong passwords from one
+address buys five minutes of silence (`FailureThrottle`), and a success forgets
+the failures so a household mistyping once is not locked out. Both are in memory
+and per socket address: a restart forgets them, and everyone behind one NAT
+shares a bucket. That is enough against a script and honesty about what a
+home server can promise without accounts.
+
+**A local write is atomic, or it does not happen.** `writeLocal` in
+`archiveStore.ts` goes through `writeFileAtomic` (same-directory temp file,
+`fsync`, then rename). `writeFile` truncates first, so a crash during a shard
+write left a prefix of JSON where the next start expects the archive; the local
+copy is the one the server reads, not a disposable cache.
+
 **Reading over the home network is gated; writing is local-only.** Set
 `ARCHIVE_HOST=0.0.0.0` and `ARCHIVE_PASSWORD` to expose the archive to the
 family (`pipeline/src/access.ts`). Read is the whole product and is gated by a
