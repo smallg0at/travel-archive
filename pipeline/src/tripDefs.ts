@@ -1,5 +1,6 @@
-import { mkdir, readFile, rename } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dataDir, dataFile, homeFile } from "./paths.js";
+import type { ArchiveIndexFile } from "@travel-archive/shared";
 
 /**
  * Trips are defined manually, not auto-detected — a mixed photo+screenshot
@@ -55,14 +56,80 @@ async function migrateLegacyFile(): Promise<void> {
   console.log("Moved trips.json into pipeline/data/ — it is archive data, not configuration.");
 }
 
+/**
+ * Trip definitions recovered from an index's trip sections.
+ *
+ * The index is shared (uploaded with the archive) and carries each trip's id,
+ * name and range; `trips.json` is a local working copy. So the index can always
+ * rebuild the definitions, while the reverse is not true. That matters because
+ * losing the definitions is not a local inconvenience: every job that rebuilds
+ * sections from them would upload an index with the trips gone.
+ */
+export function definitionsFromIndex(index: ArchiveIndexFile): TripDefinition[] {
+  return index.sections
+    .filter((section) => section.kind === "trip")
+    .map((section) => ({
+      id: section.id,
+      name: section.name,
+      startDate: section.startDate,
+      endDate: section.endDate,
+    }));
+}
+
+/** The mirrored index, if there is one. Absent or unreadable means no recovery. */
+async function localIndex(): Promise<ArchiveIndexFile | null> {
+  try {
+    return JSON.parse(await readFile(dataFile("index.json"), "utf-8")) as ArchiveIndexFile;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Loads the trip definitions, healing an empty or missing file from the index.
+ *
+ * This is a data-loss fix, not a convenience. On 2026-10-27 a first trip was
+ * created in the packaged app, whose `data/trips.json` had never existed —
+ * definitions had only ever lived in a development checkout. Creating the trip
+ * rebuilt every section from an empty list, and the upload that followed erased
+ * all sixteen trips from the archive. The index still carried them, so the list
+ * was recoverable, but nothing had asked it.
+ *
+ * Two rules follow:
+ *
+ *  - A file that exists and cannot be parsed is an error, not an empty list. The
+ *    old `catch { return [] }` turned a truncated write into "this archive has
+ *    no trips", which is the worst possible reading of a broken file.
+ *  - An empty or missing file is recovered from the index's trip sections before
+ *    anyone can rebuild sections from it.
+ */
 export async function loadTripDefinitions(): Promise<TripDefinition[]> {
   await migrateLegacyFile();
+  let parsed: TripDefinition[] | null = null;
   try {
-    const raw = await readFile(TRIPS_FILE, "utf-8");
-    return JSON.parse(raw) as TripDefinition[];
-  } catch {
-    return [];
+    parsed = JSON.parse(await readFile(TRIPS_FILE, "utf-8")) as TripDefinition[];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw new Error(
+        `Could not read ${TRIPS_FILE}: ${(error as Error).message}. ` +
+          `Refusing to treat a broken trip list as "no trips" — every index rebuild would drop them.`,
+      );
+    }
   }
+  if (parsed && Array.isArray(parsed) && parsed.length > 0) return parsed;
+
+  const index = await localIndex();
+  const recovered = index ? definitionsFromIndex(index) : [];
+  if (recovered.length) {
+    await mkdir(dataDir(), { recursive: true });
+    await writeFile(TRIPS_FILE, `${JSON.stringify(recovered, null, 2)}\n`, "utf-8");
+    console.log(
+      `Recovered ${recovered.length} trip definition(s) from index.json — trips.json was ` +
+        `${parsed ? "empty" : "missing"}.`,
+    );
+    return recovered;
+  }
+  return [];
 }
 
 /** First matching range wins if ranges overlap — keep pipeline/data/trips.json non-overlapping. */

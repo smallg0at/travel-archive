@@ -2,6 +2,15 @@
 
 Every rule here was learned by breaking it. Read it before changing the pipeline.
 
+**Trip definitions are local, the index is shared — never rebuild from an empty list.**
+`data/trips.json` is a per-machine file; the trip sections in `index.json` are
+uploaded with the archive. A machine that has never created a trip (a fresh
+install, or the packaged app after development ran in a checkout) has no
+`trips.json`, and rebuilding sections from it deletes every trip from the shared
+index — which is exactly what happened on 2026-10-27: one new trip wiped sixteen.
+`loadTripDefinitions` now recovers the definitions from the index's own trip
+sections and writes them back, and a file that cannot be parsed is an error
+rather than "no trips". Do not reintroduce the `catch { return [] }`.
 **The server is the only writer.** Every mutation goes through
 `pipeline/src/serve.ts`, which holds the archive lock (`pipeline/src/lock.ts`) for
 the duration of a write. Two writers clobbering the same shard has actually
