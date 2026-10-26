@@ -35,6 +35,20 @@ export interface NearPlace {
  */
 export const SCHEMA_VERSION = 14;
 
+/**
+ * Where the archive lives inside OneDrive, unless the user points elsewhere.
+ *
+ * One constant, imported by the reader and the server: they each used to carry
+ * their own (`Apps/DayArchive` on the app side, `Apps/TravelArchive` on the
+ * server side), so a build with no `.env` would have the reader ask the server
+ * for one namespace while the server scanned another. Nothing failed loudly —
+ * the reader simply fell back to Graph and the scan wrote somewhere else.
+ *
+ * `DayArchive` is the project's original name and the folder every existing
+ * archive uses; renaming it would be a migration that buys a nicer word.
+ */
+export const DEFAULT_METADATA_FOLDER = "Apps/DayArchive";
+
 /** How much a photo should be surfaced. `hidden` still renders behind a "show more" toggle — never removed. */
 export type Visibility = "feature" | "normal" | "hidden";
 

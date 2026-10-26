@@ -94,9 +94,10 @@ function bakedConfig() {
         "Put it in pipeline/.env (see .env.example) or set it in the environment.",
     );
   }
-  // Guarantee, not hope: every build carries a metadata folder. The builder's
-  // value when there is one; the documented default otherwise — never nothing.
-  if (!out.ONEDRIVE_METADATA_FOLDER) out.ONEDRIVE_METADATA_FOLDER = "Apps/TravelArchive";
+  // No metadata-folder fallback here: the default lives in
+  // shared/src/types.ts and env.ts applies it at run time, so a build without
+  // one still lands in the same namespace the reader expects. Baking a third
+  // copy is how the reader and the server came to disagree.
   return out;
 }
 

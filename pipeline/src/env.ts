@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { config as loadDotenv, parse } from "dotenv";
+import { DEFAULT_METADATA_FOLDER } from "@travel-archive/shared";
 import { homeFile } from "./paths.js";
 import { levelFromLegacyBudget, parseThinkingLevel } from "./providers/geminiConfig.js";
 
@@ -107,7 +108,7 @@ function readEnv() {
     azureClientId: required("AZURE_CLIENT_ID"),
     azureTenantId: fromEnv("AZURE_TENANT_ID") ?? "consumers",
     photosFolder: fromEnv("ONEDRIVE_PHOTOS_FOLDER") ?? "Pictures/Travel",
-    metadataFolder: fromEnv("ONEDRIVE_METADATA_FOLDER") ?? "Apps/TravelArchive",
+    metadataFolder: fromEnv("ONEDRIVE_METADATA_FOLDER") ?? DEFAULT_METADATA_FOLDER,
     geocodeContactEmail: fromEnv("GEOCODE_CONTACT_EMAIL") ?? "",
 
     // Inclusive `yyyy-mm` bounds on which month folders `scan` looks at, so you

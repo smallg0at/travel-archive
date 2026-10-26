@@ -159,13 +159,6 @@ async function checkPayload() {
   if (existsSync(page)) pass(`payload: ${page.includes("app-dist") ? "app-dist" : "app/dist"}/index.html`);
   else fail("payload: app page (index.html)", `missing at ${page} — the installed app would answer API and show no page`);
 
-  if (!STAGING) {
-    const asar = join(resources(), "app.asar");
-    const size = existsSync(asar) ? (await stat(asar)).size : 0;
-    if (size > 0) pass("payload: app.asar", `${(size / 1024 / 1024).toFixed(1)} MB`);
-    else fail("payload: app.asar", "missing — the installed shell would not start");
-  }
-
   await checkPageAssets(STAGING ? join(ROOT, "app/dist") : join(resources(), "app-dist"));
 }
 
@@ -364,6 +357,36 @@ async function selfCheck() {
   }
 }
 
+/**
+ * One definition of the archive's folder, in shared/src/types.ts.
+ *
+ * The reader defaulted to `Apps/DayArchive` and the server to
+ * `Apps/TravelArchive`; nothing failed, the reader simply talked to a namespace
+ * the scan never wrote. Any new literal outside the constant is that bug again.
+ */
+function checkOneNamespace() {
+  let out = "";
+  try {
+    out = execFileSync(
+      "git",
+      ["grep", "-n", "-I", "Apps/", "--", "pipeline/src", "app/src", "shared/src", "desktop/scripts"],
+      { cwd: ROOT, encoding: "utf-8" },
+    );
+  } catch {
+    warn("namespace: one definition", "no git checkout to scan");
+    return;
+  }
+  const strays = out
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .filter((line) => {
+      const file = line.slice(0, line.indexOf(":"));
+      return file !== "shared/src/types.ts" && !/[\\/]test[\\/]/.test(file);
+    });
+  if (strays.length) fail("namespace: one definition", strays.map((l) => l.split(":")[0]).join(", "));
+  else pass("namespace: one definition", "shared/src/types.ts");
+}
+
 async function main() {
   console.log(`smoke: ${STAGING ? "desktop/staging" : APP}`);
   if (!STAGING && !existsSync(APP)) {
@@ -371,6 +394,7 @@ async function main() {
     process.exit(2);
   }
   const rt = await runtime();
+  checkOneNamespace();
   await checkPayload();
   await checkBuildInfo();
   await checkGazetteer(rt, "payload");

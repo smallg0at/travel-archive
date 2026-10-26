@@ -259,7 +259,7 @@ exist" makes the real 18419 unkillable by accident.
 `VITE_PIPELINE_URL=http://127.0.0.1:<throwaway port>` and serve the result
 with `npm run --workspace app preview -- --port 4173` (4173 is in the origin
 allow-list, so CORS answers). The throwaway is a fresh `ARCHIVE_HOME` plus
-`SERVE_PORT`, metadata pointed at `Apps/TravelArchiveTest`, and `.env` copied
+`SERVE_PORT`, metadata pointed at `Apps/DayArchiveTest`, and `.env` copied
 in for `AZURE_CLIENT_ID` — never the real metadata folder, because the auto
 scan starts on its own. **Rebuild `app/dist` without the variable when done**
 (verified by grepping the assets for the test port): a stale pointer ships

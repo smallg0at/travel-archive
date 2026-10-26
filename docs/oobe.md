@@ -39,9 +39,9 @@ All five come from the first deliberate from-scratch run of this archive
 
 2. **The shipped folder defaults do not exist.** Direct Graph probes:
    `Pictures` 404, `Pictures/Travel` 404 (the `ONEDRIVE_PHOTOS_FOLDER`
-   default), `Apps` 200, `Apps/TravelArchive` 404 (the metadata default) —
-   while this account really stores photos under a Chinese-named folder and
-   metadata under `Apps/DayArchive`. The first scan with defaults then fails
+   default), `Apps` 200, `Apps/DayArchive` 200 (the metadata default) —
+   while this account stores photos under a Chinese-named folder. The first
+   scan with defaults then fails
    as `Graph API 404 … itemNotFound … graph: 404 https://…` in a job log that
    names neither the setting nor the fix.
 

@@ -1,6 +1,6 @@
 import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, TranslationFile } from "@travel-archive/shared";
 import { loadHomeIndex, loadMonth } from "../archiveData";
-import { SCHEMA_VERSION } from "@travel-archive/shared";
+import { DEFAULT_METADATA_FOLDER, SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "../msAuth";
 import { isLocalMachine, localArchiveJson } from "../backend";
 import { GRAPH_BYTES_TIMEOUT_MS, GRAPH_QUERY_TIMEOUT_MS, graphFetch } from "../graphHttp";
@@ -33,7 +33,7 @@ const INDEX_KEY = "index.json";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 // The same folder archiveData.ts reads from — it is an env setting there too.
-const METADATA_FOLDER = import.meta.env.VITE_ONEDRIVE_METADATA_FOLDER || "Apps/DayArchive";
+const METADATA_FOLDER = import.meta.env.VITE_ONEDRIVE_METADATA_FOLDER || DEFAULT_METADATA_FOLDER;
 
 interface Kept {
   etag: string | null;
