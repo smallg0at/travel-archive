@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { dataFile } from "./paths.js";
+import { readDataFile } from "./paths.js";
 
 /**
  * Which country a point is in, from China-worldview outlines.
@@ -17,7 +17,7 @@ interface Country {
 let loading: Promise<Country[]> | null = null;
 
 function countries(): Promise<Country[]> {
-  loading ??= readFile(dataFile("geo", "countries.geo.json"), "utf-8").then(
+  loading ??= readDataFile("geo", "countries.geo.json").then(
     (raw) => JSON.parse(raw) as Country[],
     () => [],
   );

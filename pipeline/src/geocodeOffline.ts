@@ -1,6 +1,5 @@
-import { readFile } from "node:fs/promises";
 import type { GeoPoint } from "@travel-archive/shared";
-import { dataFile } from "./paths.js";
+import { dataFile, readDataFile, shippedDataFile } from "./paths.js";
 import { countryAt, sameCountry } from "./countryPolygons.js";
 
 /**
@@ -69,14 +68,38 @@ interface Places {
 
 let loading: Promise<Places> | null = null;
 
+/**
+ * Reads the gazetteer now.
+ *
+ * Called before a job plans its work, so a missing file costs a message
+ * instead of a run that captions some months and then dies on the first photo
+ * that needs a place.
+ */
+export async function assertGazetteerReady(): Promise<void> {
+  await load();
+}
+
 /** One bucket per whole degree; a lookup reads the nine around the point. */
 const cellOf = (lat: number, lon: number) => (Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180);
 
 async function load(): Promise<Places> {
-  const [placesRaw, countriesRaw] = await Promise.all([
-    readFile(dataFile("geo", "places.tsv"), "utf-8"),
-    readFile(dataFile("geo", "countries.tsv"), "utf-8"),
-  ]);
+  let placesRaw: string;
+  let countriesRaw: string;
+  try {
+    [placesRaw, countriesRaw] = await Promise.all([
+      readDataFile("geo", "places.tsv"),
+      readDataFile("geo", "countries.tsv"),
+    ]);
+  } catch (err) {
+    // A bare ENOENT here reads as a bug in the code. It is not: the gazetteer
+    // is generated, and an install that does not carry it cannot make one.
+    throw new Error(
+      `The offline gazetteer is missing. Looked in ${dataFile("geo", "places.tsv")} and ` +
+        `${shippedDataFile("geo", "places.tsv")}. A packaged install ships it; in a checkout, ` +
+        `build it once with "npm run --workspace pipeline geo:build".`,
+      { cause: err as Error },
+    );
+  }
 
   const lines = placesRaw.split("\n");
   const count = lines.length - 1; // the header

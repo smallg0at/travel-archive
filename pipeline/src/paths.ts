@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
 
 /**
  * Where the pipeline keeps things, and the difference between the two kinds.
@@ -62,4 +63,31 @@ export function dataFile(...segments: string[]): string {
 /** A read-only file that ships with the build. */
 export function configFile(name: string): string {
   return join(MODULE_ROOT, name);
+}
+
+/**
+ * A read-only data file that ships beside the code, under `data/`.
+ *
+ * The installer cannot run build scripts, so anything the runtime reads that
+ * is generated at development time — the offline gazetteer, for one — has to
+ * travel inside the package. `MODULE_ROOT` is `pipeline/` in a checkout and
+ * `resources/pipeline` once installed, so this resolves in both.
+ */
+export function shippedDataFile(...segments: string[]): string {
+  return join(MODULE_ROOT, "data", ...segments);
+}
+
+/**
+ * Reads a data file that may be user state or shipped with the build.
+ *
+ * Home wins: a developer who rebuilt the gazetteer should get their version.
+ * The shipped copy is the fallback an installed app depends on, because its
+ * home starts empty and nothing on that machine can generate these files.
+ */
+export async function readDataFile(...segments: string[]): Promise<string> {
+  try {
+    return await readFile(dataFile(...segments), "utf-8");
+  } catch {
+    return readFile(shippedDataFile(...segments), "utf-8");
+  }
 }

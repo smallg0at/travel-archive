@@ -9,7 +9,7 @@ import type {
 import type { CaptionPhotoInput, CaptionResult, CaptionContext } from "../providers/types.js";
 import { getAccessToken } from "../auth.js";
 import { downloadThumbnailBuffer } from "../graph.js";
-import { offlinePlace, placeString } from "../geocodeOffline.js";
+import { offlinePlace, placeString, assertGazetteerReady } from "../geocodeOffline.js";
 import { getProvider } from "../providers/index.js";
 import { env } from "../env.js";
 import {
@@ -353,6 +353,11 @@ export async function runAnalyze(
 ): Promise<AnalyzeResult> {
   onProgress({ phase: "signing-in", message: "Signing in..." });
   const token = await getAccessToken();
+
+  // Before planning or spending: every photo that needs a place reads the
+  // gazetteer, and a missing copy used to surface mid-run as a bare ENOENT on
+  // a file the user has no way to produce.
+  await assertGazetteerReady();
 
   onProgress({ phase: "planning", message: "Loading index..." });
   const index = await loadIndex(token);

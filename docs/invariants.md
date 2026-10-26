@@ -47,6 +47,18 @@ resolves from `ARCHIVE_HOME`; read-only config that ships with the build
 resolves from the module. Get this wrong and an installed app writes into a
 read-only directory, or reads a config file that is not there.
 
+**Generated data either regenerates itself or ships.** The offline gazetteer
+(`places.tsv`, `countries.tsv`, `countries.geo.json`) is built from GeoNames
+downloads at development time, and an installed app has no way to build it, so
+the three files ship in `resources/pipeline/data/geo` and are tracked in git
+even though `data/` is otherwise ignored. `readDataFile` reads home first and
+falls back to the copy beside the code. 1.0.2 went out without them: captioning
+died on its first photo with `ENOENT … data\geo\countries.tsv`, after the paid
+run had started, and the installer was built by CI from a clean checkout where
+those files could not exist. `bundle-pipeline.mjs` now refuses to build a
+package that is missing one, and `analyze` reads the gazetteer before it plans
+anything, so a broken install costs a message rather than money.
+
 **Reading over the home network is gated; writing is local-only.** Set
 `ARCHIVE_HOST=0.0.0.0` and `ARCHIVE_PASSWORD` to expose the archive to the
 family (`pipeline/src/access.ts`). Read is the whole product and is gated by a

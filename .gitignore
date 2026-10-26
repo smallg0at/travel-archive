@@ -39,6 +39,20 @@ serve-at-login.trace
 # data/bakeoff/.
 data/
 
+# ...except the offline gazetteer. It is generated from GeoNames downloads, so
+# it looks like build output and belongs under data/ by every other rule — but
+# an installed app cannot run `geo:build`, so these three files ship inside the
+# package and must be tracked or CI would build an installer without them. That
+# is not hypothetical: 1.0.2 was released without them and captioning died on
+# its first photo with `ENOENT … data\geo\countries.tsv`.
+!pipeline/data/
+pipeline/data/*
+!pipeline/data/geo/
+pipeline/data/geo/*
+!pipeline/data/geo/places.tsv
+!pipeline/data/geo/countries.tsv
+!pipeline/data/geo/countries.geo.json
+
 # Literal personal terms — the owner's name, and anything else they want caught
 # by `redact`. The whole point of the file is that these strings cannot be found
 # by pattern, which is exactly why they must not be published.
