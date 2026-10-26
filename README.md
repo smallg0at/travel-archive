@@ -98,6 +98,33 @@ Settings says so when it detects one.
 - **Trip dates are the one thing the app will not edit.** Trips are defined and renamed in the app, and the file behind them is `pipeline/data/trips.json` (an older root-level `pipeline/trips.json` is moved into `data/` when it is seen). Changing a range still means editing that file and re-running `organize`.
 - **The captioning model is a setting, not a recommendation.** `GEMINI_MODEL` defaults to `gemini-3.7-flash`, the tier the throughput numbers in [`docs/history.md`](docs/history.md) were measured against; bulk tagging at this volume is the case for setting something cheaper.
 
+## Known issue: Brotli decompression (CVE-2026-111497)
+
+Node's Bundled Brotli decoder has an out-of-bounds write that permits remote
+code execution. It is fixed in Node **22.23.4**, **24.22.1** and **26.12.1**
+(2026-10-21). The desktop app runs whatever Node Electron embeds; Electron
+**45.0.0** — the newest stable on 2026-10-27 — still embeds **24.22.0**, one
+patch short, and every other supported line is on the same Node.
+
+**What is mitigated.** Every HTTP request this project makes for the pipeline
+and for Graph asks for `gzip` explicitly, and refuses a response whose
+`Content-Encoding` lists `br` before anything reads the body
+(`shared/src/brotli.ts`). Measured with a real key: DeepSeek answers `br` to the
+default headers and `gzip` when asked, so the guard never fires in normal use.
+
+**What is not covered.** The Gemini SDK's internal transport
+(`@google/genai`) is outside that guard, and the renderer uses Chromium's own
+network stack and Brotli copy — a separate code path, not this Node CVE.
+
+**When it goes away.** Electron rebuilds against a patched Node periodically.
+`GET /diagnostics` reports `runtime.node` from the packaged process; accept a
+build only when it is `24.22.1` or newer, then remove the guard. Until then this
+is a partial mitigation, not a fix.
+
+If a required provider ever refuses both `gzip` and `identity` and insists on
+`br`, revisit with a scoped JavaScript decoder plus decompressed-size and time
+limits — not by falling back to the native decoder.
+
 ## Licence and attribution
 
 **AGPL-3.0-or-later** — see [`LICENSE`](LICENSE), and [`COPYING`](COPYING) for the

@@ -33,9 +33,7 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import net from "node:net";
 
-const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const PROBE_SOURCE = join(ROOT, "scripts/smoke/probe-gazetteer.ts");
-
+const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));const PROBE_SOURCE = join(ROOT, "scripts/smoke/probe-gazetteer.ts");
 const argv = process.argv.slice(2);
 const STAGING = argv.includes("--staging");
 const SELF_CHECK = argv.includes("--self-check");
@@ -51,6 +49,17 @@ const results = [];
 const pass = (what, detail = "") => results.push({ ok: true, what, detail });
 const warn = (what, detail = "") => results.push({ ok: true, warn: true, what, detail });
 const fail = (what, detail = "") => results.push({ ok: false, what, detail });
+
+/** `a >= b` for dotted numeric versions; a non-version sorts as 0.0.0. */
+function compareVersions(a, b) {
+  const parse = (v) => String(v).split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parse(a), parse(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
 
 const resources = () => (STAGING ? join(ROOT, "desktop/staging") : join(APP, "resources"));
 
@@ -308,6 +317,20 @@ async function checkShell({ exe }) {
     if (child.exitCode !== null) fail("shell: still running", `exited with ${child.exitCode}`);
     else if (!diag.build?.commit) fail("shell: launched", "its server answered without build-info");
     else pass("shell: launched and served /health", `in ${waiting}s, commit ${diag.build.commit.slice(0, 7)}`);
+
+    // The Brotli CVE (README, "Known issue") is fixed in Node 24.22.1. Electron
+    // embeds its own Node, so the only honest check is the version the packaged
+    // process reports. A warning, not a failure: the fix is the vendor's to ship,
+    // and this line is what tells us when it has.
+    const node = diag.runtime?.node ?? "unknown";
+    if (compareVersions(node, "24.22.1") >= 0) {
+      pass("shell: runtime Node carries the Brotli fix", `${node} (Electron ${diag.runtime?.electron ?? "?"})`);
+    } else {
+      warn(
+        "shell: runtime Node predates the Brotli fix",
+        `${node} < 24.22.1 — the gzip guard is the mitigation (see README)`,
+      );
+    }
   } catch (error) {
     fail("shell: launched", `${error.message}; ${log.split(/\r?\n/).slice(-3).join(" ").trim().slice(0, 160)}`);
   } finally {
