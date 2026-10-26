@@ -681,7 +681,7 @@ const routes: [RegExp, string, Handler][] = [
       if (!isLoopback(req.socket.remoteAddress)) {
         return json(res, 403, { error: "Diagnostics belong to the machine running the server" });
       }
-      json(res, 200, await diagnostics(Boolean(appServer)));
+      json(res, 200, await diagnostics());
     },
   ],
 

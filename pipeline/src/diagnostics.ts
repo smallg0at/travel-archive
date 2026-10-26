@@ -5,6 +5,8 @@ import { archiveHome, moduleFile } from "./paths.js";
 import { gazetteerStats } from "./geocodeOffline.js";
 import { loadScreenshotAllowlist } from "./screenshots.js";
 import { renderCapability } from "./localThumb.js";
+import { runningPorts } from "./remoteAccess.js";
+import { servesThisApp } from "./staticApp.js";
 
 /**
  * What this build actually has, answered by the build itself.
@@ -55,12 +57,16 @@ async function buildInfo(): Promise<BuildInfo | null> {
   }
 }
 
-export async function diagnostics(pageServed: boolean): Promise<Diagnostics> {
-  const [build, gazetteer, allowlist, render] = await Promise.all([
+export async function diagnostics(): Promise<Diagnostics> {
+  const [build, gazetteer, allowlist, render, pageServed] = await Promise.all([
     buildInfo(),
     gazetteerStats().catch((error: Error) => ({ error: error.message })),
     loadScreenshotAllowlist(),
     renderCapability(),
+    // Asked, not assumed: when the desktop shell is running it serves the page
+    // itself, and this server's own `appServer` is null even though a phone can
+    // load the archive perfectly well.
+    servesThisApp(runningPorts.page),
   ]);
 
   return {
