@@ -68,6 +68,28 @@ describe("Content-Security-Policy parity", () => {
 });
 
 describe("serveApp", () => {
+  it("answers a path with a malformed escape instead of dropping the connection", async () => {
+    const base = await mkdtemp(join(tmpdir(), "staticapp-bad-"));
+    const root = join(base, "site");
+    await mkdir(join(root, "assets"), { recursive: true });
+    await writeFile(join(root, "index.html"), '<div id="app"></div>');
+    await writeFile(join(root, "assets", "app.js"), "console.log(1)");
+
+    const result = (await serveApp(root, 0, "127.0.0.1")) as Extract<ServeResult, { kind: "serving" }>;
+    expect(result.kind).toBe("serving");
+    servers.push(result.server);
+    const port = (result.server.address() as AddressInfo).port;
+
+    // `decodeURIComponent("%")` throws. Before this was caught, the request
+    // handler rejected, the process logged an unhandled rejection, and the
+    // client got no response at all — a one-line denial of service repeated
+    // from any machine on the network.
+    const barePercent = await get(port, "/%");
+    expect(barePercent.status).toBe(200);
+    const inAsset = await get(port, "/assets/%ZZ.js");
+    expect([200, 404]).toContain(inAsset.status);
+  });
+
   it("serves the page, falls back for routes, 404s for missing assets", async () => {
     const base = await mkdtemp(join(tmpdir(), "staticapp-"));
     const root = join(base, "site");

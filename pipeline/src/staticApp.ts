@@ -69,7 +69,15 @@ async function fileExists(path: string): Promise<boolean> {
  * would otherwise read anything the user can read.
  */
 function resolveWithin(root: string, urlPath: string): string | null {
-  const decoded = decodeURIComponent(urlPath.split("?")[0]);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(urlPath.split("?")[0]);
+  } catch {
+    // A malformed escape (`/%`, `/%ZZ`) is a client sending nonsense. Falling
+    // back to index.html is the same answer a route gets; throwing here would
+    // leave the request with no response at all.
+    return null;
+  }
   const candidate = resolve(join(root, normalize(decoded)));
   return candidate === root || candidate.startsWith(root + sep) ? candidate : null;
 }

@@ -136,6 +136,15 @@ function cors(req: IncomingMessage, res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
+/** A path segment from the URL, or null when its escapes are malformed. */
+function decodeSegment(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 function json(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) });
@@ -1213,7 +1222,8 @@ const routes: [RegExp, string, Handler][] = [
     /^\/thumb\/(medium|large|full)\/(.+)$/,
     "GET",
     async (_req, res, [size, encodedId]) => {
-      const itemId = decodeURIComponent(encodedId);
+      const itemId = decodeSegment(encodedId);
+      if (!itemId) return json(res, 404, { error: "No such photo" });
       const sendImage = (bytes: Buffer) => {
         res.writeHead(200, {
           "Content-Type": imageType(bytes),
@@ -1264,7 +1274,8 @@ const routes: [RegExp, string, Handler][] = [
       // sees it; and the app hides its own video affordances on a remote
       // connection to match. Nothing here is worth that.
       if (!access.isLocal(_req)) return json(res, 404, { error: "No such route" });
-      const itemId = decodeURIComponent(encodedId);
+      const itemId = decodeSegment(encodedId);
+      if (!itemId) return json(res, 404, { error: "No such route" });
       const token = await getCachedAccessToken();
       if (!token) return json(res, 404, { error: "Not signed in" });
       const url = await fetchItemDownloadUrl(token, itemId);

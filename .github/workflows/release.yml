@@ -26,6 +26,10 @@ permissions:
 jobs:
   installer:
     runs-on: windows-latest
+    # The Azure identifiers live in this environment's variables, not at
+    # repository level. Without this line `vars.*` resolves to nothing and the
+    # packaging step fails by design (no client id, no usable install).
+    environment: default-packing
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,6 +51,7 @@ jobs:
           # id is absent, because an installer without it cannot sign in.
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ONEDRIVE_METADATA_FOLDER: ${{ vars.ONEDRIVE_METADATA_FOLDER }}
 
       # Start the artifact and ask it questions before it can be attached. A
       # payload missing the gazetteer produced a 1.0.2 whose captioning died on
