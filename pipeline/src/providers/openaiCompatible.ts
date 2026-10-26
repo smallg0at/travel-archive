@@ -1,3 +1,4 @@
+import { assertNoBrotli } from "@travel-archive/shared";
 import type {
   AiProvider,
   CallUsage,
@@ -163,6 +164,7 @@ async function chat(
         headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      assertNoBrotli(res, url);
     } catch (err) {
       if (attempt < MAX_ATTEMPTS && RETRYABLE.test(String(err))) {
         await sleep(backoffMs(attempt, null));

@@ -21,6 +21,8 @@
  * `TimeoutError`.
  */
 
+import { assertNoBrotli } from "@travel-archive/shared";
+
 /** How long a small Graph call may take: lookups, listings, $batch. */
 export const GRAPH_QUERY_TIMEOUT_MS = 20_000;
 
@@ -37,7 +39,9 @@ export async function graphFetch(
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
   try {
-    return await fetch(url, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
+    const response = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
+    assertNoBrotli(response, url);
+    return response;
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
       throw new Error(`Graph did not answer within ${Math.round(timeoutMs / 1000)} s`);

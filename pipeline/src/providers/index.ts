@@ -1,3 +1,4 @@
+import { assertNoBrotli } from "@travel-archive/shared";
 import { env } from "../env.js";
 import { geminiProvider } from "./gemini.js";
 import { createOpenAiCompatProvider, type OpenAiCompatConfig } from "./openaiCompatible.js";
@@ -207,6 +208,7 @@ export async function validateProvider(
       // key as a query parameter.
       const url = `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1${key ? `&key=${encodeURIComponent(key)}` : ""}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      assertNoBrotli(res, url);
       if (res.ok || res.status === 429) return { ok: true };
       if (res.status === 400 || res.status === 401 || res.status === 403)
         return fail("auth", `Gemini rejected the key (${res.status})`);
@@ -220,6 +222,7 @@ export async function validateProvider(
     const path = (preset.probePath ?? "models").replace(/^\/+/, "");
     const headers: Record<string, string> = preset.scope === "local" || !key ? {} : { authorization: `Bearer ${key}` };
     const res = await fetch(`${base}/${path}`, { headers, signal: AbortSignal.timeout(10_000) });
+    assertNoBrotli(res, `${base}/${path}`);
     if (res.ok || res.status === 429) return { ok: true };
     if (res.status === 401 || res.status === 403) return fail("auth", `key rejected (${res.status})`);
     if (res.status === 404) return fail("unreachable", `no /${path} at ${base} (404) — check the base URL`);

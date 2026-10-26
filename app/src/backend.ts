@@ -15,6 +15,8 @@ import type {
   SyncStatus,
 } from "@travel-archive/shared";
 
+import { assertNoBrotli } from "@travel-archive/shared";
+
 /**
  * Client for `pipeline serve` — the local job server that runs analysis,
  * day summaries and trip narratives (pipeline/src/serve.ts).
@@ -100,7 +102,13 @@ export interface RenderCapability {
  * endpoint cannot quietly forget it.
  */
 export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${BACKEND}${path}`, { ...init, credentials: "include" });
+  const url = `${BACKEND}${path}`;
+  return fetch(url, { ...init, credentials: "include" }).then((response) => {
+    // The API is ours, but a phone may be reading someone else's server; see
+    // shared/src/brotli.ts for why a Brotli body is refused rather than decoded.
+    assertNoBrotli(response, url);
+    return response;
+  });
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
