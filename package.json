@@ -14,7 +14,8 @@
   "scripts": {
     "desktop": "npm run --workspace desktop build && npm run --workspace desktop start",
     "desktop:offline": "npm run --workspace desktop build && npm run --workspace desktop start -- --no-pipeline",
-    "package": "npm run --workspace app build && npm run --workspace pipeline build && npm run --workspace desktop dist"
+    "package": "npm run --workspace app build && npm run --workspace pipeline build && npm run --workspace desktop dist",
+    "smoke:package": "node scripts/smoke-package.mjs"
   },
   "version": "1.0.2"
 }

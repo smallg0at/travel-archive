@@ -16,7 +16,7 @@
  * in a checkout.
  */
 import { build } from "esbuild";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -129,3 +129,30 @@ for (const name of GEO) {
 
 console.log(`bundled ${(statSync(OUT).size / 1024 / 1024).toFixed(1)} MB -> ${OUT}`);
 console.log(`copied screenshot-apps.json and ${GEO.length} gazetteer files alongside it`);
+
+/**
+ * What this payload was built from, written beside it.
+ *
+ * A tag, a checkout and an installer were three claims with nothing tying them
+ * together: the 1.0.2 installer gave no way to ask "which commit are you?".
+ * `scripts/smoke-package.mjs` compares this file against the checkout and, in
+ * CI, against the tag it was asked to build, so the chain is verifiable from
+ * the artifact rather than from the release log.
+ */
+const { execFileSync } = await import("node:child_process");
+const git = (args) => {
+  try {
+    return execFileSync("git", args, { cwd: ROOT, encoding: "utf-8" }).trim();
+  } catch {
+    return null;
+  }
+};
+const version = JSON.parse(readFileSync(resolve(ROOT, "desktop/package.json"), "utf-8")).version;
+const buildInfo = {
+  version,
+  commit: git(["rev-parse", "HEAD"]),
+  dirty: Boolean(git(["status", "--porcelain"])),
+  builtAt: new Date().toISOString(),
+};
+writeFileSync(resolve(STAGE, "build-info.json"), `${JSON.stringify(buildInfo, null, 2)}\n`, "utf-8");
+console.log(`build-info: ${version} ${buildInfo.commit?.slice(0, 7) ?? "(no git)"}${buildInfo.dirty ? " + uncommitted changes" : ""}`);

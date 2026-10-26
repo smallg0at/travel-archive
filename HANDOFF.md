@@ -19,6 +19,7 @@ This file is the front door. The depth lives in `docs/`:
 | [`docs/working-style.md`](docs/working-style.md) | How to work on this: measurement discipline, multi-session hygiene, the writing's register. |
 | [`docs/architecture.md`](docs/architecture.md) | Subsystem notes: the phone's offline archive, the offline gazetteer, captioning. |
 | [`docs/environment.md`](docs/environment.md) | This machine: `npm`/`fnm`, the job server at logon, the network. |
+| [`docs/packaging.md`](docs/packaging.md) | Verifying a packaged build: `npm run smoke:package`, and what it cannot see. |
 | [`docs/history.md`](docs/history.md) | Records, not rules: past regressions and the local-model measurements. |
 | `private/TODO-history.md` | Frozen archive of the old TODO as of 2026-09-22. Kept on disk, not committed. |
 

@@ -42,6 +42,13 @@ jobs:
       # (tsc, bundle the pipeline, then electron-builder → desktop/release/).
       - run: npm run package
 
+      # Start the artifact and ask it questions before it can be attached. A
+      # payload missing the gazetteer produced a 1.0.2 whose captioning died on
+      # its first photo; this step fails the release instead. `--self-check`
+      # also deletes the data from a copy and proves the check rejects it.
+      - name: Smoke-test the packaged build
+        run: node scripts/smoke-package.mjs --self-check --require-clean --expect-version "${{ inputs.tag }}"
+
       - name: Attach the installer to a draft release
         shell: pwsh
         env:
