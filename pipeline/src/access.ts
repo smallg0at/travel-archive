@@ -57,7 +57,7 @@ export interface Access {
  * and a trust list, which is exactly the kind of thing that gets done wrongly —
  * so it is not done at all.
  */
-function isLoopback(addr: string | undefined): boolean {
+export function isLoopback(addr: string | undefined): boolean {
   if (!addr) return false;
   return addr === "::1" || addr === "127.0.0.1" || addr === "::ffff:127.0.0.1";
 }

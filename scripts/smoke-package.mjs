@@ -29,7 +29,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { cp, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import net from "node:net";
 
@@ -158,6 +158,34 @@ async function checkPayload() {
   const page = STAGING ? join(ROOT, "app/dist/index.html") : join(resources(), "app-dist/index.html");
   if (existsSync(page)) pass(`payload: ${page.includes("app-dist") ? "app-dist" : "app/dist"}/index.html`);
   else fail("payload: app page (index.html)", `missing at ${page} — the installed app would answer API and show no page`);
+
+  await checkPageAssets(STAGING ? join(ROOT, "app/dist") : join(resources(), "app-dist"));
+}
+
+/**
+ * The HTML the app serves must point at files that exist. A build that emits
+ * `index.html` and skips a chunk is the same failure as a missing page, one
+ * level down, and the browser reports it as a blank screen.
+ */
+async function checkPageAssets(root) {
+  for (const rel of ["index.html", "auth.html", "mobile/index.html"]) {
+    const file = join(root, rel);
+    if (!existsSync(file)) {
+      fail(`payload: ${rel}`, "missing");
+      continue;
+    }
+    const text = await readFile(file, "utf-8");
+    const refs = [...text.matchAll(/(?:src|href)="([^"]+)"/g)]
+      .map((m) => m[1])
+      .filter((url) => !/^(?:[a-z]+:|\/\/|#)/i.test(url));
+    const missing = refs.filter((url) => {
+      const clean = url.split("?")[0].split("#")[0];
+      const target = clean.startsWith("/") ? join(root, clean) : join(dirname(file), clean);
+      return !existsSync(target);
+    });
+    if (missing.length) fail(`payload: ${rel} references`, `missing ${missing.slice(0, 3).join(", ")}`);
+    else pass(`payload: ${rel} references`, `${refs.length} file(s), all present`);
+  }
 }
 
 /**
@@ -249,13 +277,37 @@ async function checkServer({ exe, asNode }) {
     if (body.ok === true) pass("server: /health answers");
     else fail("server: /health answers", JSON.stringify(body));
 
-    if (body.render?.ffmpeg) pass("server: ffmpeg found", body.render.ffmpeg);
-    else fail("server: ffmpeg found", "no ffmpeg — video posters will be blank");
+    const diagResponse = await fetch(`http://127.0.0.1:${servePort}/diagnostics`, {
+      signal: AbortSignal.timeout(30_000),
+    });
+    const diag = diagResponse.ok ? await diagResponse.json() : null;
+    if (!diag) fail("server: /diagnostics answers", `HTTP ${diagResponse.status}`);
+    else {
+      pass("server: /diagnostics answers");
+      if (diag.config?.azureClientId === "set") pass("config: AZURE_CLIENT_ID is baked in");
+      else fail("config: AZURE_CLIENT_ID is baked in", "an install without it cannot sign in");
+      if (diag.config?.metadataFolder) pass("config: metadata folder", diag.config.metadataFolder);
+      else fail("config: metadata folder", "empty — the archive has no namespace");
+      if (diag.payload?.gazetteer?.places > 100_000)
+        pass("payload: gazetteer loaded", `${diag.payload.gazetteer.places} places, ${diag.payload.gazetteer.countries} countries`);
+      else fail("payload: gazetteer loaded", JSON.stringify(diag.payload?.gazetteer));
+      if (diag.payload?.pageServed) pass("payload: a reader page is served");
+      else fail("payload: a reader page is served", "the API answers and the page does not");
+      if (diag.payload?.screenshotAllowlist > 0)
+        pass("payload: screenshot allowlist", `${diag.payload.screenshotAllowlist} app(s)`);
+      else warn("payload: screenshot allowlist", "empty — screenshot analysis would be off");
+      if (diag.payload?.ffmpegBesideCode) pass("payload: ffmpeg ships beside the code");
+      else if (diag.render?.ffmpeg) warn("payload: ffmpeg", `found at "${diag.render.ffmpeg}" on this machine's PATH, not in the payload`);
+      else warn("payload: ffmpeg", "absent — video posters and DNG rely on it");
+    }
 
     if (STAGING) warn("server: local image rendering (sharp)", "not meaningful from the checkout runtime; run against the packaged build");
     else if (body.render?.images) pass("server: local image rendering (sharp)");
     else if (REQUIRE_RENDER) fail("server: local image rendering (sharp)", "render.images is false");
     else warn("server: local image rendering (sharp)", "false — known gap, tracked separately");
+    if (STAGING) warn("server: HEIC decoding", "not meaningful from the checkout runtime");
+    else if (body.render?.heif === false) warn("server: HEIC decoding", "unavailable — HEIC thumbnails would fall back");
+    else if (body.render?.heif) pass("server: HEIC decoding");
 
     const page = await waitForUrl(`http://127.0.0.1:${pagePort}/`, 15_000);
     const html = await page.text();

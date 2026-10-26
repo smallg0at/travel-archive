@@ -41,6 +41,12 @@ jobs:
       # `npm run package` = app build + pipeline build + desktop dist
       # (tsc, bundle the pipeline, then electron-builder → desktop/release/).
       - run: npm run package
+        env:
+          # Public identifiers, not secrets: set them under Settings → Secrets
+          # and variables → Actions → Variables. The build fails if the client
+          # id is absent, because an installer without it cannot sign in.
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
 
       # Start the artifact and ask it questions before it can be attached. A
       # payload missing the gazetteer produced a 1.0.2 whose captioning died on

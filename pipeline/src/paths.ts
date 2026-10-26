@@ -65,6 +65,11 @@ export function configFile(name: string): string {
   return join(MODULE_ROOT, name);
 }
 
+/** Any file directly beside the shipped code — `build-info.json`, the bundle. */
+export function moduleFile(name: string): string {
+  return join(MODULE_ROOT, name);
+}
+
 /**
  * A read-only data file that ships beside the code, under `data/`.
  *

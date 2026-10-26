@@ -62,20 +62,38 @@ const SECRET = /KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/i;
 
 function bakedConfig() {
   const envPath = resolve(ROOT, "pipeline/.env");
-  if (!existsSync(envPath)) {
-    console.warn("no pipeline/.env — building with no baked configuration");
-    return {};
+  const fromFile = {};
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, "utf-8").split(/\r?\n/)) {
+      const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+      if (!m) continue;
+      const [, key, rawValue] = m;
+      if (!BAKE.includes(key) || SECRET.test(key)) continue;
+      const value = rawValue.trim().replace(/^['"]|['"]$/g, "");
+      if (value) fromFile[key] = value;
+    }
+    console.log(`read ${Object.keys(fromFile).length} setting(s) from pipeline/.env`);
+  } else {
+    console.warn("no pipeline/.env — falling back to the environment");
   }
-  const out = {};
-  for (const line of readFileSync(envPath, "utf-8").split(/\r?\n/)) {
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
-    if (!m) continue;
-    const [, key, rawValue] = m;
-    if (!BAKE.includes(key) || SECRET.test(key)) continue;
-    const value = rawValue.trim().replace(/^['"]|['"]$/g, "");
+
+  // CI has no .env: it passes these from repository variables. Without this a
+  // release build baked nothing, and `env.ts` then refused to start at all —
+  // an installer that could never sign in, which no earlier step noticed.
+  const out = { ...fromFile };
+  for (const key of BAKE) {
+    if (out[key] || SECRET.test(key)) continue;
+    const value = process.env[key]?.trim();
     if (value) out[key] = value;
   }
   console.log(`baking ${Object.keys(out).length} setting(s): ${Object.keys(out).join(", ")}`);
+
+  if (!out.AZURE_CLIENT_ID) {
+    throw new Error(
+      "AZURE_CLIENT_ID is missing: an install built without it cannot sign in. " +
+        "Put it in pipeline/.env (see .env.example) or set it in the environment.",
+    );
+  }
   // Guarantee, not hope: every build carries a metadata folder. The builder's
   // value when there is one; the documented default otherwise — never nothing.
   if (!out.ONEDRIVE_METADATA_FOLDER) out.ONEDRIVE_METADATA_FOLDER = "Apps/TravelArchive";

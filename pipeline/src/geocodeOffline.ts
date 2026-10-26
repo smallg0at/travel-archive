@@ -79,6 +79,12 @@ export async function assertGazetteerReady(): Promise<void> {
   await load();
 }
 
+/** Counts for `/diagnostics`: proves the file was read, not merely present. */
+export async function gazetteerStats(): Promise<{ places: number; countries: number }> {
+  const places = await load();
+  return { places: places.cc.length, countries: places.countries.size };
+}
+
 /** One bucket per whole degree; a lookup reads the nine around the point. */
 const cellOf = (lat: number, lon: number) => (Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180);
 

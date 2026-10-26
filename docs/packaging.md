@@ -34,13 +34,27 @@ The check, in order:
    compares the version with `desktop/package.json`, the commit with the
    checkout, and — in CI — the version with the tag that was asked for, so a tag
    cannot quietly build different code.
-3. **The gazetteer resolves from beside the code.** A probe is bundled into
+3. **The artifact says what it is.** `resources/pipeline/build-info.json` carries
+   version, commit and whether the tree was dirty when it was built. The check
+   compares the version with `desktop/package.json`, the commit with the
+   checkout, and — in CI — the version with the tag that was asked for, so a tag
+   cannot quietly build different code.
+4. **The configuration the build baked in is present.** `/diagnostics` (a
+   loopback-only route) reports `AZURE_CLIENT_ID` as set or missing, the tenant,
+   the metadata folder and the provider — never a secret's value. A build with
+   no client id cannot sign in, and `bundle-pipeline.mjs` now refuses to produce
+   one; CI supplies it from repository variables (`AZURE_CLIENT_ID`,
+   `AZURE_TENANT_ID` under Settings → Secrets and variables → Actions →
+   Variables).
+5. **The gazetteer resolves from beside the code.** A probe is bundled into
    `resources/pipeline/dist/`, which makes `paths.ts` compute its module root as
    `resources/pipeline` — the root the real server sees — and it resolves one
    coordinate. This is the check that 1.0.2 would have failed.
-4. **The server starts** from `resources/` against a throwaway home, with the
-   app's own runtime (`ELECTRON_RUN_AS_NODE`), and `/health`, `/`, `/mobile/`
-   and `/oobe` answer.
+6. **The server starts** from `resources/` against a throwaway home, with the
+   app's own runtime (`ELECTRON_RUN_AS_NODE`), and `/health`, `/diagnostics`,
+   `/`, `/mobile/` and `/oobe` answer. Every `src`/`href` in the served HTML is
+   resolved against the payload, so a missing chunk fails here rather than as a
+   blank page.
 
 Options: `--staging` tests `desktop/staging` with the local node instead of the
 packed exe; `--self-check` copies the payload, deletes the gazetteer and proves
@@ -63,6 +77,9 @@ release.
   real machine.
 - `sharp`: reported as a warning until its native libraries ship (see the
   desktop item for bundling `@img/sharp-win32-x64`).
+- `ffmpeg`: reported as a warning when it is only on this machine's PATH. A
+  packaged install without it loses video posters and DNG frames.
+- Whether the baked client id is *valid*: only a real sign-in proves that.
 
 When a packaging failure is fixed, add the check here first. The test exists
 because "works on my machine" was true three times while the install was broken.

@@ -26,7 +26,8 @@ import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@trav
 import { readPrefs, writePrefs } from "./prefsStore.js";
 import { env, settingNow, shellEnvironment } from "./env.js";
 import { getCachedAccessToken, getAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
-import { makeAccess } from "./access.js";
+import { makeAccess, isLoopback } from "./access.js";
+import { diagnostics } from "./diagnostics.js";
 import { loadIndex } from "./archiveStore.js";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
@@ -657,6 +658,22 @@ const routes: [RegExp, string, Handler][] = [
     },
   ],
   [/^\/archive\/status$/, "GET", async (_req, res) => json(res, 200, await archiveStatus())],
+
+  /**
+   * What this build has: payload files, baked configuration, render
+   * capabilities. Loopback only — the home path and the folder names are not
+   * for a reader on the network, and neither is a support surface.
+   */
+  [
+    /^\/diagnostics$/,
+    "GET",
+    async (req, res) => {
+      if (!isLoopback(req.socket.remoteAddress)) {
+        return json(res, 403, { error: "Diagnostics belong to the machine running the server" });
+      }
+      json(res, 200, await diagnostics(Boolean(appServer)));
+    },
+  ],
 
   /**
    * The generation settings, so a fresh install can be configured from the app
