@@ -27,6 +27,7 @@ node scripts\todo.mjs list --json
 node scripts\todo.mjs show     <item-id>        # title, status, area, body
 node scripts\todo.mjs add      --title "One-line summary" --area app --body-file tmp.md
 node scripts\todo.mjs set-area <item-id> app
+node scripts\todo.mjs set-title <item-id> "a heading that is still true"
 node scripts\todo.mjs set-body <item-id> --body-file evidence.md --append   # keep the body, add to it
 node scripts\todo.mjs close    <item-id>
 ```

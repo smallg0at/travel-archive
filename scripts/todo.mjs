@@ -274,6 +274,7 @@ function usage(stream = console.log, code = 0) {
   show <item-id> [--json]
   add --title "..." [--area <area>] [--body "..." | --body-file <path>]
   set-area <item-id> <area>
+  set-title <item-id> "new title"
   set-body <item-id> [--body "..." | --body-file <path>] [--append]
   close <item-id>
 
@@ -406,6 +407,28 @@ switch (verb) {
     setOption(id, AREA.field, AREA.options[area]);
     const item = readVerified(id, { area });
     console.log(`${item.id}  area=${item.area}  ${item.title}`);
+    break;
+  }
+
+  case "set-title": {
+    // A title is not a project field: it lives on the DraftIssue node, which is
+    // why this is a separate verb from set-area. Titles drift (a premise gets
+    // corrected and the heading keeps the old claim), and a misleading heading
+    // is what the next reader skims past.
+    const id = rest[0];
+    const title = rest.slice(1).join(" ").trim();
+    if (!id || !title) usage(console.error, 2);
+    const before = readItem(id);
+    if (!before) fail(`no project item with id ${id}`);
+    if (!before.draftId) {
+      fail(
+        `${id} is not a draft item: its title lives on the GitHub content (an issue or PR), ` +
+          `and updateProjectV2DraftIssue only edits drafts.`,
+      );
+    }
+    updateDraftBody(before.draftId, { title });
+    const item = readVerified(id, { title });
+    console.log(`${item.id}  title=${item.title}`);
     break;
   }
 
