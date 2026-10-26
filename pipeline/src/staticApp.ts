@@ -1,9 +1,9 @@
 import { createServer, type Server } from "node:http";
-import { networkInterfaces } from "node:os";
 import { createReadStream } from "node:fs";
 import { existsSync, statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
+import { lanIpv4Addresses } from "./lanAddresses.js";
 
 /**
  * Serves `app/dist` — the job server's half of the web server.
@@ -107,17 +107,11 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
  */
 function networkOrigins(exposed: boolean): string[] {
   if (!exposed) return [];
-  const out: string[] = [];
-  for (const addresses of Object.values(networkInterfaces())) {
-    for (const address of addresses ?? []) {
-      if (address.family !== "IPv4" || address.internal) continue;
-      // Private ranges only, so a public address in the policy cannot happen
-      // even if this host is somehow reachable from outside.
-      if (!/^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\./.test(address.address)) continue;
-      out.push(`http://${address.address}`, `http://${address.address}:*`);
-    }
-  }
-  return out;
+  // The same enumeration the settings page prints as "open this on your
+  // phone", so the URL shown and the CSP that lets it call the API cannot
+  // disagree. Private ranges only, so a public address in the policy cannot
+  // happen even if this host is somehow reachable from outside.
+  return lanIpv4Addresses().flatMap((address) => [`http://${address}`, `http://${address}:*`]);
 }
 
 /** Whether this server answers beyond loopback — what the CSP's extra origins depend on. */
@@ -173,10 +167,16 @@ export async function serveApp(root: string, port: number, host = "127.0.0.1"): 
   return (await servesThisApp(port)) ? { kind: "adopted" } : { kind: "occupied", by: await describe(port) };
 }
 
-/** Whether whatever owns the port answers with this app's own page. */
-async function servesThisApp(port: number): Promise<boolean> {
+/**
+ * Whether whatever owns the port answers with this app's own page.
+ *
+ * Exported because Settings asks the same question: an exposed API is not the
+ * same thing as a page a phone can open, and the address it prints must not
+ * outlive the listener it names.
+ */
+export async function servesThisApp(port: number, timeoutMs = 2000): Promise<boolean> {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) return false;
     const html = await res.text();
     // The shell's own markup, and Vite's dev entry for the same page, both

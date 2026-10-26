@@ -204,6 +204,8 @@ export const en = {
     note: "This archive is shared on the home network. Enter the password to read it. Viewing only — nothing here can be changed from this device.",
     placeholder: "Shared password",
     submit: "Open",
+    mobileVersion: "Open the phone version",
+    desktopVersion: "Open the desktop version",
   },
 
   home: {
@@ -357,6 +359,34 @@ export const en = {
     remoteNewPassword: "New password",
     remoteSetPassword: "Save password",
     remoteClearPassword: "Clear password",
+    remoteLocalOnly:
+      "Reachable on this machine only. To open it on a phone or another computer on this network, allow network reading first (a restart applies it).",
+    remoteOpenHere: "Open this in a browser — or scan the code beside an address to get the phone layout:",
+    remoteQr: "Show the QR code",
+    remoteQrTitle: "Scan this on the phone",
+    remoteQrClose: "Close",
+    remoteNoAddress:
+      "Open to the network, but no private IPv4 address was found. Check that this machine is connected, then restart the server and try again.",
+    remoteNoPage:
+      "Open to the network, but the reader page is not answering on its port (this build is missing its app files, or the page server could not start). The API is reachable, yet there is no page to type into a browser. Open the desktop app window, or reinstall a build that includes the page.",
+    remoteCopy: "Copy",
+    remoteCopied: "Copied",
+    remoteCopyFailed: "Copy failed — select it by hand",
+    remotePorts: (ports: number[]) => ports.join(", "),
+    firewallLabel: "Firewall",
+    firewallNeeds: "Other devices can only connect once the firewall rule is allowed.",
+    firewallPublicNetwork: (profile: string) =>
+      `Windows has this network as "${profile}", so a private-network rule cannot apply. Set it to Private, then reload.`,
+    firewallAllowed: "Allowed",
+    firewallAllow: "Allow",
+    firewallRuleDetail: (ports: string, rule: string) =>
+      `Adds inbound rule "${rule}" for TCP ${ports}, private networks only. Scoped by port so an app update cannot orphan it — which also means anything else on those ports is allowed.`,
+    firewallViaNamed: (rule: string, ports: string) =>
+      `Rule "${rule}" covers TCP ${ports} on private networks.`,
+    firewallViaProgram: (rule: string) => `Allowed by Windows' own prompt, as rule "${rule}".`,
+    firewallWaiting: "Waiting for Windows…",
+    firewallUnreadable: "Could not read the firewall state. Raw output:",
+    firewallFailed: "Not added:",
     restart: "Restart the server",
     restarting: "Restarting — the page reconnects on its own.",
     restartFailed: "The server did not come back. Its output is in data\\serve.log.",

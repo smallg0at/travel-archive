@@ -495,3 +495,79 @@ before launching in a box, or you are testing the host.
 
 **The NSIS installer hangs under `/S` inside a box.** Run the wizard
 interactively; `/S` is for real machines.
+
+## Remote access: address and firewall (2026-10-25)
+
+**The settings page prints the server's own answer.** `/settings/remote` now
+carries the page port (19523 in the test setup, 17923 installed), the API port,
+the private IPv4 addresses it is listening on, and `pageServed` — whether a
+reader page actually answers there. The packaged build's page lives in
+`resources/app-dist` (electron-builder's `extraResources`), not
+`resources/app/dist`; the server checks both layouts now, so the login-chained
+job server serves the page as well as an open window does. If neither is
+present the API is reachable and there is no page to type, and the UI says so
+(`pageServed`) instead of printing a URL.
+
+**The phone page is `/mobile/`, behind the same password gate.** The build puts
+the desktop layout at `/` and the phone layout at `/mobile/`. The address list
+prints the plain `http://<ip>:<port>`; the `/mobile/` suffix appears only in the
+QR dialog behind each address's code icon, because the code is for a phone and
+anything that types the address has a screen for the desktop layout. The gate
+page links to the other layout (`/` ↔ `/mobile/`); it does not guess from the
+viewport, which would move a narrow desktop window to the phone layout.
+`/mobile/` used to be the Capacitor entry only and skipped `requireAccess()`, so
+a remote phone saw an archive whose every call was 401; it now runs the gate
+before its first fetch **and before its health check** (tested from the LAN
+address, not loopback). That order is what makes the first password entry enough:
+health then says the server is there, thumbnails use it, and the kept-index path
+with its "session expired" banner is skipped.
+
+**The phone reads captions, search and translations through the server too.**
+`archiveData` asks `/archive/...` first, but the phone's own cache used to call
+Graph directly for translations and `search.json` — fine in the installed app,
+impossible for a remote reader with no Microsoft session. Both now go through
+`localArchiveJson` first and only use Graph on the machine that owns the archive
+(or `archive.local`). Search keeps its Graph/kept-copy source only when no job
+server answers; pointing it at the kept copy unconditionally was why remote
+search was empty.
+
+**Language learned after load is applied in place.** `restorePrefs` can swap
+`ui` after the modules load; anything that captured a label in a module-level
+`const` (the theme control did) keeps the old language until a reload. Read
+`ui.*` where it is drawn.
+
+**Two different firewall rules exist, and only one is ours.** A program's first
+non-loopback bind makes Windows show its own "blocked some features" dialog.
+Allowing it writes rules keyed to the **program path** on Private *and* Public,
+for any port, and those outlive an upgrade. Four `node.exe` rules were present
+on 2026-10-25 after a test server first bound `0.0.0.0`, matching the popup the
+owner saw — and a temporary copy of `node.exe` got its own rule on first bind
+without the app asking. Those rules also open the ports, so the settings row
+reports them as allowed (`via: "program"`) instead of asking for a duplicate;
+the UAC button adds the named rule only when neither covers.
+
+**The network profile is part of the answer.** A rule restricted to Private
+does nothing while Windows has the network on Public, so `/settings/firewall`
+also returns `networkProfile` (from `Get-NetConnectionProfile`) and
+`networkPrivate`, and `allows` requires the rule to name a current profile. On
+a Public-only network the row says so and hides the button — the fix is the
+network setting, not another rule. The owner's network was Private on
+2026-10-25, so that branch was not exercised live.
+
+The button in Remote access asks for UAC and runs one `netsh` add for the fixed
+name `TravelArchive Remote Reader`, covering TCP 17923 and 18419 on the private
+profile only. Nothing is changed without the button. The row has two states —
+needs-allow (with the button) and allowed — and sits beside the log-file row.
+
+Remove it when it is no longer wanted (elevated):
+
+```powershell
+netsh advfirewall firewall delete rule name="TravelArchive Remote Reader"
+```
+
+**Testing it without touching the real server.** Build the app with
+`VITE_PIPELINE_URL=http://127.0.0.1:<SERVE_PORT>`, run a throwaway with its own
+`ARCHIVE_HOME`, `SERVE_PORT` and `DESKTOP_PORT`, and give the throwaway
+`data/index.json` with one empty month — with no index the app stops at the
+empty-archive screen and never builds the nav, so Settings is unreachable.
+Rebuild `app/dist` without the pointer afterwards (grep for the test port).

@@ -32,7 +32,15 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { sendTestNotification } from "./notify.js";
 import { autostartStatus, runtimePath, setAutostart, warmAutostartCache } from "./autostart.js";
-import { remoteAccessStatus, runningExposed, runningHost, runningPassword, setRemoteAccess } from "./remoteAccess.js";
+import {
+  remoteAccessStatus,
+  remotePorts,
+  runningExposed,
+  runningHost,
+  runningPassword,
+  setRemoteAccess,
+} from "./remoteAccess.js";
+import { allowThroughFirewall, firewallStatus } from "./firewall.js";
 import { appDistIndex, serveApp } from "./staticApp.js";
 import { initProxyDispatcher } from "./proxy.js";
 import { planAnalyze, runAnalyze } from "./jobs/analyze.js";
@@ -1001,6 +1009,34 @@ const routes: [RegExp, string, Handler][] = [
   ],
 
   /**
+   * The Windows Firewall rule that lets the phone reach this page and API.
+   *
+   * Local only: it describes and changes *this machine's* firewall, and a
+   * remote reader has neither the standing nor the need to see it. The add is
+   * a write like every other, so an exposed server refuses it to anyone but
+   * the owner's own machine — before elevation is ever attempted.
+   */
+  [
+    /^\/settings\/firewall$/,
+    "GET",
+    async (req, res) => {
+      if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      json(res, 200, await firewallStatus(remotePorts()));
+    },
+  ],
+  [
+    /^\/settings\/firewall\/allow$/,
+    "POST",
+    async (req, res) => {
+      if (!access.isLocal(req)) return json(res, 403, { error: "Local only" });
+      // This request stays open while Windows waits for the UAC answer (or the
+      // reader ignores it), which is why the UI says what it is waiting for
+      // rather than leaving a button looking dead.
+      json(res, 200, await allowThroughFirewall(remotePorts()));
+    },
+  ],
+
+  /**
    * Restart — the only way a saved remote-access change, or a wedged server,
    * can be applied from where the reader is standing.
    *
@@ -1882,10 +1918,21 @@ let appServer: Server | null = null;
 
 async function startAppServer(): Promise<void> {
   const port = Number(process.env.DESKTOP_PORT ?? 17923);
-  const root =
-    process.env.APP_DIST ?? join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "app", "dist");
-  if (!appDistIndex(root)) {
-    console.log(`app page: no built app at ${root} — the window will serve it`);
+  const base = fileURLToPath(new URL(".", import.meta.url));
+  // Two layouts, one build: a checkout keeps it at `app/dist` beside
+  // `pipeline/`, and the installer puts the same files in `resources/app-dist`
+  // (electron-builder's extraResources). The shell knows that and passes
+  // `APP_DIST`; a server started by the login chain has no shell to tell it,
+  // so it looks for both. Without the second path a packaged install answers
+  // the API and has no page — exactly the state a phone cannot read.
+  const candidates = [
+    process.env.APP_DIST,
+    join(base, "..", "..", "app", "dist"),
+    join(base, "..", "..", "app-dist"),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  const root = candidates.find((candidate) => appDistIndex(candidate));
+  if (!root) {
+    console.log(`app page: no built app at ${candidates.join(" or ")} — the window will serve it`);
     return;
   }
   try {

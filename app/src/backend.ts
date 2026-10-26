@@ -5,6 +5,8 @@ import type {
   ArchiveStatus,
   AutostartStatus,
   ConfigStatus,
+  FirewallAttempt,
+  FirewallStatus,
   JobRecord,
   OrganizePlan,
   Pin,
@@ -564,6 +566,30 @@ export async function remoteAccessStatus(): Promise<RemoteAccessStatus | null> {
  */
 export function setRemoteAccess(patch: { exposed?: boolean; password?: string | null }): Promise<RemoteAccessStatus> {
   return post<RemoteAccessStatus>("/settings/remote", patch);
+}
+
+/**
+ * The Windows Firewall rule, as this machine reports it. Null when the server
+ * cannot be asked at all (no backend, or an older build without the route).
+ */
+export async function getFirewallStatus(): Promise<FirewallStatus | null> {
+  try {
+    const res = await apiFetch("/settings/firewall", { cache: "no-store" });
+    return res.ok ? ((await res.json()) as FirewallStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Adds the rule through UAC.
+ *
+ * The answer can take as long as the person takes to answer the Windows
+ * prompt, so callers must show a waiting state; `ok` means the rule was read
+ * back afterwards, not merely that a command exited zero.
+ */
+export function allowThroughFirewall(): Promise<FirewallAttempt> {
+  return post<FirewallAttempt>("/settings/firewall/allow", {});
 }
 
 /**

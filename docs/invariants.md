@@ -39,7 +39,10 @@ and `.lightbox` have each shipped a control that could not be dismissed because
 an unconditional `display: flex` outranks the browser's `[hidden] { display:
 none }`, and `.m-unlock` shipped a form that was never hidden at all — its own
 Unlock sitting beside the row's, which a reader sees as the same action twice.
-Express it as `:not([hidden]) { display: flex }`, or the flag the code sets does
+The firewall row did it again: `.set-row-action > .set-btn { display:
+inline-flex }` kept the Allow button on screen after `hidden = true`, so the
+allowed state showed "已允许。" *and* a button. Express it as `:not([hidden]) {
+display: flex }` (or add the `[hidden]` rule), or the flag the code sets does
 nothing visible.
 
 **Paths split two ways** (`pipeline/src/paths.ts`). Writable per-user state
@@ -69,6 +72,76 @@ deliberately **404 to remote readers**: `/video/:id` is the one route that hands
 out a pre-authenticated OneDrive URL, and a reader on the LAN does not need it. The cookie
 secret is regenerated at every start, so a restart signs everyone out; that is
 the honest behaviour for a token nobody can revoke.
+
+**The phone page is `/mobile/`, and it runs the same gate.** One build puts the
+desktop layout at `/` and the phone layout at `/mobile/`; `app/dist` and the
+installed `app-dist` both carry it. The settings list prints the plain
+`http://<ip>:<port>` and only the QR dialog carries `/mobile/`: the code exists
+for a phone, while a typed address gets the layout for the screen it was typed
+on. The gate links to the other layout rather than guessing from the viewport. That page began as the Capacitor entry and skipped `requireAccess()`, so on
+an exposed server every call was 401 and it painted an empty archive instead of
+asking for the password. It now calls the gate **before the health check**, not
+merely before `start`: the first visit used to ask `/health` with no cookie,
+conclude there was no server, and keep the Graph thumbnail source and the
+kept-index path — pictures only appeared after a refresh (the refresh had the
+cookie), with a spurious "session expired" banner.
+
+**A remote reader reads captions and search through the server, not Graph.**
+`archiveData` already asks `localArchiveJson` first and only falls back to
+Graph on the machine that owns the archive. The phone's own cache did not: it
+fetched translations and `search.json` with `getAccessToken()` directly, so on
+a server-backed phone the interface was Chinese while captions stayed English
+and search could not load — there is no Microsoft session to borrow. The
+server-first path is the rule; Graph is the fallback for the installed app
+(`archive.local`) and the owner's own machine. Search is likewise only pointed
+at the kept copy when **no** server answers; forcing the kept copy
+unconditionally left remote search with nothing to read.
+
+**`ui` is live; never snapshot it at module load.** `i18n` swaps its table
+when `restorePrefs` learns the archive's language after the modules have
+loaded, and ES imports see the new object only when the property is read at
+render time. `theme.ts` copied the three theme labels into a module-level
+`LABELS` table, so the phone's first launch showed "Light / Dark / System"
+until a reload re-ran the module — the rest of the page was already Chinese.
+Read `ui.something` inside the function that draws it; a `const` beside the
+imports freezes the old language.
+
+**The address a phone types is the server's, not the page's.** `RemoteAccessStatus`
+reports `port`, `apiPort`, `addresses` and `pageServed` from the running bind
+(`pipeline/src/remoteAccess.ts`); the settings page prints those, never
+`location.hostname`. `0.0.0.0` is a bind, not an address anyone can type, and an
+API that is up while the page is down (`pageServed: false`) makes every URL a
+lie — say so instead of printing one. The addresses are private IPv4 ranges
+only, because the page's CSP enumerates exactly those
+(`pipeline/src/lanAddresses.ts`); a hostname can load the page but is not a
+supported API origin until it is added to both the CSP and CORS. Do not widen
+one of the two alone: a page that loads and cannot call the API is the failure
+this exists to prevent.
+
+**The firewall rule is by port, and it is never silent.** The Windows popup on
+a program's first non-loopback bind writes *program-path* rules on Private
+**and Public**, for any port; they outlive every upgrade and are wider than the
+feature needs (four `node.exe` rules arrived that way on 2026-10-25). The app's
+button instead runs one elevated `netsh` add for the fixed name
+`TravelArchive Remote Reader`, scoped to the page and API ports on the private
+profile, and re-reads the rule afterwards — an exit code is not evidence.
+Adding it is always a button, never a side effect of exposing the archive.
+
+**"Allowed" is what Windows reports, and only on the profile the network is on
+now.** Those program-path rules do open the ports, so a state that only looks
+for the named rule would ask for a second rule that changes nothing.
+`firewallStatus` reads both and reports `via` (`named` | `program`); either must
+be enabled, inbound, allow, cover the ports, **and name a profile the network is
+currently on** (`Get-NetConnectionProfile` → `networkProfile`). A private-only
+rule on a network Windows calls Public does not let the phone in, and reporting
+it as allowed is the same lie as an unreachable URL. In that state the row says
+the network profile is the blocker and hides the UAC button: a new private rule
+cannot fix a public network. A program rule must also be pinned to **this**
+executable (`process.execPath`) — another `node.exe` on the machine is not ours.
+Seen on 2026-10-25 with a temporary copy of `node.exe`: Windows wrote the rule
+on first bind, `via` came back `program`, and the UI said 已允许。 The row has
+two states, needs-allow and allowed; a stale or unreadable rule is the first,
+with the raw output below it.
 
 **A loopback request is not a test of anything.** This is the single most
 expensive lesson in the file — **five** separate failures shipped that only

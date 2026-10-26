@@ -2,6 +2,8 @@ import type { RemoteAccessStatus } from "@travel-archive/shared";
 import { env } from "./env.js";
 import { dataFile } from "./paths.js";
 import { readSavedEnv, saveConfig } from "./configStore.js";
+import { lanIpv4Addresses } from "./lanAddresses.js";
+import { servesThisApp } from "./staticApp.js";
 
 /**
  * Who can reach the job server: read from `.env`, written through Settings.
@@ -34,13 +36,56 @@ export const runningHost = RUNNING.host;
 export const runningExposed = isExposed(RUNNING.host);
 export const runningPassword = RUNNING.password;
 
+/**
+ * The two ports a remote reader needs, taken at startup exactly as the
+ * listeners take them.
+ *
+ * `DESKTOP_PORT` is `startAppServer`'s knob (serve.ts) and the desktop shell's;
+ * `SERVE_PORT` is the API's, via `env`. Reading them here, beside the host,
+ * keeps the address the settings page prints and the firewall rule that is
+ * added from ever disagreeing about which ports are in play.
+ */
+const APP_PORT = Number(process.env.DESKTOP_PORT ?? 17923);
+export const runningPorts = { page: APP_PORT, api: env.servePort };
+
+/** Each port once: a test setup may run the page and the API on the same one. */
+export const remotePorts = (): number[] => [...new Set([runningPorts.page, runningPorts.api])];
+
+/**
+ * Where this machine can be reached from another device.
+ *
+ * The addresses come from the machine's own interfaces, filtered to the
+ * private IPv4 ranges. That filter is not cosmetic: the page's CSP lists
+ * exactly these ranges (`staticApp.ts`), so an address outside them would
+ * open a page whose API calls the browser then refuses — a URL that loads
+ * and cannot work is worse than no URL.
+ *
+ * A bind to a specific address reports that one; `0.0.0.0` reports every
+ * private address the machine holds, because that is what it is listening on.
+ */
+function reachableAddresses(host: string, exposed: boolean): string[] {
+  if (!exposed) return [];
+  // `0.0.0.0` is the wildcard, not an address anyone can type; the machine's
+  // own interfaces are what it is actually listening on.
+  if (host === "0.0.0.0" || host === "::") return lanIpv4Addresses();
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return [host];
+  return lanIpv4Addresses();
+}
+
 export async function remoteAccessStatus(local = true): Promise<RemoteAccessStatus> {
   const saved = await readSavedEnv();
   // Absent means the default applies on the next start, not "cleared".
   const savedHost = saved.ARCHIVE_HOST ?? "127.0.0.1";
   const savedPassword = saved.ARCHIVE_PASSWORD ?? null;
+  // Asked now, not remembered at startup: the desktop window may have opened
+  // (or closed) since, and the address shown has to name a page that answers.
+  const pageServed = await servesThisApp(runningPorts.page);
   return {
     host: RUNNING.host,
+    port: runningPorts.page,
+    apiPort: runningPorts.api,
+    pageServed,
+    addresses: reachableAddresses(RUNNING.host, isExposed(RUNNING.host)),
     exposed: isExposed(RUNNING.host),
     hasPassword: Boolean(RUNNING.password),
     savedHost,

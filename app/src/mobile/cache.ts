@@ -2,6 +2,7 @@ import type { ArchiveIndexFile, HomeIndexFile, PhotoShard, SearchIndexFile, Tran
 import { loadHomeIndex, loadMonth } from "../archiveData";
 import { SCHEMA_VERSION } from "@travel-archive/shared";
 import { getAccessToken } from "../msAuth";
+import { isLocalMachine, localArchiveJson } from "../backend";
 import { GRAPH_BYTES_TIMEOUT_MS, GRAPH_QUERY_TIMEOUT_MS, graphFetch } from "../graphHttp";
 import { rememberPhotos } from "./devicePhotos";
 import { contentLanguage, translatedMonths, useIndexTranslations, useMonthTranslations } from "../contentLang";
@@ -469,11 +470,21 @@ export async function applyTranslationsKeptLocal(): Promise<void> {
   useIndexTranslations(file);
 }
 
-/** Refetches the index translations, keeps them, and applies them. */
+/**
+ * Refetches the index translations, keeps them, and applies them.
+ *
+ * The job server first, exactly as `archiveData` reads everything else: a
+ * remote reader holds no Microsoft session, so the Graph copy this used to ask
+ * for was never there and the archive's text stayed English on the phone while
+ * the interface was Chinese. Graph remains the path on the machine that owns
+ * the archive (and the installed app, whose origin is `archive.local`).
+ */
 export async function refreshTranslations(): Promise<void> {
   const lang = contentLanguage();
   if (lang === "en") return;
-  const file = await graphJson<TranslationFile>(`i18n/${lang}/index.json`).catch(() => null);
+  const local = await localArchiveJson<TranslationFile>(`i18n/${lang}/index`);
+  const file =
+    local ?? (isLocalMachine ? await graphJson<TranslationFile>(`i18n/${lang}/index.json`).catch(() => null) : null);
   if (!file) return;
   void run("readwrite", (s) => s.put(file, `i18n/${lang}/index.json`)).catch(() => {});
   useIndexTranslations(file);
@@ -601,7 +612,21 @@ export async function fillMonthTranslations(): Promise<void> {
   const kept = new Set(await keysInRange(prefix));
   const missing = months.filter((month) => !kept.has(`${prefix}${month}`));
   if (!missing.length) return;
-  const token = await graphToken().catch(() => null);
-  if (!token) return;
-  for (const month of missing) await fetchMonthTranslation(month, token);
+  // Each month from the server when it answers, and applied now rather than
+  // only kept for the next launch. A remote reader has no Graph token, so
+  // asking Graph first would leave the month it is looking at untranslated.
+  let token: string | null = null;
+  for (const month of missing) {
+    const local = await localArchiveJson<TranslationFile>(`i18n/${lang}/shard/${month}`);
+    if (local) {
+      useMonthTranslations(month, local);
+      void run("readwrite", (s) => s.put(local, `${prefix}${month}`)).catch(() => {});
+      continue;
+    }
+    if (!isLocalMachine) continue;
+    if (token === null) token = await graphToken().catch(() => null);
+    if (!token) return;
+    const file = await fetchMonthTranslation(month, token);
+    if (file) useMonthTranslations(month, file);
+  }
 }

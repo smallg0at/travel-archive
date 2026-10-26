@@ -2,6 +2,7 @@ import type {
   ArchiveStatus,
   AutostartStatus,
   ConfigStatus,
+  FirewallStatus,
   JobRecord,
   ProviderOption,
   RemoteAccessStatus,
@@ -10,10 +11,12 @@ import type {
 } from "@travel-archive/shared";
 import {
   archiveStatus,
+  allowThroughFirewall,
   autostartStatus,
   canWrite,
   checkHealth,
   getConfig,
+  getFirewallStatus,
   clearCache,
   remoteAccessStatus,
   restartServer,
@@ -38,6 +41,7 @@ import { resetSidebarWidth } from "./chrome";
 import { renderThemeControl } from "./theme";
 import { renderContentLanguageControl } from "./contentLang";
 import { fmtDate, jobPhase, num, ui } from "./i18n";
+import qrcode from "qrcode-generator";
 import { checkProvider, keyState, providerChoice, providerName } from "./providerChoice";
 import { button, labelledInput, row, section, setPathValue, setRowValue } from "./settingsUi";
 import { screensSection } from "./screensSettings";
@@ -857,6 +861,92 @@ function notifySection(): HTMLElement {
 }
 
 /**
+ * Copies a URL without assuming a secure context.
+ *
+ * The address this exists to hand over is `http://192.168.x.y:17923`, which is
+ * not a secure context: `navigator.clipboard` is absent there, and that is
+ * exactly the phone case the copy button is for. `execCommand("copy")` is
+ * deprecated but still the one thing that works on an insecure origin, so it
+ * is the fallback rather than the whole story. False means neither worked, and
+ * the button says so instead of pretending.
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Permission or an insecure context: try the old path.
+    }
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.top = "0";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    area.remove();
+  }
+}
+
+/**
+ * A QR code for one URL, as SVG.
+ *
+ * Offline and client-side: `qrcode-generator` only turns the string into
+ * modules, so the address never leaves the machine and the phone does not have
+ * to be told anything by a third party. Error correction M survives a phone
+ * camera at a modest size; `scalable` lets the stylesheet choose the pixels.
+ */
+function qrSvg(url: string): string {
+  const qr = qrcode(0, "M");
+  qr.addData(url);
+  qr.make();
+  // The white background is part of the SVG, so a dark theme cannot invert the
+  // modules and leave a code no camera will read.
+  return qr.createSvgTag({ cellSize: 3, margin: 1, scalable: true });
+}
+
+/** Four squares and a corner: reads as "QR" at 16px without a label. */
+const QR_ICON = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4zM9.5 9.5h1.6v1.6H9.5zM12.4 9.5h1.1v1.1h-1.1zM9.5 12.4h1.1v1.1H9.5zM12 12h1.5v1.5H12z"/></svg>`;
+
+/** The shield Windows puts on anything that will ask for administrator consent. */
+const UAC_SHIELD = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 1.5 13 3.3v4.1c0 3.1-2 5.4-5 6.6-3-1.2-5-3.5-5-6.6V3.3L8 1.5Z"/><circle cx="8" cy="6.9" r="1.25"/><path d="M8 8.1v2.1"/></svg>`;
+
+/**
+ * The QR code, on request.
+ *
+ * An address list is read; a wall of codes is looked at. The code is one press
+ * away per address rather than always on screen, and it opens as a dialog so
+ * the phone can be held up to it without the settings page scrolling away.
+ */
+function openQrDialog(url: string): void {
+  const dialog = el<HTMLDialogElement>(
+    `<dialog class="qr-dialog"><div class="qr-card"><h4></h4><div class="qr-code"></div><code class="qr-url"></code><button type="button" class="set-btn"></button></div></dialog>`,
+  );
+  dialog.querySelector("h4")!.textContent = ui.settings.remoteQrTitle;
+  dialog.querySelector(".qr-code")!.innerHTML = qrSvg(url);
+  dialog.querySelector(".qr-url")!.textContent = url;
+  const close = dialog.querySelector("button")!;
+  close.textContent = ui.settings.remoteQrClose;
+  close.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => dialog.remove());
+  // Clicking the backdrop closes it, the way a dialog is expected to behave;
+  // the card itself stops the event by being the target's child.
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  document.body.appendChild(dialog);
+  dialog.showModal();
+}
+
+/**
  * Who may reach the job server — and the button that restarts it.
  *
  * Two values are shown at once, deliberately: what the server is doing *now*
@@ -876,6 +966,55 @@ function remoteSection(): HTMLElement {
 
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+  /**
+   * The thing the section is for: what another device types.
+   *
+   * The URLs are built only from what the server reported (its own bind, its
+   * own ports), never from `location` — the settings page may be open on the
+   * server's own loopback whereas the phone needs the LAN address. When the
+   * bind is loopback there is no such address, and the block says so with the
+   * action that changes it instead of printing a URL that cannot work.
+   */
+  const reach = el<HTMLDivElement>(`<div class="set-reach"></div>`);
+  const reachLead = el<HTMLParagraphElement>(`<p class="set-reach-lead"></p>`);
+  const urlList = el<HTMLUListElement>(`<ul class="set-urls"></ul>`);
+  reach.append(reachLead, urlList);
+  const exposeFromHere = button(ui.settings.remoteExpose, () => {
+    exposed.checked = true;
+    void save({ exposed: true });
+  });
+  const reachActions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
+  reachActions.appendChild(exposeFromHere);
+  reach.appendChild(reachActions);
+
+  const urlRow = (url: string): HTMLLIElement => {
+    const item = el<HTMLLIElement>(`<li class="set-url"></li>`);
+    const line = el<HTMLDivElement>(`<div class="set-url-text"><code></code></div>`);
+    line.querySelector("code")!.textContent = url;
+    const copy = button(ui.settings.remoteCopy, () => {
+      void copyToClipboard(url).then((ok) => {
+        copy.textContent = ok ? ui.settings.remoteCopied : ui.settings.remoteCopyFailed;
+        window.setTimeout(() => {
+          copy.textContent = ui.settings.remoteCopy;
+        }, 1500);
+      });
+    });
+    // One code per address, behind its own icon: with more than one interface
+    // there is no honest way to pick "the" address for a single code.
+    //
+    // The code carries the **phone** address, `/mobile/`, while the row and the
+    // copy button carry the plain one: the QR exists to be scanned by a phone,
+    // and a desktop that types the address gets the desktop layout.
+    const phoneUrl = `${url}/mobile/`;
+    const qr = el<HTMLButtonElement>(`<button type="button" class="set-icon-btn">${QR_ICON}</button>`);
+    qr.title = ui.settings.remoteQr;
+    qr.setAttribute("aria-label", `${ui.settings.remoteQr} — ${phoneUrl}`);
+    qr.addEventListener("click", () => openQrDialog(phoneUrl));
+    line.append(copy, qr);
+    item.appendChild(line);
+    return item;
+  };
+
   const hostRow = row(ui.settings.remoteHost, "—");
   const passRow = row(ui.settings.remotePassword, "—");
   // The file, not its contents: a failed restart says "look in data\serve.log"
@@ -885,7 +1024,7 @@ function remoteSection(): HTMLElement {
   logRow.hidden = true;
   const openWarn = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden>${ui.settings.remoteOpen}</p>`);
   const savedWarn = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden>${ui.settings.remoteSaved}</p>`);
-  body.append(hostRow, passRow, logRow, openWarn, savedWarn);
+  body.append(reach, hostRow, passRow, logRow, openWarn, savedWarn);
 
   const exposedLabel = el<HTMLLabelElement>(
     `<label class="set-check" hidden><input type="checkbox"><span>${ui.settings.remoteExpose}</span></label>`,
@@ -903,6 +1042,145 @@ function remoteSection(): HTMLElement {
   const clearKey = button(ui.settings.remoteClearPassword, () => void save({ password: null }));
   keyActions.append(saveKey, clearKey);
 
+  /**
+   * Windows Firewall — never touched silently, but not a lecture either.
+   *
+   * Two states, because there are two: the ports are allowed, or they are not
+   * and the reader has to act. The rule and ports the button adds live in its
+   * tooltip and in the UAC prompt that press raises — the places someone
+   * approving a firewall change actually looks.
+   *
+   * It is a row beside the log file, not a card of its own: it is one more
+   * fact about the running server, and a box made it read as a separate task.
+   */
+  const firewallRow = row(ui.settings.firewallLabel, "");
+  firewallRow.classList.add("set-row-action");
+  firewallRow.hidden = true;
+  const firewallValue = firewallRow.querySelector("b")!;
+  const firewallAllow = button("", () => void addFirewall());
+  firewallAllow.hidden = true;
+  firewallAllow.innerHTML = `${UAC_SHIELD}<span></span>`;
+  const allowLabel = firewallAllow.querySelector("span")!;
+  allowLabel.textContent = ui.settings.firewallAllow;
+  firewallRow.appendChild(firewallAllow);
+  const firewallProblem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
+  // Raw, not a summary: a refused elevation and a netsh error are fixed by
+  // different things, and only the original words say which one happened.
+  const firewallOutput = el<HTMLPreElement>(`<pre class="set-output" hidden></pre>`);
+
+  const applyFirewall = (status: FirewallStatus | null) => {
+    // No answer from an older server, or not Windows: there is nothing honest
+    // to draw, so the row stays out of the way rather than guessing.
+    if (!status || !status.supported) {
+      firewallRow.hidden = true;
+      firewallProblem.hidden = true;
+      firewallOutput.hidden = true;
+      return;
+    }
+    firewallRow.hidden = false;
+    const wanted = ui.settings.remotePorts(status.ports);
+    if (status.readable && status.allows) {
+      firewallValue.textContent = ui.settings.firewallAllowed;
+      firewallAllow.hidden = true;
+      firewallProblem.hidden = true;
+      firewallOutput.hidden = true;
+      // Which rule did it is worth knowing on hover, not worth a sentence:
+      // either this page's rule, or the one Windows wrote when its own prompt
+      // was allowed. Both mean the phone can connect.
+      firewallRow.title =
+        status.via === "program" && status.programRule
+          ? ui.settings.firewallViaProgram(status.programRule)
+          : ui.settings.firewallViaNamed(status.rule, wanted);
+      return;
+    }
+    // A private-only rule cannot help while Windows has the network on
+    // Public, so the action is the network setting, not the UAC button.
+    const publicOnly = Boolean(status.networkProfile) && !status.networkPrivate;
+    firewallValue.textContent = publicOnly
+      ? ui.settings.firewallPublicNetwork(status.networkProfile ?? "Public")
+      : ui.settings.firewallNeeds;
+    firewallRow.removeAttribute("title");
+    firewallAllow.hidden = publicOnly;
+    allowLabel.textContent = ui.settings.firewallAllow;
+    if (!publicOnly) {
+      firewallAllow.title = ui.settings.firewallRuleDetail(wanted, status.rule);
+      firewallAllow.setAttribute("aria-label", `${ui.settings.firewallAllow} — ${firewallAllow.title}`);
+    }
+    if (!status.readable) {
+      firewallProblem.textContent = ui.settings.firewallUnreadable;
+      firewallProblem.hidden = false;
+      if (status.detail) {
+        firewallOutput.textContent = status.detail;
+        firewallOutput.hidden = false;
+      }
+    }
+  };
+
+  const addFirewall = async () => {
+    firewallProblem.hidden = true;
+    firewallOutput.hidden = true;
+    firewallAllow.disabled = true;
+    allowLabel.textContent = ui.settings.firewallWaiting;
+    try {
+      const attempt = await allowThroughFirewall();
+      applyFirewall(attempt.status);
+      if (!attempt.ok) {
+        firewallProblem.textContent = attempt.error ?? ui.settings.firewallFailed;
+        firewallProblem.hidden = false;
+        if (attempt.output) {
+          firewallOutput.textContent = attempt.output;
+          firewallOutput.hidden = false;
+        }
+      }
+    } catch (err) {
+      // The request itself failed (server stopped, proxy timed out): the raw
+      // message is all there is, and it is more useful than "failed".
+      firewallProblem.textContent = (err as Error).message;
+      firewallProblem.hidden = false;
+    } finally {
+      firewallAllow.disabled = false;
+      // Re-label from the latest status when it arrived; otherwise restore the
+      // wording that was there before the attempt.
+      const latest = await getFirewallStatus().catch(() => null);
+      if (latest) applyFirewall(latest);
+      else allowLabel.textContent = ui.settings.firewallAllow;
+    }
+  };
+
+  // The firewall row joins the same list as the log file, not a card of its
+  // own: same component, same group, directly under the file path.
+  body.insertBefore(firewallRow, openWarn);
+  body.insertBefore(firewallProblem, openWarn);
+  body.insertBefore(firewallOutput, openWarn);
+
+  const showReach = (status: RemoteAccessStatus) => {
+    // The plain address, as typed into another computer's browser. The phone
+    // layout lives at `/mobile/`, but only the QR code points there: a laptop
+    // that scans nothing should get the layout it has a screen for.
+    const urls = status.addresses.map((ip) => `http://${ip}:${status.port}`);
+    urlList.replaceChildren();
+    if (!status.exposed) {
+      // There is no address to type while the bind is loopback. Saying that,
+      // with the action that changes it, is more useful than printing
+      // `127.0.0.1` — which on the phone means the phone itself.
+      reach.classList.add("is-local");
+      reachLead.textContent = ui.settings.remoteLocalOnly;
+      exposeFromHere.hidden = status.savedExposed;
+      return;
+    }
+    reach.classList.remove("is-local");
+    exposeFromHere.hidden = true;
+    if (!status.pageServed) {
+      // The API may be up while the page is not. A URL that refuses the
+      // connection is worse than saying so, because the phone has no console
+      // to explain it.
+      reachLead.textContent = ui.settings.remoteNoPage;
+      return;
+    }
+    reachLead.textContent = urls.length ? ui.settings.remoteOpenHere : ui.settings.remoteNoAddress;
+    for (const url of urls) urlList.appendChild(urlRow(url));
+  };
+
   const restartActions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
   const restart = button(ui.settings.restart, () => void restartNow(), "primary");
   restartActions.appendChild(restart);
@@ -913,6 +1191,7 @@ function remoteSection(): HTMLElement {
 
   const apply = (status: RemoteAccessStatus | null) => {
     if (!status) return;
+    showReach(status);
     setRowValue(hostRow, status.host);
     setRowValue(passRow, status.hasPassword ? ui.settings.remotePasswordSet : ui.settings.remotePasswordUnset);
     logRow.hidden = !status.logFile;
@@ -997,6 +1276,7 @@ function remoteSection(): HTMLElement {
   };
 
   void remoteAccessStatus().then(apply);
+  void getFirewallStatus().then(applyFirewall);
   return s;
 }
 

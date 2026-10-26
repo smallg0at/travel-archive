@@ -28,12 +28,21 @@ function mount(): HTMLElement {
       <input class="gate-input" type="password" autocomplete="current-password" spellcheck="false" />
       <button class="gate-submit" type="submit"></button>
       <p class="gate-error tone-warn" hidden></p>
+      <a class="gate-switch"></a>
     </form>
   `;
   overlay.querySelector(".gate-title")!.textContent = ui.gate.title;
   overlay.querySelector(".gate-note")!.textContent = ui.gate.note;
   (overlay.querySelector(".gate-input") as HTMLInputElement).placeholder = ui.gate.placeholder;
   overlay.querySelector(".gate-submit")!.textContent = ui.gate.submit;
+  // The two layouts are two addresses, so the way between them belongs on the
+  // one screen both can reach. No viewport redirect: `/mobile/` is what the QR
+  // carries and `/` is what a desktop types, and guessing from a width would
+  // move a narrow window to the phone layout behind the reader's back.
+  const onPhoneLayout = location.pathname.startsWith("/mobile");
+  const swap = overlay.querySelector<HTMLAnchorElement>(".gate-switch")!;
+  swap.href = onPhoneLayout ? "/" : "/mobile/";
+  swap.textContent = onPhoneLayout ? ui.gate.desktopVersion : ui.gate.mobileVersion;
   return overlay;
 }
 

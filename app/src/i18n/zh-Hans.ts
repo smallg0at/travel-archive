@@ -195,6 +195,8 @@ export const zhHans: Messages = {
     note: "此档案正在家庭网络内共享。请输入口令以查看。仅可浏览——本设备无法对档案做任何修改。",
     placeholder: "共享口令",
     submit: "进入",
+    mobileVersion: "打开手机版",
+    desktopVersion: "打开桌面版",
   },
 
   home: {
@@ -340,6 +342,34 @@ export const zhHans: Messages = {
     remoteNewPassword: "新口令",
     remoteSetPassword: "保存口令",
     remoteClearPassword: "清除口令",
+    remoteLocalOnly:
+      "当前只在本机可读。要让手机或同网络的另一台电脑打开，先允许本机网络读取（保存后需重启）。",
+    remoteOpenHere: "在浏览器里打开；或用手机扫描地址旁的二维码进入手机版：",
+    remoteQr: "显示二维码",
+    remoteQrTitle: "用手机扫描",
+    remoteQrClose: "关闭",
+    remoteNoAddress:
+      "已对网络开放，但没有找到局域网 IPv4 地址。检查这台电脑是否连上了网络，然后重启服务器再试。",
+    remoteNoPage:
+      "已对网络开放，但阅读器页面没有在它的端口上应答（这个安装缺少页面文件，或页面服务没能启动）。API 能连上，却没有可以输进浏览器的页面。先打开桌面应用窗口，或重新安装带页面文件的版本。",
+    remoteCopy: "复制",
+    remoteCopied: "已复制",
+    remoteCopyFailed: "复制失败，请手动选中",
+    remotePorts: (ports: number[]) => ports.join("、"),
+    firewallLabel: "防火墙",
+    firewallNeeds: "需要手动允许防火墙规则，局域网内其他设备才可访问。",
+    firewallPublicNetwork: (profile: string) =>
+      `当前网络在 Windows 里是「${profile.replace(/Public/g, "公用").replace(/Private/g, "专用")}」，仅专用网络的规则不会生效。把网络改为「专用」后再试。`,
+    firewallAllowed: "已允许",
+    firewallAllow: "允许",
+    firewallRuleDetail: (ports: string, rule: string) =>
+      `将添加入站规则「${rule}」：TCP ${ports}，仅专用网络。按端口放行以便升级后仍然有效，代价是这些端口上的其他程序也会被放行。`,
+    firewallViaNamed: (rule: string, ports: string) =>
+      `规则「${rule}」已放行 TCP ${ports}（仅专用网络）。`,
+    firewallViaProgram: (rule: string) => `已由 Windows 弹窗生成的规则「${rule}」放行。`,
+    firewallWaiting: "等待 Windows 确认……",
+    firewallUnreadable: "无法读取防火墙状态。原始输出：",
+    firewallFailed: "没有添加成功：",
     restart: "重启档案服务器",
     restarting: "正在重启 —— 页面会自行重连。",
     restartFailed: "服务器没有回来。它的输出在 data\\serve.log。",

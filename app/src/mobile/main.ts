@@ -1,6 +1,7 @@
 import { loadIndex, setIndexFallback, setSearchIndexSource, SignInRequiredError } from "../archiveData";
 import { completeRedirect, getActiveAccount, signIn, signInRedirect } from "../msAuth";
 import { checkHealth } from "../backend";
+import { requireAccess } from "../gate";
 import { localServerSource, setThumbnailSource } from "../photoSource";
 import { restorePrefs } from "../prefs";
 import { readTheme, showTheme } from "../theme";
@@ -263,11 +264,11 @@ async function main(): Promise<void> {
   // Photographs this phone already holds are served from it. Only when the
   // reader has allowed it in Settings; nothing is asked for here.
   void initDevicePhotos();
-  // Search reads `search.json` through the phone's kept copy (cache.ts): 6.5MB
-  // over Graph otherwise, and no search at all with no signal. The same for the
-  // index itself: the copy the first screen painted from is what search asks
-  // for when it cannot reach OneDrive.
-  setSearchIndexSource(loadSearchKept);
+  // The copy the first screen painted from is what search asks for when it
+  // cannot reach anything else. Only chosen below, once it is known whether a
+  // job server answers: forcing the kept copy unconditionally is what left a
+  // remote phone with an empty search box — the kept copy is only filled on the
+  // Graph path, which a server-backed reader never takes.
   setIndexFallback(async () => (await keptIndex().catch(() => null))?.index ?? null);
   initBackButton();
   followThemeInSystemBars();
@@ -276,6 +277,18 @@ async function main(): Promise<void> {
   // the passphrase. The phone asks for it in Settings; until then this does
   // nothing at all — it never even fetches the file.
   void ensureScreenCaptions();
+
+  // The shared-password gate, the same one the desktop page uses. It is a
+  // no-op inside the native app (no job server, so nothing is gated) and on
+  // the server's own loopback; it is what makes `/mobile/` usable from a
+  // phone when the archive is exposed.
+  //
+  // **Before the health check**, not merely before `start`. It used to sit
+  // after it, so the first visit asked `/health` with no cookie, got 401, and
+  // concluded there was no server: thumbnails stayed on the Graph source and
+  // the kept-index path ran, which is what produced "session expired" and
+  // pictures that only appeared after a refresh (the refresh had the cookie).
+  await requireAccess();
 
   // In a browser, the same two questions the desktop asks first, together: is
   // there a server to restore settings from, and to take thumbnails from.
@@ -288,7 +301,14 @@ async function main(): Promise<void> {
     if (health?.ok) {
       setThumbnailSource(localServerSource);
       useKept = false;
+    } else {
+      // No server: OneDrive (or the kept copy) is all there is, and search
+      // reads its 6.5MB through the kept copy rather than over Graph.
+      setSearchIndexSource(loadSearchKept);
     }
+  } else {
+    // The installed app has no job server either.
+    setSearchIndexSource(loadSearchKept);
   }
 
   // Load first and ask second, as the desktop does: no account is not the same

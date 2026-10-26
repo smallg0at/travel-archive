@@ -108,12 +108,15 @@ export function effectiveTheme(explicit?: Theme): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-const LABELS: Record<Theme, string> = { light: ui.theme.light, dark: ui.theme.dark, system: ui.theme.system };
-
 /**
  * The three-way control. Same shape as the thumbnail density control beside it,
  * because they are the same kind of choice and should not look like two
  * different ideas.
+ *
+ * Labels are read **here**, not into a module-level table: `restorePrefs` can
+ * learn the archive's language after this module has loaded and swap `ui` in
+ * place. A captured table kept the English words and left the buttons in
+ * English until the next reload — the phone's first launch showed that.
  */
 export function renderThemeControl(): HTMLElement {
   const wrap = document.createElement("div");
@@ -125,7 +128,7 @@ export function renderThemeControl(): HTMLElement {
   for (const option of ["light", "dark", "system"] as Theme[]) {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = LABELS[option];
+    button.textContent = ui.theme[option];
     if (option === current) button.classList.add("active");
     button.addEventListener("click", () => {
       applyTheme(option);

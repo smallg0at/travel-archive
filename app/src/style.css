@@ -2554,10 +2554,139 @@ html.desktop-shell #nav-tools {
   gap: 8px;
   padding: 10px 0 2px;
 }
+/* The address a phone types is the point of the remote section, so it gets the
+   box and the monospace line rather than a row among rows. */
+.set-reach {
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+}
+.set-reach-lead {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.set-urls {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.set-url {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.set-url-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.set-url-text code {
+  flex: 1;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+/* A quiet icon beside an address: the code is one press away, not a wall of
+   black squares in the middle of the settings page. */
+.set-icon-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.set-icon-btn:hover { color: var(--text); border-color: var(--text-secondary); }
+/* White on purpose, in both themes: a camera needs dark modules on a light
+   field, and a themed background is how a QR code stops scanning. */
+.qr-dialog {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+}
+.qr-dialog::backdrop { background: color-mix(in srgb, #000 45%, transparent); }
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--bg);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+.qr-card h4 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.qr-code {
+  width: 220px;
+  height: 220px;
+  padding: 10px;
+  border-radius: var(--radius-s);
+  background: #fff;
+}
+.qr-code svg { display: block; width: 100%; height: 100%; }
+.qr-url {
+  max-width: 100%;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+/* Raw command output belongs to a failure report, so it is quiet, scrollable
+   and wraps rather than pushing the settings column sideways. */
+.set-output {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow: auto;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 /* A row that ends in an action: the value and the button belong together at
    the right, not the value in the middle of the row. */
 .set-row.set-row-action > b { margin-left: auto; }
-.set-row.set-row-action > .set-btn { margin-left: 10px; }
+.set-row.set-row-action > .set-btn {
+  margin-left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* The class rule above outranks the UA `[hidden] { display: none }`, so the
+   "allowed" state kept showing a button it had just hidden. */
+.set-row.set-row-action > .set-btn[hidden] { display: none; }
 /* A box for the two-field dialogues (a passphrase, a key): the fields are the
    point, so they are boxed rather than left floating in the section. */
 .set-box {
@@ -3495,6 +3624,12 @@ body.map-expanded::after {
 }
 .gate-submit:disabled { opacity: 0.6; cursor: default; }
 .gate-error { margin: 0; font-size: 12.5px; }
+.gate-switch {
+  margin-top: 2px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
 
 /* --- Tags ---------------------------------------------------------------- */
 

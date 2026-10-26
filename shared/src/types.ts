@@ -781,6 +781,35 @@ export interface AutostartStatus {
 export interface RemoteAccessStatus {
   /** The host the server is listening on as it runs. */
   host: string;
+  /**
+   * The port the reader page is served on as it runs (`DESKTOP_PORT`).
+   *
+   * A phone opens *this* one in its browser; the page then finds the API on
+   * the same hostname at `apiPort`. Both are the server's own startup values,
+   * not numbers the client guesses.
+   */
+  port: number;
+  /** The port the job server's API answers on as it runs (`SERVE_PORT`). */
+  apiPort: number;
+  /**
+   * Whether a reader page actually answers on `port` right now.
+   *
+   * The API and the page are separate listeners, and an install can have one
+   * without the other (a packaged build with no `app/dist`, or a page server
+   * that lost its port). Printing `http://<ip>:<port>` in that state sends the
+   * phone to a connection that never opens, so the settings page asks this
+   * before it shows an address at all.
+   */
+  pageServed: boolean;
+  /**
+   * IPv4 addresses another device on this network can open the page at.
+   *
+   * Enumerated by the server when asked, so a DHCP change is reflected without
+   * editing anything. Empty when the bind is loopback: there is nowhere else
+   * to reach it, and the settings page says so in those words rather than
+   * showing an address that cannot work.
+   */
+  addresses: string[];
   /** Whether it is reachable beyond loopback as it runs. */
   exposed: boolean;
   /** Whether reading is gated by a password as it runs. */
@@ -799,6 +828,95 @@ export interface RemoteAccessStatus {
    * archive needs it.
    */
   logFile: string | null;
+}
+
+/**
+ * The Windows Firewall rule that lets a phone reach the page and the API.
+ *
+ * **A rule by port, never by program path.** An installed app's executable
+ * path changes with every version, so a path-scoped rule would be orphaned by
+ * an upgrade — still open, pointing at a file that no longer exists. A
+ * port-scoped rule keeps working across versions, at the cost of being wider
+ * than this one program: anything else listening on `ports` while the rule
+ * exists is allowed too. The settings page says both halves out loud.
+ *
+ * `present` is read back from Windows after every add rather than inferred from
+ * the command's exit code, and `detail` keeps the raw `netsh`/PowerShell output
+ * for a failure that cannot be summarised usefully.
+ */
+export interface FirewallStatus {
+  /** False off Windows, where there is no Windows Firewall to add a rule to. */
+  supported: boolean;
+  /** Whether the rule list could be read at all; false means `detail` says why. */
+  readable: boolean;
+  /** The fixed display name, so the UI (and a person) can name and remove it. */
+  rule: string;
+  /** The TCP ports this page needs: the reader page and the API. */
+  ports: number[];
+  /** The ports the existing rule actually covers; empty while absent. */
+  rulePorts: number[];
+  /** Whether a rule with `rule` exists right now. */
+  present: boolean;
+  /** The rule's own enabled state; null while absent or unreadable. */
+  enabled: boolean | null;
+  /**
+   * Whether something actually lets this network reach `ports` **now**:
+   * inbound, allow, enabled, covering every one of them, and scoped to a
+   * profile the network is currently on (`networkProfile`). A Private-only rule
+   * on a Public network is not allowed — it will not let the phone in.
+   *
+   * Two things can do that. This page's own rule (port-scoped, fixed name) is
+   * the one the button adds. Windows' first-listen prompt is the other: when
+   * someone allows it, Windows writes a rule scoped to the executable's path,
+   * which opens the ports just as effectively. Asking for a second rule in
+   * that state would be busywork, so it counts as allowed and `via` says which.
+   */
+  allows: boolean;
+  /**
+   * Which rule is doing the allowing: `named` for this page's rule, `program`
+   * for one Windows' prompt created for the executable, null for neither.
+   */
+  via: "named" | "program" | null;
+  /** The display name of that program-scoped rule, when `via` is `program`. */
+  programRule: string | null;
+  /** The Windows firewall profile the rule is scoped to, when known. */
+  profile: string | null;
+  /**
+   * The network categories Windows has connected right now (`Private`,
+   * `Public`, or both when several interfaces are up).
+   *
+   * A rule applies only on the profiles it names. The private-only rule this
+   * page adds does nothing while Windows treats the network as Public, and
+   * counting it as allowed there would send the reader back to a phone that
+   * still cannot connect. The row says which profile is in the way instead.
+   */
+  networkProfile: string | null;
+  /**
+   * Whether at least one connected network is Private. True when the profile
+   * could not be read, so an unreadable answer does not invent a Public
+   * network out of nothing.
+   */
+  networkPrivate: boolean;
+  /** Raw output from the check that produced this answer, verbatim. */
+  detail: string | null;
+}
+
+/**
+ * What one "allow through Windows Firewall" attempt did.
+ *
+ * Elevation can be refused before any `netsh` runs (the UAC prompt is
+ * dismissed or cannot be shown), which is why `error` and `output` are
+ * separate: the first says why nothing ran, the second is the command's own
+ * words when it did. `status` is read after the attempt, so `ok` means the
+ * rule is observably there, not merely that a command returned zero.
+ */
+export interface FirewallAttempt {
+  ok: boolean;
+  /** Verbatim `netsh` output from the elevated run; null when none ran. */
+  output: string | null;
+  /** Why elevation or the command could not run, in Windows' own words. */
+  error: string | null;
+  status: FirewallStatus;
 }
 
 /**
