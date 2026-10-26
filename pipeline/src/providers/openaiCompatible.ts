@@ -161,7 +161,16 @@ async function chat(
       if ((cfg.jsonMode ?? "response_format") === "response_format") payload.response_format = { type: "json_object" };
       res = await fetch(url, {
         method: "POST",
-        headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${cfg.apiKey}`,
+          "Content-Type": "application/json",
+          // Ask for gzip explicitly. DeepSeek answers `Content-Encoding: br` to
+          // the default `gzip, deflate` — measured 2026-10-27 with a real key —
+          // and the runtime's Brotli decoder is unpatched (CVE-2026-111497), so
+          // shared/src/brotli.ts would refuse it and every call would fail.
+          // With this header it answers gzip; the guard stays as the backstop.
+          "Accept-Encoding": "gzip",
+        },
         body: JSON.stringify(payload),
       });
       assertNoBrotli(res, url);

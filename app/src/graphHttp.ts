@@ -38,6 +38,9 @@ export async function graphFetch(
 ): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  // Ask for gzip explicitly; the runtime's Brotli decoder is unpatched (see
+  // shared/src/brotli.ts), and a service that compresses unasked can answer br.
+  if (!headers.has("Accept-Encoding")) headers.set("Accept-Encoding", "gzip");
   try {
     const response = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
     assertNoBrotli(response, url);

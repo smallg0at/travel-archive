@@ -134,7 +134,7 @@ async function graphFetchUrl(initialToken: string, url: string, init: RequestIni
     try {
       res = await fetch(url, {
         ...init,
-        headers: { Authorization: `Bearer ${token}`, ...init.headers },
+        headers: { "Accept-Encoding": "gzip", Authorization: `Bearer ${token}`, ...init.headers },
       });
     } catch (err) {
       // No answer at all — a dropped socket. Throttling is handled below by
@@ -431,7 +431,7 @@ export async function downloadThumbnailBuffer(
   if (url) {
     // The thumbnail URL is already pre-authenticated; sending our bearer token
     // to that host would leak it to a different origin.
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: { "Accept-Encoding": "gzip" } });
     assertNoBrotli(res, url);
     if (res.ok) {
       const bytes = Buffer.from(await res.arrayBuffer());

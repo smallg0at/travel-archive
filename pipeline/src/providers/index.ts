@@ -207,7 +207,10 @@ export async function validateProvider(
       // The host the SDK talks to; listing models is free and needs only the
       // key as a query parameter.
       const url = `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1${key ? `&key=${encodeURIComponent(key)}` : ""}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { "Accept-Encoding": "gzip" },
+      });
       assertNoBrotli(res, url);
       if (res.ok || res.status === 429) return { ok: true };
       if (res.status === 400 || res.status === 401 || res.status === 403)
@@ -220,7 +223,8 @@ export async function validateProvider(
     // preset; the URL is built here) — an unnormalized double slash 404s
     // and reads like a misconfigured base URL, which is a lie.
     const path = (preset.probePath ?? "models").replace(/^\/+/, "");
-    const headers: Record<string, string> = preset.scope === "local" || !key ? {} : { authorization: `Bearer ${key}` };
+    const headers: Record<string, string> = { "Accept-Encoding": "gzip" };
+    if (!(preset.scope === "local" || !key)) headers.authorization = `Bearer ${key}`;
     const res = await fetch(`${base}/${path}`, { headers, signal: AbortSignal.timeout(10_000) });
     assertNoBrotli(res, `${base}/${path}`);
     if (res.ok || res.status === 429) return { ok: true };
