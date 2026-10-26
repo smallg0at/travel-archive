@@ -3,6 +3,7 @@ import { homeFile } from "./paths.js";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { env } from "./env.js";
+import { pendingFromDeviceCode, type PendingDeviceCode } from "./deviceCode.js";
 
 // Per-user state, so it follows home rather than the module: installed, the
 // module directory is read-only and writing the refresh token there fails.
@@ -85,12 +86,7 @@ export async function getCachedAccessToken(): Promise<string | null> {
  * itself whether the sign-in lands or fails, so a stale code is never on
  * offer twice.
  */
-export interface PendingDeviceCode {
-  url: string;
-  code: string;
-  /** ISO timestamp — the page counts down from it. */
-  expiresAt: string;
-}
+export type { PendingDeviceCode } from "./deviceCode.js";
 
 let pendingDeviceCode: PendingDeviceCode | null = null;
 
@@ -115,21 +111,43 @@ export async function getAccessToken(): Promise<string> {
     }
   }
 
+  let deviceCodeUnusable = false;
+
   try {
     const result = await pca.acquireTokenByDeviceCode({
       scopes: GRAPH_SCOPES,
       deviceCodeCallback: (response) => {
+        // MSAL calls this before it validates the answer, so a rejected
+        // request — a wrong client id or tenant, or a proxy returning junk —
+        // arrives here with every field undefined. Building a Date from
+        // `undefined` threw "Invalid time value", which replaced the real
+        // cause with a message about dates; the same shape as the empty
+        // reasoning block, an action that should fail loudly instead
+        // reporting something plausible and useless. Leave the state unset
+        // and let MSAL raise what actually went wrong.
+        const pending = pendingFromDeviceCode(response);
+        if (!pending) {
+          deviceCodeUnusable = true;
+          return;
+        }
         console.log(response.message);
-        pendingDeviceCode = {
-          url: response.verificationUri,
-          code: response.userCode,
-          expiresAt: new Date(Date.now() + response.expiresIn * 1000).toISOString(),
-        };
+        pendingDeviceCode = pending;
       },
     });
 
     if (!result) throw new Error("Device code sign-in did not return a token");
     return result.accessToken;
+  } catch (err) {
+    // The callback above cannot throw without masking whichever error MSAL
+    // was about to raise, so it flags the bad response and the rewrite
+    // happens here, where MSAL's own message can be kept as the cause.
+    if (deviceCodeUnusable) {
+      const cause = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Sign-in could not start: ${cause}. Azure rejected the device code request before issuing a code — check AZURE_CLIENT_ID and AZURE_TENANT_ID.`,
+      );
+    }
+    throw err;
   } finally {
     // Completed or abandoned: either way this code is spent.
     pendingDeviceCode = null;
