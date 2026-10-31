@@ -9,7 +9,7 @@ import { env, settingNow } from "../../env.js";
 import { allowThroughFirewall, firewallStatus } from "../../firewall.js";
 import { GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "../../graph.js";
 import { readOobe, writeOobe } from "../../oobeStore.js";
-import { writePrefs } from "../../prefsStore.js";
+import { readPrefs, writePrefs } from "../../prefsStore.js";
 import { remoteAccessStatus, remotePorts, setRemoteAccess } from "../../remoteAccess.js";
 import { planScreenPassphrase, setScreenPassphrase } from "../../screenCaptions.js";
 import { passphraseProblem } from "../../screenKey.js";
@@ -341,6 +341,20 @@ export const settingsRoutes = (ctx: RouteContext): Route[] => [
     },
   ],
 
+  /**
+   * The app's interface preferences — theme, thumbnail density, sidebar width,
+   * content language, which nav groups are open.
+   *
+   * Nothing to do with the archive: no lock, no upload, no schema version. It
+   * is here because this process is the one thing that is running whenever the
+   * desktop shell is *and* writes to a disk that survives the renderer being
+   * killed, which `localStorage` demonstrably did not — see prefsStore.ts.
+   *
+   * The app keeps its own `localStorage` copy regardless and falls back to it
+   * when nothing answers here, because a browser reading OneDrive directly has
+   * no server at all and must still remember a theme.
+   */
+  [/^\/prefs$/, "GET", async (_req, res) => json(res, 200, await readPrefs())],
   [
     /^\/prefs$/,
     "POST",

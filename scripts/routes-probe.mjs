@@ -13,6 +13,13 @@ const routes = [];
 for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "context.ts")) {
   const lines = readFileSync(join(dir, file), "utf8").split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
+    // Both shapes the table uses: `[regex, "METHOD", handler]` on one line, and
+    // the entry spread over several. The first is how three routes were lost.
+    const inline = /\[\s*(\/\^[^,]+?\/[a-z]*)\s*,\s*"(GET|POST)"/.exec(lines[i]);
+    if (inline) {
+      routes.push({ file, regex: inline[1], method: inline[2] });
+      continue;
+    }
     if (!/^\s{2}\[\s*$/.test(lines[i])) continue;
     const pattern = /^\s{4}(\/\^.*\/[a-z]*),?\s*$/.exec(lines[i + 1] ?? "");
     const method = /^\s{4}"(GET|POST)",?\s*$/.exec(lines[i + 2] ?? "");
@@ -25,6 +32,7 @@ for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "co
 function concrete(regex) {
   return regex
     .replace(/^\/\^/, "")
+    .replace(/\/[a-z]*$/, "")
     .replace(/\$$/, "")
     .replace(/\\\//g, "/")
     .replace("(\\d{4}-\\d{2}-\\d{2})", "2024-01-02")
@@ -70,6 +78,20 @@ for (let i = 0; i < 60 && !ready; i++) {
 }
 
 const missing = [];
+/**
+ * Routes that must not be poked by a test, with the reason.
+ *
+ * `/settings/firewall/allow` is the one that taught this: calling it ran an
+ * elevated PowerShell and put a Windows UAC consent dialog on screen, which is
+ * both a decision for a person and a change to the machine's firewall. A probe
+ * that proves a route exists must not exercise the ones that ask permission.
+ */
+const neverPoke = {
+  "/server/restart": "scripts/restart-probe.mjs",
+  "/settings/firewall/allow": "asks for UAC consent",
+  "/notify/test": "puts a toast on the desktop",
+};
+
 const skipped = [];
 const results = [];
 if (ready) {
@@ -79,10 +101,8 @@ if (ready) {
       skipped.push(`${route.method} ${path}`);
       continue;
     }
-    // Restarting is its own probe (scripts/restart-probe.mjs) — asking here
-    // would close the listener the rest of the list is still using.
-    if (path === "/server/restart") {
-      skipped.push(`${route.method} ${path} (restart-probe.mjs)`);
+    if (neverPoke[path]) {
+      skipped.push(`${route.method} ${path} (${neverPoke[path]})`);
       continue;
     }
     try {
@@ -92,7 +112,10 @@ if (ready) {
         body: route.method === "POST" ? "{}" : undefined,
       });
       const text = await res.text();
-      const routed = !text.includes("No route for");
+      // Two ways a route can be gone: nothing matched the path at all, or the
+      // path matched but not this method — which is how a lost `GET /prefs`
+      // hides behind a surviving `POST /prefs`.
+      const routed = !text.includes("No route for") && !/^Use (GET|POST) for /.test(text.replace(/^\{"error":"/, ""));
       results.push(`${routed ? "pass" : "MISS"}  ${route.method.padEnd(4)} ${path.padEnd(46)} ${res.status}`);
       if (!routed) missing.push(`${route.method} ${path} (${route.file})`);
     } catch (err) {

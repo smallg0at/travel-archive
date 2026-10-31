@@ -48,6 +48,8 @@ export const syncRoutes = (_ctx: RouteContext): Route[] => [
     },
   ],
 
+  /** What the reader keeps on this device, rather than leaving evictable. */
+  [/^\/sync\/pins$/, "GET", async (_req, res) => json(res, 200, { pins: await pins() })],
   [
     /^\/sync\/pins$/,
     "POST",

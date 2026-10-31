@@ -5,7 +5,7 @@
 
 import { isLoopback } from "../../access.js";
 import { hasCachedAccount } from "../../auth.js";
-import { isWritableKey, saveConfig } from "../../configStore.js";
+import { configStatus, isWritableKey, saveConfig } from "../../configStore.js";
 import { diagnostics } from "../../diagnostics.js";
 import { renderCapability } from "../../localThumb.js";
 import { sendTestNotification } from "../../notify.js";
@@ -55,6 +55,16 @@ export const systemRoutes = (ctx: RouteContext): Route[] => [
     },
   ],
 
+  /**
+   * The generation settings, so a fresh install can be configured from the app
+   * instead of being told to hand-write a `.env`.
+   *
+   * **The response never carries a key back out.** `keys` reports only whether
+   * each one is set: a value that arrives here should be write-only, and a
+   * readable-secrets endpoint on a server with no authentication of its own is
+   * not worth the convenience.
+   */
+  [/^\/config$/, "GET", (_req, res) => json(res, 200, configStatus())],
   [
     /^\/config$/,
     "POST",
