@@ -117,6 +117,11 @@ export const zhHans: Messages = {
     loadingFull: "正在加载原图…",
     zoomIn: "放大",
     zoomOut: "缩小",
+    copy: "复制",
+    copying: "准备中…",
+    copied: "已复制",
+    copyFailed: "复制失败",
+    copyTitle: "把这张照片复制到剪贴板",
   },
 
   edit: {

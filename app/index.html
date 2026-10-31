@@ -122,7 +122,22 @@
           <img id="lightbox-img" alt="" draggable="false" />
           <video id="lightbox-video" controls playsinline preload="metadata" hidden></video>
           <div id="lightbox-spinner" class="spinner" hidden><span></span>Loading full resolution…</div>
+          <!--
+            The stage's only permanent controls: the photograph's own actions on
+            the left of a hairline, the view controls on the right. Windows'
+            command bar reads the same way (New / Copy / Delete | Sort / View),
+            so the split needs no explaining. Copying is an action on this
+            photograph, not another way to look at it.
+          -->
           <div id="lightbox-zoom">
+            <button id="lightbox-copy" class="lightbox-copy" type="button" data-copy="1" title="Copy this photo to the clipboard">
+              <svg class="lightbox-copy-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M7.5 2A2.5 2.5 0 0 0 5 4.5v9A2.5 2.5 0 0 0 7.5 16h6a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 13.5 2h-6zM6.5 4.5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-9z"/>
+                <path d="M3.5 6.75a.75.75 0 0 0-1.5 0v9A3.75 3.75 0 0 0 5.75 19.5h6a.75.75 0 0 0 0-1.5h-6A2.25 2.25 0 0 1 3.5 15.75v-9z"/>
+              </svg>
+              <span class="lightbox-copy-label" aria-live="polite">Copy</span>
+            </button>
+            <span class="lightbox-zoom-sep" aria-hidden="true"></span>
             <button type="button" data-zoom="out" aria-label="Zoom out">&minus;</button>
             <span class="zoom-level">100%</span>
             <button type="button" data-zoom="in" aria-label="Zoom in">+</button>
@@ -135,6 +150,7 @@
         <aside id="lightbox-panel">
           <section id="lightbox-card" hidden></section>
           <section id="lightbox-photo"></section>
+          <!-- The day's other photographs, one click away, under the text. -->
           <div id="lightbox-strip" hidden></div>
         </aside>
       </figure>

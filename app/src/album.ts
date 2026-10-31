@@ -1,7 +1,8 @@
 import type { ArchiveIndexFile, DayExcursion, DayRecord, MonthSummary, PhotoRecord, TripRecord } from "@travel-archive/shared";
 import { loadHomeIndex, loadMonth, SignInRequiredError } from "./archiveData";
 import { el, lazyImg } from "./photoUi";
-import { openPhoto } from "./viewer";
+import { openPhoto, syncPhotoRoute } from "./viewer";
+import { setBaseView, setIndex, splitPhoto } from "./photoRoute";
 import { renderDayBody } from "./render";
 import { addDayControls, isRetimable, setDayEditingAvailable } from "./dayEdit";
 import { selectionClick } from "./retime";
@@ -1168,13 +1169,16 @@ type View =
   | { kind: "home" };
 
 function viewFromHash(): View | null {
-  if (location.hash === "#settings") return { kind: "settings" };
-  if (location.hash === "#generate") return { kind: "generate" };
-  if (location.hash === "#activity") return { kind: "activity" };
+  // A photograph's address is its view plus `/photo/<id>`: the page under it is
+  // the view, and the viewer reconciles itself with the tail separately.
+  const hash = splitPhoto(location.hash).view;
+  if (hash === "#settings") return { kind: "settings" };
+  if (hash === "#generate") return { kind: "generate" };
+  if (hash === "#activity") return { kind: "activity" };
   // Search moved onto the home page; an old #search link lands there.
-  if (location.hash === "#search") return { kind: "home" };
-  if (location.hash === "#home") return { kind: "home" };
-  const match = /^#(trip|month)\/(.+)$/.exec(location.hash);
+  if (hash === "#search") return { kind: "home" };
+  if (hash === "#home") return { kind: "home" };
+  const match = /^#(trip|month)\/(.+)$/.exec(hash);
   return match ? { kind: match[1] as "trip" | "month", id: decodeURIComponent(match[2]) } : null;
 }
 
@@ -1253,6 +1257,9 @@ function enter(hash: string): void {
   if (historyMode === "push" && location.hash !== hash) history.pushState(null, "", hash);
   else history.replaceState(null, "", hash);
   currentHash = hash;
+  // The page a photograph would open over. Set here rather than read from the
+  // address, which carries the photograph once the viewer is up.
+  setBaseView(hash);
 }
 
 /**
@@ -1303,9 +1310,17 @@ function watchNavigation(content: HTMLElement): void {
   window.addEventListener("pagehide", saveScroll);
   window.addEventListener("popstate", () => {
     if (!cachedIndex) return;
+    const { view: hash, photoId } = splitPhoto(location.hash);
+    // The viewer follows the address in both directions: Back out of a
+    // photograph closes it, Forward into one opens it.
+    void syncPhotoRoute(photoId);
+    // Same page underneath — closing the viewer, or a step that only replaced
+    // the photograph. Redrawing it would throw away the scroll offset and, on a
+    // trip, re-run the whole render for nothing.
+    if (hash === currentHash) return;
     const view = viewFromHash();
     const row = rowFor(view);
-    if (row && (view?.kind === "trip" || view?.kind === "month")) restoreScrollTop = storedScroll(location.hash);
+    if (row && (view?.kind === "trip" || view?.kind === "month")) restoreScrollTop = storedScroll(hash);
     reopen(row ?? defaultRow());
   });
 }
@@ -1328,6 +1343,14 @@ export function captureView(): void {
 
 export function renderAlbum(index: ArchiveIndexFile): void {
   cachedIndex = index;
+  // A photograph's address is resolved against the index — its trip's days say
+  // which month shard holds it.
+  setIndex(index);
+  // Read the address here, before anything rewrites it. Reopening the view
+  // replaces the hash with the view's own, which drops a `#trip/<id>/photo/<id>`
+  // tail — and the tail is what the last step of this function needs, so reading
+  // it down there raced the view's own open and lost on a cold load.
+  const photoId = splitPhoto(location.hash).photoId;
   const content = document.getElementById("content")!;
   applyDensity();
   watchNavigation(content);
@@ -1366,7 +1389,11 @@ export function renderAlbum(index: ArchiveIndexFile): void {
     // offset captured for the missing view means nothing there.
     restoreScrollTop = null;
   } else if (!captured && (view?.kind === "trip" || view?.kind === "month")) {
-    restoreScrollTop = storedScroll(location.hash);
+    restoreScrollTop = storedScroll(splitPhoto(location.hash).view);
   }
   reopen(row ?? defaultRow());
+
+  // The address may name a photograph over this view — a shared link, a reload
+  // with the viewer open, or Back into one.
+  if (photoId) void syncPhotoRoute(photoId);
 }

@@ -54,6 +54,67 @@ allowed state showed "已允许。" *and* a button. Express it as `:not([hidden]
 display: flex }` (or add the `[hidden]` rule), or the flag the code sets does
 nothing visible.
 
+**A photograph is a second level under the view it was opened from.**
+`#trip/<id>/photo/<photoId>`, `#month/<id>/photo/<photoId>`,
+`#home/photo/<photoId>` — the view is the prefix, so Back returns to the page
+the photograph came from instead of redrawing it underneath a viewer that stays
+on screen. Opening pushes one entry and stepping *replaces* it: a card of 33
+photographs must not cost 33 presses of Back. `viewer.ts` reconciles with the
+address in `syncPhotoRoute`, which the album calls from `popstate` and after
+every render; closing by intent goes through `requestClose`, which pops rather
+than hiding, or the address goes on naming a photograph that is gone. Four
+traps, all hit while building it: the back button bubbles into the backdrop
+handler, so `requestClose` needs a guard or one click pops twice; the scroll
+offset is keyed by the *view* hash, so `storedScroll(location.hash)` silently
+returns nothing once a photograph is in the address; `renderAlbum` has to read
+the photo id *before* it reopens the view, because `enter` replaces the hash with
+the view's own and reading it afterwards gets a stripped address — that one
+opened the view and no viewer on a cold load, and a second trip only appeared to
+work because its row open was async and won the race; and "backdrop" has to be
+defined by what it excludes — the photograph, its text, its strip and its
+controls — because the figure fills the window and a handler on `#lightbox`
+alone is reachable only from the 34px strip at the edges, which is why the only
+ways out used to be Escape and the back button. Zoomed, the stage's empty space
+is excluded too: it exists only because the reader panned the picture away.
+
+**The viewer is two columns under one bar, and the pane is a surface, not a
+card.** Header across the top (40px, drag region, window buttons at its right
+end), then the photograph's column and a fixed 360px text pane reaching the
+window's bottom edge. The day's other photographs live at the bottom of that
+pane, a count line above the row and the row windowed to the pane's width — not
+under the stage (a row there changed the photograph's height whenever it
+appeared, faded, or grew a count, and the picture moved under the cursor) and not
+floating over it (it covered the corner of the picture instead). Five things bit
+while building it:
+`align-items: center` from the overlay's centring shrank the header to its
+content, so the column needs `align-items: stretch`; a stage padding would put
+an 18px band around the picture the moment it is zoomed, so the fitted size is
+inset with `max-width: calc(100% - 56px)` on the image and the zoomed size is
+unconstrained; and `.lightbox img` also matches the strip's thumbnails, where a
+`calc(100% - 40px)` cap cut them to 16px tall — every rule meant for the
+photograph belongs on `.lightbox-stage img`; a `max-height` on the picture still
+centres it in the whole stage, so reserving room for a floating strip has to be
+padding on the stage, not a smaller picture; and fixed-width thumbnails leave a
+gap at the row's end the moment one more would fit but for a pixel (5 × 60 + 4 ×
+6 = 324 in a 323px pane), so the thumbs share the row with `flex: 1 1 0` and the
+capacity comes from the pane's measured width. Narrow windows stack the pane
+under the photograph and hide the strip.
+
+**The window is a drag region, so every overlay has to opt out.** The desktop
+shell has no title bar of its own, so `html.desktop-shell` is
+`-webkit-app-region: drag` and anything that wants clicks says `no-drag`
+(`#main-column` does). `#lightbox` is the one overlay that is a *sibling* of
+`#main-column` rather than inside it, and it never said so: every click in the
+viewer was a window drag — the strip could not be clicked, a zoomed photograph
+could not be panned, the backdrop could not be clicked to close. It went
+unnoticed because `html.desktop-shell button` opts out, so the buttons were the
+only part that worked. Measured with
+`getComputedStyle(el).getPropertyValue("-webkit-app-region")`: `html` drag,
+`.lightbox` now no-drag, `.lightbox-header` still drag (that strip is meant to
+move the window).
+`webContents.sendInputEvent` cannot test this — it injects below the browser's
+non-client hit test, so a synthetic click lands on a drag region too.
+
 **Paths split two ways** (`pipeline/src/paths.ts`). Writable per-user state
 resolves from `ARCHIVE_HOME`; read-only config that ships with the build
 resolves from the module. Get this wrong and an installed app writes into a
@@ -388,6 +449,22 @@ server's own origin now, so `ThumbnailSource.crossOrigin` opts in — **per
 source, never blanket**: setting it on a host that does not send
 `Access-Control-Allow-Origin` makes the image fail to load outright, which is
 why the Graph CDN path leaves it unset.
+
+**A clipboard write has to happen inside the click.** `navigator.clipboard.write`
+is permitted by the click's transient activation, and that does not survive an
+`await`: waiting 10s for the lightbox's original photograph before writing made
+it fail with `NotAllowedError` while the document was focused and
+`clipboard-write` reported `granted`. A promise-valued `ClipboardItem` is the
+way through — `write` is called straight away and the pixels arrive later; a
+promise that resolved 8s later still wrote correctly. PNG is the only type
+Chromium accepts, so the picture is re-encoded from the decoded `<img>`
+(measured: 771ms and 8.4MB for 4032×3024), and a canvas drawn from an image the
+page did not load itself is tainted — which is why the button is absent on the
+`openLightbox(url)` path. **Verify it in Electron, not in the embedded browser:**
+the desktop app's browser profile reports `clipboard-write` as `denied`, so a
+copy tested there always fails. Electron 45's `clipboard.read()` no longer
+reports image formats either; read the OS clipboard with
+`[System.Windows.Forms.Clipboard]::GetImage()`.
 
 **Config can be written at runtime, so nothing may capture it at import.**
 `POST /config` writes `.env` and calls `reloadEnv()`, which updates the `env`

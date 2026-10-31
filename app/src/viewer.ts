@@ -1,5 +1,7 @@
 import type { Highlight, PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge, loadVideoUrl, releaseFullPhoto } from "./graphPhoto";
+import { canCopyImage, copyImage } from "./clipboard";
+import { currentBaseView, photoHash, resolveSession, splitPhoto } from "./photoRoute";
 import { isLocalMachine } from "./backend";
 import { thumbnailSource } from "./photoSource";
 import { el, tagChip, transcript, transcriptOriginal } from "./photoUi";
@@ -60,6 +62,115 @@ interface Session {
 }
 let session: Session | null = null;
 
+// --- Copying ---------------------------------------------------------------
+
+/**
+ * Whether this page can put a photograph on the clipboard at all.
+ *
+ * Asked once: an insecure origin — the archive read over the home network as
+ * plain http — has no `navigator.clipboard`, and a browser without PNG
+ * clipboard support cannot gain it while the page is open. When it is false the
+ * control is not rendered at all: a button that can never work is a permanent
+ * question with no answer.
+ */
+const copySupported = canCopyImage();
+
+/** What the copy button is saying, and the timer that puts it back. */
+type CopyState = "idle" | "working" | "done" | "failed";
+let copyState: CopyState = "idle";
+let copyTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Resolves when the photograph on screen is the original rather than the
+ * preview, or when waiting for it has stopped being worth it.
+ *
+ * The viewer paints the `large` thumbnail first and swaps the original in
+ * behind it. Copying inside that window would hand over an 800px preview of a
+ * 12-megapixel photograph and still say "copied" — a downgrade the reader
+ * cannot see, and the one failure worth engineering against. So the copy waits
+ * for the swap, bounded by something long enough for a cold original to arrive
+ * over the network; past that, what is on screen is what gets copied.
+ */
+const FULL_WAIT_MS = 10_000;
+let fullReady: Promise<void> = Promise.resolve();
+let settleFull: (() => void) | null = null;
+
+/** Starts the wait afresh for the photograph about to be shown. */
+function resetFullWait(): void {
+  settleFull = null;
+  fullReady = new Promise<void>((resolve) => {
+    settleFull = resolve;
+  });
+}
+
+function setCopyState(state: CopyState): void {
+  copyState = state;
+  const { copy } = dom();
+  copy.dataset.state = state;
+  copy.querySelector(".lightbox-copy-label")!.textContent =
+    state === "working"
+      ? ui.viewer.copying
+      : state === "done"
+        ? ui.viewer.copied
+        : state === "failed"
+          ? ui.viewer.copyFailed
+          : ui.viewer.copy;
+  // Disabled while working: a second click would start a second encode of the
+  // same photograph, and the label is the only thing that says so.
+  copy.disabled = state === "working";
+  if (copyTimer) {
+    clearTimeout(copyTimer);
+    copyTimer = null;
+  }
+  // Back to the plain label on its own. A toast would be the obvious
+  // alternative, but the toast stack sits at z-index 60 under a lightbox at
+  // 1000 — the confirmation has to happen where the click did.
+  if (state === "done" || state === "failed") {
+    copyTimer = setTimeout(() => setCopyState("idle"), state === "done" ? 1600 : 2600);
+  }
+}
+
+/** Waits for the original to replace the preview, but never forever. */
+function waitForOriginal(): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const bound = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, FULL_WAIT_MS);
+  });
+  return Promise.race([fullReady, bound]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/** Copies the photograph the viewer is showing. */
+async function copyCurrent(): Promise<void> {
+  if (!session || copyState === "working") return;
+  const photo = session.photos[session.index];
+  if (!photo || photo.video) return;
+
+  const mine = token;
+  setCopyState("working");
+  try {
+    // The wait runs inside the clipboard item's promise rather than before the
+    // write: the write has to happen while the click still counts as a gesture,
+    // and a cold original can take longer than that. A reader who stepped on in
+    // the meantime makes it reject instead of copying the wrong photograph.
+    const original = waitForOriginal().then(() => {
+      if (mine !== token) throw new Error("the viewer moved on");
+    });
+    await copyImage(dom().img, original);
+    setCopyState("done");
+  } catch (error) {
+    // The label belongs to whatever is on screen now; `show` has already reset
+    // it, and saying "couldn't copy" about a photograph the reader left would
+    // be a lie about the one they are looking at.
+    if (mine !== token) return;
+    // A refused write (another app holding the clipboard, a document that lost
+    // focus) and a tainted canvas both land here. Say so and leave it there.
+    console.error("copying the photograph failed", error);
+    setCopyState("failed");
+  }
+}
+
 function dom() {
   return {
     lightbox: document.getElementById("lightbox")!,
@@ -70,6 +181,7 @@ function dom() {
     photoPanel: document.getElementById("lightbox-photo")!,
     strip: document.getElementById("lightbox-strip")!,
     zoom: document.getElementById("lightbox-zoom")!,
+    copy: document.getElementById("lightbox-copy") as HTMLButtonElement,
   };
 }
 
@@ -216,20 +328,83 @@ function renderPhotoPanel(photo: PhotoRecord): void {
 }
 
 /** The card's other photographs. Hidden when there is only one. */
+/**
+ * How many thumbnails the strip draws at once — as many as fit beside the
+ * control bar, between 3 and 12.
+ *
+ * The archive's days hold a median of 3 photographs and a maximum of 382 (p90
+ * 30, p99 238 over 2,076 days), and a stop's grid is similar. Drawing the whole
+ * set meant 30,000px of horizontal scroll, one thumbnail request per
+ * photograph, and a strip whose current frame was off screen — the reader was
+ * looking at photograph 150 of 219 with the strip showing the first dozen.
+ */
+const STRIP_THUMB_STEP = 62;
+
+function stripCapacity(): number {
+  const strip = document.getElementById("lightbox-strip");
+  const width = strip?.clientWidth ?? 324;
+  return Math.max(2, Math.min(8, Math.floor((width - 8) / STRIP_THUMB_STEP)));
+}
+
+/** Where the current window starts, or -1 when it has to be chosen afresh. */
+let stripStart = -1;
+/** The session the window belongs to: a new one starts its own window. */
+let stripSession: unknown = null;
+
+function centreStrip(track: HTMLElement, offset: number): void {
+  const current = track.children[offset] as HTMLElement | undefined;
+  if (current) track.scrollLeft = current.offsetLeft - (track.clientWidth - current.offsetWidth) / 2;
+}
+
 function renderStrip(): void {
   const { strip } = dom();
-  strip.replaceChildren();
   if (!session || session.photos.length < 2) {
     strip.hidden = true;
+    strip.replaceChildren();
+    stripStart = -1;
     return;
   }
   strip.hidden = false;
 
-  for (const [i, photo] of session.photos.entries()) {
+  const total = session.photos.length;
+  const at = session.index;
+  const windowSize = Math.min(total, stripCapacity());
+  if (stripSession !== session) {
+    stripSession = session;
+    stripStart = -1;
+  }
+  // The window stays put while the reader steps inside it, and re-centres only
+  // when they reach its edge: re-laying out a dozen thumbnails on every arrow
+  // press would flash the whole strip to reload for one changed highlight.
+  let start: number;
+  if (total <= windowSize) {
+    start = 0;
+  } else if (stripStart < 0 || at < stripStart + 2 || at > stripStart + windowSize - 3) {
+    start = Math.max(0, Math.min(total - windowSize, at - Math.floor(windowSize / 2)));
+  } else {
+    start = stripStart;
+  }
+  const end = Math.min(total, start + windowSize);
+
+  const track = strip.querySelector<HTMLElement>(".strip-track");
+  if (track && stripStart === start && track.childElementCount === end - start) {
+    [...track.children].forEach((el, i) => el.classList.toggle("current", start + i === at));
+    const count = strip.querySelector(".strip-count");
+    if (count) count.textContent = `${at + 1} / ${total}`;
+    centreStrip(track, at - start);
+    return;
+  }
+
+  stripStart = start;
+  strip.replaceChildren();
+  const fresh = document.createElement("div");
+  fresh.className = "strip-track";
+  for (let i = start; i < end; i++) {
+    const photo = session.photos[i];
     const thumb = document.createElement("img");
     thumb.src = BLANK;
     thumb.alt = loc(photo.caption) ?? "";
-    thumb.className = i === session.index ? "current" : "";
+    thumb.className = i === at ? "current" : "";
     void loadLarge(photo.id).then((url) => {
       if (url) setSource(thumb, url);
     });
@@ -237,8 +412,22 @@ function renderStrip(): void {
       event.stopPropagation();
       void show(i);
     });
-    strip.appendChild(thumb);
+    fresh.appendChild(thumb);
   }
+  // Which photograph of how many, above the strip and against its left edge, so
+  // the count reads as a caption for the row rather than as one more item in it.
+  // Left off when the window is the whole set: "2 / 2" is noise.
+  if (total > windowSize) {
+    const count = document.createElement("span");
+    count.className = "strip-count";
+    count.textContent = `${at + 1} / ${total}`;
+    strip.appendChild(count);
+  }
+  strip.appendChild(fresh);
+
+  // Centre the current frame once the row has been laid out, or the strip opens
+  // scrolled to its left end whatever is on screen.
+  centreStrip(fresh, at - start);
 }
 
 // --- Zoom ------------------------------------------------------------------
@@ -297,6 +486,11 @@ function applyZoom(): void {
   // The 4px radius is a mask, and once zoomed the stage clips the photo square
   // anyway — a rounded photo inside a square frame is just a mismatch.
   img.classList.toggle("zoomed", scale > 1);
+  // Zoomed, the strip steps out of the way: the reader is inspecting pixels,
+  // and 76px of thumbnails along the bottom is 76px not spent on the
+  // photograph. Faded rather than hidden, so the stage grows and the layout
+  // settles instead of the strip vanishing under the cursor.
+  dom().lightbox.classList.toggle("is-zoomed", scale > 1);
   zoom.querySelector(".zoom-level")!.textContent = `${Math.round(scale * 100)}%`;
 }
 
@@ -315,6 +509,11 @@ function setZoom(next: number, anchor?: { x: number; y: number }): void {
     panX += (anchor.x - (r.left + r.width / 2)) * (1 - k);
     panY += (anchor.y - (r.top + r.height / 2)) * (1 - k);
   }
+  // Zooming in from the fitted view: measure it now rather than trusting a size
+  // taken when the photograph loaded. The stage is taller while zoomed (the
+  // strip has faded away) and different again after a window resize, so a base
+  // measured once goes stale and the first zoom step jumps.
+  if (scale === 1 && clamped > 1) measureBase();
   scale = clamped;
   // Snapping back to centre at 1x avoids the photo being stuck off-screen after
   // panning and then zooming out.
@@ -326,13 +525,23 @@ function setZoom(next: number, anchor?: { x: number; y: number }): void {
 }
 
 function initZoomControls(): void {
-  const { zoom, img } = dom();
+  const { zoom, img, copy } = dom();
   if (zoom.dataset.wired === "1") return;
   zoom.dataset.wired = "1";
 
+  copy.title = ui.viewer.copyTitle;
+  copy.setAttribute("aria-label", ui.viewer.copyTitle);
+
   zoom.addEventListener("click", (event) => {
     event.stopPropagation();
-    const action = (event.target as HTMLElement).dataset.zoom;
+    const target = event.target as HTMLElement;
+    // The copy button carries an icon, so the click often lands on the `<svg>`
+    // rather than the button itself.
+    if (target.closest("[data-copy]")) {
+      void copyCurrent();
+      return;
+    }
+    const action = target.dataset.zoom;
     if (action === "in") setZoom(scale * 1.5);
     if (action === "out") setZoom(scale / 1.5);
     if (action === "fit") setZoom(1);
@@ -455,23 +664,25 @@ async function show(index: number): Promise<void> {
   session.index = index;
   const photo = session.photos[index];
   const mine = ++token;
+  // The address follows the photograph on screen, including a step through the
+  // strip or an arrow key.
+  replaceRoute(photo.id);
 
-  const { img, spinner, strip } = dom();
+  const { img, spinner } = dom();
   setZoom(1);
+  resetFullWait();
+  setCopyState("idle");
   // Zoom/Fit act on the image only, so they are meaningless over a video — hide
-  // them for any video, poster fallback included.
+  // them for any video, poster fallback included. Copy goes with them: there is
+  // no still picture of this one to put on the clipboard.
   dom().zoom.hidden = Boolean(photo.video);
+  dom().copy.hidden = !copySupported;
   renderPhotoPanel(photo);
-  strip.querySelectorAll("img").forEach((t, i) => {
-    t.classList.toggle("current", i === index);
-    // Keep the marked thumbnail in view: the strip scrolls now, so arrowing
-    // through a long grid otherwise leaves the highlight somewhere off to the
-    // right with no sign of where you are.
-    if (i === index) t.scrollIntoView({ block: "nearest", inline: "nearest" });
-  });
+  renderStrip();
 
   if (photo.video) {
     await showVideo(photo, mine);
+    settleFull?.();
     return;
   }
   hideVideo();
@@ -497,7 +708,11 @@ async function show(index: number): Promise<void> {
     return;
   }
   if (!url) {
+    // No original to wait for: what the preview shows is the whole photograph
+    // as far as this viewer can tell, and the copy should not sit on a wait
+    // that will never end.
     spinner.hidden = true;
+    settleFull?.();
     return;
   }
 
@@ -515,11 +730,17 @@ async function show(index: number): Promise<void> {
       // The fitted size is the basis every zoom level is computed from, and it
       // differs per photograph.
       measureBase();
+      // A copy asked for during the preview has been waiting for exactly this.
+      settleFull?.();
     },
     { once: true },
   );
   loader.addEventListener("error", () => {
-    if (mine === token) spinner.hidden = true;
+    if (mine === token) {
+      spinner.hidden = true;
+      // The original will not arrive; the preview is what this viewer has.
+      settleFull?.();
+    }
   });
   // The loader only decodes; assigning its src has to carry the session too, or
   // this probe request is the one that 401s and the preview never swaps.
@@ -538,12 +759,14 @@ export function openCard(
   const photos = highlight.photoIds.map((id) => byId[id]).filter(Boolean);
   if (photos.length === 0) return;
 
-  session = { photos, index: startAt, highlight };
+  const at = Math.min(startAt, photos.length - 1);
+  session = { photos, index: at, highlight };
   initZoomControls();
   renderCardPanel(highlight, byId);
   renderStrip();
   dom().lightbox.hidden = false;
-  void show(Math.min(startAt, photos.length - 1));
+  pushRoute(photos[at].id);
+  void show(at);
 }
 
 /** Opens a single photograph, for grids and album months where there is no card. */
@@ -564,10 +787,107 @@ export function openPhoto(photo: PhotoRecord, siblings?: PhotoRecord[]): void {
   renderCardPanel(null, {});
   renderStrip();
   dom().lightbox.hidden = false;
+  pushRoute(photo.id);
   void show(session.index);
 }
 
-function close(): void {
+// --- The address -----------------------------------------------------------
+
+/**
+ * The viewer is a place, not an overlay.
+ *
+ * Opening pushes one entry on top of the view — `#trip/<id>/photo/<photoId>` —
+ * so Back leaves the viewer instead of quietly redrawing the page underneath
+ * while it stays on screen. Stepping through the strip replaces that entry:
+ * a card of 33 photographs should not cost 33 presses of Back.
+ */
+let routeView = "";
+let routeOwned = false;
+
+function pushRoute(photoId: string): void {
+  routeView = currentBaseView();
+  history.pushState({ photo: photoId }, "", photoHash(routeView, photoId));
+  routeOwned = true;
+  closing = false;
+}
+
+function replaceRoute(photoId: string): void {
+  if (!routeOwned) return;
+  history.replaceState({ photo: photoId }, "", photoHash(routeView, photoId));
+}
+
+/**
+ * Reconciles the viewer with the address. Called by the album after it has
+ * drawn the view a hash names, and on every popstate.
+ */
+export async function syncPhotoRoute(photoId: string | null): Promise<void> {
+  const { lightbox } = dom();
+  if (!photoId) {
+    hide();
+    return;
+  }
+  closing = false;
+
+  // Already showing it — a reload of the same address, or a forward step.
+  if (session && session.photos[session.index]?.id === photoId) {
+    lightbox.hidden = false;
+    return;
+  }
+  // The same list, a different photograph: Back and Forward inside one session.
+  const at = session?.photos.findIndex((p) => p.id === photoId) ?? -1;
+  if (at >= 0) {
+    lightbox.hidden = false;
+    void show(at);
+    return;
+  }
+
+  const resolved = await resolveSession(photoId);
+  if (!resolved) {
+    // The address names a photograph this view cannot find — a stale link, or
+    // one opened from a page that spans the library. Leave the reader on the
+    // page rather than on a viewer with nothing in it.
+    hide();
+    history.replaceState(null, "", currentBaseView());
+    return;
+  }
+
+  // A cold load arrives with the photograph as the only entry. Rewriting it as
+  // the view and pushing the photograph over it gives Back somewhere to go.
+  routeView = currentBaseView();
+  history.replaceState(null, "", routeView);
+  history.pushState({ photo: photoId }, "", photoHash(routeView, photoId));
+  routeOwned = true;
+
+  session = { photos: resolved.photos, index: resolved.index, highlight: null };
+  initZoomControls();
+  renderCardPanel(null, {});
+  renderStrip();
+  lightbox.hidden = false;
+  void show(resolved.index);
+}
+
+/**
+ * Leaves the viewer. Anything that closes it by intent comes through here, so
+ * the address goes with it: hiding without popping would leave `#…/photo/…`
+ * naming a photograph that is no longer on screen.
+ */
+function requestClose(): void {
+  if (dom().lightbox.hidden || closing) return;
+  if (routeOwned && splitPhoto(location.hash).photoId) {
+    // The pop lands in `syncPhotoRoute(null)`, which hides the viewer. Guarded
+    // because the back button also bubbles into the backdrop handler, and two
+    // `back()` calls would leave the reader on the view *before* this one.
+    closing = true;
+    history.back();
+    return;
+  }
+  hide();
+}
+
+/** True while a pop we asked for is in flight. */
+let closing = false;
+
+function hide(): void {
   const { lightbox, img, spinner } = dom();
   if (lightbox.hidden) return;
   lightbox.hidden = true;
@@ -575,6 +895,9 @@ function close(): void {
   // has been closed and reopened on something else.
   token++;
   session = null;
+  routeOwned = false;
+  closing = false;
+  setCopyState("idle");
 
   img.removeAttribute("src");
   img.classList.remove("preview");
@@ -596,8 +919,30 @@ function step(delta: number): void {
   void show(next);
 }
 
-document.getElementById("lightbox")?.addEventListener("click", close);
-document.getElementById("lightbox-back")?.addEventListener("click", close);
+/**
+ * Clicking the backdrop leaves the viewer.
+ *
+ * Which parts of the screen count as backdrop is the whole question. The
+ * figure fills the window, so a handler on `#lightbox` alone could only be
+ * reached from a 34px strip at the edges — and it was, which is why the only
+ * ways out were Escape and the back button. The photograph, its text, its
+ * strip and its controls are named here instead: everything else is empty
+ * space and closes.
+ *
+ * Zoomed is the exception the reader would not forgive: once the picture is
+ * larger than the stage, any empty stage area is there because the reader
+ * panned the picture away from it. Closing on that click would undo the
+ * inspection they just performed.
+ */
+document.getElementById("lightbox")?.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement;
+  if (target.closest("#lightbox-img, #lightbox-video, #lightbox-panel, #lightbox-strip, #lightbox-zoom, #lightbox-back")) {
+    return;
+  }
+  if (scale > 1 && target.closest(".lightbox-stage")) return;
+  requestClose();
+});
+document.getElementById("lightbox-back")?.addEventListener("click", () => requestClose());
 
 /**
  * A tag was clicked; get out of the way so the search can be seen.
@@ -606,19 +951,25 @@ document.getElementById("lightbox-back")?.addEventListener("click", close);
  * so the viewer closes itself and lets the event carry on to the home page's
  * listener. Listening here rather than routing through the caller is what keeps
  * `tagChip` in `photoUi.ts` free of any knowledge of the viewer.
+ *
+ * Hidden and rewritten here rather than through `requestClose`: the search is
+ * about to push an entry of its own, and a `history.back()` racing that push
+ * would land the reader on whichever one won.
  */
 document.addEventListener("tag-search", () => {
-  if (!document.getElementById("lightbox")?.hidden) close();
+  if (document.getElementById("lightbox")?.hidden) return;
+  hide();
+  history.replaceState(null, "", currentBaseView());
 });
-// The figure fills the screen, so clicking inside it must not dismiss — beside
-// a portrait photo is still "inside".
-document.querySelector(".lightbox-figure")?.addEventListener("click", (e) => e.stopPropagation());
 
 document.addEventListener("keydown", (event) => {
   if (document.getElementById("lightbox")?.hidden) return;
-  if (event.key === "Escape") close();
+  if (event.key === "Escape") requestClose();
   // Arrow keys move between the card's photographs, which is the whole reason
-  // the strip exists.
+  // the strip exists. Not while the reader is typing: the panel holds a time
+  // editor, and there the arrows belong to the field.
+  const target = event.target;
+  if (target instanceof Element && target.closest("input, textarea, [contenteditable='true']")) return;
   if (event.key === "ArrowRight") step(1);
   if (event.key === "ArrowLeft") step(-1);
 });
@@ -633,6 +984,10 @@ export function openLightbox(url: string): void {
   setSource(img, url);
   img.classList.remove("preview");
   dom().zoom.hidden = false;
+  // No record behind this URL and no `crossOrigin` on the element, so the
+  // canvas would be tainted and the copy could only ever fail. The sign-in
+  // banner's "view this" is the only caller.
+  dom().copy.hidden = true;
   spinner.hidden = true;
   lightbox.hidden = false;
   openObjectUrl = url;

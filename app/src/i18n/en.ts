@@ -124,6 +124,11 @@ export const en = {
     loadingFull: "Loading full resolution…",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
+    copy: "Copy",
+    copying: "Preparing…",
+    copied: "Copied",
+    copyFailed: "Couldn't copy",
+    copyTitle: "Copy this photo to the clipboard",
   },
 
   edit: {

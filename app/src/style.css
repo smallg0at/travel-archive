@@ -1566,8 +1566,13 @@ body.m #toasts {
 .lightbox:not([hidden]) {
   display: flex;
   flex-direction: column;
+  /* Children span the window: the header is a bar across the top and the two
+     columns below it fill everything under the bar. */
+  align-items: stretch;
 }
-.lightbox img {
+/* Scoped to the stage: the strip's thumbnails are images in the viewer too,
+   and a `calc(100% - 40px)` cap meant for the stage cut them to 16px tall. */
+.lightbox-stage img {
   max-width: 92vw;
   max-height: 92vh;
   max-width: 94vw;
@@ -1949,11 +1954,29 @@ body.setup-active #signin-banner {
  * all and simply shows the second.
  */
 /* Lightbox top header / title bar */
+/*
+ * The viewer opts out of the window drag region as a whole.
+ *
+ * `html.desktop-shell` is `-webkit-app-region: drag` (the window has no title
+ * bar of its own), and every surface that wants clicks has to say so. The
+ * viewer is the one overlay that sits outside `#main-column`, and it never did:
+ * every click inside it was a window drag — the strip could not be clicked, the
+ * zoomed photograph could not be panned, the backdrop could not be clicked to
+ * close. It looked fine because `html.desktop-shell button` opts out, so the
+ * buttons were the only part of the viewer that worked.
+ *
+ * The header below re-opts *in*, which is what keeps the window draggable from
+ * the strip above the photograph.
+ */
+html.desktop-shell .lightbox {
+  -webkit-app-region: no-drag;
+}
+/* In flow above the two columns, not floating over them: the pane runs the
+   full height of the window below this bar, and the window's own buttons sit in
+   the bar's right end. */
 .lightbox-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex: 0 0 40px;
   height: 40px;
   display: flex;
   align-items: center;
@@ -1961,6 +1984,9 @@ body.setup-active #signin-banner {
   padding: 0 12px;
   z-index: 10;
   user-select: none;
+  /* A bar has to end somewhere: without this the header, the pane and the
+     photograph's column all met with nothing between them. */
+  border-bottom: 1px solid rgb(255 255 255 / 0.09);
 }
 html.desktop-shell .lightbox-header {
   -webkit-app-region: drag;
@@ -2000,30 +2026,45 @@ html.desktop-shell .lightbox-header {
   fill: currentColor;
 }
 
+/*
+ * Two columns under one header: the photograph, and the text about it.
+ *
+ * The pane is a solid surface reaching the window's edge, not a card floating
+ * over a dimmed page — a transcript is a thing you read, and reading it over
+ * whatever happened to be behind the viewer was the wrong trade. The strip is
+ * in the photograph's column because it is about the photograph: the day's
+ * other frames, not another paragraph.
+ */
 .lightbox-figure {
   margin: 0;
-  padding-top: 40px;
-  display: flex;
-  align-items: stretch;
-  gap: 18px;
-  width: 95vw;
-  height: calc(100dvh - 30px);
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  /* One row: the stage owns the whole column, and the pane's own column runs
+     the full height beside it. */
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  height: calc(100dvh - 40px);
   cursor: auto;
 }
 
 .lightbox-stage {
+  grid-area: 1 / 1;
   position: relative;
-  flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
 }
-.lightbox img {
-  max-width: 100%;
-  max-height: 92vh;
-  max-height: calc(100dvh - 60px);
+.lightbox-stage img {
+  /* The inset is on the photograph rather than padding on the stage: the stage
+     clips at its padding edge, so padding would put an 18px band around the
+     picture the moment it is zoomed past the stage. Here the fitted size is
+     inset and the zoomed size is not constrained at all. */
+  max-width: calc(100% - 56px);
+  max-height: calc(100% - 40px);
   object-fit: contain;
   border-radius: var(--radius-s);
   transform-origin: center;
@@ -2035,17 +2076,16 @@ html.desktop-shell .lightbox-header {
 }
 /* Zoomed, the stage clips it square, so a rounded photo inside a square frame
    is simply a mismatch. */
-.lightbox img.zoomed { border-radius: 0; }
+.lightbox-stage img.zoomed { border-radius: 0; }
 /* The instantly-available thumbnail, upscaled. Softened so the swap to full
    resolution reads as sharpening rather than as the image changing. */
-.lightbox img.zoomed { border-radius: 0; filter: none; }
-.lightbox img.preview { filter: blur(0.5px); }
+.lightbox-stage img.zoomed { border-radius: 0; filter: none; }
+.lightbox-stage img.preview { filter: blur(0.5px); }
 /* A video, played in the same stage. No zoom/pan; the native controls are the
    interaction. Sized like the image so the layout does not jump between them. */
-.lightbox video {
-  max-width: 100%;
-  max-height: 92vh;
-  max-height: calc(100dvh - 60px);
+.lightbox-stage video {
+  max-width: calc(100% - 56px);
+  max-height: calc(100% - 40px);
   border-radius: var(--radius-s);
   background: #000;
   filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5));
@@ -2083,6 +2123,44 @@ html.desktop-shell .lightbox-header {
 }
 #lightbox-zoom button:hover { background: rgb(255 255 255 / 0.12); color: #fff; }
 #lightbox-zoom button:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+/* One bar, two groups: the photograph's actions, a hairline, then the view
+   controls — the reading order of a Windows command bar. */
+#lightbox-zoom .lightbox-zoom-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  flex: none;
+  background: rgba(255, 255, 255, 0.16);
+}
+#lightbox-zoom .lightbox-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Fixed width, so "Copy → Preparing… → Copied" never resizes the bar under
+     the cursor. */
+  min-width: 76px;
+  padding: 3px 9px;
+}
+#lightbox-zoom .lightbox-copy-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  fill: currentColor;
+}
+/* `display: flex` above beats the UA's `[hidden] { display: none }` — the same
+   bug class documented on `.lightbox` and `.signin-banner`. The hairline goes
+   with the button, or a stray divider would be left heading the zoom group. */
+#lightbox-zoom .lightbox-copy[hidden],
+#lightbox-zoom .lightbox-copy[hidden] + .lightbox-zoom-sep {
+  display: none;
+}
+#lightbox-zoom .lightbox-copy[data-state="working"] {
+  color: rgba(255, 255, 255, 0.7);
+  cursor: progress;
+}
+#lightbox-zoom .lightbox-copy[data-state="working"]:hover { background: none; }
+#lightbox-zoom .lightbox-copy[data-state="failed"] { color: #e8a0a0; }
 .zoom-level {
   min-width: 40px;
   text-align: center;
@@ -2121,45 +2199,51 @@ html.desktop-shell .lightbox-header {
   .spinner span { animation-duration: 2.4s; }
 }
 
+/*
+ * The pane, not a card.
+ *
+ * A fixed width rather than a fraction of the window: the text is a column of a
+ * known measure, and the old `clamp(280px, 27vw, 400px)` set a long transcript
+ * and a short caption at different widths as the window moved. The photograph
+ * takes whatever is left, which is also what makes the seam between them a
+ * deliberate edge instead of a gap.
+ */
 #lightbox-panel {
-  flex: 0 0 clamp(280px, 27vw, 400px);
+  grid-area: 1 / 2 / span 2 / 2;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  /* Without this the flex basis above is only a suggestion: a row flex item's
-     automatic minimum size is its content's min-content width, and the strip's
-     thumbnails do not shrink — so the panel grew to fit all of them and pushed
-     the photograph off instead of letting the strip scroll. */
+  gap: 14px;
   min-width: 0;
+  min-height: 0;
+  padding: 18px;
+  overflow: hidden;
   color: #f1efe8;
+  background: rgb(26 26 26 / 0.97);
+  border-left: 1px solid rgb(255 255 255 / 0.09);
   cursor: auto;
 }
 
-/* Each section is its own surface rather than text floating on the dimmed page
-   — a transcript is hard enough to read without a museum wall behind it. */
+/* Each section is its own scroller inside the pane; the pane itself is the
+   surface, so neither one draws a border of its own. */
 #lightbox-card,
 #lightbox-photo {
-  padding: 14px 16px;
-  padding: 16px 18px;
-  border-radius: var(--radius-m);
-  background: rgb(28 27 25 / 0.92);
-  border: 1px solid rgb(241 239 232 / 0.1);
-  background: rgba(30, 30, 30, 0.88);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  padding: 0;
 }
 #lightbox-card { flex: 0 0 auto; max-height: 40%; overflow-y: auto; }
 /* The photograph's own section takes the remaining height, because the
    transcript lives in it and that is what needs the room. */
 #lightbox-photo { flex: 1 1 auto; overflow-y: auto; }
 #lightbox-card[hidden] { display: none; }
+/* One hairline between the card's context and the photograph's own, and only
+   when there is a card to separate from. */
+#lightbox-card:not([hidden]) + #lightbox-photo {
+  padding-top: 14px;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
 
 #lightbox-card h3 {
   margin: 0;
@@ -2247,31 +2331,57 @@ html.desktop-shell .lightbox-header {
   scrollbar-width: thin;
 }
 
-/* The card's other photographs, one click away. Absent when there is only one,
-   which is every ordinary photo. */
+/* The day's other photographs, under the text in the pane: a caption line, then
+   the row. */
 #lightbox-strip {
   flex: 0 0 auto;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 6px;
-  overflow-x: auto;
-  /* Same reason as the panel: this is the box that has to be allowed to be
-     narrower than what it holds. */
   min-width: 0;
-  padding-bottom: 2px;
   padding: 2px 0 4px;
-  scrollbar-width: thin;
-  overscroll-behavior-x: contain;
 }
+/* The scroller itself. */
+.strip-track {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.strip-track::-webkit-scrollbar { display: none; }
+/* "67 / 83", above the row and left-aligned: what the window would otherwise
+   hide, read as the strip's caption rather than as one more thumbnail. */
+.strip-count {
+  align-self: flex-start;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.45);
+}
+/* Zoomed, the strip steps out of the way: the reader is inspecting pixels, and
+   a filmstrip beside them is one more thing in the corner of the eye. */
+.lightbox.is-zoomed #lightbox-strip {
+  opacity: 0;
+  pointer-events: none;
+}
+#lightbox-strip::-webkit-scrollbar { display: none; }
 #lightbox-strip[hidden] { display: none; }
+/* The thumbs share the row: a fixed 60px left 65px of empty space at the right
+   end whenever five would not fit by one pixel, which read as a gap rather than
+   as a limit. */
 #lightbox-strip img {
-  width: 74px;
-  height: 56px;
+  height: 45px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 74px;
   object-fit: cover;
   border-radius: 5px;
   border: 2px solid transparent;
   opacity: 0.55;
   cursor: pointer;
-  flex-shrink: 0;
   transition: opacity 120ms ease, transform 120ms ease, border-color 120ms ease;
 }
 #lightbox-strip img:hover { opacity: 0.85; }
@@ -2285,21 +2395,24 @@ html.desktop-shell .lightbox-header {
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
-/* Narrow: stack, and cap the panel so the photograph keeps most of the height. */
+/* Narrow: stack, and cap the pane so the photograph keeps most of the height.
+   The strip has nowhere to sit in this layout that does not eat the photograph,
+   so it goes. */
 @media (max-width: 900px) {
   .lightbox-figure {
-    flex-direction: column;
-    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
     /* The height a phone actually shows, not the one behind its toolbars —
        92vh on a phone reaches under them, and the panel's end with it. */
-    height: 92dvh;
-    height: calc(92dvh - 30px);
+    height: calc(100dvh - 40px);
   }
-  .lightbox-stage { min-height: 0; }
-  .lightbox img { max-height: 100%; }
+  .lightbox-stage { grid-area: 1 / 1; }
+  #lightbox-strip { display: none; }
   #lightbox-panel {
-    flex: 0 1 auto;
+    grid-area: 2 / 1;
     max-height: 40vh;
+    border-left: none;
+    border-top: 1px solid rgb(255 255 255 / 0.09);
     /* One scroller for the whole panel. Stacked, the card could not shrink
        and the photo's section got what was left — nothing, on a phone — so
        the transcript was clipped with no way to reach it. Reported as "layout
