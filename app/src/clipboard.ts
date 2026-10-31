@@ -6,6 +6,15 @@
  * and JPEG — so the picture is re-encoded from the pixels the browser already
  * decoded, not handed over as the file it came from.
  *
+ * **And PNG of a photograph is enormous**, which is why the copy is capped.
+ * Measured on two real originals: 4080×3072 encodes to **24.9 MB** and takes
+ * 1175ms; 3072×4096 to **15.7 MB** / 1009ms. Pasting one of those into
+ * Explorer produced a 20MB file on disk, which is what a reader notices. At a
+ * 1600px long edge the same two are 4.7 MB / 140ms and 3.3 MB / 216ms — the
+ * cap buys speed as well as size, because PNG's cost is the pixel count. The
+ * budget below is the backstop for a photograph that is noisy enough to blow
+ * past it at 1600.
+ *
  * **Only in a secure context.** `navigator.clipboard` does not exist on a plain
  * http origin, which is exactly how the archive is read over the home network
  * (`http://<lan-ip>:17923`). The caller asks first and hides the control rather
@@ -14,6 +23,13 @@
  */
 
 const PNG = "image/png";
+
+/** The long edge the copy is scaled to. Detail enough to paste into a document. */
+const MAX_EDGE = 1600;
+/** If a photograph still encodes past this, it is re-encoded smaller. */
+const BUDGET_BYTES = 4 * 1024 * 1024;
+/** The second and last attempt: 4080×3072 measured 2.7 MB here. */
+const FALLBACK_EDGE = 1200;
 
 /**
  * Whether this page can copy an image at all.
@@ -30,7 +46,7 @@ export function canCopyImage(): boolean {
 }
 
 /**
- * Copies what `img` is showing, at its own resolution.
+ * Copies what `img` is showing, scaled to a size a clipboard can carry.
  *
  * **`write` is called immediately, and everything slow happens in the promise
  * it is handed.** The click's user activation is what permits the write, and it
@@ -58,11 +74,29 @@ async function encodePng(img: HTMLImageElement): Promise<Blob> {
   const height = img.naturalHeight;
   if (width === 0 || height === 0) throw new Error("the image has not decoded");
 
+  const first = await drawPng(img, MAX_EDGE);
+  if (first.size <= BUDGET_BYTES) return first;
+  // A photograph noisy enough to be over budget at 1600 gets one smaller try
+  // rather than being handed over at whatever size it came out.
+  return drawPng(img, FALLBACK_EDGE);
+}
+
+/** The photograph, scaled so its long edge is at most `edge` pixels, as PNG. */
+async function drawPng(img: HTMLImageElement, edge: number): Promise<Blob> {
+  const natural = Math.max(img.naturalWidth, img.naturalHeight);
+  const scale = Math.min(1, edge / natural);
+  const width = Math.max(1, Math.round(img.naturalWidth * scale));
+  const height = Math.max(1, Math.round(img.naturalHeight * scale));
+
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("no 2d drawing context");
+  // Downscaling a 12-megapixel photograph by a third in one `drawImage` is
+  // nearest-neighbour in effect and shows as jaggies on fine detail; the
+  // `imageSmoothingQuality` hint asks for the better resampler.
+  context.imageSmoothingQuality = "high";
   context.drawImage(img, 0, 0, width, height);
 
   // A canvas drawn from an image this page did not load itself is tainted, and

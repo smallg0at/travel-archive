@@ -457,10 +457,22 @@ it fail with `NotAllowedError` while the document was focused and
 `clipboard-write` reported `granted`. A promise-valued `ClipboardItem` is the
 way through — `write` is called straight away and the pixels arrive later; a
 promise that resolved 8s later still wrote correctly. PNG is the only type
-Chromium accepts, so the picture is re-encoded from the decoded `<img>`
-(measured: 771ms and 8.4MB for 4032×3024), and a canvas drawn from an image the
-page did not load itself is tainted — which is why the button is absent on the
-`openLightbox(url)` path. **Verify it in Electron, not in the embedded browser:**
+Chromium accepts, so the picture is re-encoded from the decoded `<img>`, and a
+canvas drawn from an image the page did not load itself is tainted — which is
+why the button is absent on the `openLightbox(url)` path.
+
+**And PNG of a photograph is enormous, so the copy is capped.** Measured on two
+real originals: 4080×3072 encodes to **24.9 MB**, 3072×4096 to **15.7 MB** —
+pasting one into Explorer produced a 20MB file, which is what a reader notices.
+PNG has no quality knob, so the only lever is pixels: the same two at a 1600px
+long edge are 4.7 MB and 3.3 MB, and the encode drops from ~1.1s to ~0.15s
+(PNG's cost is the pixel count). `clipboard.ts` scales to `MAX_EDGE = 1600` and
+re-encodes at 1200 if a noisy photograph still lands past a 4 MB budget. The
+original pixels are therefore **not** on the clipboard — that is the trade, and
+it is why "copy the file itself" would be a different action, not a tweak to
+this one.
+
+**Verify it in Electron, not in the embedded browser:**
 the desktop app's browser profile reports `clipboard-write` as `denied`, so a
 copy tested there always fails. Electron 45's `clipboard.read()` no longer
 reports image formats either; read the OS clipboard with
