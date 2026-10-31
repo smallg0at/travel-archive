@@ -2,12 +2,9 @@ import { createServer, type Server } from "node:http";
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
 import { readOobe, writeOobe } from "./oobeStore.js";
-import { existsSync } from "node:fs";
-import { spawn } from "node:child_process";
-import { get } from "node:http";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { archiveHome, dataFile } from "./paths.js";
+import { dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { withArchiveLock } from "./lock.js";
 import { originAllowed, hostAllowed } from "./originCheck.js";
@@ -23,7 +20,7 @@ import {
 } from "./thumbStore.js";
 import type { AppPrefs } from "@travel-archive/shared";
 import { readPrefs, writePrefs } from "./prefsStore.js";
-import { env, settingNow, shellEnvironment } from "./env.js";
+import { env, settingNow } from "./env.js";
 import { getCachedAccessToken, getAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
 import { makeAccess, isLoopback } from "./access.js";
 import { diagnostics } from "./diagnostics.js";
@@ -31,7 +28,7 @@ import { loadIndex } from "./archiveStore.js";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { configStatus, isWritableKey, saveConfig } from "./configStore.js";
 import { sendTestNotification } from "./notify.js";
-import { autostartStatus, runtimePath, setAutostart, warmAutostartCache } from "./autostart.js";
+import { autostartStatus, setAutostart, warmAutostartCache } from "./autostart.js";
 import {
   remoteAccessStatus,
   remotePorts,
@@ -66,6 +63,7 @@ import { BadRequest, cors, decodeSegment, json, readJsonBody, refuseIfBusy, send
 import { archiveStatus, mirrorOrFetch, readLocalJson } from "./server/mirror.js";
 import { streamJob } from "./server/jobStream.js";
 import { beginWarm, clearCache, fetchAndCache, imageType, warmingStatus } from "./server/media.js";
+import { handOver, planRestart, type RestartHost } from "./server/restart.js";
 
 /**
  * How a screenshot-passphrase failure is reported.
@@ -104,165 +102,6 @@ import * as jobs from "./server/jobs.js";
  * page reloaded mid-run reattaches by polling once and then subscribing.
  */
 
-
-
-
-
-
-/**
- * Whether this server's own health endpoint answers, without going through
- * the proxy layer.
- *
- * A plain `fetch` would be handed to the global dispatcher that
- * `initProxyDispatcher` installed for AI and Graph traffic, and a loopback URL
- * asking a system proxy to loop back is a question with two answers. `http.get`
- * touches neither, and this is the one probe that must not be clever.
- */
-function answersHealth(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = get(`http://127.0.0.1:${port}/health`, (res) => {
-      res.resume();
-      resolve(res.statusCode === 200);
-    });
-    req.setTimeout(1200, () => {
-      req.destroy();
-      resolve(false);
-    });
-    req.on("error", () => resolve(false));
-  });
-}
-
-type RestartPlan = { ok: true; entry: string } | { ok: false; error: string };
-
-/**
- * Whether a restart may happen, and what to start in this one's place.
- *
- * Refuses on a running job rather than killing it: a job stopped mid-write
- * leaves the archive lock held by a process that will never release it, and
- * that failure surfaces as "nothing works" at the next launch with no line on
- * screen to explain it.
- */
-async function planRestart(): Promise<RestartPlan> {
-  const running = jobs.runningJob();
-  if (running) {
-    return { ok: false, error: `A ${running.kind} job is running (${running.id}); wait for it or cancel it first.` };
-  }
-  const entry = process.argv[1];
-  if (!entry || !isAbsolute(entry) || !existsSync(entry)) {
-    return {
-      ok: false,
-      error:
-        `This server was not started from a file on disk (${entry ?? "no entry point"}), ` +
-        `so there is nothing to start again.`,
-    };
-  }
-  return { ok: true, entry };
-}
-
-/**
- * Start a replacement and leave — only once it is answering.
- *
- * The order is the whole design:
- *
- *   1. **Close the listener first.** On Windows a replacement binding while
- *      this one still listens gets EADDRINUSE and dies, which would be a
- *      restart that removes the server. The port has to be free *before* the
- *      new process starts, not when it tries.
- *   2. **Spawn detached, from the same entry, with the shell's environment
- *      rather than this process's**, so it does not care whether it was the
- *      desktop shell, the sign-in launcher or a terminal that started this one.
- *      Not this process's env: that carries `.env`'s values, `dotenv` will not
- *      override them, and the replacement would come back holding the very
- *      setting the reader just changed and asked to apply (`shellEnvironment`).
- *      No supervisor is introduced — the dying process is the only thing that
- *      has to work, and it works the same in the background case where there is
- *      no shell to fall back on.
- *   3. **Wait for /health, up to 20 seconds, before exiting.** A replacement
- *      that failed to start must be followed by this one coming back up, not
- *      by nothing.
- *
- * The response has already been written by then: readers see a couple of
- * seconds in which `/health` does not answer, which the app's two-consecutive-
- * misses rule absorbs without drawing the offline banner.
- */
-async function handOver(entry: string): Promise<void> {
-  console.log(`restart: handing over to ${entry}`);
-
-  // Wait for the listener to be *gone*, not merely closing. `server.close()`
-  // releases the port only once its connections are finished, and on Windows a
-  // replacement that binds before then gets EADDRINUSE — which is exactly what
-  // the first attempt did, with the child's own error line lost along with it
-  // because it died before a pipe flushed.
-  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
-  server.closeIdleConnections?.();
-  const stragglers = setTimeout(() => server.closeAllConnections?.(), 1200);
-  await Promise.race([closed, new Promise<void>((r) => setTimeout(r, 4000))]);
-  clearTimeout(stragglers);
-
-  // The page listener must go too, for the mirror-image reason: a replacement
-  // that cannot bind the app port would come up API-only, and the archive
-  // would answer /health with no way to open it. If this process never
-  // served the page (the shell does), there is nothing to close.
-  if (appServer) {
-    const pageClosed = new Promise<void>((resolve) => appServer!.close(() => resolve()));
-    appServer.closeIdleConnections?.();
-    await Promise.race([pageClosed, new Promise<void>((r) => setTimeout(r, 2000))]);
-    appServer = null;
-  }
-
-  let child: ReturnType<typeof spawn> | null = null;
-  try {
-    child = spawn(runtimePath(), [entry], {
-      cwd: archiveHome(),
-      env: { ...shellEnvironment(), ELECTRON_RUN_AS_NODE: "1" },
-      detached: true,
-      // Not this process's stdout: the replacement writes `data/serve.log`
-      // itself (logFile.ts), and handing it our stream as well would put every
-      // line in twice — once through the launcher's redirect, once through
-      // its own mirror.
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    child.on("error", (err) => console.error(`restart: could not start the replacement: ${err.message}`));
-    child.unref();
-  } catch (err) {
-    console.error(`restart: failed to spawn the replacement: ${(err as Error).message}`);
-  }
-
-  if (child) {
-    // A replacement that dies must be reported now, not after twenty seconds
-    // of polling a port nobody is going to answer on.
-    let died: string | null = null;
-    child.once("exit", (code, signal) => {
-      died = code !== null && code !== undefined ? String(code) : String(signal ?? "unknown");
-    });
-
-    for (let attempt = 0; attempt < 40; attempt++) {
-      await new Promise((r) => setTimeout(r, 500));
-      if (died !== null) {
-        console.error(`restart: the replacement exited (${died}) before it answered`);
-        break;
-      }
-      if (await answersHealth(env.servePort)) {
-        console.log("restart: replacement is answering - exiting");
-        // Not `process.exit` straight away: this process's stdout is a pipe
-        // (the launcher redirects it), and a synchronous exit drops whatever
-        // the pipe has not flushed - which is how the first attempt's report
-        // went missing.
-        setTimeout(() => process.exit(0), 150);
-        return;
-      }
-    }
-  }
-
-  // Nothing came up. Take the listener back rather than leave the port held by
-  // a process that is about to stop listening and then sit there.
-  console.error("restart: no replacement answered within 20s - taking the listener back");
-  server.listen(env.servePort, HOST, () => {
-    console.log(`pipeline serve - back up on ${HOST} after a restart that did not complete`);
-  });
-  void startAppServer();
-}
 
 /**
  * Everything this process prints is also written to `data/serve.log` — the
@@ -728,7 +567,7 @@ const routes: [RegExp, string, Handler][] = [
       const plan = await planRestart();
       if (!plan.ok) return json(res, 409, plan);
       json(res, 200, { ok: true, restarting: true });
-      setTimeout(() => void handOver(plan.entry), 300);
+      setTimeout(() => void handOver(plan.entry, restartHost), 300);
     },
   ],
 
@@ -1664,6 +1503,37 @@ const access = makeAccess({ password: runningPassword ?? null, exposed });
  */
 const thumbLimiter = new RateLimiter(60, 4);
 const signInThrottle = new FailureThrottle(5, 5 * 60_000, 5 * 60_000);
+
+/**
+ * The listeners `handOver` (server/restart.ts) has to take down and, if the
+ * replacement never answers, put back. They belong to this file, so the
+ * restart logic asks rather than reaches in.
+ */
+const restartHost: RestartHost = {
+  closeApi: async () => {
+    // Wait for the listener to be *gone*, not merely closing. `server.close()`
+    // releases the port only once its connections are finished, and on Windows
+    // a replacement that binds before then gets EADDRINUSE.
+    const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+    server.closeIdleConnections?.();
+    const stragglers = setTimeout(() => server.closeAllConnections?.(), 1200);
+    await Promise.race([closed, new Promise<void>((r) => setTimeout(r, 4000))]);
+    clearTimeout(stragglers);
+  },
+  closeApp: async () => {
+    if (!appServer) return;
+    const pageClosed = new Promise<void>((resolve) => appServer!.close(() => resolve()));
+    appServer.closeIdleConnections?.();
+    await Promise.race([pageClosed, new Promise<void>((r) => setTimeout(r, 2000))]);
+    appServer = null;
+  },
+  reopen: () => {
+    server.listen(env.servePort, HOST, () => {
+      console.log(`pipeline serve - back up on ${HOST} after a restart that did not complete`);
+    });
+    void startAppServer();
+  },
+};
 
 server.listen(env.servePort, HOST, () => {
   const where = exposed ? `http://${HOST}:${env.servePort}` : `http://127.0.0.1:${env.servePort} (loopback only)`;
