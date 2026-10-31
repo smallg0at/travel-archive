@@ -35,6 +35,18 @@ layers flex and min-height on top of those base rules. The owner spotted it;
 restored in `64e6473`. `grep` for the class name across `app/src` before
 removing its rules, and remember that the phone may be styling on top of them.
 
+**A mechanical move is verified by comparing sets, not by the build passing.**
+Moving `serve.ts`'s route table into `server/routes/` (2026-10-31) kept
+typecheck, all 206 tests, the gates and the smoke test green — and silently
+dropped seven routes, all of the ones written on a single line, which the
+script that copied the table did not understand: `/archive/status`, `/jobs`,
+`/jobs/history`, `/jobs/screens`, `/jobs/analyze/auto`,
+`/jobs/analyze/batches` and `/jobs/:id/events` — an SSE stream and the Activity
+history simply gone, with nothing failing. The type checker cannot see a
+handler that no longer exists. Diff the *set* of things (routes, selectors,
+rows) before and after, and keep a probe that asks each one for an answer:
+`scripts/routes-probe.mjs` fails on the dispatcher's own "No route for".
+
 **Watch for `display: …` beating `[hidden]`.** An author-origin `display` rule
 overrides the UA's `[hidden] { display: none }`. This has bitten three times —
 `.lightbox`, `.signin-banner`, `.job-form`. The remedy in the stylesheet is to
