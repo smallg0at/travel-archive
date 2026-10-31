@@ -1,19 +1,18 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer, type Server } from "node:http";
 import { cachedSync, checkSync, protectedPaths, runSync, startSyncChecks, type ConflictChoice } from "./jobs/sync.js";
 import { pins, readSync, removePin, setPin, writeSync } from "./syncStore.js";
 import { readOobe, writeOobe } from "./oobeStore.js";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { get } from "node:http";
-import { dirname, isAbsolute, join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { archiveHome, dataFile } from "./paths.js";
 import { mirrorOutputToLog } from "./logFile.js";
 import { withArchiveLock } from "./lock.js";
 import { originAllowed, hostAllowed } from "./originCheck.js";
 import { FailureThrottle, RateLimiter } from "./rateLimit.js";
-import { downloadMetadataJson, downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
@@ -23,7 +22,7 @@ import {
   writeThumb,
   type ThumbSize,
 } from "./thumbStore.js";
-import type { AppPrefs, ArchiveIndexFile, ArchiveStatus, JobRecord } from "@travel-archive/shared";
+import type { AppPrefs } from "@travel-archive/shared";
 import { readPrefs, writePrefs } from "./prefsStore.js";
 import { env, settingNow, shellEnvironment } from "./env.js";
 import { getCachedAccessToken, getAccessToken, getPendingDeviceCode, hasCachedAccount } from "./auth.js";
@@ -64,6 +63,9 @@ import { planScreenPassphrase, setScreenPassphrase, SCREEN_CAPTIONS_FILE } from 
 import { canStorePassphrase, hasStoredPassphrase, importLegacyPassphrase } from "./screenKeyStore.js";
 import { passphraseProblem } from "./screenKey.js";
 import { isScreenError } from "./screenErrors.js";
+import { BadRequest, cors, decodeSegment, json, readJsonBody, refuseIfBusy, sendJsonText, type Handler } from "./server/http.js";
+import { archiveStatus, mirrorOrFetch, readLocalJson } from "./server/mirror.js";
+import { streamJob } from "./server/jobStream.js";
 
 /**
  * How a screenshot-passphrase failure is reported.
@@ -102,201 +104,9 @@ import * as jobs from "./server/jobs.js";
  * page reloaded mid-run reattaches by polling once and then subscribing.
  */
 
-/**
- * Which origins may talk to this server, and which may write to it.
- *
- * The rule itself lives in `originCheck.ts`: it is a security decision, so it
- * sits where it can be tested on its own. What used to be here matched private
- * *IP literals* against three ports — which quietly excluded every reader who
- * reached the machine by name instead of by address (`http://nas:17923`,
- * `http://desktop.local:17923`), for CORS on a read and a 403 on a write.
- */
 
-type Handler = (req: IncomingMessage, res: ServerResponse, params: string[]) => Promise<void> | void;
 
-function cors(req: IncomingMessage, res: ServerResponse): void {
-  // **Always `Vary: Origin`, even with no Origin on the request.**
-  //
-  // Thumbnails are served `immutable, max-age=31536000`. Without this header a
-  // response fetched *without* CORS is cached with no record that CORS mattered,
-  // and the browser then satisfies a later CORS request from that same entry —
-  // which has no `Access-Control-Allow-Origin`, so the check fails and the image
-  // dies instantly. That presented as "some images load and some do not",
-  // splitting on whichever URLs happened to be fetched no-CORS first, and it
-  // survives clearing the *server's* cache because the poisoned copy is in the
-  // browser's.
-  res.setHeader("Vary", "Origin");
-  const origin = req.headers.origin;
-  if (origin && originAllowed(origin, { exposed })) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-  // The session cookie has to be allowed through for a remote reader, who signs
-  // in on the shell's origin and then fetches thumbnails from this one.
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
 
-/** A path segment from the URL, or null when its escapes are malformed. */
-function decodeSegment(value: string): string | null {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
-}
-
-function json(res: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
-  res.writeHead(status, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) });
-  res.end(payload);
-}
-
-/**
- * A request the server understands well enough to refuse precisely.
- *
- * Distinct from a failure: this is the caller's answer, and it has to reach
- * them as a 400 rather than being caught by the generic handler below and
- * reported as the server's own fault — which is what happened to the
- * content-type check on its first outing.
- */
-class BadRequest extends Error {}
-
-async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += (chunk as Buffer).length;
-    // Nothing this API accepts is large; a body this big is a mistake or an abuse.
-    if (size > 1_000_000) throw new BadRequest("Request body too large");
-    chunks.push(chunk as Buffer);
-  }
-  if (chunks.length === 0) return {} as T;
-
-  /**
-   * The content type is the check, not a formality.
-   *
-   * `application/json` makes the browser preflight, and a preflight is where
-   * `cors()` refuses an origin it does not know — so a page on the internet
-   * cannot deliver a body at all. `text/plain` and the form types are "simple"
-   * requests: sent without asking, answered without the attacker seeing the
-   * answer, and **executed all the same**. Parsing whatever arrived meant the
-   * origin rule protected the response and not the write.
-   *
-   * `canWrite` does not help: it is the socket address, and a browser reaching
-   * 127.0.0.1 from any page *is* 127.0.0.1.
-   *
-   * An empty body is exempt — with nothing to parse there is nothing to do —
-   * which keeps a bare `POST /jobs/analyze/collect` from a shell working.
-   */
-  const type = (req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
-  if (type !== "application/json") {
-    throw new BadRequest(`Expected Content-Type: application/json, got ${type || "none"}`);
-  }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf-8")) as T;
-  } catch (err) {
-    // The caller's body, so the caller's 400 — with the parser's own position,
-    // which is the only part of the message worth having.
-    throw new BadRequest(`Body is not valid JSON: ${(err as Error).message}`);
-  }
-}
-
-/** Refuses a second job rather than letting two writers race over index.json. */
-function refuseIfBusy(res: ServerResponse): boolean {
-  const running = jobs.runningJob();
-  if (!running) return false;
-  json(res, 409, { error: "A job is already running", job: running });
-  return true;
-}
-
-/**
- * Totals for the Settings page, from the local mirror.
- *
- * This used to call `loadIndex(token)`, which downloads the whole of
- * `index.json` from OneDrive — **2.5MB, measured at 1,043-1,762ms** — to report
- * five counts. `/archive/index` above already established that the mirror holds
- * identical bytes because this server is the only writer; the same reasoning
- * applies here, and reading it locally parses in **8-11ms**.
- *
- * `signedIn` still comes from the token, since it describes the session rather
- * than the archive, and it is a cache lookup (~2ms) rather than a round trip.
- * The Graph path stays as the fallback for a machine that has never scanned.
- */
-async function archiveStatus(): Promise<ArchiveStatus> {
-  const token = await getCachedAccessToken();
-  if (!token) {
-    return {
-      signedIn: false,
-      schemaVersion: 0,
-      months: [],
-      totals: { photos: 0, analyzable: 0, analyzed: 0, days: 0, sections: 0 },
-    };
-  }
-
-  const local = await readLocalJson("index.json");
-  const index = local ? (JSON.parse(local) as ArchiveIndexFile) : await loadIndex(token);
-  const months = index.months.map((m) => ({
-    month: m.month,
-    photoCount: m.photoCount,
-    representativeCount: m.representativeCount,
-    analyzedCount: m.analyzedCount,
-  }));
-
-  return {
-    signedIn: true,
-    schemaVersion: index.schemaVersion,
-    months,
-    totals: {
-      photos: months.reduce((n, m) => n + m.photoCount, 0),
-      analyzable: months.reduce((n, m) => n + m.representativeCount, 0),
-      analyzed: months.reduce((n, m) => n + m.analyzedCount, 0),
-      days: index.sections.reduce((n, s) => n + s.days.length, 0),
-      sections: index.sections.length,
-    },
-  };
-}
-
-/**
- * One SSE stream per client. The current record is sent immediately so a late
- * subscriber is not staring at a blank panel until the next progress tick, and
- * the stream closes itself once the job reaches a terminal state — otherwise
- * EventSource would reconnect forever to a job that finished.
- */
-function streamJob(res: ServerResponse, id: string): void {
-  const record = jobs.getJob(id);
-  if (!record) return json(res, 404, { error: "No such job" });
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    // Node buffers small writes; without this a proxy or the client may hold
-    // frames back until enough bytes accumulate.
-    "X-Accel-Buffering": "no",
-  });
-
-  const send = (current: JobRecord) => {
-    res.write(`data: ${JSON.stringify(current)}\n\n`);
-    if (current.status !== "running" && current.status !== "queued") {
-      unsubscribe();
-      clearInterval(heartbeat);
-      res.end();
-    }
-  };
-
-  // A comment frame keeps intermediaries from timing out a quiet stream — an
-  // analyze job can spend a minute inside one slow month without emitting.
-  const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), 15_000);
-  const unsubscribe = jobs.subscribe(id, send);
-
-  res.on("close", () => {
-    unsubscribe();
-    clearInterval(heartbeat);
-  });
-
-  send(record);
-}
 
 /**
  * Fetches one image and caches it, collapsing concurrent requests for the same
@@ -306,67 +116,7 @@ function streamJob(res: ServerResponse, id: string): void {
  * fast scroll, and certain once warming runs alongside rendering — makes two
  * Graph round trips for bytes that are about to be identical.
  */
-/**
- * Reads a file from the archive mirror without parsing it — the app is going to
- * parse it anyway, and `index.json` is 2.4MB.
- */
-async function readLocalJson(relative: string): Promise<string | null> {
-  try {
-    return await readFile(dataFile(relative), "utf-8");
-  } catch {
-    return null;
-  }
-}
 
-/**
- * A metadata file from the mirror — and when the mirror does not have it yet,
- * from OneDrive, written into the mirror on the way back.
- *
- * The mirror is filled by the pipeline, so a machine that has never run a scan
- * or a sync has an empty one even when the account's OneDrive holds a whole
- * archive. That state used to fall through to the *reader's* own Graph fetch,
- * which needs the reader's Microsoft sign-in: an install pointed at an existing
- * archive therefore asked the owner to sign in twice, with the server already
- * signed in and perfectly able to answer. Measured 2026-10-14 on the installed
- * build — empty mirror, `GET /archive/index` 404, the reader showed the sign-in
- * banner while `/health` said `signedIn: true`.
- *
- * Skipped while a job runs, because a job is the mirror's other writer, and the
- * write takes the archive lock so a CLI run sharing the home cannot be trodden
- * on. Any failure returns null, which is exactly what this route did before:
- * the reader falls back to Graph, and on a phone that is the normal path.
- */
-async function mirrorOrFetch(relative: string): Promise<string | null> {
-  const local = await readLocalJson(relative);
-  if (local) return local;
-  if (jobs.runningJob()) return null;
-
-  const token = await getCachedAccessToken();
-  if (!token) return null;
-
-  try {
-    const doc = await downloadMetadataJson<unknown>(token, env.metadataFolder, relative);
-    if (doc === null) return null;
-    const text = JSON.stringify(doc, null, 2);
-    await withArchiveLock(`mirror ${relative}`, async () => {
-      await mkdir(dirname(dataFile(relative)), { recursive: true });
-      await writeFile(dataFile(relative), text, "utf-8");
-    });
-    return text;
-  } catch (err) {
-    console.log(`mirror: ${relative} not fetched: ${(err as Error).message}`);
-    return null;
-  }
-}
-
-function sendJsonText(res: ServerResponse, body: string): void {
-  res.writeHead(200, {
-    "Content-Type": "application/json; charset=utf-8",
-    // Not immutable: a job rewrites these, and the app must see it on reload.
-    "Cache-Control": "no-cache",
-  });
-  res.end(body);
-}
 
 const inFlight = new Map<string, Promise<Buffer | null>>();
 
@@ -1845,7 +1595,7 @@ const routes: [RegExp, string, Handler][] = [
 ];
 
 const server = createServer(async (req, res) => {
-  cors(req, res);
+  cors(req, res, exposed);
   if (req.method === "OPTIONS") {
     res.writeHead(204);
     return res.end();
