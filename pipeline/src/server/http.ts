@@ -13,6 +13,14 @@ import * as jobs from "./jobs.js";
 export type Handler = (req: IncomingMessage, res: ServerResponse, params: string[]) => Promise<void> | void;
 
 /**
+ * One entry in the route table: what it matches, the one method it answers, and
+ * the handler. Anything else on that path is a 405 with this table as the
+ * `Allow` header, which is why the method is a value here rather than a check
+ * inside the handler.
+ */
+export type Route = [RegExp, string, Handler];
+
+/**
  * Which origins may talk to this server, and which may write to it.
  *
  * The rule itself lives in `originCheck.ts`: it is a security decision, so it

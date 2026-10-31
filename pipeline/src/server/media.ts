@@ -13,6 +13,9 @@ import { downloadPhotoBuffer, downloadThumbnailBuffer } from "../graph.js";
 import { dataFile } from "../paths.js";
 import { thumbSize, writeThumb, type ThumbSize } from "../thumbStore.js";
 
+/** The sizes the cache holds — re-exported so routes can name one. */
+export type { ThumbSize };
+
 /**
  * Fetches one image and caches it, collapsing concurrent requests for the same
  * one.
