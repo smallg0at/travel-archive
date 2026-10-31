@@ -12,14 +12,13 @@ import { mirrorOutputToLog } from "./logFile.js";
 import { withArchiveLock } from "./lock.js";
 import { originAllowed, hostAllowed } from "./originCheck.js";
 import { FailureThrottle, RateLimiter } from "./rateLimit.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer, fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
+import { fetchItemDownloadUrl, fetchItemMeta, GraphError, listChildFolderNames, listFolderFileNames, monthUnder } from "./graph.js";
 import { renderCapability } from "./localThumb.js";
 import {
   invalidateCacheStats,
   readThumb,
   setProtectedProvider,
   thumbSize,
-  writeThumb,
   type ThumbSize,
 } from "./thumbStore.js";
 import type { AppPrefs } from "@travel-archive/shared";
@@ -66,6 +65,7 @@ import { isScreenError } from "./screenErrors.js";
 import { BadRequest, cors, decodeSegment, json, readJsonBody, refuseIfBusy, sendJsonText, type Handler } from "./server/http.js";
 import { archiveStatus, mirrorOrFetch, readLocalJson } from "./server/mirror.js";
 import { streamJob } from "./server/jobStream.js";
+import { beginWarm, clearCache, fetchAndCache, imageType, warmingStatus } from "./server/media.js";
 
 /**
  * How a screenshot-passphrase failure is reported.
@@ -108,106 +108,6 @@ import * as jobs from "./server/jobs.js";
 
 
 
-/**
- * Fetches one image and caches it, collapsing concurrent requests for the same
- * one.
- *
- * Without this, a browser asking for the same thumbnail twice — easy during a
- * fast scroll, and certain once warming runs alongside rendering — makes two
- * Graph round trips for bytes that are about to be identical.
- */
-
-
-const inFlight = new Map<string, Promise<Buffer | null>>();
-
-/**
- * Only the most recent warm run may continue.
- *
- * Warming competes with the app's own Graph calls — the month shards it needs
- * before it can render anything at all — and measurably so: with a previous
- * run still going, loading a trip took 5,745ms of shard fetches against
- * 4,021ms with the warm loop dead, one shard inflating from 1,335ms to
- * 3,313ms. A reload should supersede whatever the last page load started
- * rather than adding to it.
- */
-let warmGeneration = 0;
-
-/**
- * What the latest `/thumb/warm` is doing, for `/health` — the app's Activity
- * page shows it. Warming is not a job (it does not take the archive lock and
- * must not block one), so it has no record of its own; each request replaces
- * this, as it replaces the work.
- */
-interface Warming {
-  size: ThumbSize;
-  total: number;
-  done: number;
-  failed: number;
-  startedAt: string;
-  finishedAt: string | null;
-}
-let warming: Warming | null = null;
-/** How long a finished warm stays in `/health`, so a page polling every 15 s still sees how it ended. */
-const WARMING_SHOWN_FOR_MS = 10 * 60_000;
-
-function warmingStatus(): Warming | null {
-  if (warming?.finishedAt && Date.now() - Date.parse(warming.finishedAt) > WARMING_SHOWN_FOR_MS) return null;
-  return warming;
-}
-
-function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer | null> {
-  const key = `${size}:${itemId}`;
-  const existing = inFlight.get(key);
-  if (existing) return existing;
-
-  const work = (async () => {
-    const token = await getCachedAccessToken();
-    if (!token) return null;
-    const bytes =
-      size === "full"
-        ? await downloadPhotoBuffer(token, itemId)
-        : await downloadThumbnailBuffer(token, itemId, size);
-    if (bytes) await writeThumb(size, itemId, bytes);
-    return bytes;
-  })().finally(() => inFlight.delete(key));
-
-  inFlight.set(key, work);
-  return work;
-}
-
-/** Deletes cached files of these sizes, skipping anything pinned. */
-async function clearCache(sizes: ThumbSize[], keep: Set<string>): Promise<number> {
-  const { readdir, unlink } = await import("node:fs/promises");
-  const { join } = await import("node:path");
-  const { dataFile } = await import("./paths.js");
-  let removed = 0;
-  for (const size of sizes) {
-    const dir = dataFile(`thumbs/${size}`);
-    let names: string[];
-    try {
-      names = await readdir(dir);
-    } catch {
-      continue;
-    }
-    for (const name of names) {
-      const path = join(dir, name);
-      if (keep.has(path)) continue;
-      try {
-        await unlink(path);
-        removed++;
-      } catch {
-        /* already gone */
-      }
-    }
-  }
-  return removed;
-}
-
-/** JPEG and PNG are the only things this library holds; sniffed, not assumed. */
-function imageType(bytes: Buffer): string {
-  if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
-  return "image/jpeg";
-}
 
 /**
  * Whether this server's own health endpoint answers, without going through
@@ -1162,40 +1062,7 @@ const routes: [RegExp, string, Handler][] = [
       const body = await readJsonBody<{ size?: string; ids?: string[] }>(req);
       const size = (body.size === "medium" || body.size === "full" ? body.size : "large") as ThumbSize;
       const ids = Array.isArray(body.ids) ? body.ids.slice(0, 20000) : [];
-
-      const missing: string[] = [];
-      for (const id of ids) if ((await thumbSize(size, id)) === null) missing.push(id);
-
-      json(res, 202, { requested: ids.length, alreadyCached: ids.length - missing.length, warming: missing.length });
-
-      // Deliberately after the response. Concurrency 4, not 8: this runs while
-      // the user is browsing, and the thing it competes with is the app's own
-      // Graph traffic, so being greedy here slows down the very load it is
-      // meant to help.
-      const generation = ++warmGeneration;
-      if (missing.length === 0) return;
-      const record: Warming = {
-        size,
-        total: missing.length,
-        done: 0,
-        failed: 0,
-        startedAt: new Date().toISOString(),
-        finishedAt: null,
-      };
-      warming = record;
-      void (async () => {
-        let next = 0;
-        const worker = async () => {
-          while (next < missing.length && generation === warmGeneration) {
-            const id = missing[next++];
-            const bytes = await fetchAndCache(size, id).catch(() => null);
-            if (bytes) record.done++;
-            else record.failed++;
-          }
-        };
-        await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
-        record.finishedAt = new Date().toISOString();
-      })();
+      json(res, 202, await beginWarm(size, ids));
     },
   ],
   /**
