@@ -117,6 +117,23 @@ async function targetFor(root: string, urlPath: string): Promise<string> {
  * Read at listen time rather than at import: the address can change between
  * launches (DHCP), and a stale list is the same failure again.
  */
+/**
+ * Whether an IPv4 literal is in one of the private ranges the policy names:
+ * RFC 1918 only, the same three as the job server's `isPrivateIpv4`.
+ *
+ * Written as a regex over the address, and the `10` alternative is *bare* on
+ * purpose: the pattern continues with `\.` for all three ranges, so `10\.`
+ * would ask for "10.." and quietly drop every 10/8 address. That is the shape
+ * this had, and it cost nothing on a 192.168 machine and everything on a 10/
+ * one — the LAN origin was missing from the shell's policy, so the phone loaded
+ * the page and had every request refused. `staticApp.test.ts` now pins the
+ * ranges against the job server's copy on a table rather than on whatever
+ * address this machine happens to hold.
+ */
+export function isPrivateIpv4(host: string): boolean {
+  return /^(?:192\.168|10|172\.(?:1[6-9]|2\d|3[01]))\./.test(host);
+}
+
 function networkOrigins(exposed: boolean): string[] {
   if (!exposed) return [];
   const out: string[] = [];
@@ -125,7 +142,7 @@ function networkOrigins(exposed: boolean): string[] {
       if (address.family !== "IPv4" || address.internal) continue;
       // Private ranges only, so a public address in the policy cannot happen
       // even if this host is somehow reachable from outside.
-      if (!/^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\./.test(address.address)) continue;
+      if (!isPrivateIpv4(address.address)) continue;
       out.push(`http://${address.address}`, `http://${address.address}:*`);
     }
   }

@@ -20,7 +20,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { contentSecurityPolicy, serveApp, type ServeResult } from "../src/staticApp.js";
-import { contentSecurityPolicy as shellPolicy } from "../../desktop/src/static";
+import { contentSecurityPolicy as shellPolicy, isPrivateIpv4 as shellPrivate } from "../../desktop/src/static";
+import { isPrivateIpv4 } from "../src/lanAddresses.js";
 
 function get(port: number, path: string): Promise<{ status: number; headers: Record<string, unknown>; body: string }> {
   return new Promise((resolve, reject) => {
@@ -64,6 +65,24 @@ describe("Content-Security-Policy parity", () => {
     // (May or may not contain a private address depending on this machine —
     // the fixed part is that loopback mode never enumerates interfaces.)
     expect(contentSecurityPolicy(false).startsWith("default-src 'self'")).toBe(true);
+  });
+
+  it("names the same private ranges as the shell, on a table rather than on this machine", () => {
+    // The parity test above only sees the interfaces the runner happens to
+    // have: it passed on a 192.168 laptop while the shell's copy silently
+    // dropped every 10/8 address (`10\.` followed by the pattern's own `\.`
+    // asks for "10.."), which on a CI runner is the only address there is.
+    // This table is the machine-independent half.
+    const privateOnes = ["10.1.0.143", "10.255.255.254", "192.168.1.20", "172.16.0.1", "172.31.255.255"];
+    const publicOnes = ["172.32.0.1", "172.15.0.1", "100.64.0.1", "169.254.1.1", "8.8.8.8", "127.0.0.1"];
+    for (const host of privateOnes) {
+      expect(isPrivateIpv4(host), host).toBe(true);
+      expect(shellPrivate(host), host).toBe(true);
+    }
+    for (const host of publicOnes) {
+      expect(isPrivateIpv4(host), host).toBe(false);
+      expect(shellPrivate(host), host).toBe(false);
+    }
   });
 });
 
