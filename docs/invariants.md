@@ -132,6 +132,24 @@ those files could not exist. `bundle-pipeline.mjs` now refuses to build a
 package that is missing one, and `analyze` reads the gazetteer before it plans
 anything, so a broken install costs a message rather than money.
 
+**A native module is external and copied, never inlined.** esbuild inlines
+`sharp`'s JavaScript and silently drops the addon and libvips, so for three
+weeks every packaged build answered `/health` with `render: {images: false}` and
+the layered fallback made it read as a capability gap rather than a broken
+payload (`heic-decode` is JS over a wasm file and fails the same way). Both are
+`external` in `desktop/scripts/bundle-pipeline.mjs`, and `NATIVE_PACKAGES` copies
+them plus the platform package (`@img/sharp-win32-x64`, which carries the DLLs)
+into `resources/pipeline/node_modules`, where Node finds them by walking up from
+`server.mjs`. Two steps are needed because each one silently loses files:
+esbuild inlines a package it was not told to leave alone, and electron-builder
+drops any `node_modules` inside an `extraResources` source — measured by the
+package having none while `staging/` had it — so `desktop/scripts/after-pack.cjs`
+copies the directory into `appOutDir` after packing. The cost is ~28.6MB in the
+installer and libvips's LGPL-3.0 obligation: `THIRD-PARTY-NOTICES.md` ships as a
+resource and the smoke test asserts both the packages and the notices.
+`--require-render` in the release workflow is the part that matters — the
+failure was a warning nobody read.
+
 **Every request must name this server.** The first thing the handler does is
 `hostAllowed(req.headers.host)` (`pipeline/src/originCheck.ts`). Without it a
 page on any domain can point that domain at `127.0.0.1` (DNS rebinding) and the

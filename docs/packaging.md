@@ -7,7 +7,7 @@ packaging bug found so far came from that difference:
 
 | Missing from the payload | What a user saw |
 |---|---|
-| `sharp`'s native libraries | local rendering silently off; a permanent warning line |
+| `sharp`'s native libraries | local rendering silently off; a permanent warning line (fixed 2026-11-04: the packages ship beside the bundle) |
 | `data/geo/*` | captioning died on its first photo, after the paid run started (1.0.2) |
 | `app-dist` | the API answered and there was no page to type |
 
@@ -27,8 +27,10 @@ testing it is testing the install without installing.
 The check, in order:
 
 1. **Payload files exist and are non-empty** — `server.mjs`, the three
-   gazetteer files, `screenshot-apps.json`, `app-dist/index.html`. Each is named
-   individually so a failure says which file, not "something went wrong".
+   gazetteer files, `screenshot-apps.json`, `app-dist/index.html`, and
+   `node_modules/sharp` with its platform package (the native half `server.mjs`
+   cannot contain). Each is named individually so a failure says which file, not
+   "something went wrong".
 2. **The artifact says what it is.** `resources/pipeline/build-info.json` carries
    version, commit and whether the tree was dirty when it was built. The check
    compares the version with `desktop/package.json`, the commit with the
@@ -69,12 +71,12 @@ Options: `--staging` tests `desktop/staging` with the local node instead of the
 packed exe; `--self-check` copies the payload, deletes the gazetteer and proves
 the check rejects it (a test that cannot fail is decoration); `--require-clean`
 fails when the payload was built from a dirty tree; `--expect-version v1.0.3`
-pins the version CI was asked to build; `--require-render` turns the `sharp`
-warning into a failure, for when the native libraries are bundled.
+pins the version CI was asked to build; `--require-render` turns a missing
+`sharp`/HEIC capability into a failure.
 
-CI runs `node scripts/smoke-package.mjs --self-check` after `npm run package`
-and before attaching the installer, so a payload-less build cannot reach a
-release.
+CI runs `node scripts/smoke-package.mjs --self-check --require-render` after
+`npm run package` and before attaching the installer, so a payload-less build
+cannot reach a release.
 
 ## Request gates
 
@@ -92,8 +94,6 @@ home.
 - The NSIS script: it copies the same `win-unpacked` tree, but the installer's
   own steps (shortcuts, uninstall entries) are only exercised by installing on a
   real machine.
-- `sharp`: reported as a warning until its native libraries ship (see the
-  desktop item for bundling `@img/sharp-win32-x64`).
 - `ffmpeg`: reported as a warning when it is only on this machine's PATH. A
   packaged install without it loses video posters and DNG frames.
 - Whether the baked client id is *valid*: only a real sign-in proves that.

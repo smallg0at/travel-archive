@@ -4,7 +4,9 @@
  * npm workspaces hoist dependencies to the root `node_modules`, so there is no
  * `pipeline/node_modules` tree to ship — and copying the root one would drag in
  * Electron, Vite and the whole toolchain. Bundling produces a single ~3MB file
- * with the six runtime dependencies inlined instead.
+ * with the six runtime dependencies inlined instead. The exceptions are native
+ * or wasm-backed packages (sharp, heic-decode), which are copied beside it —
+ * see NATIVE_PACKAGES.
  *
  * **ESM, not CJS.** `pipeline/src/paths.ts` locates the files that ship beside
  * the code with `import.meta.url`, which esbuild leaves empty under CJS — the
@@ -16,7 +18,7 @@
  * in a checkout.
  */
 import { build } from "esbuild";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,6 +27,31 @@ const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 // directory (that is where the icon lives) and excludes it from the app.
 const STAGE = resolve(ROOT, "desktop/staging/pipeline");
 const OUT = resolve(STAGE, "dist/server.mjs");
+
+/**
+ * Packages the bundle cannot contain, copied beside it instead.
+ *
+ * `sharp` is a JavaScript wrapper around a native addon and libvips; esbuild
+ * used to inline the wrapper, leave the native half behind, and say nothing —
+ * the packaged app answered `/health` with `render: {images: false}` and every
+ * local render quietly fell back (the "sharp is not shipped" entry in the
+ * backlog). `heic-decode` is JS over a 1.4MB `.wasm` loaded from disk and fails
+ * the same way. Both are `external` in the build below; these are the packages
+ * that must sit in a `node_modules` beside `dist/`, where Node finds them by
+ * walking up from `server.mjs`. The platform package carries the libvips DLLs.
+ *
+ * A missing package fails the build rather than shipping a quietly degraded
+ * install: the fallback layer turns "broken payload" into a plausible answer.
+ */
+const NATIVE_PACKAGES = [
+  "sharp",
+  "@img/colour",
+  `@img/sharp-${process.platform}-${process.arch}`,
+  "semver",
+  "detect-libc",
+  "heic-decode",
+  "libheif-js",
+];
 
 /**
  * Configuration compiled into the bundle as a fallback for `process.env`.
@@ -101,6 +128,16 @@ function bakedConfig() {
   return out;
 }
 
+// A stale staging directory would keep a file this build no longer produces.
+rmSync(STAGE, { recursive: true, force: true });
+
+function dirSize(dir) {
+  return readdirSync(dir, { withFileTypes: true }).reduce((sum, entry) => {
+    const path = resolve(dir, entry.name);
+    return sum + (entry.isDirectory() ? dirSize(path) : statSync(path).size);
+  }, 0);
+}
+
 await build({
   entryPoints: [resolve(ROOT, "pipeline/dist/serve.js")],
   bundle: true,
@@ -110,7 +147,8 @@ await build({
   outfile: OUT,
   logLevel: "warning",
   // Electron supplies these; bundling them would be wrong even if it worked.
-  external: ["electron"],
+  // sharp, heic-decode and libheif-js are copied below — see NATIVE_PACKAGES.
+  external: ["electron", "sharp", "heic-decode", "libheif-js"],
   define: { __BAKED_CONFIG__: JSON.stringify(bakedConfig()) },
   banner: {
     // Some bundled dependencies are CommonJS and expect `require` to exist.
@@ -148,6 +186,28 @@ for (const name of GEO) {
 
 console.log(`bundled ${(statSync(OUT).size / 1024 / 1024).toFixed(1)} MB -> ${OUT}`);
 console.log(`copied screenshot-apps.json and ${GEO.length} gazetteer files alongside it`);
+
+/**
+ * The packages from NATIVE_PACKAGES, into the `node_modules` Node finds by
+ * walking up from `dist/server.mjs`.
+ *
+ * The whole published package is copied, not a hand-picked file list: sharp
+ * keeps per-platform metadata and licences beside the addon, and a curated copy
+ * is how one of them goes missing in a later version. The total is printed
+ * because it is installer size the reader pays for.
+ */
+let nativeBytes = 0;
+for (const name of NATIVE_PACKAGES) {
+  const from = resolve(ROOT, "node_modules", name);
+  if (!existsSync(from)) {
+    throw new Error(
+      `missing node_modules/${name} — run "npm install"; without it the packaged server renders nothing locally`,
+    );
+  }
+  cpSync(from, resolve(STAGE, "node_modules", name), { recursive: true });
+  nativeBytes += dirSize(from);
+}
+console.log(`copied ${NATIVE_PACKAGES.length} native package(s), ${(nativeBytes / 1024 / 1024).toFixed(1)} MB, into node_modules`);
 
 /**
  * What this payload was built from, written beside it.

@@ -156,6 +156,10 @@ async function checkPayload() {
     "data/geo/countries.tsv",
     "data/geo/countries.geo.json",
     "screenshot-apps.json",
+    // The native half of the local renderer. `server.mjs` imports it, so a
+    // payload without these loads a `sharp` that cannot decode anything.
+    "node_modules/sharp/package.json",
+    `node_modules/@img/sharp-${process.platform}-${process.arch}/package.json`,
   ];
   for (const rel of required) {
     const file = join(base, rel);
@@ -168,6 +172,12 @@ async function checkPayload() {
   const page = STAGING ? join(ROOT, "app/dist/index.html") : join(resources(), "app-dist/index.html");
   if (existsSync(page)) pass(`payload: ${page.includes("app-dist") ? "app-dist" : "app/dist"}/index.html`);
   else fail("payload: app page (index.html)", `missing at ${page} — the installed app would answer API and show no page`);
+
+  // The bundled payload now carries libvips (LGPL-3.0-or-later), so the licence
+  // inventory has to travel with the binary, not only live in the repository.
+  const notices = STAGING ? join(ROOT, "THIRD-PARTY-NOTICES.md") : join(resources(), "THIRD-PARTY-NOTICES.md");
+  if (existsSync(notices)) pass("payload: third-party notices", `${((await stat(notices)).size / 1024).toFixed(0)} KB`);
+  else fail("payload: third-party notices", `missing at ${notices} — the payload ships LGPL-3.0 libvips`);
 
   await checkPageAssets(STAGING ? join(ROOT, "app/dist") : join(resources(), "app-dist"));
 }
@@ -394,13 +404,13 @@ async function checkServer({ exe, asNode }) {
       await checkNamespaceAgreement(diag.config?.metadataFolder);
     }
 
-    if (STAGING) warn("server: local image rendering (sharp)", "not meaningful from the checkout runtime; run against the packaged build");
-    else if (body.render?.images) pass("server: local image rendering (sharp)");
-    else if (REQUIRE_RENDER) fail("server: local image rendering (sharp)", "render.images is false");
-    else warn("server: local image rendering (sharp)", "false — known gap, tracked separately");
-    if (STAGING) warn("server: HEIC decoding", "not meaningful from the checkout runtime");
-    else if (body.render?.heif === false) warn("server: HEIC decoding", "unavailable — HEIC thumbnails would fall back");
-    else if (body.render?.heif) pass("server: HEIC decoding");
+    if (body.render?.images) pass("server: local image rendering (sharp)");
+    else if (REQUIRE_RENDER)
+      fail("server: local image rendering (sharp)", "render.images is false — the payload lost node_modules/sharp");
+    else warn("server: local image rendering (sharp)", "render.images is false — the local render fallback is unavailable");
+    if (body.render?.heif) pass("server: HEIC decoding");
+    else if (REQUIRE_RENDER) fail("server: HEIC decoding", "render.heif is false — HEIC thumbnails would fall back");
+    else warn("server: HEIC decoding", "unavailable — HEIC thumbnails would fall back");
 
     const page = await waitForUrl(`http://127.0.0.1:${pagePort}/`, 15_000);
     const html = await page.text();

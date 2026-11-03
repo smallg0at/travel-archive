@@ -38,8 +38,17 @@
       {
         "from": "staging/pipeline",
         "to": "pipeline"
+      },
+      {
+        "from": "../THIRD-PARTY-NOTICES.md",
+        "to": "THIRD-PARTY-NOTICES.md"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
       }
     ],
+    "afterPack": "scripts/after-pack.cjs",
     "win": {
       "target": [
         "nsis"
