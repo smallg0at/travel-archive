@@ -177,7 +177,11 @@ switches for what the card carries (caption, date, place — remembered in
   full-bleed photo, caption, one muted line of date and place. Every piece is a
   switch, because a caption written for oneself is not always for the person
   receiving the picture. It exists because most of this archive is HEIC and a
-  chat app handed a `.heic` file shows nothing.
+  chat app handed a `.heic` file shows nothing. Type is sized against the phone
+  it is read on, not against the card's own pixels: the caption is 96px and the
+  date line 62px because a chat app shows the card about 1080 physical pixels
+  wide, which puts them at roughly 18px and 12px — the first pass at 54/34
+  looked right in the editor and arrived unreadable.
 - **The card is drawn from bytes, never from the `<img>` on screen.** A canvas
   drawn from an image whose response lacks CORS headers is tainted and
   `toBlob` then throws — the reader would see "share failed" with no reason.

@@ -35,12 +35,23 @@ const CARD_QUALITY = 0.9;
 /** A photograph taller than this is cropped around the middle rather than
  *  producing a card two screens tall for a panorama held sideways. */
 const MAX_IMAGE_HEIGHT = Math.round(CARD_WIDTH * 1.3);
-const PAD = 88;
-const CAPTION_SIZE = 54;
-const CAPTION_LINE = 72;
-const CAPTION_LINES = 4;
-const FOOTER_SIZE = 34;
-const FOOTER_LINE = 46;
+
+/**
+ * Type sized for the phone the card is read on, not for the card's own pixels.
+ *
+ * The first pass set the caption at 54px on a 2048px card, which is a sane
+ * ratio on paper and wrong on a phone: a chat app shows the card about 1080
+ * physical pixels wide, so 54px lands at roughly 10px of text — legible in the
+ * editor and unreadable in the message. Everything here is therefore measured
+ * against that 1080 target: the caption is ~18px and the date line ~12px once
+ * the card is on screen, which is body text and a footnote.
+ */
+const PAD = 120;
+const CAPTION_SIZE = 96;
+const CAPTION_LINE = 128;
+const CAPTION_LINES = 5;
+const FOOTER_SIZE = 62;
+const FOOTER_LINE = 82;
 
 const PAPER = "#fbfaf8";
 const INK = "#141414";
