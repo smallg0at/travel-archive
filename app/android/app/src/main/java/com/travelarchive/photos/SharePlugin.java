@@ -67,7 +67,7 @@ public class SharePlugin extends Plugin {
     /** A photo on this phone, by its MediaStore id, without copying it. */
     @PluginMethod
     public void shareDevice(PluginCall call) {
-        Long id = call.getLong("id");
+        Long id = mediaId(call.getData().opt("id"));
         if (id == null) {
             call.reject("no id");
             return;
@@ -90,6 +90,24 @@ public class SharePlugin extends Plugin {
         Intent chooser = Intent.createChooser(intent, null);
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(chooser);
+    }
+
+    /**
+     * The id as a number.
+     *
+     * Not `call.getLong`: Capacitor's Java side only accepts a `Long` there and
+     * a number sent from JavaScript arrives as an `Integer` (or `Double`), so
+     * `getLong` answers null for every id a caller could actually pass — tried
+     * on the device, 42 and 1_000_000_034 both came back as "no id".
+     */
+    private static Long mediaId(Object raw) {
+        if (raw instanceof Number) return ((Number) raw).longValue();
+        if (raw == null) return null;
+        try {
+            return Long.parseLong(raw.toString().trim());
+        } catch (NumberFormatException error) {
+            return null;
+        }
     }
 
     private static String safeName(String name) {

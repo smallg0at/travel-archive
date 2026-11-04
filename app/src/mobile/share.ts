@@ -1,6 +1,6 @@
 import type { PhotoRecord } from "@travel-archive/shared";
-import { loadFullPhoto } from "../graphPhoto";
-import { deviceMediaId } from "./devicePhotos";
+import { loadFullPhoto, loadLarge } from "../graphPhoto";
+import { deviceFullUrl, deviceMediaId } from "./devicePhotos";
 import { isPhoneSurface } from "./surface";
 import { cardFileName, renderCard, type CardOptions, type CardText } from "./shareCard";
 
@@ -30,6 +30,15 @@ async function sharePlugin(): Promise<SharePlugin | null> {
   if (cachedPlugin !== undefined) return cachedPlugin;
   if (!isPhoneSurface) {
     cachedPlugin = null;
+    return cachedPlugin;
+  }
+  // The bridge's own registry first: Capacitor has already resolved every
+  // native plugin by the time the page's first script runs, and a dynamic
+  // `import("@capacitor/core")` inside a bundled chunk is a second path to the
+  // same object that can resolve to nothing at all.
+  const bridged = (globalThis as { Capacitor?: { Plugins?: Record<string, SharePlugin> } }).Capacitor?.Plugins?.Share;
+  if (bridged) {
+    cachedPlugin = bridged;
     return cachedPlugin;
   }
   try {
@@ -109,11 +118,24 @@ export async function shareOriginal(photo: PhotoRecord): Promise<void> {
     await plugin.shareDevice({ id: deviceId, mime: mimeOf(photo.fileName) });
     return;
   }
-  const url = await loadFullPhoto(photo.id);
-  if (!url) throw new Error("the original could not be fetched");
+  await shareBytes(await photoBytes(photo), photo.fileName, mimeOf(photo.fileName));
+}
+
+/**
+ * The bytes of a photograph, preferring the copy on this phone.
+ *
+ * `loadFullPhoto` knows about the job server and OneDrive and nothing about
+ * `/_device/`, so asking it first sent a photo sitting on this phone out over
+ * mobile data to come straight back: measured on the device, the local copy
+ * arrives in 49ms and the OneDrive download had not finished after twenty
+ * seconds, with the share sheet still saying "Preparing…".
+ */
+async function photoBytes(photo: PhotoRecord): Promise<Blob> {
+  const url = deviceFullUrl(photo.id) ?? (await loadFullPhoto(photo.id));
+  if (!url) throw new Error("the photograph could not be fetched");
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`the original could not be fetched (HTTP ${response.status})`);
-  await shareBytes(await response.blob(), photo.fileName, mimeOf(photo.fileName));
+  if (!response.ok) throw new Error(`the photograph could not be fetched (HTTP ${response.status})`);
+  return await response.blob();
 }
 
 /**
@@ -122,17 +144,29 @@ export async function shareOriginal(photo: PhotoRecord): Promise<void> {
  * Decoded through `createImageBitmap` from bytes rather than drawn from the
  * `<img>` on screen, because a canvas is tainted by any image whose response
  * lacks CORS headers and a tainted canvas cannot produce a file at all.
+ *
+ * A HEIC original that is not on this phone cannot be decoded by the WebView at
+ * all, so the card falls back to the archive's `large` JPEG rendition — softer,
+ * and still a picture rather than a failure.
  */
 export async function sharePhotoCard(photo: PhotoRecord, text: CardText, options: CardOptions): Promise<void> {
-  const url = await loadFullPhoto(photo.id);
-  if (!url) throw new Error("the photograph could not be fetched");
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`the photograph could not be fetched (HTTP ${response.status})`);
-  const bitmap = await createImageBitmap(await response.blob());
+  const bitmap = await decodable(photo);
   try {
     const blob = await renderCard(bitmap, text, options);
     await shareBytes(blob, cardFileName(photo.fileName), "image/jpeg");
   } finally {
     bitmap.close();
+  }
+}
+
+async function decodable(photo: PhotoRecord): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(await photoBytes(photo));
+  } catch {
+    const url = await loadLarge(photo.id);
+    if (!url) throw new Error("the photograph could not be decoded");
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`the photograph could not be fetched (HTTP ${response.status})`);
+    return await createImageBitmap(await response.blob());
   }
 }

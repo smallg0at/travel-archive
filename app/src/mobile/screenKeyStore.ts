@@ -38,8 +38,9 @@ export async function nativeScreenKey(): Promise<ScreenKeyBridge | null> {
     return cached;
   }
   try {
-    const { registerPlugin } = await import("@capacitor/core");
-    const plugin = registerPlugin<NativeScreenKeyPlugin>("ScreenKey");
+    const bridged = (globalThis as { Capacitor?: { Plugins?: Record<string, NativeScreenKeyPlugin> } }).Capacitor
+      ?.Plugins?.ScreenKey;
+    const plugin = bridged ?? (await import("@capacitor/core")).registerPlugin<NativeScreenKeyPlugin>("ScreenKey");
     cached = {
       available: () => plugin.available().then((r) => r.available === true).catch(() => false),
       get: () => plugin.get().then((r) => r.value ?? null).catch(() => null),

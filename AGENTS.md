@@ -29,6 +29,7 @@ Keep this file short; don't restate what those already cover.
   force-push, mass rewrites, anything that spends money); genuine ambiguity where
   a wrong guess wastes the work; or a hard external blocker. If you must stop,
   end with a one-line `needs the user:` note.
+- **Always draft UX changes before it is implemented**. Any design changes for the UX should be drafted, showcased, approved by the user before it is implemented, either in form of a ASCII art or demo.
 - **Report progress.** On anything long, emit 1–3 lines per stage (roughly every
   8–10 tool calls): what you are doing, the current conclusion, any blocker.
   Never grind through dozens of tool calls in silence.
