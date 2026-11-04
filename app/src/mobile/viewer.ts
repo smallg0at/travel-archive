@@ -6,9 +6,11 @@ import { onScreenCaptions, screenCaptionFor, screenCaptionSlot } from "../screen
 import { contentLanguage, loc } from "../contentLang";
 import { fmtDateTime, ui } from "../i18n";
 import { dismiss, isTopLayer, openLayer } from "./overlay";
-import { ICONS, leave } from "./ui";
+import { ICONS, leave, showToast } from "./ui";
 import { overrideSystemBars } from "./native";
 import { deviceFullUrl } from "./devicePhotos";
+import { loadCardOptions, saveCardOptions } from "./shareCard";
+import { shareOriginal, sharePhotoCard } from "./share";
 
 /**
  * The full-screen photo viewer.
@@ -295,6 +297,72 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       own.appendChild(details);
     }
     sheetBody.appendChild(own);
+
+    // Sending the photograph out: the file itself, or a card with whatever text
+    // the reader leaves switched on. Placed last because it is an action, not
+    // something to read about the photo.
+    const share = el<HTMLElement>(`<section class="m-viewer-share"><h3></h3><div class="m-share-switches"></div><div class="m-share-actions"></div></section>`);
+    share.querySelector("h3")!.textContent = ui.mobile.share;
+    const switches = share.querySelector<HTMLDivElement>(".m-share-switches")!;
+    const options = loadCardOptions();
+    const switchRows: Array<["caption" | "date" | "place", string]> = [
+      ["caption", ui.mobile.cardCaption],
+      ["date", ui.mobile.cardDate],
+      ["place", ui.mobile.cardPlace],
+    ];
+    for (const [key, label] of switchRows) {
+      const row = el<HTMLLabelElement>(`<label class="m-share-switch"><input type="checkbox" /><span></span></label>`);
+      const input = row.querySelector("input")!;
+      input.checked = options[key];
+      row.querySelector("span")!.textContent = label;
+      input.addEventListener("change", () => {
+        options[key] = input.checked;
+        saveCardOptions(options);
+      });
+      switches.appendChild(row);
+    }
+
+    const dateText = photo.takenAt
+      ? fmtDateTime(new Date(photo.takenAt.slice(0, 19) + "Z"), {
+          dateStyle: "medium",
+          timeStyle: photo.timeSuspect ? undefined : "short",
+          timeZone: "UTC",
+        })
+      : null;
+    const actions = share.querySelector<HTMLDivElement>(".m-share-actions")!;
+    const action = (label: string, run: () => Promise<void>) => {
+      const button = el<HTMLButtonElement>(`<button type="button"></button>`);
+      button.textContent = label;
+      button.addEventListener("click", async () => {
+        if (button.disabled) return;
+        for (const other of actions.querySelectorAll("button")) other.disabled = true;
+        const toast = showToast(ui.mobile.shareWorking);
+        try {
+          await run();
+          toast.close();
+        } catch (error) {
+          console.error("Share failed:", error);
+          toast.set(ui.mobile.shareFailed);
+          setTimeout(() => toast.close(), 3000);
+        } finally {
+          for (const other of actions.querySelectorAll("button")) other.disabled = false;
+        }
+      });
+      actions.appendChild(button);
+    };
+    action(ui.mobile.shareOriginal, () => shareOriginal(photo));
+    action(ui.mobile.shareCard, () =>
+      sharePhotoCard(
+        photo,
+        {
+          caption: loc(photo.caption) ?? screenCaptionFor(photo.id)?.caption ?? null,
+          date: dateText,
+          place: placeName(photo),
+        },
+        { ...options },
+      ),
+    );
+    sheetBody.appendChild(share);
   }
 
   function settle(): void {

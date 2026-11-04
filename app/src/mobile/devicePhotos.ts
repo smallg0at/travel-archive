@@ -87,6 +87,19 @@ function deviceFile(itemId: string): { id: string; bytes: string } | null {
   return id ? { id, bytes: key.slice(key.lastIndexOf("|") + 1) } : null;
 }
 
+/**
+ * The MediaStore id behind a record, for handing the file to another app.
+ *
+ * Sharing a photo this phone holds is a `content://` uri and a read grant, so
+ * what travels is the id — the original bytes are never copied.
+ */
+export function deviceMediaId(itemId: string): number | null {
+  const file = deviceFile(itemId);
+  if (!file) return null;
+  const id = Number.parseInt(file.id, 10);
+  return Number.isFinite(id) ? id : null;
+}
+
 /** The original file on this phone, for "full resolution" — or null to fetch it. */
 export function deviceFullUrl(itemId: string): string | null {
   const file = deviceFile(itemId);

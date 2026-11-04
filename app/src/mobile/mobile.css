@@ -1017,6 +1017,28 @@ body.m {
 .m .m-viewer-photo dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0 0; font-size: 14px; }
 .m .m-viewer-photo dt { color: var(--text-secondary); }
 .m .m-viewer-photo dd { margin: 0; }
+/* Sending the photo out. The switches are the card's own text block, so they
+   sit directly above the two buttons that act on them. */
+.m .m-viewer-share { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.m .m-viewer-share h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+.m .m-share-switches { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0 0; }
+.m .m-share-switch { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 14px; }
+.m .m-share-switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+.m .m-share-actions { display: flex; gap: 10px; margin: 14px 0 0; }
+.m .m-share-actions button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+}
+.m .m-share-actions button:active { transform: scale(.985); }
+.m .m-share-actions button:disabled { opacity: .5; }
 .m .m-viewer-sheet details { margin-top: 12px; }
 .m .m-viewer-sheet summary { min-height: 40px; display: flex; align-items: center; color: var(--accent); font-weight: 600; }
 .m .m-viewer-sheet pre {

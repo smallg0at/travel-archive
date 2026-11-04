@@ -162,6 +162,29 @@ archive describes. The refusal is not a broken square: `devicePhotos.ts`
 drops the match and re-requests from OneDrive. The list is rebuilt whenever
 the app is resumed, so photos taken or deleted meanwhile are picked up.
 
+### Sending a photograph out
+
+The viewer's Details sheet ends with **分享原图** and **分享卡片**, and three
+switches for what the card carries (caption, date, place — remembered in
+`localStorage`, since they are preferences and not secrets).
+
+- **The original** is not copied when this phone holds the file: `SharePlugin`
+  hands Android a `content://` uri for the MediaStore item plus a read grant, so
+  a 20MB photo leaves as it sits on disk. Everything else is fetched through the
+  page (job server or OneDrive) and written once to the app cache, shared
+  through the existing `FileProvider` (`cache-path` was already declared).
+- **The card** (`src/mobile/shareCard.ts`) is 2048 wide at JPEG quality 0.9:
+  full-bleed photo, caption, one muted line of date and place. Every piece is a
+  switch, because a caption written for oneself is not always for the person
+  receiving the picture. It exists because most of this archive is HEIC and a
+  chat app handed a `.heic` file shows nothing.
+- **The card is drawn from bytes, never from the `<img>` on screen.** A canvas
+  drawn from an image whose response lacks CORS headers is tainted and
+  `toBlob` then throws — the reader would see "share failed" with no reason.
+  `createImageBitmap` over the fetched blob is same-origin by construction.
+- **Not `@capacitor/share`**: that package wraps the same two `Intent` calls and
+  adds a dependency for them.
+
 ## The desktop shell
 
 One window, and the only way to use the parts that need a local machine —

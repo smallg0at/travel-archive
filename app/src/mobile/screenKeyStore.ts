@@ -22,12 +22,11 @@ interface NativeScreenKeyPlugin {
 /**
  * Whether this page is running inside the installed app rather than a browser.
  *
- * Read off the global rather than `mobile/native.ts`'s `isNative`, because that
- * module pulls in the router and the theme, and this one is imported by the
- * settings page the desktop also uses.
+ * Re-exported from `surface.ts`, which the share path reads too: one definition,
+ * because a second copy is how these drift.
  */
-export const isPhoneSurface =
-  (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() === true;
+import { isPhoneSurface } from "./surface";
+export { isPhoneSurface };
 
 let cached: ScreenKeyBridge | null | undefined;
 
