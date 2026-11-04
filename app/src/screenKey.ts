@@ -17,17 +17,30 @@
  *    survives a restart, which is the whole point of asking for it.
  *
  * So the reader asks "keep it here", "keep it on this computer", "give it
- * back", "forget it" — and the surface decides what it can do. The phone will
- * grow a third place (a Keystore plugin); this file is where that lands, and
- * it is one more surface rather than a second mechanism.
+ * back", "forget it" — and the surface decides what it can do. The phone is the
+ * third place: `android/.../ScreenKeyPlugin.java`, reached through
+ * `mobile/screenKeyStore.ts`, keeps an AES-GCM key in the Android Keystore and
+ * nothing but ciphertext on disk. This file is where all three land, and each
+ * is one more surface rather than a second mechanism.
  */
+
+import { nativeScreenKey } from "./mobile/screenKeyStore";
 
 /** The passphrase this session is holding. */
 let session: string | null = null;
 
-/** The shell's key store, when there is one. */
-function bridge(): ScreenKeyBridge | undefined {
-  return window.electronAPI?.screenKey;
+/**
+ * The shell's key store, when there is one; the phone's, when there is one.
+ *
+ * Two surfaces rather than one call, because they are different facts: a
+ * browser has neither, the desktop shell has `safeStorage`, the installed app
+ * has the Keystore. `nativeScreenKey()` resolves null off the phone without
+ * touching Capacitor.
+ */
+async function bridge(): Promise<ScreenKeyBridge | undefined> {
+  const shell = window.electronAPI?.screenKey;
+  if (shell) return shell;
+  return (await nativeScreenKey()) ?? undefined;
 }
 
 /**
@@ -38,7 +51,7 @@ function bridge(): ScreenKeyBridge | undefined {
  * form can offer "remember on this computer" only when remembering will work.
  */
 export async function screenKeyCanPersist(): Promise<boolean> {
-  const store = bridge();
+  const store = await bridge();
   if (!store) return false;
   return store.available();
 }
@@ -57,10 +70,10 @@ export async function screenKeyCanPersist(): Promise<boolean> {
 export async function rememberScreenKey(passphrase: string, persist = false): Promise<void> {
   session = passphrase;
   if (!persist) return;
-  const store = bridge();
+  const store = await bridge();
   if (!store) return;
   const ok = await store.set(passphrase);
-  if (!ok) throw new Error("This shell's key store is not available.");
+  if (!ok) throw new Error("This device's key store is not available.");
 }
 
 /**
@@ -71,7 +84,7 @@ export async function rememberScreenKey(passphrase: string, persist = false): Pr
  */
 export async function recallScreenKey(): Promise<string | null> {
   if (session) return session;
-  const store = bridge();
+  const store = await bridge();
   return (await store?.get()) ?? null;
 }
 
@@ -83,5 +96,5 @@ export async function recallScreenKey(): Promise<string | null> {
  */
 export async function forgetScreenKey(): Promise<void> {
   session = null;
-  await bridge()?.forget();
+  await (await bridge())?.forget();
 }

@@ -593,6 +593,7 @@ export const zhHans: Messages = {
     screensForgetYes: "忘记口令",
     screensPassEnter: "口令",
     screensRemember: "在这台电脑上记住",
+    screensRememberPhone: "在这台手机上记住",
     screensLocked: "已锁定——输入口令才能在这里读取",
     screensOpening: "正在打开……",
     screensNoCrypto: "这个连接无法解密：浏览器只在安全上下文（https 或 localhost）里提供 WebCrypto。",

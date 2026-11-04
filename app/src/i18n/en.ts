@@ -628,6 +628,7 @@ export const en = {
     screensForgetYes: "Forget it",
     screensPassEnter: "the passphrase",
     screensRemember: "Remember on this computer",
+    screensRememberPhone: "Remember on this phone",
     screensLocked: "Locked — enter the passphrase to read them here",
     screensOpening: "Opening…",
     screensNoCrypto:

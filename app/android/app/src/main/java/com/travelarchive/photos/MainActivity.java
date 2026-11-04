@@ -27,6 +27,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SystemBarsPlugin.class);
         registerPlugin(LocalPhotosPlugin.class);
         registerPlugin(CookiesPlugin.class);
+        registerPlugin(ScreenKeyPlugin.class);
         super.onCreate(savedInstanceState);
         bridge.setWebViewClient(new ReturnFromMicrosoft(bridge));
         // A single-page app's refresh token lasts 24 hours. After that MSAL

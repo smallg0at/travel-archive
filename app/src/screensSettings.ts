@@ -31,6 +31,7 @@ import {
   lockScreenCaptions,
 } from "./screenCaptions";
 import { recallScreenKey, screenKeyCanPersist } from "./screenKey";
+import { isPhoneSurface } from "./mobile/screenKeyStore";
 
 export function screensSection(): HTMLElement {
   const s = section(ui.settings.screens);
@@ -108,7 +109,10 @@ export function screensSection(): HTMLElement {
   // would be a promise the surface cannot keep.
   const rememberRow = el<HTMLLabelElement>(`<label class="set-remember" hidden></label>`);
   const remember = el<HTMLInputElement>(`<input type="checkbox" name="remember" checked />`);
-  rememberRow.append(remember, document.createTextNode(` ${ui.generate.screensRemember}`));
+  // The surface decides the wording: a phone is not a computer, and the two
+  // stores are not the same one (Keystore vs safeStorage).
+  const rememberLabel = isPhoneSurface ? ui.generate.screensRememberPhone : ui.generate.screensRemember;
+  rememberRow.append(remember, document.createTextNode(` ${rememberLabel}`));
   const unlockActions = el<HTMLDivElement>(`<div class="set-actions"></div>`);
   const unlockCancel = button(ui.common.cancel, () => closeUnlockBox());
   const unlockSave = button(ui.generate.screensUnlock, () => void saveUnlock(), "primary");

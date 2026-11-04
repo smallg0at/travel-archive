@@ -130,7 +130,7 @@ the machine the key the device already holds when there is one.
 |---|---|---|
 | the desktop shell | yes | Electron's `safeStorage` — DPAPI, per Windows account, per machine |
 | a browser on localhost | no | this session's memory, gone when the tab closes |
-| the phone | no | the same; a Keystore plugin is the follow-up |
+| the phone | yes | the Android Keystore (`ScreenKeyPlugin.java`): the AES-GCM key never leaves it, the disk holds ciphertext |
 | a browser on the LAN | no | it cannot decrypt at all — WebCrypto needs a secure context |
 
 **A description says what kind of screen a photograph is** — a chat
@@ -153,10 +153,8 @@ not in the description, so filling it in means walking the shards once and
 matching ids: `npm run --workspace pipeline screens:dates` (and the screenshot
 pass itself now fills it in as it goes). Done on 2026-10-21 for all 2,352.
 
-**What is left:** a Keystore plugin for the phone, so the phone can be asked
-once instead of every session; and moving the section out of Generate into
-Settings, next to the other sections (the position is decided, the move is
-not).
+**What is left:** moving the section out of Generate into Settings, next to the
+other sections (the position is decided, the move is not).
 
 ---
 

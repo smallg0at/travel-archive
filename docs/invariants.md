@@ -617,15 +617,17 @@ memory, and only the descriptions it could open.
 **The passphrase is kept per surface, and only after it has opened
 something.** Where it lives is the surface's business (`app/src/screenKey.ts`):
 the desktop shell has Electron's `safeStorage` (DPAPI — per Windows account,
-per machine), a browser and the phone have the session's memory and nothing
-else, and a browser on the home network cannot decrypt at all (WebCrypto needs
-a secure context, which is the platform's rule and a good one). **Never
-`localStorage`** — that is plaintext, and the whole point is that the key does
-not sit beside the ciphertext. And the order matters: a passphrase is checked
-against the file's own fingerprint **before** it is written to a store, so a
-mistyped passphrase never replaces a good one — a store holding the wrong
-passphrase can only be emptied by hand, and the error gives no way to tell
-which of the two was wrong.
+per machine), the phone has the Android Keystore (`ScreenKeyPlugin.java` — an
+AES-GCM key that never leaves it, and only `base64(iv)|base64(ciphertext)` in
+private SharedPreferences; a backup therefore carries bytes that decrypt
+nowhere), a browser has the session's memory and nothing else, and a browser on
+the home network cannot decrypt at all (WebCrypto needs a secure context, which
+is the platform's rule and a good one). **Never `localStorage`** — that is
+plaintext, and the whole point is that the key does not sit beside the
+ciphertext. And the order matters: a passphrase is checked against the file's
+own fingerprint **before** it is written to a store, so a mistyped passphrase
+never replaces a good one — a store holding the wrong passphrase can only be
+emptied by hand, and the error gives no way to tell which of the two was wrong.
 
 **An empty key store is not "no passphrase".** There are two stores on a machine
 that both writes and reads — the server's (`data/screen-key.json`) for sealing
