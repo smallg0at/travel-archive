@@ -129,7 +129,11 @@ async function main() {
     const zh = toSimplified(slot.zh?.value ?? "");
     if (slot.local) withLocal++;
     if (zh) withZh++;
-    out.push([city.lat, city.lon, city.cc, city.pop, local, en === local ? "" : en, zh === local ? "" : zh].join("\t"));
+    // A blank column means "the same as the local name". That is worth keeping
+  // for `en` (Tokyo/東京), but not for `zh`: a Chinese city's Chinese name is
+  // its local name, so blanking it made every place in China look untranslated
+  // to a Chinese reader. Written out explicitly.
+  out.push([city.lat, city.lon, city.cc, city.pop, local, en === local ? "" : en, zh].join("\t"));
   }
   writeFileSync(OUT, out.join("\n"), "utf8");
   console.log(`wrote ${OUT} — ${(statSync(OUT).size / 1e6).toFixed(1)}MB`);

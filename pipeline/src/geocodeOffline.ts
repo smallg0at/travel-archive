@@ -88,6 +88,9 @@ export async function gazetteerStats(): Promise<{ places: number; countries: num
 /** One bucket per whole degree; a lookup reads the nine around the point. */
 const cellOf = (lat: number, lon: number) => (Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180);
 
+/** Han characters: what makes an empty `zh` column mean "same as the local name". */
+const hasHan = (text: string): boolean => /[\u3400-\u9fff]/.test(text);
+
 async function load(): Promise<Places> {
   let placesRaw: string;
   let countriesRaw: string;
@@ -133,7 +136,11 @@ async function load(): Promise<Places> {
     places.local[n] = f[4];
     // An empty column means "the same as the local name" — see build-geo.mjs.
     places.en[n] = f[5] || f[4];
-    places.zh[n] = f[6] || null;
+    // …and the same is true of `zh`: build-geo blanks it when the Chinese name
+    // *is* the local one, which is most of China. Read literally, those places
+    // had no Chinese name at all, and a photo in Beijing was labelled
+    // "Beijing, China" in a Chinese reader.
+    places.zh[n] = f[6] || (hasHan(f[4]) ? f[4] : null);
     const cell = cellOf(places.lat[n], places.lon[n]);
     let bucket = places.grid.get(cell);
     if (!bucket) places.grid.set(cell, (bucket = []));
@@ -144,7 +151,7 @@ async function load(): Promise<Places> {
   for (const line of countriesRaw.split("\n").slice(1)) {
     if (!line) continue;
     const [cc, local, en, zh] = line.split("\t");
-    places.countries.set(cc, { local, en: en || local, zh: zh || null });
+    places.countries.set(cc, { local, en: en || local, zh: zh || (hasHan(local) ? local : null) });
   }
   return places;
 }
