@@ -299,12 +299,19 @@ export function paintCard(canvas: HTMLCanvasElement, bitmap: ImageBitmap, text: 
   const captionBlock = captionLines.length ? captionLines.length * theme.captionLine : 0;
   const footerBlock = footerLines.length ? footerLines.length * theme.footerLine : 0;
   const ruleBlock = theme.ruleGap > 0 && captionBlock && footerBlock ? theme.ruleGap + 2 : 0;
-  const textHeight =
-    captionBlock +
-    (captionBlock ? theme.gap : theme.pad) +
-    ruleBlock +
-    footerBlock +
-    (captionBlock || footerBlock ? theme.bottom : 0);
+  const hasText = captionBlock > 0 || footerBlock > 0;
+  // The top padding belongs to the block even when a caption comes first: it was
+  // only counted on the footer-only path, so every card with a caption came out
+  // 120px shorter than the text it had to hold and the bottom margin was eaten —
+  // measured 25px below the last line instead of the 128 it asks for.
+  const textHeight = hasText
+    ? theme.pad +
+      captionBlock +
+      (captionBlock ? theme.gap : 0) +
+      ruleBlock +
+      footerBlock +
+      theme.bottom
+    : 0;
 
   canvas.width = CARD_WIDTH;
   canvas.height = drawnHeight + textHeight;
