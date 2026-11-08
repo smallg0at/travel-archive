@@ -2,7 +2,7 @@ import type { PhotoRecord } from "@travel-archive/shared";
 import { loadFullPhoto, loadLarge } from "../graphPhoto";
 import { deviceFullUrl, deviceMediaId } from "./devicePhotos";
 import { isPhoneSurface } from "./surface";
-import { cardFileName, renderCard, type CardOptions, type CardText } from "./shareCard";
+import { cardFileName } from "./shareCard";
 
 /**
  * Sending a photograph out of the app: the original file, or a rendered card.
@@ -139,7 +139,7 @@ async function photoBytes(photo: PhotoRecord): Promise<Blob> {
 }
 
 /**
- * The card: the photograph with whatever text the reader left switched on.
+ * The photograph as a bitmap for the card, preferring the copy on this phone.
  *
  * Decoded through `createImageBitmap` from bytes rather than drawn from the
  * `<img>` on screen, because a canvas is tainted by any image whose response
@@ -149,17 +149,7 @@ async function photoBytes(photo: PhotoRecord): Promise<Blob> {
  * all, so the card falls back to the archive's `large` JPEG rendition — softer,
  * and still a picture rather than a failure.
  */
-export async function sharePhotoCard(photo: PhotoRecord, text: CardText, options: CardOptions): Promise<void> {
-  const bitmap = await decodable(photo);
-  try {
-    const blob = await renderCard(bitmap, text, options);
-    await shareBytes(blob, cardFileName(photo.fileName), "image/jpeg");
-  } finally {
-    bitmap.close();
-  }
-}
-
-async function decodable(photo: PhotoRecord): Promise<ImageBitmap> {
+export async function cardBitmap(photo: PhotoRecord): Promise<ImageBitmap> {
   try {
     return await createImageBitmap(await photoBytes(photo));
   } catch {
@@ -169,4 +159,9 @@ async function decodable(photo: PhotoRecord): Promise<ImageBitmap> {
     if (!response.ok) throw new Error(`the photograph could not be fetched (HTTP ${response.status})`);
     return await createImageBitmap(await response.blob());
   }
+}
+
+/** An already-rendered card, out through whichever route this surface has. */
+export async function shareCardBlob(blob: Blob, photo: PhotoRecord): Promise<void> {
+  await shareBytes(blob, cardFileName(photo.fileName), "image/jpeg");
 }

@@ -121,15 +121,19 @@ function wrap(context: CanvasRenderingContext2D, text: string, maxWidth: number,
 }
 
 /**
- * Draw the card and hand back its bytes.
+ * Draw the card into a canvas the caller owns.
  *
  * The photograph arrives as a decoded bitmap rather than an `<img>` because a
  * canvas drawn from an image the server sent without CORS headers is tainted,
  * and a tainted canvas cannot be exported at all — the failure would land on
  * the reader as "share failed" with no explanation. The caller fetches the
  * bytes and decodes them locally.
+ *
+ * Drawing is kept separate from encoding because the same canvas is both the
+ * preview and the thing that gets shared: a switch can repaint it in about a
+ * tenth of a second, while encoding it to JPEG takes seconds on a phone.
  */
-export async function renderCard(bitmap: ImageBitmap, text: CardText, options: CardOptions): Promise<Blob> {
+export function paintCard(canvas: HTMLCanvasElement, bitmap: ImageBitmap, text: CardText, options: CardOptions): void {
   const scale = CARD_WIDTH / bitmap.width;
   const drawnHeight = Math.min(Math.round(bitmap.height * scale), MAX_IMAGE_HEIGHT);
   const crop = drawnHeight < Math.round(bitmap.height * scale);
@@ -147,7 +151,6 @@ export async function renderCard(bitmap: ImageBitmap, text: CardText, options: C
     (footerLines.length ? FOOTER_LINE * footerLines.length + (captionLines.length ? 30 : PAD * 0.9) : 0) +
     (captionLines.length || footerLines.length ? PAD : 0);
 
-  const canvas = document.createElement("canvas");
   canvas.width = CARD_WIDTH;
   canvas.height = drawnHeight + textHeight;
   const context = canvas.getContext("2d")!;
@@ -179,7 +182,10 @@ export async function renderCard(bitmap: ImageBitmap, text: CardText, options: C
       context.fillText(line, PAD, y);
     }
   }
+}
 
+/** The canvas as a JPEG. Measured at 4.2s alone and 13.2s inside the viewer. */
+export function encodeCard(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error("the card could not be encoded"))),

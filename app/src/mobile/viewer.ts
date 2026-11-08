@@ -9,8 +9,8 @@ import { dismiss, isTopLayer, openLayer } from "./overlay";
 import { ICONS, leave, showToast } from "./ui";
 import { overrideSystemBars } from "./native";
 import { deviceFullUrl } from "./devicePhotos";
-import { loadCardOptions, saveCardOptions } from "./shareCard";
-import { shareOriginal, sharePhotoCard } from "./share";
+import { cardFileName, encodeCard, loadCardOptions, paintCard, saveCardOptions, type CardText } from "./shareCard";
+import { cardBitmap, shareCardBlob, shareOriginal } from "./share";
 
 /**
  * The full-screen photo viewer.
@@ -83,11 +83,21 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       <header class="m-viewer-top">
         <button type="button" class="m-icon-btn m-viewer-close">${ICONS.close}</button>
         <span class="m-viewer-count"></span>
-        <button type="button" class="m-viewer-hd"></button>
+        <button type="button" class="m-icon-btn m-viewer-hd" hidden>${ICONS.download}</button>
+        <button type="button" class="m-icon-btn m-viewer-share-btn">${ICONS.share}</button>
         <button type="button" class="m-icon-btn m-viewer-info-btn">${ICONS.info}</button>
       </header>
       <footer class="m-viewer-caption"><p></p></footer>
       <section class="m-viewer-sheet" hidden><div class="m-sheet-handle"></div><div class="m-viewer-sheet-body"></div></section>
+      <section class="m-viewer-sheet m-share-sheet" hidden>
+        <div class="m-sheet-handle"></div>
+        <h2 class="m-share-title"></h2>
+        <div class="m-share-preview"><canvas class="m-share-canvas"></canvas></div>
+        <p class="m-share-state"></p>
+        <div class="m-share-switches"></div>
+        <div class="m-share-actions"></div>
+        <p class="m-share-progress" hidden><span class="m-share-progress-text"></span><button type="button" class="m-share-cancel"></button></p>
+      </section>
     </div>
   `);
   const track = root.querySelector<HTMLElement>(".m-viewer-track")!;
@@ -96,9 +106,20 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   const sheet = root.querySelector<HTMLElement>(".m-viewer-sheet")!;
   const sheetBody = root.querySelector<HTMLElement>(".m-viewer-sheet-body")!;
   const hd = root.querySelector<HTMLButtonElement>(".m-viewer-hd")!;
+  const shareSheet = root.querySelector<HTMLElement>(".m-share-sheet")!;
+  const shareCanvas = root.querySelector<HTMLCanvasElement>(".m-share-canvas")!;
+  const shareState = root.querySelector<HTMLElement>(".m-share-state")!;
+  const shareSwitches = root.querySelector<HTMLElement>(".m-share-switches")!;
+  const shareActions = root.querySelector<HTMLElement>(".m-share-actions")!;
+  const shareProgress = root.querySelector<HTMLElement>(".m-share-progress")!;
+  const shareCancel = root.querySelector<HTMLButtonElement>(".m-share-cancel")!;
   root.querySelector(".m-viewer-close")!.setAttribute("aria-label", ui.common.close);
   root.querySelector(".m-viewer-info-btn")!.setAttribute("aria-label", ui.mobile.info);
-  hd.textContent = ui.mobile.fullResolution;
+  root.querySelector(".m-viewer-share-btn")!.setAttribute("aria-label", ui.mobile.share);
+  hd.setAttribute("aria-label", ui.mobile.fullResolution);
+  shareSheet.querySelector(".m-share-title")!.textContent = ui.mobile.shareTitle;
+  shareCancel.textContent = ui.common.cancel;
+  shareProgress.querySelector(".m-share-progress-text")!.textContent = ui.mobile.shareWorking;
 
   const slides = photos.map(() => {
     const slide = el<HTMLDivElement>(`<div class="m-slide"><img alt="" draggable="false" /></div>`);
@@ -212,6 +233,10 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       void closeSheet();
       return;
     }
+    if (!shareSheet.hidden) {
+      void closeShare();
+      return;
+    }
     const now = Date.now();
     if (now - lastTap < DOUBLE_TAP_MS) {
       if (tapTimer) clearTimeout(tapTimer);
@@ -297,73 +322,162 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       own.appendChild(details);
     }
     sheetBody.appendChild(own);
-
-    // Sending the photograph out: the file itself, or a card with whatever text
-    // the reader leaves switched on. Placed last because it is an action, not
-    // something to read about the photo.
-    const share = el<HTMLElement>(`<section class="m-viewer-share"><h3></h3><div class="m-share-switches"></div><div class="m-share-actions"></div></section>`);
-    share.querySelector("h3")!.textContent = ui.mobile.share;
-    const switches = share.querySelector<HTMLDivElement>(".m-share-switches")!;
-    const options = loadCardOptions();
-    const switchRows: Array<["caption" | "date" | "place", string]> = [
-      ["caption", ui.mobile.cardCaption],
-      ["date", ui.mobile.cardDate],
-      ["place", ui.mobile.cardPlace],
-    ];
-    for (const [key, label] of switchRows) {
-      const row = el<HTMLLabelElement>(`<label class="m-share-switch"><input type="checkbox" /><span></span></label>`);
-      const input = row.querySelector("input")!;
-      input.checked = options[key];
-      row.querySelector("span")!.textContent = label;
-      input.addEventListener("change", () => {
-        options[key] = input.checked;
-        saveCardOptions(options);
-      });
-      switches.appendChild(row);
-    }
-
-    const dateText = photo.takenAt
-      ? fmtDateTime(new Date(photo.takenAt.slice(0, 19) + "Z"), {
-          dateStyle: "medium",
-          timeStyle: photo.timeSuspect ? undefined : "short",
-          timeZone: "UTC",
-        })
-      : null;
-    const actions = share.querySelector<HTMLDivElement>(".m-share-actions")!;
-    const action = (label: string, run: () => Promise<void>) => {
-      const button = el<HTMLButtonElement>(`<button type="button"></button>`);
-      button.textContent = label;
-      button.addEventListener("click", async () => {
-        if (button.disabled) return;
-        for (const other of actions.querySelectorAll("button")) other.disabled = true;
-        const toast = showToast(ui.mobile.shareWorking);
-        try {
-          await run();
-          toast.close();
-        } catch (error) {
-          console.error("Share failed:", error);
-          toast.set(ui.mobile.shareFailed);
-          setTimeout(() => toast.close(), 3000);
-        } finally {
-          for (const other of actions.querySelectorAll("button")) other.disabled = false;
-        }
-      });
-      actions.appendChild(button);
-    };
-    action(ui.mobile.shareOriginal, () => shareOriginal(photo));
-    action(ui.mobile.shareCard, () =>
-      sharePhotoCard(
-        photo,
-        {
-          caption: loc(photo.caption) ?? screenCaptionFor(photo.id)?.caption ?? null,
-          date: dateText,
-          place: placeName(photo),
-        },
-        { ...options },
-      ),
-    );
-    sheetBody.appendChild(share);
+    // The share sheet belongs to one photograph: swiping to the next one puts
+    // it away rather than leaving it showing the previous picture's card.
+    if (!shareSheet.hidden) void closeShare();
   }
+
+  /* --- Share sheet ------------------------------------------------------ */
+
+  // Its own screen, opened from the toolbar, because sending a photograph out
+  // is an action rather than a fact about it — and because the card has to be
+  // looked at before it goes. The canvas above the switches *is* the card: the
+  // same drawing code fills it for the preview and is encoded once when the
+  // reader presses Share. Encoding takes seconds on a phone (4.2s measured on
+  // its own, 13.2s with the viewer holding its bitmaps), so a switch must only
+  // repaint — about a tenth of a second — and never re-encode.
+
+  const cardOptions = loadCardOptions();
+  const switchRows: Array<["caption" | "date" | "place", string]> = [
+    ["caption", ui.mobile.cardCaption],
+    ["date", ui.mobile.cardDate],
+    ["place", ui.mobile.cardPlace],
+  ];
+  for (const [key, label] of switchRows) {
+    const row = el<HTMLLabelElement>(`<label class="m-share-switch"><input type="checkbox" /><span></span></label>`);
+    const input = row.querySelector("input")!;
+    input.checked = cardOptions[key];
+    row.querySelector("span")!.textContent = label;
+    input.addEventListener("change", () => {
+      cardOptions[key] = input.checked;
+      saveCardOptions(cardOptions);
+      repaintCard();
+    });
+    shareSwitches.appendChild(row);
+  }
+
+  function cardText(photo: PhotoRecord): CardText {
+    return {
+      caption: loc(photo.caption) ?? screenCaptionFor(photo.id)?.caption ?? null,
+      date: photo.takenAt
+        ? fmtDateTime(new Date(photo.takenAt.slice(0, 19) + "Z"), {
+            dateStyle: "medium",
+            timeStyle: photo.timeSuspect ? undefined : "short",
+            timeZone: "UTC",
+          })
+        : null,
+      place: placeName(photo),
+    };
+  }
+
+  let cardSource: { bitmap: ImageBitmap; index: number } | null = null;
+  let previewToken = 0;
+  let shareToken = 0;
+
+  /** Redraw the preview from the bitmap already in hand: switches, not renders. */
+  function repaintCard(): void {
+    if (!cardSource || cardSource.index !== current) return;
+    paintCard(shareCanvas, cardSource.bitmap, cardText(photos[current]), cardOptions);
+  }
+
+  async function refreshCard(): Promise<void> {
+    const index = current;
+    if (index < 0) return;
+    const token = ++previewToken;
+    const photo = photos[index];
+    if (cardSource?.index !== index) {
+      cardSource?.bitmap.close();
+      cardSource = null;
+      shareState.textContent = ui.mobile.shareLoading;
+      shareState.hidden = false;
+      try {
+        const bitmap = await cardBitmap(photo);
+        if (token !== previewToken) {
+          bitmap.close();
+          return;
+        }
+        cardSource = { bitmap, index };
+      } catch (error) {
+        console.error("Card preview failed:", error);
+        if (token === previewToken) shareState.textContent = ui.mobile.shareFailed;
+        return;
+      }
+      if (token !== previewToken) return;
+      shareState.textContent = "";
+      shareState.hidden = true;
+    }
+    paintCard(shareCanvas, cardSource!.bitmap, cardText(photo), cardOptions);
+  }
+
+  function setSharing(busy: boolean): void {
+    for (const button of shareActions.querySelectorAll("button")) button.disabled = busy;
+    shareProgress.hidden = !busy;
+  }
+
+  function failOver(error: unknown): void {
+    console.error("Share failed:", error);
+    const toast = showToast(ui.mobile.shareFailed);
+    setTimeout(() => toast.close(), 3000);
+  }
+
+  async function shareCardNow(): Promise<void> {
+    const index = current;
+    if (index < 0 || cardSource?.index !== index) return;
+    const token = ++shareToken;
+    setSharing(true);
+    try {
+      const blob = await encodeCard(shareCanvas);
+      // Cancelled while the encoder was running: the work is finished, the
+      // send is not.
+      if (token !== shareToken) return;
+      await shareCardBlob(blob, photos[index]);
+    } catch (error) {
+      if (token === shareToken) failOver(error);
+    } finally {
+      if (token === shareToken) setSharing(false);
+    }
+  }
+
+  async function shareOriginalNow(): Promise<void> {
+    const index = current;
+    if (index < 0) return;
+    try {
+      await shareOriginal(photos[index]);
+    } catch (error) {
+      failOver(error);
+    }
+  }
+
+  const cardButton = el<HTMLButtonElement>(`<button type="button" class="is-primary"></button>`);
+  cardButton.textContent = ui.mobile.shareCard;
+  cardButton.addEventListener("click", () => void shareCardNow());
+  const originalButton = el<HTMLButtonElement>(`<button type="button"></button>`);
+  originalButton.textContent = ui.mobile.shareOriginal;
+  originalButton.addEventListener("click", () => void shareOriginalNow());
+  shareActions.append(cardButton, originalButton);
+
+  const hideShare = () => {
+    previewToken++;
+    shareToken++;
+    shareSheet.hidden = true;
+    shareSheet.style.transform = "";
+  };
+  const openShare = () => {
+    if (!sheet.hidden) void closeSheet();
+    setSharing(false);
+    shareSheet.hidden = false;
+    shareSheet.scrollTop = 0;
+    void refreshCard();
+    openLayer(hideShare, { nested: true });
+  };
+  const closeShare = () => (isTopLayer(hideShare) ? dismiss() : Promise.resolve(hideShare()));
+
+  shareCancel.addEventListener("click", () => {
+    shareToken++;
+    setSharing(false);
+  });
+  root.querySelector(".m-viewer-share-btn")!.addEventListener("click", () => (shareSheet.hidden ? openShare() : void closeShare()));
+  shareSheet.querySelector(".m-sheet-handle")!.addEventListener("click", () => void closeShare());
 
   function settle(): void {
     const width = track.clientWidth;
@@ -383,13 +497,11 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   hd.addEventListener("click", async () => {
     const i = current;
     hd.disabled = true;
-    hd.textContent = ui.viewer.loadingFull;
     // The phone's own copy when it has one — the original bytes, with no
     // download. loadFullPhoto trusts a source's fullUrl without a fallback,
     // so the choice is made here rather than in photoSource.
     const url = deviceFullUrl(photos[i].id) ?? (await loadFullPhoto(photos[i].id));
     hd.disabled = false;
-    hd.textContent = ui.mobile.fullResolution;
     if (!url) return;
     fullUrls.set(i, url);
     const img = slides[i].querySelector("img")!;
@@ -418,42 +530,48 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   sheet.querySelector(".m-sheet-handle")!.addEventListener("click", () => void closeSheet());
 
   // Drag down to close — only from the top of the sheet's own scroll, so a
-  // long transcription still scrolls back up rather than closing.
-  let drag: { y: number; dy: number } | null = null;
-  sheet.addEventListener(
-    "touchstart",
-    (event) => {
-      drag = sheet.scrollTop <= 0 && event.touches.length === 1 ? { y: event.touches[0].clientY, dy: 0 } : null;
-    },
-    { passive: true },
-  );
-  sheet.addEventListener(
-    "touchmove",
-    (event) => {
+  // long transcription still scrolls back up rather than closing. Both sheets,
+  // the same gesture.
+  const draggable = (node: HTMLElement, close: () => Promise<void>) => {
+    let drag: { y: number; dy: number } | null = null;
+    node.addEventListener(
+      "touchstart",
+      (event) => {
+        drag = node.scrollTop <= 0 && event.touches.length === 1 ? { y: event.touches[0].clientY, dy: 0 } : null;
+      },
+      { passive: true },
+    );
+    node.addEventListener(
+      "touchmove",
+      (event) => {
+        if (!drag) return;
+        drag.dy = event.touches[0].clientY - drag.y;
+        if (drag.dy <= 0) {
+          // Upward: the sheet's own scroll, not a drag.
+          node.style.transform = "";
+          drag = null;
+          return;
+        }
+        event.preventDefault();
+        node.style.transition = "none";
+        node.style.transform = `translateY(${drag.dy}px)`;
+      },
+      { passive: false },
+    );
+    node.addEventListener("touchend", () => {
       if (!drag) return;
-      drag.dy = event.touches[0].clientY - drag.y;
-      if (drag.dy <= 0) {
-        // Upward: the sheet's own scroll, not a drag.
-        sheet.style.transform = "";
-        drag = null;
-        return;
-      }
-      event.preventDefault();
-      sheet.style.transition = "none";
-      sheet.style.transform = `translateY(${drag.dy}px)`;
-    },
-    { passive: false },
-  );
-  sheet.addEventListener("touchend", () => {
-    if (!drag) return;
-    const far = drag.dy > Math.min(120, sheet.offsetHeight / 4);
-    drag = null;
-    sheet.style.transition = "";
-    if (far) void closeSheet();
-    else sheet.style.transform = "";
-  });
+      const far = drag.dy > Math.min(120, node.offsetHeight / 4);
+      drag = null;
+      node.style.transition = "";
+      if (far) void close();
+      else node.style.transform = "";
+    });
+  };
+  draggable(sheet, closeSheet);
+  draggable(shareSheet, closeShare);
 
   root.querySelector(".m-viewer-close")!.addEventListener("click", async () => {
+    if (!shareSheet.hidden) await closeShare();
     await closeSheet();
     await dismiss();
   });
@@ -463,6 +581,8 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     overrideSystemBars(null);
     document.body.classList.remove("m-locked");
     for (const url of fullUrls.values()) releaseFullPhoto(url);
+    cardSource?.bitmap.close();
+    cardSource = null;
     stopWatching();
   }
 
