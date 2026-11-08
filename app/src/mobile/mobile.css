@@ -1019,6 +1019,42 @@ body.m {
 .m .m-share-state { margin: -6px 0 0; font-size: 13px; color: var(--text-secondary); text-align: center; }
 .m .m-share-state[hidden] { display: none; }
 .m .m-share-switches { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.m .m-share-segment { display: flex; gap: 8px; margin: -4px 0 0; }
+.m .m-share-segment label {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.m .m-share-segment label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.m .m-share-segment input { position: absolute; opacity: 0; pointer-events: none; }
+.m .m-share-custom {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+}
+.m .m-share-custom[hidden] { display: none; }
 .m .m-share-switch { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 14px; }
 .m .m-share-switch input { width: 18px; height: 18px; accent-color: var(--accent); }
 .m .m-share-actions { display: flex; flex-direction: column; gap: 10px; }

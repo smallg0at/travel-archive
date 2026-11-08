@@ -9,7 +9,8 @@ import { dismiss, isTopLayer, openLayer } from "./overlay";
 import { ICONS, leave, showToast } from "./ui";
 import { overrideSystemBars } from "./native";
 import { deviceFullUrl } from "./devicePhotos";
-import { cardFileName, encodeCard, loadCardOptions, paintCard, saveCardOptions, type CardText } from "./shareCard";
+import { cardFileName, encodeCard, loadCardOptions, paintCard, saveCardOptions, type CardStyle, type CardText } from "./shareCard";
+import { ensureCardFont } from "./shareCardFont";
 import { cardBitmap, shareCardBlob, shareOriginal } from "./share";
 
 /**
@@ -92,8 +93,11 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       <section class="m-viewer-sheet m-share-sheet" hidden>
         <div class="m-sheet-handle"></div>
         <h2 class="m-share-title"></h2>
+        <div class="m-share-segment m-share-styles" role="radiogroup"></div>
         <div class="m-share-preview"><canvas class="m-share-canvas"></canvas></div>
         <p class="m-share-state"></p>
+        <div class="m-share-segment m-share-sources" role="radiogroup"></div>
+        <textarea class="m-share-custom" rows="2" hidden></textarea>
         <div class="m-share-switches"></div>
         <div class="m-share-actions"></div>
         <p class="m-share-progress" hidden><span class="m-share-progress-text"></span><button type="button" class="m-share-cancel"></button></p>
@@ -338,6 +342,80 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   // repaint — about a tenth of a second — and never re-encode.
 
   const cardOptions = loadCardOptions();
+  const shareStyles = root.querySelector<HTMLElement>(".m-share-styles")!;
+  const shareSources = root.querySelector<HTMLElement>(".m-share-sources")!;
+  const customCaptionBox = root.querySelector<HTMLTextAreaElement>(".m-share-custom")!;
+  const styleChoices: Array<[CardStyle, string]> = [
+    ["gallery", ui.mobile.cardGallery],
+    ["editorial", ui.mobile.cardEditorial],
+  ];
+  shareStyles.setAttribute("aria-label", ui.mobile.cardStyle);
+  for (const [value, label] of styleChoices) {
+    const row = el<HTMLLabelElement>(`<label><input type="radio" name="card-style" /><span></span></label>`);
+    const input = row.querySelector("input")!;
+    input.value = value;
+    input.checked = cardOptions.style === value;
+    row.querySelector("span")!.textContent = label;
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      cardOptions.style = value;
+      saveCardOptions(cardOptions);
+      repaintCard();
+    });
+    shareStyles.appendChild(row);
+  }
+
+  type CaptionSource = "title" | "description" | "custom";
+  let captionSource: CaptionSource = "description";
+  let customCaption = "";
+
+  const sourceChoices: Array<[CaptionSource, string]> = [
+    ["title", ui.mobile.cardSourceTitle],
+    ["description", ui.mobile.cardSourceCaption],
+    ["custom", ui.mobile.cardSourceCustom],
+  ];
+  shareSources.setAttribute("aria-label", ui.mobile.cardTextSource);
+  for (const [value, label] of sourceChoices) {
+    const row = el<HTMLLabelElement>(`<label><input type="radio" name="card-source" /><span></span></label>`);
+    const input = row.querySelector("input")!;
+    input.value = value;
+    input.checked = captionSource === value;
+    // The title only exists when the viewer was opened from a day or trip.
+    if (value === "title" && !context?.title) {
+      row.hidden = true;
+      input.disabled = true;
+    }
+    row.querySelector("span")!.textContent = label;
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      captionSource = value;
+      customCaptionBox.hidden = value !== "custom";
+      if (value === "custom" && !customCaption.trim()) {
+        customCaption = descriptionCaption(photos[current]) ?? "";
+        customCaptionBox.value = customCaption;
+      }
+      repaintCard();
+    });
+    shareSources.appendChild(row);
+  }
+  customCaptionBox.hidden = true;
+  customCaptionBox.setAttribute("aria-label", ui.mobile.cardSourceCustom);
+  customCaptionBox.addEventListener("input", () => {
+    customCaption = customCaptionBox.value;
+    repaintCard();
+  });
+
+  function descriptionCaption(photo: PhotoRecord | undefined): string | null {
+    if (!photo) return null;
+    return loc(photo.caption) ?? screenCaptionFor(photo.id)?.caption ?? null;
+  }
+
+  function captionFor(photo: PhotoRecord): string | null {
+    if (captionSource === "title") return context?.title ?? null;
+    if (captionSource === "custom") return customCaption.trim() || null;
+    return descriptionCaption(photo);
+  }
+
   const switchRows: Array<["caption" | "date" | "place", string]> = [
     ["caption", ui.mobile.cardCaption],
     ["date", ui.mobile.cardDate],
@@ -358,7 +436,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
 
   function cardText(photo: PhotoRecord): CardText {
     return {
-      caption: loc(photo.caption) ?? screenCaptionFor(photo.id)?.caption ?? null,
+      caption: captionFor(photo),
       date: photo.takenAt
         ? fmtDateTime(new Date(photo.takenAt.slice(0, 19) + "Z"), {
             dateStyle: "medium",
@@ -377,7 +455,11 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   /** Redraw the preview from the bitmap already in hand: switches, not renders. */
   function repaintCard(): void {
     if (!cardSource || cardSource.index !== current) return;
-    paintCard(shareCanvas, cardSource.bitmap, cardText(photos[current]), cardOptions);
+    const source = cardSource;
+    void ensureCardFont().then(() => {
+      if (cardSource?.bitmap !== source.bitmap) return;
+      paintCard(shareCanvas, source.bitmap, cardText(photos[source.index]), cardOptions);
+    });
   }
 
   async function refreshCard(): Promise<void> {
@@ -406,12 +488,31 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       shareState.textContent = "";
       shareState.hidden = true;
     }
+    await ensureCardFont();
+    if (token !== previewToken) return;
     paintCard(shareCanvas, cardSource!.bitmap, cardText(photo), cardOptions);
   }
 
+  let progressTimer = 0;
+
+  /**
+   * Buttons go dead at once, the progress row only after a third of a second.
+   *
+   * Encoding a card usually takes seconds, but not always: a small photo
+   * finishes before a painted line could be read, and the row appearing and
+   * vanishing in one frame looks like a glitch rather than progress. So it is
+   * deferred, and once shown it stays until the share sheet takes over.
+   */
   function setSharing(busy: boolean): void {
     for (const button of shareActions.querySelectorAll("button")) button.disabled = busy;
-    shareProgress.hidden = !busy;
+    window.clearTimeout(progressTimer);
+    if (!busy) {
+      shareProgress.hidden = true;
+      return;
+    }
+    progressTimer = window.setTimeout(() => {
+      shareProgress.hidden = false;
+    }, 300);
   }
 
   function failOver(error: unknown): void {
@@ -426,6 +527,9 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     const token = ++shareToken;
     setSharing(true);
     try {
+      // A card whose face arrived late would encode in the fallback: the preview
+      // looks right and the sent file does not.
+      await ensureCardFont();
       const blob = await encodeCard(shareCanvas);
       // Cancelled while the encoder was running: the work is finished, the
       // send is not.

@@ -111,6 +111,25 @@ if (missing.length) {
   lines.push("## Licences with no text found in the tree", "", ...missing.map((id) => `- \`${id}\``), "");
 }
 
+// Assets that ship with the app but are not npm packages, so nothing above
+// would ever list them.
+const shippedFont = join(REPO, "app/public/fonts/OFL.txt");
+if (existsSync(shippedFont)) {
+  lines.push(
+    "",
+    "## Bundled fonts",
+    "",
+    "`app/public/fonts/NotoSerifSC-SemiBold.woff2` — a subset of Noto Serif SC, SIL Open Font License 1.1.",
+    "The font is instanced at weight 600 and cut down to the GB2312 character set by",
+    "`app/scripts/build-card-font.py`.",
+    "",
+    "```",
+    readFileSync(shippedFont, "utf8").trim(),
+    "```",
+    "",
+  );
+}
+
 writeFileSync(OUT, lines.join("\n"));
 console.log(`wrote ${OUT}`);
 console.log(`  packages: ${packages.length}`);

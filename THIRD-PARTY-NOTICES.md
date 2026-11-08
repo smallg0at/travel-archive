@@ -24,15 +24,14 @@ production dependencies are listed, because only they are bundled in a build.
 
 ## Packages
 
-- `@azure/msal-browser@5.21.0` — MIT
-- `@azure/msal-common@16.14.0` — MIT
-- `@azure/msal-common@15.17.0` — MIT
-- `@azure/msal-node@3.8.10` — MIT
-- `@capacitor/android@7.6.8` — MIT
-- `@capacitor/app@7.1.2` — MIT
-- `@capacitor/core@7.6.8` — MIT
+- `@azure/msal-browser@5.26.0` — MIT
+- `@azure/msal-common@16.14.3` — MIT
+- `@azure/msal-node@7.1.1` — MIT
+- `@capacitor/android@8.5.3` — MIT
+- `@capacitor/app@8.1.2` — MIT
+- `@capacitor/core@8.5.3` — MIT
 - `@emnapi/runtime@1.11.3` — MIT
-- `@google/genai@2.21.0` — Apache-2.0
+- `@google/genai@2.30.0` — Apache-2.0
 - `@img/colour@1.1.0` — MIT
 - `@img/sharp-darwin-arm64@0.35.5` — Apache-2.0
 - `@img/sharp-darwin-x64@0.35.5` — Apache-2.0
@@ -69,7 +68,7 @@ production dependencies are listed, because only they are bundled in a build.
 - `@protobufjs/path@1.1.2` — BSD-3-Clause
 - `@protobufjs/pool@1.1.0` — BSD-3-Clause
 - `@protobufjs/utf8@1.1.2` — BSD-3-Clause
-- `@types/node@24.13.3` — MIT
+- `@types/node@24.19.2` — MIT
 - `@types/retry@0.12.0` — MIT
 - `agent-base@7.1.4` — MIT
 - `base64-js@1.5.1` — MIT
@@ -78,7 +77,7 @@ production dependencies are listed, because only they are bundled in a build.
 - `data-uri-to-buffer@4.0.1` — MIT
 - `debug@4.4.3` — MIT
 - `detect-libc@2.1.2` — Apache-2.0
-- `dotenv@17.4.2` — BSD-2-Clause
+- `dotenv@18.0.8` — BSD-2-Clause
 - `ecdsa-sig-formatter@1.0.11` — Apache-2.0
 - `exifr@7.1.3` — MIT
 - `extend@3.0.2` — MIT
@@ -108,15 +107,16 @@ production dependencies are listed, because only they are bundled in a build.
 - `node-fetch@3.3.2` — MIT
 - `p-retry@4.6.2` — MIT
 - `protobufjs@7.6.6` — BSD-3-Clause
+- `qrcode-generator@2.0.4` — MIT
 - `retry@0.13.1` — MIT
 - `safe-buffer@5.2.1` — MIT
+- `scrypt-js@3.0.1` — MIT
 - `semver@7.8.5` — ISC
 - `sharp@0.35.5` — Apache-2.0
 - `tslib@2.8.1` — 0BSD
-- `undici-types@7.18.2` — MIT
-- `uuid@8.3.2` — MIT
+- `undici-types@7.24.6` — MIT
 - `web-streams-polyfill@3.3.3` — MIT
-- `ws@8.21.3` — MIT
+- `ws@8.22.0` — MIT
 
 ## Licence texts
 
@@ -141,7 +141,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ### Apache-2.0
 
-Taken from `@google/genai@2.21.0`.
+Taken from `@google/genai@2.30.0`.
 
 ```
 Apache License
@@ -349,7 +349,7 @@ Apache License
 
 ### BSD-2-Clause
 
-Taken from `dotenv@17.4.2`.
+Taken from `dotenv@18.0.8`.
 
 ```
 Copyright (c) 2015, Scott Motte
@@ -804,12 +804,12 @@ third-party archives.
 
 ### MIT
 
-Taken from `@azure/msal-browser@5.21.0`.
+Taken from `@capacitor/android@8.5.3`.
 
 ```
 MIT License
 
-Copyright (c) Microsoft Corporation. All rights reserved.
+Copyright (c) 2017-present Drifty Co.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -827,5 +827,109 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE
+SOFTWARE.
+```
+
+
+## Bundled fonts
+
+`app/public/fonts/NotoSerifSC-SemiBold.woff2` — a subset of Noto Serif SC, SIL Open Font License 1.1.
+The font is instanced at weight 600 and cut down to the GB2312 character set by
+`app/scripts/build-card-font.py`.
+
+```
+Copyright 2012 Google Inc. All Rights Reserved.
+
+This Font Software is licensed under the SIL Open Font License,
+Version 1.1.
+
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font
+creation efforts of academic and linguistic communities, and to
+provide a free and open framework in which fonts may be shared and
+improved in partnership with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply to
+any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software
+components as distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to,
+deleting, or substituting -- in part or in whole -- any of the
+components of the Original Version, by changing formats or by porting
+the Font Software to a new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed,
+modify, redistribute, and sell modified and unmodified copies of the
+Font Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components, in
+Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the
+corresponding Copyright Holder. This restriction only applies to the
+primary font name as presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created using
+the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
