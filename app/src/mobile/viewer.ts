@@ -429,9 +429,19 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
     input.addEventListener("change", () => {
       cardOptions[key] = input.checked;
       saveCardOptions(cardOptions);
+      updateCardButton();
       repaintCard();
     });
     shareSwitches.appendChild(row);
+  }
+
+  /**
+   * With every layer off the card is just the photo, which "share the original"
+   * already sends — so the card button stops being an action. A disabled button
+   * says that better than a card of nothing.
+   */
+  function updateCardButton(): void {
+    cardButton.disabled = !cardOptions.caption && !cardOptions.date && !cardOptions.place;
   }
 
   function cardText(photo: PhotoRecord): CardText {
@@ -505,6 +515,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
    */
   function setSharing(busy: boolean): void {
     for (const button of shareActions.querySelectorAll("button")) button.disabled = busy;
+    if (!busy) updateCardButton();
     window.clearTimeout(progressTimer);
     if (!busy) {
       shareProgress.hidden = true;
@@ -555,6 +566,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
   const cardButton = el<HTMLButtonElement>(`<button type="button" class="is-primary"></button>`);
   cardButton.textContent = ui.mobile.shareCard;
   cardButton.addEventListener("click", () => void shareCardNow());
+  updateCardButton();
   const originalButton = el<HTMLButtonElement>(`<button type="button"></button>`);
   originalButton.textContent = ui.mobile.shareOriginal;
   originalButton.addEventListener("click", () => void shareOriginalNow());
