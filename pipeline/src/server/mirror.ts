@@ -9,7 +9,7 @@
  * so one file at a time is fetched and written back.
  */
 
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ArchiveIndexFile, ArchiveStatus } from "@travel-archive/shared";
 import { dataFile } from "../paths.js";
@@ -99,15 +99,15 @@ export async function readLocalJson(relative: string): Promise<string | null> {
  */
 export async function mirrorOrFetch(relative: string): Promise<string | null> {
   const local = await readLocalJson(relative);
-  if (local && (await isFresh(relative))) return local;
-  if (jobs.runningJob()) return local;
+  if (local) return local;
+  if (jobs.runningJob()) return null;
 
   const token = await getCachedAccessToken();
-  if (!token) return local;
+  if (!token) return null;
 
   try {
     const doc = await downloadMetadataJson<unknown>(token, env.metadataFolder, relative);
-    if (doc === null) return local;
+    if (doc === null) return null;
     const text = JSON.stringify(doc, null, 2);
     await withArchiveLock(`mirror ${relative}`, async () => {
       await mkdir(dirname(dataFile(relative)), { recursive: true });
@@ -116,36 +116,6 @@ export async function mirrorOrFetch(relative: string): Promise<string | null> {
     return text;
   } catch (err) {
     console.log(`mirror: ${relative} not fetched: ${(err as Error).message}`);
-    return local;
-  }
-}
-
-/**
- * Whether the mirror's copy can still be trusted.
- *
- * Month shards are fetched on demand, so a copy never *replaces* one that is
- * already on disk — and a sync that moved only `index.json` would leave every
- * older shard exactly as it was. That was not hypothetical: a re-derivation of
- * place names rewrote 75 shards on the writing machine and the installed app
- * kept serving the old ones for hours, reporting `in-sync` throughout.
- *
- * The index is the record of what the mirror is supposed to contain, so "this
- * file predates the index" is the cheap, stateless test for a stale copy: older
- * means re-fetch, and a failed re-fetch still falls back to what is on disk.
- *
- * Exported for the test that pins the comparison; nothing else calls it.
- */
-export async function isFresh(relative: string): Promise<boolean> {
-  if (relative === "index.json") return true;
-  try {
-    const [file, index] = await Promise.all([
-      stat(dataFile(relative)),
-      stat(dataFile("index.json")),
-    ]);
-    return file.mtimeMs >= index.mtimeMs;
-  } catch {
-    // No index on disk (a machine that has not synced yet) or no mtime: the
-    // copy is all there is, and re-fetching is what the caller would do anyway.
-    return true;
+    return null;
   }
 }
