@@ -30,6 +30,15 @@ bytes). Three separate faults surfaced, and only the last one was Microsoft's:
 The lesson worth keeping: every one of these was invisible until the far end
 broke, and none of them was about the far end.
 
+Recovery, measured after Microsoft's MO1550821 cleared on 2026-11-14: a cold
+thumbnail 1.8 s then 220 ms cached; a month shard 333 ms; `/health` back to
+`content: ok`. Two smaller faults were found while confirming the recovery: a
+bogus item id answered 503 (the "far end refused" state) instead of 404, which
+would have painted a network-failure icon over a photo that simply has no
+preview and tripped the breaker for the entire archive; and the breaker itself
+is global, so a single such answer was enough to claim an outage. Both fixed —
+404/400/406 now mean "no preview", everything else means "the far end".
+
 ## Past regressions, now fixed
 
 Two things reported by the owner turned out to trace back to one bad edit of
