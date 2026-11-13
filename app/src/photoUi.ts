@@ -1,8 +1,9 @@
 import type { PhotoRecord } from "@travel-archive/shared";
 import { loadThumbnail, loadLarge } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
-import { isLocalMachine } from "./backend";
+import { apiFetch, isLocalMachine } from "./backend";
 import { loc } from "./contentLang";
+import { noteContentUnavailable, noteImageFailure, noteImageSuccess } from "./contentStatus";
 import { ui } from "./i18n";
 
 /** Builds an element from an HTML string. Used everywhere in place of a template engine. */
@@ -82,9 +83,66 @@ const BLANK_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAAL
  * The cell keeps its shape and stays clickable: only the thumbnail is
  * missing, and the original still opens in the lightbox.
  */
-function markMissing(img: HTMLImageElement): void {
-  img.classList.add("thumb-missing");
+/**
+ * Decides whether a failed image is the archive's answer or the far end's.
+ *
+ * One cheap loopback request, and only after something already failed — the
+ * alternative was drawing the same blank cell for both, which is how a OneDrive
+ * outage looked like an empty library.
+ */
+async function classifyFailure(img: HTMLImageElement, url: string): Promise<void> {
+  const id = img.dataset.photoId;
+  const size = img.dataset.loader === "large" ? "large" : "medium";
+  try {
+    const res = await apiFetch(`/thumb/state/${size}/${encodeURIComponent(id ?? "")}`);
+    if (res.ok) {
+      const { state } = (await res.json()) as { state?: string };
+      if (state === "unavailable") {
+        markFailed(img, url);
+        noteContentUnavailable();
+        return;
+      }
+    }
+  } catch {
+    // The server itself did not answer; that is the offline case, and the
+    // banner is already the right thing to show.
+    markFailed(img, url);
+    noteImageFailure();
+    return;
+  }
+  markMissing(img);
+}
+
+function markMissing(img: HTMLImageElement): void {  img.classList.add("thumb-missing");
   img.title = ui.album.noPreview;
+}
+
+/**
+ * A photo whose bytes could not be fetched — the network or OneDrive's backend,
+ * not the archive. Drawn as a torn-image icon, and clicking it asks again.
+ *
+ * Separate from `markMissing` on purpose: a photo with no preview stays that way
+ * however often it is retried, while a failed fetch usually does not, and the
+ * old single state made the two indistinguishable to the reader.
+ */
+function markFailed(img: HTMLImageElement, url: string): void {
+  img.classList.add("thumb-failed");
+  img.title = ui.album.retry;  if (img.dataset.retryWired === "1") return;
+  img.dataset.retryWired = "1";
+  img.addEventListener(
+    "click",
+    (event) => {
+      if (!img.classList.contains("thumb-failed")) return;
+      // The cell's own click opens the lightbox; a retry is not a request for it.
+      event.stopPropagation();
+      event.preventDefault();
+      img.classList.remove("thumb-failed");
+      img.title = "";
+      img.src = BLANK_PIXEL;
+      void hydrate(img);
+    },
+    { capture: true },
+  );
 }
 
 /**
@@ -145,6 +203,7 @@ function hydrate(img: HTMLImageElement): Promise<void> {
           "load",
           () => {
             img.classList.add("loaded");
+            noteImageSuccess();
             resolve();
           },
           { once: true },
@@ -155,8 +214,12 @@ function hydrate(img: HTMLImageElement): Promise<void> {
           "error",
           () => {
             img.src = BLANK_PIXEL;
-            markMissing(img);
             resolve();
+            // An image element reports only that it failed. Ask the server
+            // which kind of failure it was: "no preview for this photo" is a
+            // fact about the archive, "OneDrive would not answer" is news about
+            // the world, and only the second one is worth a banner and a retry.
+            void classifyFailure(img, url);
           },
           { once: true },
         );

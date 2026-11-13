@@ -9,7 +9,7 @@
 import { readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { getCachedAccessToken } from "../auth.js";
-import { downloadPhotoBuffer, downloadThumbnailBuffer } from "../graph.js";
+import { downloadPhotoBuffer, downloadThumbnailBuffer, GraphError } from "../graph.js";
 import { dataFile } from "../paths.js";
 import { thumbSize, writeThumb, type ThumbSize } from "../thumbStore.js";
 
@@ -61,11 +61,76 @@ export function warmingStatus(): Warming | null {
   return warming;
 }
 
+/** How long a failed fetch is remembered, so one dead id cannot cost every request. */
+const UNAVAILABLE_MS = 60_000;
+
+/**
+ * The most a single cache miss may cost the caller. Warming and rendering both
+ * sit behind this, and a content backend that answers slowly is worse than one
+ * that answers "no": 2026-11-13 saw one thumbnail take 104 seconds before
+ * failing.
+ */
+const FETCH_BUDGET_MS = 15_000;
+
+/** Thrown when the bytes cannot be had right now — not when the item is gone. */
+export class ThumbUnavailable extends Error {
+  constructor(
+    readonly itemId: string,
+    readonly reason: "timeout" | "failed",
+  ) {
+    super(
+      reason === "timeout"
+        ? `Gave up waiting for ${itemId} after ${FETCH_BUDGET_MS}ms`
+        : `No bytes for ${itemId}; the content backend refused the request`,
+    );
+  }
+}
+
+/** Keys whose last fetch failed, and when to try again. */
+const unavailable = new Map<string, number>();
+
+/**
+ * When a thumbnail fetch last failed for a reason the far end owns.
+ *
+ * A plain flag was wrong: 250 good images finish loading around the handful
+ * that fail, and every success cleared it — the banner appeared for half a
+ * second and vanished (reported within minutes). Failures are remembered for a
+ * while instead, so the strip stays readable; a couple of quiet minutes is the
+ * signal that the far end is back.
+ */
+let lastUnavailableAt = 0;
+const UNAVAILABLE_WINDOW_MS = 120_000;
+
+export function contentState(): "ok" | "unavailable" {
+  return Date.now() - lastUnavailableAt < UNAVAILABLE_WINDOW_MS ? "unavailable" : "ok";
+}
+
+/**
+ * What is known about one id right now, without fetching it.
+ *
+ * "unavailable" means the last attempt failed for a reason the far end owns;
+ * anything else is either cached or unknown to this server. The app asks after
+ * an `<img>` fails, because an image element cannot read a status code and the
+ * difference between "this photo has no preview" and "OneDrive would not answer"
+ * is exactly what the reader needs to see.
+ */
+export function knownUnavailable(size: ThumbSize, itemId: string): boolean {
+  const until = unavailable.get(`${size}:${itemId}`);
+  return until !== undefined && until > Date.now();
+}
+
 export function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer | null> {
   const key = `${size}:${itemId}`;
   const existing = inFlight.get(key);
   if (existing) return existing;
 
+  const until = unavailable.get(key);
+  if (until !== undefined) {
+    if (until > Date.now()) return Promise.reject(new ThumbUnavailable(itemId, "failed"));
+    unavailable.delete(key);
+  }
+
+  let timer: NodeJS.Timeout | undefined;
   const work = (async () => {
     const token = await getCachedAccessToken();
     if (!token) return null;
@@ -75,10 +140,28 @@ export function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer |
         : await downloadThumbnailBuffer(token, itemId, size);
     if (bytes) await writeThumb(size, itemId, bytes);
     return bytes;
-  })().finally(() => inFlight.delete(key));
+  })().finally(() => {
+    clearTimeout(timer);
+    inFlight.delete(key);
+  });
 
-  inFlight.set(key, work);
-  return work;
+  // The budget is a race, not a cancel: the fetch below is already in a socket
+  // and nobody can abort it here, but the caller must not wait for it either.
+  const budgeted = Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new ThumbUnavailable(itemId, "timeout")), FETCH_BUDGET_MS);
+      timer.unref?.();
+    }),
+  ]).catch((err: unknown) => {
+    unavailable.set(key, Date.now() + UNAVAILABLE_MS);
+    // "Gone" is the archive's answer and says nothing about the far end.
+    if (!(err instanceof GraphError && err.status === 404)) lastUnavailableAt = Date.now();
+    throw err instanceof ThumbUnavailable ? err : new ThumbUnavailable(itemId, "failed");
+  });
+
+  inFlight.set(key, budgeted);
+  return budgeted;
 }
 
 /** Deletes cached files of these sizes, skipping anything pinned. */

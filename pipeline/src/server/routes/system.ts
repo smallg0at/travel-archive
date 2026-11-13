@@ -12,7 +12,7 @@ import { sendTestNotification } from "../../notify.js";
 import { validateProvider } from "../../providers/index.js";
 import { json, readJsonBody, type Route } from "../http.js";
 import * as jobs from "../jobs.js";
-import { warmingStatus } from "../media.js";
+import { contentState, warmingStatus } from "../media.js";
 import type { RouteContext } from "./context.js";
 
 /** The routes, in the order they were written; the dispatcher keeps looking after a method mismatch. */
@@ -35,6 +35,11 @@ export const systemRoutes = (ctx: RouteContext): Route[] => [
         lastFinished: jobs.lastFinished(),
         warming: warmingStatus(),
         render: await renderCapability(),
+        // A remembered answer, not a probe: whether the last thumbnail fetch
+        // failed because OneDrive's content backend refused it. The app reads
+        // this to say "the far end is having trouble" instead of drawing blank
+        // cells — see contentStatus.ts in the app.
+        content: contentState(),
       };
       json(res, 200, body);
     },

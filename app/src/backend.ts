@@ -74,6 +74,12 @@ export interface Health {
   lastFinished?: Pick<JobRecord, "id" | "kind" | "status" | "finishedAt"> | null;
   warming?: ThumbWarming | null;
   /**
+   * What the server last made of a thumbnail fetch. `unavailable` means the far
+   * end refused or timed out — a different thing from a photo with no preview,
+   * and the reason the app can say which. Optional: older servers omit it.
+   */
+  content?: "ok" | "unavailable";
+  /**
    * What the server can render locally — sharp, heic-decode, ffmpeg — for the
    * thumbnails OneDrive refuses to produce. Absent on a server built before
    * this existed, so it stays optional like `lastFinished`.
@@ -139,6 +145,44 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export const isLocalMachine = /^(localhost|127\.0\.0\.1|\[::1\]|archive\.local)$/i.test(
   location.hostname || "localhost",
 );
+
+/**
+ * Whether the job server this page came from is signed in to Graph.
+ *
+ * On the owner's machine the renderer's own Microsoft session is beside the
+ * point: the server holds the token and does the reading. When a shard is not in
+ * the mirror yet, the honest message is "being fetched", not "sign in" — the
+ * owner *is* signed in, and asking again sent them to a banner that could not
+ * help (2026-10-14, reported again 2026-11-13 on a trip page that said
+ * "sign in to load" over a working archive).
+ */
+let serverSignedIn = false;
+
+export function setServerSignedIn(value: boolean): void {
+  serverSignedIn = value;
+}
+
+export function serverCanFetch(): boolean {
+  return serverSignedIn;
+}
+
+/**
+ * Whether this page itself was served by the job server.
+ *
+ * The distinction that matters when a read fails: on the desktop the server *is*
+ * the archive, so a missing shard is never a reason to ask the reader to sign in
+ * — the renderer has no Microsoft session to give. A probe that timed out while
+ * the server was busy used to be enough to send the reader to a sign-in prompt
+ * over a perfectly working archive (2026-11-13: "sign in to load October 2026"
+ * beside "the local server stopped responding" on a server answering in 292ms).
+ */
+export function servedByJobServer(): boolean {
+  // The shell's page (17923) and any debug copy of it come from the job server
+  // itself; Vite's dev (5173) and preview (4173) ports do not, and a renderer
+  // Microsoft session is meaningful there.
+  const port = location.port;
+  return isLocalMachine && !!port && port !== "5173" && port !== "4173";
+}
 
 /** Whether the server wants a password, and whether this browser has given it. */
 export interface AccessStatus {

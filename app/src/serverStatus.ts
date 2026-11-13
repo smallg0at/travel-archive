@@ -98,7 +98,11 @@ export function initServerStatus(online: boolean, failure: HealthFailure | null 
   // A 401 at startup *is* the gate being shown — its own explanation. A banner
   // underneath it (z-index 60 under the gate's 100) added nothing but a false
   // claim that the server was not running.
-  if (!online && !isAuth(failure) && !dismissed()) show(ui.server.offline, null);
+  //
+  // Nothing is painted from the startup answer at all: the first probe below
+  // runs immediately, and two misses are needed before the banner appears. The
+  // old immediate `show` is what put "stopped responding" on screen over a
+  // server that was merely still starting.
 
   /**
    * One failed probe is not a dead server.
@@ -116,7 +120,7 @@ export function initServerStatus(online: boolean, failure: HealthFailure | null 
   /** What the failed probe said, kept for the message if it does go offline. */
   let lastFailure: HealthFailure | null = null;
 
-  setInterval(async () => {
+  const probe = async () => {
     const result = await healthResult();
     let next: State;
     if (result.ok) {
@@ -150,5 +154,12 @@ export function initServerStatus(online: boolean, failure: HealthFailure | null 
     } else {
       show(offlineText, reload);
     }
-  }, POLL_MS);
+  };
+
+  // Ask once now, then keep asking. The startup answer is often taken while the
+  // server is still coming up — or busy writing an index — and painting "stopped
+  // responding" from a single early miss put a false alarm on screen that a
+  // reload then disproved.
+  void probe();
+  setInterval(() => void probe(), POLL_MS);
 }

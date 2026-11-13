@@ -107,6 +107,13 @@ export const en = {
     gridDensity: "Grid density",
     /** Hover text on a cell whose picture nothing can render — see photoUi.ts. */
     noPreview: "No preview for this photo",
+    /** A cell whose bytes could not be fetched (as opposed to a photo that has none). */
+    retry: "Click to try again",
+    /** Top strip, shown only while reads are failing — see contentStatus.ts. */
+    contentOffline: "You are offline. Only the photos kept on this device can be shown.",
+    contentRemote:
+      "OneDrive is not returning photos right now. Check the service status before assuming the archive is at fault.",
+    contentCheckStatus: "Service status",
     contents: "Contents",
     density: { compact: "Small", comfortable: "Medium", spacious: "Large" },
   },

@@ -8,7 +8,7 @@ import { GraphError, fetchItemDownloadUrl } from "../../graph.js";
 import { SCREEN_CAPTIONS_FILE } from "../../screenCaptions.js";
 import { readThumb } from "../../thumbStore.js";
 import { decodeSegment, json, sendJsonText, type Route } from "../http.js";
-import { fetchAndCache, imageType, type ThumbSize } from "../media.js";
+import { fetchAndCache, imageType, knownUnavailable, ThumbUnavailable, type ThumbSize } from "../media.js";
 import { mirrorOrFetch, archiveStatus } from "../mirror.js";
 import type { RouteContext } from "./context.js";
 
@@ -115,6 +115,21 @@ export const archiveRoutes = (ctx: RouteContext): Route[] => [
     },
   ],
   /**
+   * What this server knows about one thumbnail, without going to OneDrive.
+   *
+   * The app asks after an `<img>` errors: an image element reports only "this
+   * failed", and the two answers a reader needs — "no preview exists" and
+   * "OneDrive would not answer" — are indistinguishable from it.
+   */
+  [
+    /^\/thumb\/state\/(medium|large|full)\/(.+)$/,
+    "GET",
+    async (_req, res, [size, encodedId]) => {
+      const itemId = decodeURIComponent(encodedId);
+      json(res, 200, { state: knownUnavailable(size as ThumbSize, itemId) ? "unavailable" : "unknown" });
+    },
+  ],
+  /**
    * A thumbnail, from disk when it has been fetched before.
    *
    * The app used to mint a short-lived CDN link per image through a Graph
@@ -173,6 +188,13 @@ export const archiveRoutes = (ctx: RouteContext): Route[] => [
         // fault, and 500 is not the status the app reads as "no preview".
         if (err instanceof GraphError && err.status === 404) {
           return json(res, 404, { error: "No such item, or not signed in" });
+        }
+        // The content backend is refusing reads, or too slow to answer. Not a
+        // missing photo and not a broken server: a separate answer so the app
+        // can say "OneDrive is having trouble" instead of drawing nothing.
+        if (err instanceof ThumbUnavailable) {
+          res.setHeader("Retry-After", "60");
+          return json(res, 503, { error: "content-unavailable", reason: err.reason });
         }
         throw err;
       }

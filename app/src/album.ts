@@ -10,7 +10,7 @@ import { contentLanguage, loc, locDay, locTrip } from "./contentLang";
 import { renderTripMap } from "./tripMap";
 import { releaseThumbnails } from "./graphPhoto";
 import { thumbnailSource } from "./photoSource";
-import { canWrite, checkHealth, setPin as savePin, syncStatus } from "./backend";
+import { canWrite, checkHealth, setPin as savePin, servedByJobServer, serverCanFetch, syncStatus } from "./backend";
 import { releaseSettings, showSettings } from "./settings";
 import { showGenerate, whenGenerationReady } from "./tripMode";
 import { canPrint, printView } from "./print";
@@ -522,6 +522,10 @@ async function showTrip(trip: TripRecord): Promise<void> {
     for (const shard of shards) Object.assign(photos, shard.photos);
   } catch (err) {
     if (err instanceof SignInRequiredError) {
+      if (serverCanFetch() || servedByJobServer()) {
+        content.replaceChildren(loadingNote(ui.app.loadGap));
+        return;
+      }
       window.dispatchEvent(new CustomEvent("signin-required"));
       content.replaceChildren(loadingNote(ui.common.signInToLoad(locTrip(trip).name)));
       return;
@@ -628,6 +632,12 @@ async function showMonth(summary: MonthSummary, index: ArchiveIndexFile): Promis
     shard = await loadMonth(summary.month);
   } catch (err) {
     if (err instanceof SignInRequiredError) {
+      // With the server signed in, "sign in" is a lie: the month is simply not
+      // in the mirror yet. Say what is true instead — see backend.serverCanFetch.
+      if (serverCanFetch() || servedByJobServer()) {
+        content.replaceChildren(loadingNote(ui.app.loadGap));
+        return;
+      }
       window.dispatchEvent(new CustomEvent("signin-required"));
       content.replaceChildren(loadingNote(ui.common.signInToLoad(label)));
       return;

@@ -97,6 +97,13 @@ export const zhHans: Messages = {
     gridDensity: "网格密度",
     /** 悬停提示：这张照片在任何地方都渲染不出缩略图 — 见 photoUi.ts。 */
     noPreview: "这张照片没有预览图",
+    /** 取不到字节时的悬停提示（区别于照片本来就没有预览）。 */
+    retry: "点击重试",
+    /** 顶部提示条，仅在读取失败时出现 — 见 contentStatus.ts。 */
+    contentOffline: "当前未连接网络，只能显示保存在本机的照片。",
+    contentRemote:
+      "OneDrive 远端异常，在线内容不可用。请先确认服务状态，再判断是不是档案出了问题。",
+    contentCheckStatus: "服务状态",
     contents: "目录",
     density: { compact: "小", comfortable: "中", spacious: "大" },
   },

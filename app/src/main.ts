@@ -9,7 +9,7 @@ import {
   SignInRequiredError,
 } from "./archiveData";
 import { getActiveAccount, signIn } from "./msAuth";
-import { isLocalMachine } from "./backend";
+import { isLocalMachine, setServerSignedIn } from "./backend";
 import { initGeneration } from "./tripMode";
 import { initSidebarNav, initSidebarResize } from "./chrome";
 import { setArchiveRefresh } from "./dayEdit";
@@ -238,6 +238,7 @@ async function main() {
   // so the Microsoft session is neither available nor wanted.
   if (isLocalMachine) {
     serverHasGraph = health.ok && health.health.signedIn;
+    setServerSignedIn(serverHasGraph);
     if (!serverHasGraph && !(await getActiveAccount())) showSignInBanner();
   }
 

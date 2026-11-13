@@ -129,6 +129,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function graphFetchUrl(initialToken: string, url: string, init: RequestInit = {}): Promise<Response> {
   guardLiveGraph();
   let token = initialToken;
+  let refreshedToken = false;
   for (let attempt = 1; ; attempt++) {
     let res: Response;
     try {
@@ -154,7 +155,15 @@ async function graphFetchUrl(initialToken: string, url: string, init: RequestIni
     // the expiry would 401 and every remaining photo would be recorded as
     // failed. Re-acquiring is cheap — auth.ts renews silently from the cached
     // refresh token — so it is done here rather than threaded through callers.
-    if (res.status === 401 && attempt < MAX_ATTEMPTS) {
+    //
+    // Once, not five times. A refreshed token that is *still* refused is not a
+    // stale token: it is the content backend refusing the request (on
+    // 2026-11-13 SharePoint answered 401 to every content read while metadata
+    // reads kept working). Retrying that four more times spent ~100 seconds per
+    // thumbnail before reporting failure, which is what made the thumbnail
+    // cache look stuck and the app look dead.
+    if (res.status === 401 && !refreshedToken) {
+      refreshedToken = true;
       token = await getAccessToken();
       continue;
     }
