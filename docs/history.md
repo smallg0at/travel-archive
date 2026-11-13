@@ -2,6 +2,34 @@
 
 Records, not rules. Kept because the measurements are the reasoning a future change has to answer to.
 
+## An archive that looked empty because a read failed (2026-11-13)
+
+OneDrive's content backend answered 401 to every binary read for most of a day
+(metadata reads kept working — Graph returned the item, SharePoint refused the
+bytes). Three separate faults surfaced, and only the last one was Microsoft's:
+
+- **A failed read was indistinguishable from an empty archive.**
+  `downloadMetadataJson` returned `null` for any failure, `loadIndex` turned
+  `null` into "no months", and a scan rebuilt the index from the one month it had
+  just walked: 33,059 records down to 109. The shrink guard stopped the write;
+  the index was never damaged. Fixed by making only a 404 mean "absent", and by
+  having scan read its index and shards from the mirror first, because those are
+  read-to-rewrite paths.
+- **A 401 was retried like a throttle.** Five attempts with token re-acquisition
+  and backoff cost **104 seconds per thumbnail** (measured), so warming looked
+  stuck and the app looked dead. Now a 401 is retried once; a cache miss has a
+  15-second budget; failures are remembered for a minute.
+- **A failure had no presentation.** An `<img>` that errors reports nothing, so
+  a refused read drew the same blank cell as a photo with no preview, and a
+  transient health-probe miss printed "the local server stopped responding" over
+  a server answering in 292 ms — followed by "sign in to load" over an archive
+  that was signed in. Cells now ask the server which failure they had and show a
+  torn-image icon that retries on click; the reason itself is one toast, in the
+  existing card style.
+
+The lesson worth keeping: every one of these was invisible until the far end
+broke, and none of them was about the far end.
+
 ## Past regressions, now fixed
 
 Two things reported by the owner turned out to trace back to one bad edit of

@@ -139,6 +139,10 @@ function markFailed(img: HTMLImageElement, url: string): void {
       img.classList.remove("thumb-failed");
       img.title = "";
       img.src = BLANK_PIXEL;
+      // Without this the image counts as already hydrated and the retry does
+      // nothing at all — the icon vanished and never came back, which reads as
+      // "it worked" until the cell is empty again.
+      delete img.dataset.hydrated;
       void hydrate(img);
     },
     { capture: true },

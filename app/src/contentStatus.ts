@@ -86,27 +86,38 @@ function render(): void {
     paint(banner);
     return;
   }
+  // The same toast stack the server banner uses, and the same card style: this
+  // is a transient note about the far end, not page chrome. A fixed strip of my
+  // own covered the window's title bar and duplicated an existing look.
+  let stack = document.getElementById("toasts");
+  if (!stack) {
+    stack = document.createElement("div");
+    stack.id = "toasts";
+    document.body.appendChild(stack);
+  }
   banner = document.createElement("div");
-  banner.className = "content-banner";
+  banner.className = "server-banner";
   paint(banner);
-  document.body.appendChild(banner);
+  stack.appendChild(banner);
 }
 
 function paint(node: HTMLElement): void {
   node.replaceChildren();
   const text = document.createElement("span");
+  text.className = "server-banner-text";
   text.textContent = health === "offline" ? ui.album.contentOffline : ui.album.contentRemote;
   node.appendChild(text);
 
   if (health === "remote") {
-    // A plain anchor: the desktop shell already routes http(s) clicks to the
-    // system browser, so this needs no new bridge.
+    // A plain anchor inside the sentence: the desktop shell already routes
+    // http(s) clicks to the system browser, so this needs no new bridge — and
+    // no new styles either.
+    text.append(" ");
     const link = document.createElement("a");
     link.href = "https://status.cloud.microsoft/";
     link.target = "_blank";
     link.rel = "noreferrer";
-    link.className = "content-banner-action";
     link.textContent = ui.album.contentCheckStatus;
-    node.appendChild(link);
+    text.appendChild(link);
   }
 }
