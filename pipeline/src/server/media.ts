@@ -124,6 +124,15 @@ export function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer |
   const existing = inFlight.get(key);
   if (existing) return existing;
 
+  // Circuit breaker. When the far end is down it is down for minutes, not for
+  // one photo — on 2026-11-13 SharePoint answered 504 after 30 seconds to every
+  // content read, so a 4-wide warm batch sat on 4 sockets for ~190 s each
+  // (5 attempts × 30 s + backoff) while every caller waited behind them. While
+  // the last failure is recent, answer immediately instead: the app then shows
+  // its "OneDrive is not returning photos" state at once, which is the truth,
+  // and nothing spends a socket learning it again.
+  if (contentState() === "unavailable") return Promise.reject(new ThumbUnavailable(itemId, "failed"));
+
   const until = unavailable.get(key);
   if (until !== undefined) {
     if (until > Date.now()) return Promise.reject(new ThumbUnavailable(itemId, "failed"));
