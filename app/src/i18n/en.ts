@@ -406,6 +406,15 @@ export const en = {
       "No local server is running, so the archive is being read directly from OneDrive and images are cached in this browser only. Sync, pinning and generation need the desktop app.",
 
     library: "Library",
+    groups: {
+      archive: "Archive",
+      sync: "Sync and scanning",
+      generate: "Generation",
+      access: "Access",
+      storage: "Storage",
+      appearance: "Appearance",
+      about: "About",
+    },
     notices: "Licences",
     noticesNote:
       "This app bundles libvips (LGPL-3.0-or-later) for local rendering. Its notice and this app's own licence ship beside the executable; these buttons open them.",

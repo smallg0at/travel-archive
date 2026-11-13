@@ -1182,7 +1182,9 @@ function viewFromHash(): View | null {
   // A photograph's address is its view plus `/photo/<id>`: the page under it is
   // the view, and the viewer reconciles itself with the tail separately.
   const hash = splitPhoto(location.hash).view;
-  if (hash === "#settings") return { kind: "settings" };
+  // A group inside Settings is part of its address (`#settings/sync`), so a
+  // failed job's error can link straight to the pane that fixes it.
+  if (/^#settings(?:\/|$)/.test(hash)) return { kind: "settings" };
   if (hash === "#generate") return { kind: "generate" };
   if (hash === "#activity") return { kind: "activity" };
   // Search moved onto the home page; an old #search link lands there.

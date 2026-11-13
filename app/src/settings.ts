@@ -217,6 +217,81 @@ export function releaseSettings(): void {
   for (const stop of watchers.splice(0)) stop();
 }
 
+/**
+ * One pane of Settings: what a task needs, in reading order.
+ *
+ * `build` is lazy so a pane's sections are constructed when it is opened; the
+ * archive pane builds immediately, because it is the one that paints first.
+ */
+interface SettingGroup {
+  id: string;
+  label: string;
+  build: () => (HTMLElement | null)[];
+}
+
+const GROUP_HASH = /^#settings\/([\w-]+)/;
+
+/** The pane's address, so a link can open Settings on the right group. */
+function groupFromHash(): string | null {
+  return GROUP_HASH.exec(location.hash)?.[1] ?? null;
+}
+
+function settingsLayout(groups: SettingGroup[], sync: SyncStatus): HTMLElement {
+  const first = groupFromHash() ?? groups[0].id;
+  const nav = el<HTMLElement>(`<nav class="set-nav" role="tablist"></nav>`);
+  const panes = el<HTMLElement>(`<div class="set-panes"></div>`);
+  const built = new Map<string, HTMLElement>();
+
+  const paneFor = (group: SettingGroup): HTMLElement => {
+    const existing = built.get(group.id);
+    if (existing) return existing;
+    const pane = el<HTMLElement>(`<div class="set-pane" role="tabpanel" data-group="${group.id}" hidden></div>`);
+    for (const node of group.build()) if (node) pane.appendChild(node);
+    panes.appendChild(pane);
+    built.set(group.id, pane);
+    return pane;
+  };
+
+  // The same row style as the main sidebar — one Fluent list, not a second
+  // visual language. `month-link` brings the hover, the accent bar and the
+  // bold-on-selected behaviour with it.
+  const buttons = new Map<string, HTMLButtonElement>();
+  for (const group of groups) {
+    const button = el<HTMLButtonElement>(
+      `<button type="button" role="tab" class="month-link set-nav-item" data-group="${group.id}">${group.label}</button>`,
+    );
+    button.addEventListener("click", () => select(group.id, true));
+    buttons.set(group.id, button);
+    nav.appendChild(button);
+  }
+
+  const select = (id: string, remember: boolean) => {
+    const group = groups.find((g) => g.id === id) ?? groups[0];
+    for (const [key, button] of buttons) {
+      const active = key === group.id;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    }
+    for (const [key, pane] of built) pane.hidden = key !== group.id;
+    paneFor(group).hidden = false;
+    if (remember) history.replaceState(null, "", `#settings/${group.id}`);
+    // Switching a group is a jump to a new page, not a scroll within one; the
+    // scroll position of the old pane belongs to it, not here.
+    document.querySelector("main")?.scrollTo({ top: 0 });
+  };
+
+  const node = el<HTMLElement>(`<div class="set-layout"></div>`);
+  node.append(nav, panes);
+  // Deferred: `select` reads `main`, which does not exist until this is mounted.
+  queueMicrotask(() => select(first, false));
+  void sync;
+  return node;
+}
+
+function creditsNote(): HTMLElement {
+  return el(`<p class="set-credits">${ui.settings.dataCredits}</p>`);
+}
+
 export async function showSettings(): Promise<void> {
   const content = document.getElementById("content")!;
   releaseSettings();
@@ -239,39 +314,49 @@ export async function showSettings(): Promise<void> {
   }
 
   const writable = canWrite();
-  frag.appendChild(librarySection(archive));
-  // The rest is this machine's: scanning and syncing the archive, running
-  // jobs, the proxy and storage behind them. A remote reader is shown only the
-  // archive it is reading and how this window looks — the server would refuse
-  // every control in these sections anyway.
-  if (writable) {
-    frag.appendChild(photosFolderSection());
-    frag.appendChild(scanSection(sync));
-    frag.appendChild(backgroundSection());
-    // Notifications belong next to the section that makes the server a
-    // background thing: this is the switch for what it says when nobody is
-    // looking at it.
-    frag.appendChild(notifySection());
-    frag.appendChild(remoteSection());
-    frag.appendChild(generationSection());
-    // The settings for describing the withheld screenshots: the passphrase the
-    // descriptions are sealed under, the service that writes them, and what
-    // this machine can open. Running the pass is a job, and jobs live in
-    // Generate.
-    frag.appendChild(screensSection());
-    frag.appendChild(proxySection());
-    frag.appendChild(syncSection(sync));
-    frag.appendChild(offlineSection(sync));
-    frag.appendChild(storageSection(sync));
-  }
-  frag.appendChild(appearanceSection());
-  // The notices the licence requires to travel with the app; reachable here
-  // rather than only by browsing Program Files.
-  frag.appendChild(noticesSection());
-  // GeoNames is CC BY 4.0, which asks for credit "as suitable for your medium".
-  // Natural Earth is public domain and needs none, but naming it costs a line.
-  frag.appendChild(el(`<p class="set-credits"></p>`)).textContent = ui.settings.dataCredits;
+  // One pane per task, instead of 14 sections in a 4,100px scroll. The groups
+  // are a reading order, not a new set of settings: every row is the same one
+  // it was, in the same section component.
+  const groups: SettingGroup[] = [
+    { id: "archive", label: ui.settings.groups.archive, build: () => [librarySection(archive), writable ? photosFolderSection() : null] },
+    {
+      id: "sync",
+      label: ui.settings.groups.sync,
+      // This machine's: scanning and syncing the archive, and the pass that
+      // watches it while nobody is looking. A remote reader is shown only the
+      // archive it is reading and how this window looks — the server refuses
+      // every control here anyway.
+      build: () =>
+        writable ? [scanSection(sync), syncSection(sync), backgroundSection()] : [],
+    },
+    {
+      id: "generate",
+      label: ui.settings.groups.generate,
+      build: () =>
+        writable
+          ? // Notifications sit beside generation because they are the job
+            // server's way of saying a job finished.
+            [generationSection(), screensSection(), notifySection()]
+          : [],
+    },
+    { id: "access", label: ui.settings.groups.access, build: () => (writable ? [remoteSection(), proxySection()] : []) },
+    {
+      id: "storage",
+      label: ui.settings.groups.storage,
+      build: () => (writable ? [offlineSection(sync), storageSection(sync)] : []),
+    },
+    { id: "appearance", label: ui.settings.groups.appearance, build: () => [appearanceSection()] },
+    {
+      id: "about",
+      label: ui.settings.groups.about,
+      // GeoNames is CC BY 4.0, which asks for credit "as suitable for your
+      // medium". Natural Earth is public domain and needs none, but naming it
+      // costs a line.
+      build: () => [noticesSection(), creditsNote()],
+    },
+  ].filter((group) => writable || group.id === "archive" || group.id === "appearance" || group.id === "about");
 
+  frag.appendChild(settingsLayout(groups, sync));
   content.replaceChildren(frag);
 
   void refreshStatus();

@@ -1930,6 +1930,61 @@ body.setup-active #signin-banner {
    takes the card's register — the path as 12px machine text, and the probe
    answer as a row rather than a proclamation. */
 .set-section .photo-folder .setup-path { font-size: 12px; color: var(--text-secondary); }
+/* --- Settings: a task per pane ------------------------------------------- */
+
+/*
+ * 14 sections in one 4,100px scroll became a reading problem: the row a reader
+ * wanted was four screens down and the page gave no clue which part it was in.
+ * The panes are that same list, grouped by what the reader is trying to do. The
+ * nav reuses `.month-link` so it is the same Fluent list as the main sidebar,
+ * not a second visual language: hover lift, 3px accent bar, bold when selected.
+ */
+.set-layout {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  max-width: 1000px;
+}
+
+.set-nav {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+
+.set-nav-item {
+  /* `.month-link` indents 34px for icon-less rows in the tree; this list has no
+     tree and no icons, so it takes its own symmetric padding. */
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.set-panes { min-width: 0; }
+.set-pane[hidden] { display: none; }
+.set-pane > .set-section { margin-top: 0; }
+
+/* One column when the window is narrow, as the phone browser's Settings is. */
+@media (max-width: 900px) {
+  .set-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .set-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .set-nav::-webkit-scrollbar { display: none; }
+  .set-nav-item { white-space: nowrap; }
+}
+
 .set-section .photo-folder .setup-ok { font-size: 12.5px; font-weight: 500; }
 .setup-input { flex: 1; min-width: 0; }
 .setup-picker { border-top: 1px solid rgba(127, 127, 127, 0.25); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
