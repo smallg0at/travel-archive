@@ -657,7 +657,19 @@ export async function fetchItemMeta(
   }
 }
 
-/** Downloads a metadata JSON file previously written by uploadMetadataJson. Returns null if it doesn't exist yet. */
+/**
+ * Downloads a metadata JSON file previously written by uploadMetadataJson.
+ * Returns null only when the file genuinely is not there (404).
+ *
+ * It used to return null for *any* failure, which is a far more expensive
+ * mistake than it looks: `loadIndex` turns null into an empty archive, and an
+ * empty archive is a valid thing to write. On 2026-11-13 a content download
+ * failed five times on a weak link, `scan` read that as "this archive has no
+ * months", rebuilt the index from the one month it had just walked, and only
+ * the shrink guard stood between that and replacing 33,059 records with 109.
+ * A read that failed is not a read that found nothing — the caller has to know
+ * the difference.
+ */
 export async function downloadMetadataJson<T>(token: string, metadataFolder: string, fileName: string): Promise<T | null> {
   const path = `${metadataFolder}/${fileName}`;
   try {
@@ -665,6 +677,7 @@ export async function downloadMetadataJson<T>(token: string, metadataFolder: str
     return (await res.json()) as T;
   } catch (err) {
     if (err instanceof LiveGuardError) throw err;
-    return null;
+    if (err instanceof GraphError && err.status === 404) return null;
+    throw err;
   }
 }

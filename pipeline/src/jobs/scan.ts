@@ -2,7 +2,7 @@ import type { MonthSummary, PhotoRecord, PhotoShard } from "@travel-archive/shar
 import { getAccessToken } from "../auth.js";
 import { GraphError, listPhotoFolders, listPhotosInFolder, type PhotoFolder, type ScannedPhoto } from "../graph.js";
 import { env } from "../env.js";
-import { loadIndex, loadShard, saveIndex, saveShard } from "../archiveStore.js";
+import { loadIndexForWriting, loadShard, saveIndex, saveShard } from "../archiveStore.js";
 import { formatMonthLabel, monthKey } from "../util.js";
 import { assignDuplicates, analysisTargets } from "../duplicates.js";
 import { flagGpsOutliersByDay } from "../geo.js";
@@ -208,7 +208,10 @@ export async function runScan(range: Range, onProgress: ProgressFn, signal?: Abo
   onProgress({ message: `Screenshot allowlist: ${allowlist.length} app(s) approved for analysis.` });
 
   onProgress({ phase: "loading", message: "Loading index..." });
-  const index = await loadIndex(token);
+  // Mirror first: a scan rewrites the index from what it loaded, so it must not
+  // depend on a network read succeeding. `loadIndexForWriting` falls back to
+  // OneDrive only when the local copy is missing or older than the remote.
+  const index = await loadIndexForWriting(token);
 
   onProgress({ phase: "listing", message: `Listing photo folders under ${env.photosFolder}...` });
   let allFolders: PhotoFolder[];
