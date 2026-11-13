@@ -37,6 +37,9 @@ import { msalConfig, SCOPES } from "./msalConfig";
  */
 let msalInstance: PublicClientApplication | null = null;
 
+/** The last renewal failure already written to the log — see the catch below. */
+let lastRenewalLog: string | null = null;
+
 function msal(): PublicClientApplication {
   if (!msalInstance) msalInstance = new PublicClientApplication(msalConfig);
   return msalInstance;
@@ -185,13 +188,25 @@ export async function getAccessToken(): Promise<string> {
     // first is a network problem. Without this line the phone's silent
     // renewal failing every time was indistinguishable from a bad connection.
     const e = err as { name?: string; errorCode?: string; subError?: string } | null;
-    console.error("[msal] silent renewal failed:", {
-      name: e?.name,
-      errorCode: e?.errorCode,
-      subError: e?.subError,
-      message: err instanceof Error ? err.message : String(err),
-      cause: err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined,
-    });
+    // One line, formatted. A second argument object reaches the phone's log as
+    // the literal text "[object Object]" — Capacitor's console bridge has no
+    // room for a structured value — which is how five unreadable lines ended up
+    // in logcat for every failed renewal.
+    const line = [
+      `[msal] silent renewal failed: ${e?.name ?? "Error"}`,
+      e?.errorCode ? `code=${e.errorCode}` : null,
+      e?.subError ? `subError=${e.subError}` : null,
+      err instanceof Error ? `message=${err.message}` : `value=${String(err)}`,
+      err instanceof Error && err.cause instanceof Error ? `cause=${err.cause.message}` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    // Once per distinct failure: a renewal that fails on every attempt in one
+    // session is one fact, not five.
+    if (line !== lastRenewalLog) {
+      lastRenewalLog = line;
+      console.error(line);
+    }
     throw new TokenRenewalError(err);
   }
 }

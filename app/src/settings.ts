@@ -265,6 +265,9 @@ export async function showSettings(): Promise<void> {
     frag.appendChild(storageSection(sync));
   }
   frag.appendChild(appearanceSection());
+  // The notices the licence requires to travel with the app; reachable here
+  // rather than only by browsing Program Files.
+  frag.appendChild(noticesSection());
   // GeoNames is CC BY 4.0, which asks for credit "as suitable for your medium".
   // Natural Earth is public domain and needs none, but naming it costs a line.
   frag.appendChild(el(`<p class="set-credits"></p>`)).textContent = ui.settings.dataCredits;
@@ -723,6 +726,56 @@ function offlineSection(status: SyncStatus): HTMLElement {
   pick.addEventListener("change", () => void saveSyncSettings({ intervalMinutes: Number(pick.value) }));
   every.appendChild(pick);
   body.appendChild(every);
+  return s;
+}
+
+/**
+ * The files the licence asks to travel with the app.
+ *
+ * LGPL-3.0 (libvips, inside the packaged pipeline) requires the notice to be
+ * distributed with the binary, which `desktop/scripts/bundle-pipeline.mjs`
+ * does. Being inside the installer is not the same as being reachable, so this
+ * is the row that opens them. Shell only — a browser has no build beside it, so
+ * the section hides itself there.
+ */
+function noticesSection(): HTMLElement {
+  const s = section(ui.settings.notices);
+  const body = s.querySelector(".set-body")!;
+  const api = window.electronAPI;
+  if (!api?.openNotice) {
+    s.hidden = true;
+    return s;
+  }
+  const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
+  const open = (which: "notices" | "license", label: string) => {
+    const button = el<HTMLButtonElement>(`<button type="button" class="set-btn">${label}</button>`);
+    button.addEventListener("click", () => {
+      problem.hidden = true;
+      button.disabled = true;
+      void api
+        .openNotice!(which)
+        .then((r) => {
+          if (!r.ok) {
+            problem.textContent = r.error || ui.settings.noticesFailed;
+            problem.hidden = false;
+          }
+        })
+        .catch(() => {
+          problem.textContent = ui.settings.noticesFailed;
+          problem.hidden = false;
+        })
+        .finally(() => {
+          button.disabled = false;
+        });
+    });
+    return button;
+  };
+  body.append(
+    el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.noticesNote}</p>`),
+    open("notices", ui.settings.noticesThirdParty),
+    open("license", ui.settings.noticesLicense),
+    problem,
+  );
   return s;
 }
 

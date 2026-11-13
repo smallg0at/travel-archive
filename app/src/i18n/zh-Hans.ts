@@ -389,6 +389,12 @@ export const zhHans: Messages = {
       "本地服务器未运行，照片档案将直接从 OneDrive 读取，且图片仅缓存在当前浏览器中。同步、保存至本机以及生成功能均需使用桌面端应用。",
 
     library: "照片库",
+    notices: "许可",
+    noticesNote:
+      "随应用分发的 libvips（LGPL-3.0-or-later）负责本机渲染。它的声明与本应用的许可就在可执行文件旁边，下面两个按钮直接打开。",
+    noticesThirdParty: "第三方声明",
+    noticesLicense: "本应用的许可",
+    noticesFailed: "无法打开该文件。",
     notSignedIn: "未登录。",
     photos: "照片",
     analyzed: "已由 AI 生成说明",

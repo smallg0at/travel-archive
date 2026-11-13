@@ -54,6 +54,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   startPipeline: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("start-pipeline"),
   /**
+   * Opens a file that ships beside the app — currently the third-party notices,
+   * which LGPL-3.0 requires to travel with the installer. Browsing Program
+   * Files was the only way to reach them.
+   */
+  openNotice: (which: "notices" | "license"): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("open-notice", which),
+  /**
    * The passphrase that opens the encrypted screenshot descriptions.
    *
    * The only bridge that hands a secret back to the page, and it is here

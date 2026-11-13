@@ -546,6 +546,16 @@ ipcMain.handle("start-pipeline", async (): Promise<{ ok: boolean; error?: string
   return { ok: false, error: failureDetail(`No answer on ${PIPELINE_PORT} within 25 seconds.`) };
 });
 
+ipcMain.handle("open-notice", async (_event, which: unknown) => {
+  const name = which === "license" ? "LICENSE" : "THIRD-PARTY-NOTICES.md";
+  // Beside the pipeline in `resources/`, which is where the build puts them.
+  const candidates = [join(ROOT, name), join(ROOT, "resources", name), join(__dirname, "..", "..", name)];
+  const found = candidates.find((path) => existsSync(path));
+  if (!found) return { ok: false, error: `${name} is missing from this build.` };
+  const failure = await shell.openPath(found);
+  return failure ? { ok: false, error: failure } : { ok: true };
+});
+
 if (process.platform === "win32") {
   systemPreferences.on("accent-color-changed", (_event, newColor) => {
     const formatted = `#${newColor.slice(0, 6)}`;
