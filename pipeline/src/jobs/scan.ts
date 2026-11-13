@@ -2,7 +2,7 @@ import type { MonthSummary, PhotoRecord, PhotoShard } from "@travel-archive/shar
 import { getAccessToken } from "../auth.js";
 import { GraphError, listPhotoFolders, listPhotosInFolder, type PhotoFolder, type ScannedPhoto } from "../graph.js";
 import { env } from "../env.js";
-import { loadIndexForWriting, loadShard, saveIndex, saveShard } from "../archiveStore.js";
+import { loadIndexForWriting, loadShard, loadShardForWriting, saveIndex, saveShard } from "../archiveStore.js";
 import { formatMonthLabel, monthKey } from "../util.js";
 import { assignDuplicates, analysisTargets } from "../duplicates.js";
 import { flagGpsOutliersByDay } from "../geo.js";
@@ -289,7 +289,10 @@ export async function runScan(range: Range, onProgress: ProgressFn, signal?: Abo
   const summaries = new Map(index.months.map((m) => [m.month, m] as const));
 
   for (const [i, [month, photos]] of touched.entries()) {
-    const shard = await loadShard(token, month);
+    // Mirror first, for the same reason as the index above: a shard is read in
+    // order to be rewritten, so a failed download must not become an empty
+    // shard — which the shrink guard would then have to catch.
+    const shard = await loadShardForWriting(token, month);
     const before = stable(shard.photos);
 
     // Drop records from territory this run covered that no longer exist —
