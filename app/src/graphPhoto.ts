@@ -1,5 +1,5 @@
 import { getAccessToken } from "./msAuth";
-import { GRAPH_BYTES_TIMEOUT_MS, GRAPH_QUERY_TIMEOUT_MS, graphFetch } from "./graphHttp";
+import { GRAPH_BYTES_TIMEOUT_MS, GRAPH_QUERY_TIMEOUT_MS, fetchBytesNative, graphFetch } from "./graphHttp";
 import { getCached, putThumb, releaseObjectUrls } from "./thumbCache";
 import { localServerSource, thumbnailSource } from "./photoSource";
 
@@ -198,12 +198,12 @@ async function thumbnail(itemId: string, size: Size): Promise<string | null> {
     if (!cdnUrl) return null;
 
     try {
-      // The CDN link is already authenticated — sending our bearer token here
-      // would be both unnecessary and a leak of it to a different host.
-      const res = await graphFetch(cdnUrl, null, GRAPH_BYTES_TIMEOUT_MS);
-      if (!res.ok) return null;
-
-      return putThumb(key, await res.blob());
+      // Through the native stack on the phone: the CDN link is
+      // pre-authenticated, and the host's missing CORS header is what killed
+      // every thumbnail in the WebView. See fetchBytesNative.
+      const bytes = await fetchBytesNative(cdnUrl, GRAPH_BYTES_TIMEOUT_MS);
+      if (!bytes) return null;
+      return putThumb(key, bytes);
     } catch {
       // A refusal or a timeout is a "no", not an error to escalate: the cell
       // falls to its missing state, and the inFlight cleanup below lets a
@@ -256,16 +256,16 @@ export async function loadFullPhoto(itemId: string): Promise<string | null> {
     return null;
   }
 
-  let res: Response;
+  let res: Blob | null = null;
   try {
-    res = await graphFetch(`${GRAPH_BASE}/me/drive/items/${itemId}/content`, token, GRAPH_BYTES_TIMEOUT_MS);
+    res = await fetchBytesNative(`${GRAPH_BASE}/me/drive/items/${itemId}/content`, GRAPH_BYTES_TIMEOUT_MS, token);
   } catch {
     // A 4.4MB original over a bad link can exceed the bound; that is a "no
     // answer", which the lightbox treats exactly like a refused download.
     return null;
   }
-  if (!res.ok) return null;
-  return URL.createObjectURL(await res.blob());
+  if (!res) return null;
+  return URL.createObjectURL(res);
 }
 
 export function releaseFullPhoto(url: string): void {

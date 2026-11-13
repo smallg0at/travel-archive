@@ -47,6 +47,19 @@ const config: CapacitorConfig = {
     // where the WebView reports no insets of its own.
     adjustMarginsForEdgeToEdge: "auto",
   },
+  plugins: {
+    /**
+     * Image bytes go through the native HTTP stack, not the WebView's.
+     *
+     * OneDrive hands out pre-authenticated CDN links on
+     * `my.microsoftpersonalcontent.com`, and that host stopped sending
+     * `Access-Control-Allow-Origin` on 2026-11-13 — every thumbnail and every
+     * original died at the CORS check inside the WebView while the same URL
+     * worked fine outside it. A native request is not subject to CORS, so the
+     * bytes arrive; see graphHttp.ts for where it is used.
+     */
+    CapacitorHttp: { enabled: true },
+  },
 };
 
 export default config;

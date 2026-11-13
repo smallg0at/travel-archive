@@ -22,6 +22,7 @@
  */
 
 import { assertNoBrotli } from "@travel-archive/shared/brotli";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
 /** How long a small Graph call may take: lookups, listings, $batch. */
 export const GRAPH_QUERY_TIMEOUT_MS = 20_000;
@@ -51,4 +52,53 @@ export async function graphFetch(
     }
     throw err;
   }
+}
+
+/**
+ * The bytes at `url`, fetched by the native HTTP stack when there is one.
+ *
+ * Why this exists: an `<img>` in the WebView (and a `fetch` inside it) is
+ * subject to CORS, and OneDrive's download host stopped sending
+ * `Access-Control-Allow-Origin` for the app's `https://archive.local` origin on
+ * 2026-11-13. Every thumbnail and every original then failed inside the WebView
+ * — measured in logcat, `blocked by CORS policy: No
+ * 'Access-Control-Allow-Origin' header` — while the URL itself was fine. The
+ * native request is not a browser request and has no origin to be refused for,
+ * so the images keep working; the failure state stays as the honest fallback
+ * for a genuine 401/timeout.
+ *
+ * The Web path is untouched: on the desktop the same call is an ordinary
+ * `fetch`, and the local job server answers it.
+ */
+export async function fetchBytesNative(url: string, timeoutMs: number, token: string | null = null): Promise<Blob | null> {
+  if (!Capacitor.isNativePlatform()) {
+    const res = await graphFetch(url, token, timeoutMs);
+    return res.ok ? await res.blob() : null;
+  }
+
+  const res = await Promise.race([
+    CapacitorHttp.request({
+      url,
+      method: "GET",
+      responseType: "blob",
+      // A CDN link carries its own credential and must not be sent ours; a
+      // Graph `/content` call needs the bearer token. One argument covers both.
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      connectTimeout: timeoutMs,
+      readTimeout: timeoutMs,
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Graph did not answer within ${Math.round(timeoutMs / 1000)} s`)), timeoutMs),
+    ),
+  ]);
+
+  if (res.status < 200 || res.status >= 300) return null;
+  const data = res.data as unknown;
+  if (typeof data !== "string") return null;
+  // `responseType: "blob"` arrives base64-encoded: it is the only way the
+  // bridge can carry binary without re-encoding it as UTF-8 text.
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes]);
 }
