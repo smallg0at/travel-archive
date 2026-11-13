@@ -31,6 +31,7 @@ import {
   testNotification,
   validateGeneration,
   watchJob,
+  isLocalMachine,
   type ConflictChoice,
   type ScanMode,
 } from "./backend";
@@ -356,7 +357,7 @@ export async function showSettings(): Promise<void> {
       // GeoNames is CC BY 4.0, which asks for credit "as suitable for your
       // medium". Natural Earth is public domain and needs none, but naming it
       // costs a line.
-      build: () => [appearanceSection(), noticesSection(), creditsNote()],
+      build: () => [appInfoSection(archive), appearanceSection(), noticesSection(), creditsNote()],
     },
   ].filter((group) => writable || group.id === "archive" || group.id === "app");
 
@@ -869,6 +870,34 @@ function noticesSection(): HTMLElement {
     open("license", ui.settings.noticesLicense),
     problem,
   );
+  return s;
+}
+
+/**
+ * What this is: the bundle's version, the archive's schema, and the pipeline
+ * that is actually answering.
+ *
+ * The pane had no version anywhere, so "am I looking at the installed build or
+ * a working copy?" — a question that has mattered here more than once — could
+ * only be answered from a terminal.
+ */
+function appInfoSection(archive: ArchiveStatus | null): HTMLElement {
+  const s = section(ui.settings.appInfo);
+  const body = s.querySelector(".set-body")!;
+  const version = row(ui.settings.version, __APP_VERSION__ || "—");
+  const schema = row(ui.settings.schema, archive?.schemaVersion ? `v${archive.schemaVersion}` : "—");
+  const server = row(ui.settings.serverVersion, ui.settings.serverVersionUnknown);
+  body.append(version, schema, server);
+
+  if (isLocalMachine) {
+    void checkHealth()
+      .then((health) => {
+        if (!health) return;
+        const text = health.version ?? ui.settings.serverVersionUnknown;
+        setRowValue(server, text);
+      })
+      .catch(() => {});
+  }
   return s;
 }
 

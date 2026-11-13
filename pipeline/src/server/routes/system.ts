@@ -13,6 +13,7 @@ import { validateProvider } from "../../providers/index.js";
 import { json, readJsonBody, type Route } from "../http.js";
 import * as jobs from "../jobs.js";
 import { contentState, warmingStatus } from "../media.js";
+import { pipelineVersion } from "../pipelineVersion.js";
 import type { RouteContext } from "./context.js";
 
 /** The routes, in the order they were written; the dispatcher keeps looking after a method mismatch. */
@@ -30,6 +31,9 @@ export const systemRoutes = (ctx: RouteContext): Route[] => [
       // machine without ffmpeg says so instead of leaving videos blank.
       const body = {
         ok: true,
+        // Which pipeline is answering. "Installed build or my working copy?"
+        // was not answerable from the UI, and the two have disagreed before.
+        version: pipelineVersion(),
         signedIn: await hasCachedAccount(),
         running: jobs.runningJob(),
         lastFinished: jobs.lastFinished(),

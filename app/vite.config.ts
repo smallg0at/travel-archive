@@ -1,7 +1,16 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
+
+const APP_VERSION = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version?: string })
+  .version ?? "";
 
 export default defineConfig({
+  define: {
+    // What the Settings > App pane reports. Baked at build time so the pane
+    // says which bundle it is, not what package.json says now.
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   build: {
     outDir: "dist",
     rollupOptions: {

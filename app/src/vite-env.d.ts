@@ -36,6 +36,9 @@ interface Window {
   electronAPI?: ElectronAPI;
 }
 
+/** The app bundle's own version, baked by vite.config.ts. */
+declare const __APP_VERSION__: string;
+
 interface ImportMetaEnv {
   readonly VITE_AZURE_CLIENT_ID: string;
   readonly VITE_AZURE_TENANT_ID: string;

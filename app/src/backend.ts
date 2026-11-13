@@ -79,6 +79,8 @@ export interface ThumbWarming {
 }
 
 export interface Health {
+  /** Optional: a server built before Activity reported it omits this. */
+  version?: string;
   ok: boolean;
   signedIn: boolean;
   running: JobRecord | null;

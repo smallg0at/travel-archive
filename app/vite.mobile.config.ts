@@ -1,5 +1,9 @@
 import { defineConfig, type Plugin } from "vite";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
+
+const APP_VERSION = (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version?: string })
+  .version ?? "";
 
 /**
  * The phone app's build, for Capacitor (see capacitor.config.ts).
@@ -28,6 +32,7 @@ function phonePageAtRoot(): Plugin {
 }
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   plugins: [phonePageAtRoot()],
   build: {
     outDir: "dist-mobile",

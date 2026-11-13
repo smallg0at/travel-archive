@@ -1266,9 +1266,13 @@ let historyMode: "push" | "replace" = "push";
 function enter(hash: string): void {
   window.clearTimeout(scrollSaveTimer);
   saveScroll(); // the view being left, under its own hash
-  if (historyMode === "push" && location.hash !== hash) history.pushState(null, "", hash);
-  else history.replaceState(null, "", hash);
-  currentHash = hash;
+  // A Settings group is part of the address (`#settings/sync`). Reopening
+  // Settings — on load, after Back, after a re-render — must not strip it and
+  // silently drop the reader on the first pane.
+  const target = hash === "#settings" && location.hash.startsWith("#settings/") ? location.hash : hash;
+  if (historyMode === "push" && location.hash !== target) history.pushState(null, "", target);
+  else history.replaceState(null, "", target);
+  currentHash = target;
   // The page a photograph would open over. Set here rather than read from the
   // address, which carries the photograph once the viewer is up.
   setBaseView(hash);

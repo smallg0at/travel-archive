@@ -389,6 +389,10 @@ export const zhHans: Messages = {
       "本地服务器未运行，照片档案将直接从 OneDrive 读取，且图片仅缓存在当前浏览器中。同步、保存至本机以及生成功能均需使用桌面端应用。",
 
     library: "照片库",
+    appInfo: "本应用",
+    version: "版本",
+    serverVersion: "服务端",
+    serverVersionUnknown: "未响应",
     groups: {
       archive: "档案",
       sync: "同步与扫描",
