@@ -899,7 +899,12 @@ html.desktop-shell .nav-year:hover {
    of as broken. */
 .album-cell img,
 .stop-grid img,
-.card-images img {
+.card-images img,
+/* The home page's "on this day" cards draw through the same loader, so they get
+   the same pending state — they used to sit as flat blanks, indistinguishable
+   from a failure. */
+.then-cover-img,
+.then-thumb {
   color: transparent;
   overflow: hidden;
   /* Mixed against --bg-muted, which is what the card behind it is painted in.
@@ -922,7 +927,9 @@ html.desktop-shell .nav-year:hover {
    wanted; the decoded image then covers it. */
 .album-cell img.loaded,
 .stop-grid img.loaded,
-.card-images img.loaded {
+.card-images img.loaded,
+.then-cover-img.loaded,
+.then-thumb.loaded {
   background-image: none;
   animation: none;
 }
@@ -933,9 +940,7 @@ html.desktop-shell .nav-year:hover {
    flight on every visit. The slash is drawn with gradients because an <img>
    has no children for ::after to mark, and background-size is reset because
    the shimmer's 260% would stretch it off the cell. */
-.album-cell img.thumb-missing,
-.stop-grid img.thumb-missing,
-.card-images img.thumb-missing {
+img.thumb-missing {
   background-size: 100% 100%;
   background-image: linear-gradient(
     to top right,
@@ -950,13 +955,12 @@ html.desktop-shell .nav-year:hover {
 /* A photo whose bytes could not be had. The slash above says "not here yet";
    this icon says "the fetch failed", and clicking it asks again — the one
    action a reader wants from a failure and could not take before. The artwork
-   is inline so it needs no asset pipeline and cannot 404 on its own. */
-.album-cell img.thumb-failed,
-.stop-grid img.thumb-failed,
-.card-images img.thumb-failed,
-.album-cell img.thumb-failed:hover,
-.stop-grid img.thumb-failed:hover,
-.card-images img.thumb-failed:hover {
+   is inline so it needs no asset pipeline and cannot 404 on its own.
+
+   Written against the element, not a container list: the home page's "on this
+   day" cards, the album cells and the trip grids all draw through the same
+   loader, and a container list silently left one of them blank. */
+img.thumb-failed {
   background-size: 26% 26%;
   background-position: center;
   background-repeat: no-repeat;
@@ -964,9 +968,7 @@ html.desktop-shell .nav-year:hover {
   animation: none;
   cursor: pointer;
 }
-.album-cell img.thumb-failed:hover,
-.stop-grid img.thumb-failed:hover,
-.card-images img.thumb-failed:hover {
+img.thumb-failed:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 1 1-2.64-6.36'/%3E%3Cpath d='M21 3v6h-6'/%3E%3C/svg%3E");
 }
 /* A strip that exists only while photos cannot be fetched — see contentStatus.ts.
