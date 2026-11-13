@@ -411,9 +411,7 @@ export const en = {
       sync: "Sync and scanning",
       generate: "Generation",
       access: "Access",
-      storage: "Storage",
-      appearance: "Appearance",
-      about: "About",
+      app: "App",
     },
     notices: "Licences",
     noticesNote:

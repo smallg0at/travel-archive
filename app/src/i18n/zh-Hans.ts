@@ -394,9 +394,7 @@ export const zhHans: Messages = {
       sync: "同步与扫描",
       generate: "生成",
       access: "访问",
-      storage: "存储",
-      appearance: "外观",
-      about: "关于",
+      app: "应用",
     },
     notices: "许可",
     noticesNote:

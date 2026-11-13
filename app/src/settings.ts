@@ -314,11 +314,21 @@ export async function showSettings(): Promise<void> {
   }
 
   const writable = canWrite();
-  // One pane per task, instead of 14 sections in a 4,100px scroll. The groups
-  // are a reading order, not a new set of settings: every row is the same one
-  // it was, in the same section component.
+  // One pane per task, instead of 14 sections in a 4,100px scroll. Grouped so
+  // no pane is a two-row stub: what the archive is, what it costs to keep, and
+  // where its bytes live all belong to 档案; the licence and the look of the
+  // window belong to the app itself.
   const groups: SettingGroup[] = [
-    { id: "archive", label: ui.settings.groups.archive, build: () => [librarySection(archive), writable ? photosFolderSection() : null] },
+    {
+      id: "archive",
+      label: ui.settings.groups.archive,
+      build: () => [
+        librarySection(archive),
+        writable ? photosFolderSection() : null,
+        writable ? offlineSection(sync) : null,
+        writable ? storageSection(sync) : null,
+      ],
+    },
     {
       id: "sync",
       label: ui.settings.groups.sync,
@@ -341,20 +351,14 @@ export async function showSettings(): Promise<void> {
     },
     { id: "access", label: ui.settings.groups.access, build: () => (writable ? [remoteSection(), proxySection()] : []) },
     {
-      id: "storage",
-      label: ui.settings.groups.storage,
-      build: () => (writable ? [offlineSection(sync), storageSection(sync)] : []),
-    },
-    { id: "appearance", label: ui.settings.groups.appearance, build: () => [appearanceSection()] },
-    {
-      id: "about",
-      label: ui.settings.groups.about,
+      id: "app",
+      label: ui.settings.groups.app,
       // GeoNames is CC BY 4.0, which asks for credit "as suitable for your
       // medium". Natural Earth is public domain and needs none, but naming it
       // costs a line.
-      build: () => [noticesSection(), creditsNote()],
+      build: () => [appearanceSection(), noticesSection(), creditsNote()],
     },
-  ].filter((group) => writable || group.id === "archive" || group.id === "appearance" || group.id === "about");
+  ].filter((group) => writable || group.id === "archive" || group.id === "app");
 
   frag.appendChild(settingsLayout(groups, sync));
   content.replaceChildren(frag);
@@ -740,6 +744,34 @@ function syncSection(status: SyncStatus): HTMLElement {
   updaters.push(update);
 
   update(status);
+
+  // When the archive is checked at all. These two lived in "kept on this
+  // machine", which is where they were written, not where they belong: they are
+  // about syncing, and a reader looking for the check interval opened this
+  // section, not that one.
+  const auto = el<HTMLLabelElement>(
+    `<label class="set-check"><input type="checkbox"><span>${ui.settings.autoCheck}</span></label>`,
+  );
+  const box = auto.querySelector("input") as HTMLInputElement;
+  // The stored value. It was hard-coded to checked, so unticking it looked
+  // undone on the next visit; `settings` is absent from an older server.
+  box.checked = status.settings?.autoSyncOnLaunch ?? true;
+  box.addEventListener("change", () => void saveSyncSettings({ autoSyncOnLaunch: box.checked }));
+  body.appendChild(auto);
+
+  const every = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.checkEvery}</span></div>`);
+  const pick = document.createElement("select");
+  pick.className = "set-select";
+  for (const minutes of [0, 15, 60, 360]) {
+    const option = document.createElement("option");
+    option.value = String(minutes);
+    option.textContent = ui.settings.interval(minutes);
+    pick.appendChild(option);
+  }
+  pick.value = String(status.settings?.intervalMinutes ?? 0);
+  pick.addEventListener("change", () => void saveSyncSettings({ intervalMinutes: Number(pick.value) }));
+  every.appendChild(pick);
+  body.appendChild(every);
   return s;
 }
 
@@ -787,30 +819,6 @@ function offlineSection(status: SyncStatus): HTMLElement {
 
   renderPins(status.pins);
   updaters.push((next) => renderPins(next.pins));
-
-  const auto = el<HTMLLabelElement>(
-    `<label class="set-check"><input type="checkbox"><span>${ui.settings.autoCheck}</span></label>`,
-  );
-  const box = auto.querySelector("input") as HTMLInputElement;
-  // The stored value. It was hard-coded to checked, so unticking it looked
-  // undone on the next visit; `settings` is absent from an older server.
-  box.checked = status.settings?.autoSyncOnLaunch ?? true;
-  box.addEventListener("change", () => void saveSyncSettings({ autoSyncOnLaunch: box.checked }));
-  body.appendChild(auto);
-
-  const every = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.checkEvery}</span></div>`);
-  const pick = document.createElement("select");
-  pick.className = "set-select";
-  for (const minutes of [0, 15, 60, 360]) {
-    const option = document.createElement("option");
-    option.value = String(minutes);
-    option.textContent = ui.settings.interval(minutes);
-    pick.appendChild(option);
-  }
-  pick.value = String(status.settings?.intervalMinutes ?? 0);
-  pick.addEventListener("change", () => void saveSyncSettings({ intervalMinutes: Number(pick.value) }));
-  every.appendChild(pick);
-  body.appendChild(every);
   return s;
 }
 
