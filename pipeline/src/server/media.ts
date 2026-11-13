@@ -163,9 +163,13 @@ export function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer |
       timer.unref?.();
     }),
   ]).catch((err: unknown) => {
-    // "Gone" is the archive's answer, not the far end's: no preview exists for
-    // this item, and the honest reply is "no preview", not "unavailable".
-    if (err instanceof GraphError && err.status === 404) return null;
+    // Not every failure is the far end's. A 404 (no such item / no thumbnail)
+    // or a 400 is the archive's own answer, and the honest reply is "this photo
+    // has no preview" — the slash, not the network-failure icon. Marking those
+    // as unavailable also tripped the breaker for a fact about the archive.
+    if (err instanceof GraphError && (err.status === 404 || err.status === 400 || err.status === 406)) {
+      return null;
+    }
     unavailable.set(key, Date.now() + UNAVAILABLE_MS);
     lastUnavailableAt = Date.now();
     throw err instanceof ThumbUnavailable ? err : new ThumbUnavailable(itemId, "failed");
