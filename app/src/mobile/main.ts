@@ -24,7 +24,7 @@ import {
   ensureSearchKept,
   refreshTranslations,
 } from "./cache";
-import { followThemeInSystemBars, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
+import { followThemeInSystemBars, hideSplash, initBackButton, isNative, keepSignInAcrossLaunches } from "./native";
 import { initDevicePhotos } from "./devicePhotos";
 import { allMonths, initOfflineResume, startAutoCache, syncAndRefresh } from "./offline";
 import { ensureScreenCaptions } from "../screenCaptions";
@@ -249,6 +249,9 @@ async function start(): Promise<void> {
   screens.replaceChildren();
   document.title = ui.app.title;
   startRouter({ routes: ROUTES, host: screens, onTab: buildTabs() });
+  // The launch screen has been up since process start; it goes away now that
+  // there is a screen behind it. A no-op outside the installed app.
+  void hideSplash();
 }
 
 async function main(): Promise<void> {

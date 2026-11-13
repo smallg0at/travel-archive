@@ -2,6 +2,8 @@ package com.travelarchive.photos;
 
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -9,6 +11,7 @@ import android.webkit.WebView;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
+import androidx.core.splashscreen.SplashScreen;
 
 public class MainActivity extends BridgeActivity {
 
@@ -21,14 +24,36 @@ public class MainActivity extends BridgeActivity {
      */
     private static final String APP_HOST = "archive.local";
 
+    /**
+     * Set once the first screen is drawn (SplashPlugin) or the safety timeout
+     * fires. The launch screen is held until then — see onCreate.
+     */
+    private static volatile boolean uiReady = false;
+    /** Nothing may hold the splash forever: a crashed first paint still has to
+     *  show the app, which then draws its own error state. */
+    private static final long SPLASH_TIMEOUT_MS = 12_000;
+
+    static void markReady() {
+        uiReady = true;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Before super.onCreate: the system turns this into the window it shows
+        // while the WebView is still starting. Held until the app says the first
+        // screen is up, because a splash that hides on a timer disappears during
+        // the longest load, which is exactly when it is needed.
+        SplashScreen splash = SplashScreen.installSplashScreen(this);
+        splash.setKeepOnScreenCondition(() -> !uiReady);
+        new Handler(Looper.getMainLooper()).postDelayed(MainActivity::markReady, SPLASH_TIMEOUT_MS);
+
         // The app's own plugins register before the bridge is built.
         registerPlugin(SystemBarsPlugin.class);
         registerPlugin(LocalPhotosPlugin.class);
         registerPlugin(CookiesPlugin.class);
         registerPlugin(ScreenKeyPlugin.class);
         registerPlugin(SharePlugin.class);
+        registerPlugin(SplashPlugin.class);
         super.onCreate(savedInstanceState);
         bridge.setWebViewClient(new ReturnFromMicrosoft(bridge));
         // A single-page app's refresh token lasts 24 hours. After that MSAL

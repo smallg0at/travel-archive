@@ -23,5 +23,10 @@
         <item name="android:background">@color/ic_launcher_background</item>
         <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_mark</item>
+        <item name="windowSplashScreenAnimationDuration">200</item>
+        <!-- Without this the activity kept the launch theme for its whole life:
+             the system drew the splash, then had no theme to hand over to, and
+             on some devices the icon never appeared at all. -->
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

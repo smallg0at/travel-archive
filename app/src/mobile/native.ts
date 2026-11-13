@@ -100,6 +100,24 @@ export function followThemeInSystemBars(): void {
 }
 
 /**
+ * Releases the Android launch screen.
+ *
+ * The splash is held by MainActivity until the first screen is actually up
+ * (see SplashPlugin.java), because the slow part of a launch here is the WebView
+ * booting and reading the archive — a splash that hides on a timer expires in
+ * exactly that gap and leaves a blank page. No-op off the phone.
+ */
+export async function hideSplash(): Promise<void> {
+  if (!isNative) return;
+  try {
+    await registerPlugin<{ ready(): Promise<void> }>("Splash").ready();
+  } catch {
+    // No plugin (an older build, or a browser): the 12 s watchdog in
+    // MainActivity releases the screen on its own.
+  }
+}
+
+/**
  * Android's back button, by the platform's own convention: close what is on
  * top, else go back a page, else go to the first tab, else leave the app.
  *

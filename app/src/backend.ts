@@ -15,6 +15,18 @@ import type {
   SyncStatus,
 } from "@travel-archive/shared";
 
+/**
+ * Whether this is the installed phone app, asked of the bridge's global rather
+ * than by importing `@capacitor/core`.
+ *
+ * The desktop bundle must not pull Capacitor in — it is a phone-only
+ * dependency and the desktop has no bridge to give it, so a *missing* global is
+ * the normal case there, not an error. Everything below degrades to "no".
+ */
+function onNativePlatform(): boolean {
+  const bridge = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  return bridge?.isNativePlatform?.() === true;
+}
 import { assertNoBrotli } from "@travel-archive/shared/brotli";
 
 /**
@@ -142,9 +154,17 @@ async function post<T>(path: string, body: unknown): Promise<T> {
  * decides "guest or not" — the interface preferences stay on the phone and a
  * kept archive is its own — and the name is not on the network either.
  */
-export const isLocalMachine = /^(localhost|127\.0\.0\.1|\[::1\]|archive\.local)$/i.test(
-  location.hostname || "localhost",
-);
+export const isLocalMachine =
+  // The installed app's origin is `archive.local` too, and it is emphatically
+  // not the owner's machine: nothing there is served by the job server, and
+  // treating it as "local" had the app deciding it had a backend that answers
+  // on port 18419 — three of those requests hung for the full 8 s timeout
+  // before the first screen could be drawn (measured over CDP, 2026-11-14).
+  !onNativePlatform() &&
+  /^(localhost|127\.0\.0\.1|\[::1\]|archive\.local)$/i.test(location.hostname || "localhost");
+
+/** Whether a job server could answer at all — never, inside the installed app. */
+export const hasJobServer = !onNativePlatform();
 
 /**
  * Whether the job server this page came from is signed in to Graph.
@@ -195,6 +215,11 @@ export interface AccessStatus {
 let access: AccessStatus | null = null;
 
 export async function accessStatus(): Promise<AccessStatus | null> {
+  // No job server inside the app, so nothing can be gated. Asking anyway meant
+  // `https://archive.local:18419/access` — a host the WebView itself answers,
+  // so the request did not fail, it hung until the 8 s timeout, before the
+  // first screen.
+  if (!hasJobServer) return null;
   try {
     const res = await apiFetch("/access", { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
     if (!res.ok) return null;
@@ -357,6 +382,10 @@ export function saveSyncSettings(body: {
  * phone, and this sits in front of the very first thing the app does.
  */
 export async function localArchiveJson<T>(path: string): Promise<T | null> {
+  // Three of these (`/access`, the i18n index, `/archive/home`) were being
+  // attempted from the phone and each burned the whole 8 s timeout before the
+  // first paint — the app had no server to ask. Graph is the source there.
+  if (!hasJobServer) return null;
   try {
     const res = await apiFetch(`/archive/${path}`, {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
