@@ -898,7 +898,7 @@ function aboutSection(archive: ArchiveStatus | null): HTMLElement {
 function licenceBlock(which: "notices" | "license", title: string, hint: string): HTMLElement {
   const wrap = el<HTMLDivElement>(`<div class="set-acc"></div>`);
   const head = el<HTMLButtonElement>(
-    `<button type="button" class="set-acc-head" aria-expanded="false"><span class="set-acc-caret">▸</span><span class="set-acc-title"></span><span class="set-acc-hint"></span></button>`,
+    `<button type="button" class="set-acc-head" aria-expanded="false"><span class="set-acc-caret">›</span><span class="set-acc-title"></span><span class="set-acc-hint"></span></button>`,
   );
   head.querySelector(".set-acc-title")!.textContent = title;
   head.querySelector(".set-acc-hint")!.textContent = hint;

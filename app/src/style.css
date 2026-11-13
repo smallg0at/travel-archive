@@ -1992,100 +1992,107 @@ body.setup-active #signin-banner {
  * to Notepad. LGPL-3.0 asks that the notices travel with the app; it does not
  * ask the reader to leave it. So: the window's own mark, one line of chips, and
  * two disclosure rows that read the text into a scrollable block.
+ *
+ * Sizes here are the ones the rest of Settings already uses — a section title is
+ * 13px/600, a row is 12px on a 7px rhythm, a note is 11.5px — rather than a
+ * second scale invented for one pane.
  */
 .set-about-head {
   display: flex;
-  gap: 16px;
+  gap: 12px;
+  /* Top-aligned, not centred: the text block is three lines, and centring it
+     against the mark moved the name off the line the eye starts on. */
   align-items: flex-start;
-  padding: 4px 0 16px;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 .set-about-mark {
   flex: none;
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: var(--surface);
+  width: 44px;
+  height: 44px;
+  /* A fixed radius on purpose: the corner must not grow with the mark. The
+     artwork inside carries its own rounded rect, and this clips the edge. */
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .set-about-mark svg { display: block; }
 .set-about-text { min-width: 0; }
-.set-about-name { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
-.set-about-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.set-about-name { margin: 0; font-size: 15px; line-height: 1.25; font-weight: 600; }
+.set-about-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .set-chip {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  padding: 3px 9px;
-  border-radius: 999px;
+  padding: 1px 6px;
+  border-radius: var(--radius-s);
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--text-primary) 7%, transparent);
 }
 
-.set-about-tagline { margin: 0; }
-.set-subhead { margin: 18px 0 8px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+.set-about-tagline { margin: 8px 0 0; }
+.set-subhead { margin: 14px 0 2px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 
-.set-acc {
-  border-radius: var(--radius-m);
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.set-acc + .set-acc { margin-top: 6px; }
+/* Disclosure rows on the row rhythm, not cards of their own: the licence list
+   is a list of two things in this section, the same as a list of two settings. */
+.set-acc { overflow: hidden; }
+.set-acc + .set-acc { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 
 .set-acc-head {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: baseline;
   width: 100%;
-  padding: 11px 14px;
+  padding: 8px 0;
   border: none;
   background: none;
   color: inherit;
   font: inherit;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 
-.set-acc-head:hover { background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
-.set-acc-caret { color: var(--text-secondary); transition: transform 0.12s ease; }
+.set-acc-head:hover .set-acc-title { text-decoration: underline; }
+.set-acc-caret { color: var(--text-secondary); font-size: 10px; transition: transform 0.12s ease; }
 .set-acc-head.open .set-acc-caret { transform: rotate(90deg); }
 .set-acc-title { font-weight: 500; }
-.set-acc-hint { color: var(--text-tertiary, var(--text-secondary)); font-size: 12px; }
+.set-acc-hint { color: var(--text-secondary); font-size: 11.5px; }
 
-.set-acc-body { border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent); }
+.set-acc-body { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 
 .set-licence {
   margin: 0;
   max-height: 320px;
   overflow: auto;
-  padding: 14px 16px;
+  padding: 6px 0 10px;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--text-secondary);
 }
 
-.set-credit-line { margin: 0 0 10px; }
-.set-about-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.set-credit-line { margin: 4px 0 8px; }
+.set-about-links { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
 
 .set-link-chip {
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
+  padding: 2px 9px;
+  border-radius: var(--radius-s);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
   background: none;
-  color: inherit;
+  color: var(--text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   cursor: pointer;
 }
 
-.set-link-chip:hover { background: color-mix(in srgb, var(--text-primary) 7%, transparent); }
+.set-link-chip:hover { color: var(--text); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
 
 .set-section .photo-folder .setup-ok { font-size: 12.5px; font-weight: 500; }
 .setup-input { flex: 1; min-width: 0; }
