@@ -163,9 +163,11 @@ export function fetchAndCache(size: ThumbSize, itemId: string): Promise<Buffer |
       timer.unref?.();
     }),
   ]).catch((err: unknown) => {
+    // "Gone" is the archive's answer, not the far end's: no preview exists for
+    // this item, and the honest reply is "no preview", not "unavailable".
+    if (err instanceof GraphError && err.status === 404) return null;
     unavailable.set(key, Date.now() + UNAVAILABLE_MS);
-    // "Gone" is the archive's answer and says nothing about the far end.
-    if (!(err instanceof GraphError && err.status === 404)) lastUnavailableAt = Date.now();
+    lastUnavailableAt = Date.now();
     throw err instanceof ThumbUnavailable ? err : new ThumbUnavailable(itemId, "failed");
   });
 
