@@ -406,6 +406,12 @@ export const en = {
       "No local server is running, so the archive is being read directly from OneDrive and images are cached in this browser only. Sync, pinning and generation need the desktop app.",
 
     library: "Library",
+    aboutHeading: "About",
+    aboutTagline: "A photo archive that runs on this machine and stays yours.",
+    dataSources: "Data",
+    licenceLoading: "Reading…",
+    noticesThirdPartyHint: "libvips (LGPL-3.0-or-later), sharp, Noto Serif SC, …",
+    noticesLicenseHint: "AGPL-3.0-or-later",
     appInfo: "This app",
     version: "Version",
     serverVersion: "Pipeline",

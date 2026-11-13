@@ -54,12 +54,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   startPipeline: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("start-pipeline"),
   /**
-   * Opens a file that ships beside the app — currently the third-party notices,
-   * which LGPL-3.0 requires to travel with the installer. Browsing Program
-   * Files was the only way to reach them.
+   * The licence text, rendered in the pane rather than opened in an editor.
+   * LGPL-3.0 requires the notices to travel with the app; it does not require
+   * the reader to leave it to read them.
    */
-  openNotice: (which: "notices" | "license"): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke("open-notice", which),
+  readNotice: (which: "notices" | "license"): Promise<{ ok: true; text: string } | { ok: false; error?: string }> =>
+    ipcRenderer.invoke("read-notice", which),
+  /** Attribution links belong in the reader's browser, not in this window. */
+  openExternal: (url: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("open-external", url),
   /**
    * The passphrase that opens the encrypted screenshot descriptions.
    *

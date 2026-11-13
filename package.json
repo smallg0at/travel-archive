@@ -18,5 +18,5 @@
     "smoke:package": "node scripts/smoke-package.mjs",
     "check:gates": "node scripts/check-gates.mjs"
   },
-  "version": "1.0.3"
+  "version": "1.1.0"
 }

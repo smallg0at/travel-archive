@@ -289,10 +289,6 @@ function settingsLayout(groups: SettingGroup[], sync: SyncStatus): HTMLElement {
   return node;
 }
 
-function creditsNote(): HTMLElement {
-  return el(`<p class="set-credits">${ui.settings.dataCredits}</p>`);
-}
-
 export async function showSettings(): Promise<void> {
   const content = document.getElementById("content")!;
   releaseSettings();
@@ -357,7 +353,7 @@ export async function showSettings(): Promise<void> {
       // GeoNames is CC BY 4.0, which asks for credit "as suitable for your
       // medium". Natural Earth is public domain and needs none, but naming it
       // costs a line.
-      build: () => [appInfoSection(archive), appearanceSection(), noticesSection(), creditsNote()],
+      build: () => [appearanceSection(), aboutSection(archive)],
     },
   ].filter((group) => writable || group.id === "archive" || group.id === "app");
 
@@ -832,73 +828,106 @@ function offlineSection(status: SyncStatus): HTMLElement {
  * is the row that opens them. Shell only — a browser has no build beside it, so
  * the section hides itself there.
  */
-function noticesSection(): HTMLElement {
-  const s = section(ui.settings.notices);
-  const body = s.querySelector(".set-body")!;
-  const api = window.electronAPI;
-  if (!api?.openNotice) {
-    s.hidden = true;
-    return s;
-  }
-  const problem = el<HTMLParagraphElement>(`<p class="set-note tone-warn" hidden></p>`);
-  const open = (which: "notices" | "license", label: string) => {
-    const button = el<HTMLButtonElement>(`<button type="button" class="set-btn">${label}</button>`);
-    button.addEventListener("click", () => {
-      problem.hidden = true;
-      button.disabled = true;
-      void api
-        .openNotice!(which)
-        .then((r) => {
-          if (!r.ok) {
-            problem.textContent = r.error || ui.settings.noticesFailed;
-            problem.hidden = false;
-          }
-        })
-        .catch(() => {
-          problem.textContent = ui.settings.noticesFailed;
-          problem.hidden = false;
-        })
-        .finally(() => {
-          button.disabled = false;
-        });
-    });
-    return button;
-  };
-  body.append(
-    el<HTMLParagraphElement>(`<p class="set-note">${ui.settings.noticesNote}</p>`),
-    open("notices", ui.settings.noticesThirdParty),
-    open("license", ui.settings.noticesLicense),
-    problem,
-  );
-  return s;
-}
-
 /**
- * What this is: the bundle's version, the archive's schema, and the pipeline
- * that is actually answering.
+ * The About pane: what this is, under which licences, on whose data.
  *
- * The pane had no version anywhere, so "am I looking at the installed build or
- * a working copy?" — a question that has mattered here more than once — could
- * only be answered from a terminal.
+ * The licence texts used to leave the app for whatever editor the machine had;
+ * LGPL-3.0 asks for the notices to be reachable, not for the reader to be sent
+ * to Notepad. They now open in place.
  */
-function appInfoSection(archive: ArchiveStatus | null): HTMLElement {
-  const s = section(ui.settings.appInfo);
+function aboutSection(archive: ArchiveStatus | null): HTMLElement {
+  const s = section(ui.settings.aboutHeading);
   const body = s.querySelector(".set-body")!;
-  const version = row(ui.settings.version, __APP_VERSION__ || "—");
-  const schema = row(ui.settings.schema, archive?.schemaVersion ? `v${archive.schemaVersion}` : "—");
-  const server = row(ui.settings.serverVersion, ui.settings.serverVersionUnknown);
-  body.append(version, schema, server);
 
-  if (isLocalMachine) {
+  const head = el<HTMLDivElement>(`<div class="set-about-head"></div>`);
+  const mark = el<HTMLSpanElement>(`<span class="set-about-mark" aria-hidden="true"></span>`);
+  // The window's own mark, inlined from index.html rather than redrawn.
+  mark.innerHTML = `<svg viewBox="0 0 108 108" width="44" height="44"><rect width="108" height="108" rx="24" fill="#0078d4"/><circle cx="38" cy="70" r="6.5" fill="none" stroke="#ffffff" stroke-width="3.6"/><circle cx="47.07" cy="60.93" r="2.1" fill="#ffffff"/><circle cx="51.76" cy="56.24" r="2.1" fill="#ffffff"/><circle cx="56.45" cy="51.55" r="2.1" fill="#ffffff"/><circle cx="61.14" cy="46.86" r="2.1" fill="#ffffff"/><circle cx="70" cy="38" r="8" fill="#ffffff"/></svg>`;
+  const text = el<HTMLDivElement>(`<div class="set-about-text"></div>`);
+  text.appendChild(el(`<h3 class="set-about-name"></h3>`) as HTMLElement).textContent = "Photo Archive";
+  const chips = el<HTMLDivElement>(`<div class="set-about-chips"></div>`);
+  const chip = (value: string) => {
+    const node = el<HTMLSpanElement>(`<span class="set-chip"></span>`);
+    node.textContent = value;
+    chips.appendChild(node);
+    return node;
+  };
+  chip(__APP_VERSION__ || "—");
+  if (archive?.schemaVersion) chip(`${ui.settings.schema} v${archive.schemaVersion}`);
+  const server = isLocalMachine ? chip(ui.settings.serverVersionUnknown) : null;
+  const tagline = el<HTMLParagraphElement>(`<p class="set-note set-about-tagline"></p>`);
+  tagline.textContent = ui.settings.aboutTagline;
+  text.append(chips, tagline);
+  head.append(mark, text);
+  body.appendChild(head);
+
+  if (server) {
     void checkHealth()
       .then((health) => {
-        if (!health) return;
-        const text = health.version ?? ui.settings.serverVersionUnknown;
-        setRowValue(server, text);
+        if (health?.version) server.textContent = `${ui.settings.serverVersion} ${health.version}`;
       })
       .catch(() => {});
   }
+
+  body.appendChild(el(`<h3 class="set-subhead"></h3>`) as HTMLElement).textContent = ui.settings.notices;
+  body.appendChild(licenceBlock("notices", ui.settings.noticesThirdParty, ui.settings.noticesThirdPartyHint));
+  body.appendChild(licenceBlock("license", ui.settings.noticesLicense, ui.settings.noticesLicenseHint));
+
+  body.appendChild(el(`<h3 class="set-subhead"></h3>`) as HTMLElement).textContent = ui.settings.dataSources;
+  // CC BY 4.0 asks for credit "as suitable for your medium", so the credit is a
+  // sentence here rather than a line of grey text at the bottom of the page.
+  body.appendChild(el<HTMLParagraphElement>(`<p class="set-note set-credit-line">${ui.settings.dataCredits}</p>`));
+  const links = el<HTMLDivElement>(`<div class="set-about-links"></div>`);
+  for (const [label, href] of [
+    ["GeoNames", "https://www.geonames.org/"],
+    ["Natural Earth", "https://www.naturalearthdata.com/"],
+  ] as const) {
+    const link = el<HTMLButtonElement>(`<button type="button" class="set-link-chip">${label} ↗</button>`);
+    link.addEventListener("click", () => {
+      const api = window.electronAPI;
+      if (api?.openExternal) void api.openExternal(href);
+      else window.open(href, "_blank", "noopener");
+    });
+    links.appendChild(link);
+  }
+  body.appendChild(links);
   return s;
+}
+
+/** One collapsed licence row: a header that reads the text the first time it opens. */
+function licenceBlock(which: "notices" | "license", title: string, hint: string): HTMLElement {
+  const wrap = el<HTMLDivElement>(`<div class="set-acc"></div>`);
+  const head = el<HTMLButtonElement>(
+    `<button type="button" class="set-acc-head" aria-expanded="false"><span class="set-acc-caret">▸</span><span class="set-acc-title"></span><span class="set-acc-hint"></span></button>`,
+  );
+  head.querySelector(".set-acc-title")!.textContent = title;
+  head.querySelector(".set-acc-hint")!.textContent = hint;
+  const panelWrap = el<HTMLDivElement>(`<div class="set-acc-body" hidden></div>`);
+  const pre = el<HTMLPreElement>(`<pre class="set-licence"></pre>`);
+  pre.textContent = ui.settings.licenceLoading;
+  panelWrap.appendChild(pre);
+  wrap.append(head, panelWrap);
+
+  let loaded = false;
+  head.addEventListener("click", () => {
+    const open = panelWrap.hidden === true;
+    panelWrap.hidden = !open;
+    head.setAttribute("aria-expanded", String(open));
+    head.classList.toggle("open", open);
+    if (!open || loaded) return;
+    loaded = true;
+    const api = window.electronAPI;
+    const done = (result: { ok: boolean; text?: string; error?: string }) => {
+      pre.textContent = result.ok ? result.text ?? "" : result.error || ui.settings.noticesFailed;
+    };
+    if (api?.readNotice) void api.readNotice(which).then(done).catch(() => (pre.textContent = ui.settings.noticesFailed));
+    else
+      void fetch(which === "license" ? "/LICENSE" : "/THIRD-PARTY-NOTICES.md")
+        .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
+        .then((body) => (pre.textContent = body))
+        .catch(() => (pre.textContent = ui.settings.noticesFailed));
+  });
+  return wrap;
 }
 
 function appearanceSection(): HTMLElement {

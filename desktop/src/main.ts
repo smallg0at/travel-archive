@@ -546,15 +546,29 @@ ipcMain.handle("start-pipeline", async (): Promise<{ ok: boolean; error?: string
   return { ok: false, error: failureDetail(`No answer on ${PIPELINE_PORT} within 25 seconds.`) };
 });
 
-ipcMain.handle("open-notice", async (_event, which: unknown) => {
-  const name = which === "license" ? "LICENSE" : "THIRD-PARTY-NOTICES.md";
-  // Beside the pipeline in `resources/`, which is where the build puts them.
-  const candidates = [join(ROOT, name), join(ROOT, "resources", name), join(__dirname, "..", "..", name)];
-  const found = candidates.find((path) => existsSync(path));
-  if (!found) return { ok: false, error: `${name} is missing from this build.` };
-  const failure = await shell.openPath(found);
-  return failure ? { ok: false, error: failure } : { ok: true };
-});
+  // The licence text itself, not a request to open an editor: it is rendered in
+  // the pane, so reading it must not depend on what this machine has installed
+  // or leave the app for a text editor.
+  ipcMain.handle("read-notice", async (_event, which: unknown) => {
+    const name = which === "license" ? "LICENSE" : "THIRD-PARTY-NOTICES.md";
+    // Beside the pipeline in `resources/`, which is where the build puts them.
+    const candidates = [join(ROOT, name), join(ROOT, "resources", name), join(__dirname, "..", "..", name)];
+    const found = candidates.find((path) => existsSync(path));
+    if (!found) return { ok: false as const, error: `${name} is missing from this build.` };
+    try {
+      return { ok: true as const, text: readFileSync(found, "utf8") };
+    } catch (err) {
+      return { ok: false as const, error: (err as Error).message };
+    }
+  });
+
+  // Attribution links go to the reader's own browser, as any link in a native
+  // shell has to.
+  ipcMain.handle("open-external", async (_event, url: unknown) => {
+    if (typeof url !== "string" || !/^https:\/\//i.test(url)) return { ok: false as const };
+    await shell.openExternal(url);
+    return { ok: true as const };
+  });
 
 if (process.platform === "win32") {
   systemPreferences.on("accent-color-changed", (_event, newColor) => {
