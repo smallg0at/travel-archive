@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { serveApp } from "./static";
+import { checkForUpdates, currentUpdateState, installUpdate, onUpdateState } from "./updates";
 import {
   isHealthy,
   startPipelineServer,
@@ -554,6 +555,16 @@ ipcMain.handle("start-pipeline", async (): Promise<{ ok: boolean; error?: string
     return { ok: true as const };
   });
 
+  ipcMain.handle("update-state", () => currentUpdateState());
+  ipcMain.handle("update-check", () => checkForUpdates());
+  ipcMain.handle("update-install", () => installUpdate());
+
+  // The renderer shows a row in Settings, not a modal: an update is never a
+  // reason to interrupt what someone is doing. This only keeps that row live.
+  onUpdateState((state) => {
+    mainWindow?.webContents.send("update-state", state);
+  });
+
 if (process.platform === "win32") {
   systemPreferences.on("accent-color-changed", (_event, newColor) => {
     const formatted = `#${newColor.slice(0, 6)}`;
@@ -727,6 +738,11 @@ async function startup(): Promise<void> {
         buttons: ["OK"],
       });
     }
+
+    // Updates are checked once, quietly, a little after the window is up. The
+    // renderer's Settings row reflects the state; nothing interrupts, and a
+    // failed check stays a line in that row rather than a dialog.
+    setTimeout(() => void checkForUpdates(), 20_000);
   })();
 }
 

@@ -28,6 +28,14 @@ interface ElectronAPI {
   startPipeline?(): Promise<{ ok: boolean; error?: string }>;
   /** Shell-only: open an https link in the reader's browser. */
   openExternal?(url: string): Promise<{ ok: boolean }>;
+
+  /** Shell-only: in-app updates (desktop/src/updates.ts). */
+  updates?: {
+    state(): Promise<unknown>;
+    check(): Promise<unknown>;
+    install(): Promise<{ ok: boolean; error?: string }>;
+    onState(fn: (state: unknown) => void): () => void;
+  };
   /** Shell-only: the passphrase store (safeStorage). Absent in a browser. */
   screenKey?: ScreenKeyBridge;
 }

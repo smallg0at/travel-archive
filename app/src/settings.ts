@@ -37,6 +37,7 @@ import {
 } from "./backend";
 import { el } from "./photoUi";
 import { legalText } from "./legalText";
+import { updateRow } from "./updateRow";
 import { createFolderPanel } from "./photoFolder";
 import { renderDensityControl, getCachedIndex, formatMonthLabel } from "./album";
 import { resetSidebarWidth } from "./chrome";
@@ -871,6 +872,9 @@ function aboutSection(archive: ArchiveStatus | null): HTMLElement {
       })
       .catch(() => {});
   }
+
+  const updater = window.electronAPI?.updates;
+  if (updater) body.appendChild(updateRow(updater));
 
   body.appendChild(el(`<h3 class="set-subhead"></h3>`) as HTMLElement).textContent = ui.settings.notices;
   body.appendChild(licenceBlock("notices", ui.settings.noticesThirdParty, ui.settings.noticesThirdPartyHint));

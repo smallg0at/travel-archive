@@ -62,8 +62,18 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Photo Archive"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "smallg0at",
+        "repo": "travel-archive"
+      }
+    ]
   },
   "author": "smallg0at",
-  "license": "AGPL-3.0-or-later"
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
 }

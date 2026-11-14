@@ -71,5 +71,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     set: (passphrase: string): Promise<boolean> => ipcRenderer.invoke("screen-key-set", passphrase),
     forget: (): Promise<void> => ipcRenderer.invoke("screen-key-forget"),
   },
+
+  /**
+   * In-app updates. The state is a value, not an event stream the page has to
+   * subscribe to before it exists: Settings asks once when it opens and then
+   * listens for changes.
+   */
+  updates: {
+    state: (): Promise<unknown> => ipcRenderer.invoke("update-state"),
+    check: (): Promise<unknown> => ipcRenderer.invoke("update-check"),
+    install: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke("update-install"),
+    onState: (fn: (state: unknown) => void): (() => void) => {
+      const listener = (_event: unknown, state: unknown) => fn(state);
+      ipcRenderer.on("update-state", listener);
+      return () => ipcRenderer.removeListener("update-state", listener);
+    },
+  },
 });
 
