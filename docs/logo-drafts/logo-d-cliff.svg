@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Photo Archive">
+  <defs>
+    <linearGradient id="backCard" x1="0.2" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#E9EEF4"/><stop offset="1" stop-color="#C6D1DC"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0.15" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.62" stop-color="#F8FAFC"/><stop offset="1" stop-color="#E6ECF3"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0.8" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#8FC0DC"/><stop offset="0.55" stop-color="#AECFE4"/><stop offset="1" stop-color="#D7E6EF"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0.1" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#5C97A3"/><stop offset="0.5" stop-color="#3E7E8C"/><stop offset="1" stop-color="#2C6675"/>
+    </linearGradient>
+    <linearGradient id="chalk" x1="0.2" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#FFFDF6"/><stop offset="0.55" stop-color="#F1EADA"/><stop offset="1" stop-color="#D8CFBC"/>
+    </linearGradient>
+    <linearGradient id="plateau" x1="0.2" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#96A05C"/><stop offset="0.45" stop-color="#8B9350"/><stop offset="1" stop-color="#6F7638"/>
+    </linearGradient>
+    <linearGradient id="warm" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#C0A874"/><stop offset="1" stop-color="#9A8455"/>
+    </linearGradient>
+    <linearGradient id="tower" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.55" stop-color="#F4EFE4"/><stop offset="1" stop-color="#CFC6B4"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0.15" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#FF8B57"/><stop offset="0.35" stop-color="#F0521A"/>
+      <stop offset="0.75" stop-color="#D03104"/><stop offset="1" stop-color="#A81F00"/>
+    </linearGradient>
+    <linearGradient id="innerShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B2743" stop-opacity="0.2"/><stop offset="0.14" stop-color="#0B2743" stop-opacity="0"/>
+      <stop offset="0.88" stop-color="#0B2743" stop-opacity="0"/><stop offset="1" stop-color="#0B2743" stop-opacity="0.14"/>
+    </linearGradient>
+    <linearGradient id="topLight" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="view"><rect x="24" y="21" width="52" height="48" rx="5"/></clipPath>
+    <clipPath id="cardClip"><rect x="18" y="15" width="64" height="76" rx="8"/></clipPath>
+    <filter id="backShadow" x="-40%" y="-30%" width="180%" height="170%">
+      <feDropShadow dx="0" dy="2.2" stdDeviation="3.2" flood-color="#061426" flood-opacity="0.24"/>
+    </filter>
+    <filter id="contact" x="-30%" y="-25%" width="160%" height="160%">
+      <feDropShadow dx="-1.2" dy="2.4" stdDeviation="2.6" flood-color="#04101F" flood-opacity="0.34"/>
+    </filter>
+    <filter id="pinShadow" x="-70%" y="-50%" width="240%" height="230%">
+      <feDropShadow dx="-1.8" dy="2.4" stdDeviation="3" flood-color="#0B1220" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- back card, tilted, as in the original -->
+  <g transform="rotate(-8.5 42 46)" filter="url(#backShadow)">
+    <rect x="15" y="13" width="56" height="66" rx="7" fill="url(#backCard)"/>
+  </g>
+
+  <!-- front card -->
+  <rect x="18" y="15" width="64" height="76" rx="8" fill="url(#card)" filter="url(#contact)"/>
+  <g clip-path="url(#cardClip)">
+    <rect x="18" y="15" width="64" height="4" fill="url(#topLight)" opacity="0.7"/>
+  </g>
+
+  <g clip-path="url(#view)">
+    <g transform="translate(24 21)">
+      <rect width="52" height="48" fill="url(#sky)"/>
+
+      <!-- sea, left of the headland, horizon at 13 -->
+      <path d="M0 12.4 H30 C26.4 15 22.8 17.4 19.4 20.4 C12.6 26.6 6.4 31.6 0 34.4 Z" fill="url(#sea)"/>
+      <path d="M0 13.2 H30" stroke="#CFE1E6" stroke-width="0.4" opacity="0.55"/>
+
+      <!-- plateau: warm ground rising to the crest and running to the right edge -->
+      <path d="M19.4 20.4 C23 16.8 27.6 14.2 33 13.4 C39 12.6 45.6 13.4 52 14.8 V48 H12.6 C13.4 38.6 15.2 28.4 19.4 20.4 Z" fill="url(#plateau)"/>
+      <!-- a warm band where the sun catches the clifftop -->
+      <path d="M19.4 20.4 C23 16.8 27.6 14.2 33 13.4 C36 13 39.6 13.1 43 13.7 C38 15.6 32.4 18.4 27.6 22.6 C24.6 25.2 22 28.2 20.2 31.6 Z" fill="url(#warm)" opacity="0.5"/>
+
+      <!-- the cliff: one long S-curve, white chalk -->
+      <path d="M12.6 48 C13.2 37 14.6 27.4 19.4 20.4 C17 22.8 15 25.6 13.6 28.6 C10.6 34.8 8.4 41 7.4 48 Z" fill="url(#chalk)"/>
+      <path d="M19.4 20.4 C15 27.8 13.2 37 12.6 48 L0 48 C1 41 3.2 34.6 6.2 28.6 C9 22.6 13 17.4 19.4 20.4 Z" fill="url(#chalk)"/>
+      <!-- its shaded right face -->
+      <path d="M19.4 20.4 C17.2 26 15.8 32.6 15.2 39 C16.8 32.4 19.2 26.4 22.2 21.6 Z" fill="#CFC5B0" opacity="0.55"/>
+
+      <!-- foam at the foot of the cliff -->
+      <path d="M0 34.4 C4.6 32.8 9 30.8 13.2 28.2" fill="none" stroke="#EAF4F5" stroke-width="1" opacity="0.75"/>
+      <path d="M0 37.6 C5 35.8 9.8 33.6 14.4 31" fill="none" stroke="#DCEAEC" stroke-width="0.7" opacity="0.5"/>
+
+      <!-- the lighthouse, raised so it reads at 64px -->
+      <g>
+        <path d="M32.4 13.6 L32 5.4 L34.4 5.4 L34.8 13.6 Z" fill="url(#tower)"/>
+        <rect x="31.5" y="4.4" width="3.5" height="1.4" rx="0.7" fill="#2E3A44"/>
+        <path d="M31.8 4.4 L33.2 3.1 L34.6 4.4 Z" fill="#3A4753"/>
+        <rect x="31.9" y="7.6" width="2.5" height="0.8" rx="0.4" fill="#2E3A44" opacity="0.75"/>
+        <rect x="31.3" y="12.6" width="4.3" height="1.5" rx="0.6" fill="#E8E2D4"/>
+      </g>
+
+      <!-- the path curving across the plateau -->
+      <path d="M21.4 24.6 C27 22.6 33 22.2 39 23.2 C45 24.2 49.6 25.4 52 26.2" fill="none" stroke="#D9CEB2" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+
+      <!-- a couple of walkers' dots, the only human trace -->
+      <g fill="#4B4F3A" opacity="0.55">
+        <circle cx="37.4" cy="30.6" r="0.5"/><circle cx="38.6" cy="30.9" r="0.5"/>
+        <circle cx="41.6" cy="33.4" r="0.5"/>
+      </g>
+    </g>
+    <rect x="24" y="21" width="52" height="48" fill="url(#innerShade)"/>
+  </g>
+
+  <!-- caption margin -->
+  <rect x="24" y="75.8" width="33" height="2" rx="1" fill="#6C8094" opacity="0.85"/>
+  <rect x="24" y="81.8" width="22" height="2" rx="1" fill="#6C8094" opacity="0.5"/>
+  <rect x="66" y="75.5" width="10" height="6" rx="2.5" fill="#F0A11E"/>
+
+  <!-- Argon's pin: head r 12.5, tip at 45, hole 5 -->
+  <g filter="url(#pinShadow)" transform="rotate(12 76.5 22.5)">
+    <path d="M76.5 10 a12.5 12.5 0 0 1 12.5 12.5 c0 8.4 -9.2 15.6 -12.5 22.5 c-3.3 -6.9 -12.5 -14.1 -12.5 -22.5 A12.5 12.5 0 0 1 76.5 10 Z" fill="url(#pin)"/>
+  </g>
+  <path d="M76.5 12 a10.4 10.4 0 0 0 -10 7.6 c1.8 -3.6 5.6 -6 10 -6 c1.6 0 3.2 0.35 4.5 1 a10.4 10.4 0 0 0 -4.5 -2.6 Z" fill="#FFD9C7" opacity="0.5" transform="rotate(12 76.5 22.5)"/>
+  <circle cx="76.5" cy="22.4" r="5" fill="#FFFFFF"/>
+</svg>
