@@ -2021,7 +2021,7 @@ body.setup-active #signin-banner {
 
 .set-about-mark svg { display: block; }
 .set-about-text { min-width: 0; }
-.set-about-name { margin: 0; font-size: 15px; line-height: 1.25; font-weight: 600; }
+.set-about-name { margin: 0; font-size: 25px; line-height: 1.25; font-weight: 600; }
 .set-about-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .set-chip {
@@ -2031,7 +2031,7 @@ body.setup-active #signin-banner {
   padding: 1px 6px;
   border-radius: var(--radius-s);
   color: var(--text-secondary);
-  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 25%, transparent);
 }
 
 .set-about-tagline { margin: 8px 0 0; }
@@ -2767,7 +2767,10 @@ html.desktop-shell #nav-tools {
   max-width: 640px;
   margin: 0 0 26px;
 }
-.set-section h3 {
+/* Direct child only: the section's own title. Written as a descendant rule it
+   also caught the h3s inside a section (About's name, its sub-heads) and pinned
+   them to 13px, which silently beat the classes meant to size them. */
+.set-section > h3 {
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
