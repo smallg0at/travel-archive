@@ -59,6 +59,21 @@
       <stop offset="0.5" stop-color="#B4ADA0"/>
       <stop offset="1" stop-color="#9E978B"/>
     </linearGradient>
+    <linearGradient id="ochreWash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B99A6B" stop-opacity="0"/>
+      <stop offset="0.35" stop-color="#B99A6B" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#B99A6B" stop-opacity="0.14"/>
+    </linearGradient>
+    <linearGradient id="footShadow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A443B" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#4A443B" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#4A443B" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="seaBounce" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8FC4C6" stop-opacity="0.22"/>
+      <stop offset="0.55" stop-color="#8FC4C6" stop-opacity="0.19"/>
+      <stop offset="1" stop-color="#8FC4C6" stop-opacity="0.12"/>
+    </linearGradient>
     <linearGradient id="plateau" x1="0.1" y1="0" x2="0.8" y2="1">
       <stop offset="0" stop-color="#A6B46E"/>
       <stop offset="0.50" stop-color="#889655"/>
@@ -83,6 +98,15 @@
     </clipPath>
     <clipPath id="cardClip">
       <rect x="18" y="15" width="64" height="76" rx="8"/>
+    </clipPath>
+    <clipPath id="chalkClip">
+      <path d="M18.0 22.8
+               C20.4 26.2, 26.4 27.8, 35.0 29.2
+               C37.2 29.6, 38.4 30.6, 37.8 32.0
+               C37.2 33.4, 37.4 35.0, 38.6 36.8
+               C41.6 40.6, 45.2 44.4, 48.6 48.0
+               H17.4
+               C17.2 39.2, 17.4 30.4, 18.0 22.8 Z"/>
     </clipPath>
 
     <filter id="backShadow" x="-40%" y="-30%" width="180%" height="170%">
@@ -118,19 +142,19 @@
       <line x1="0" y1="17.6" x2="52" y2="17.6" stroke="#DCF2F8" stroke-width="0.45" opacity="0.72"/>
 
       <!-- Pale aqua surf band sweeping down along the shore & cliff foot -->
-      <path d="M0 43.2 C6.8 42.4, 12.6 38.6, 17.6 31.8 V48.0 H0 Z" fill="url(#surfGlow)"/>
+      <path d="M0 43.6 C7.4 43.0, 13.4 39.8, 17.6 33.0 V48.0 H0 Z" fill="url(#surfGlow)"/>
 
-      <!-- Cobble beach: narrow ~2-3 unit strip of grey-brown pebbles between surf and chalk, solid to bottom -->
+      <!-- 6. Cobble strip: 2-3 units deep between surf and chalk, grey-brown pebbles, darker waterline above -->
       <path d="M0 46.2
-               C7.0 45.4, 13.0 41.6, 17.6 34.0
+               C7.6 45.6, 13.6 42.6, 17.6 35.6
                V48.0 H0 Z"
             fill="url(#cobble)"/>
-      <!-- Slightly darker waterline along the cobble-surf edge -->
-      <path d="M0 46.2 C7.0 45.4, 13.0 41.6, 17.6 34.0"
-            fill="none" stroke="#474B4A" stroke-width="0.5" stroke-linecap="round" opacity="0.65"/>
-      <!-- Soft pale surf edge right above the waterline -->
-      <path d="M0 45.5 C6.8 44.7, 12.8 40.9, 17.5 33.3"
-            fill="none" stroke="#DCF5F7" stroke-width="0.55" stroke-linecap="round" opacity="0.55"/>
+      <!-- Darker waterline above the cobble strip -->
+      <path d="M0 46.2 C7.6 45.6, 13.6 42.6, 17.6 35.6"
+            fill="none" stroke="#454948" stroke-width="0.52" stroke-linecap="round" opacity="0.72"/>
+      <!-- Soft pale surf lip just above the waterline -->
+      <path d="M0 45.5 C7.4 44.9, 13.4 41.9, 17.5 34.9"
+            fill="none" stroke="#DCF5F7" stroke-width="0.52" stroke-linecap="round" opacity="0.55"/>
 
       <!-- 3. Headland downland plateau: gentle warm ochre-green plateau -->
       <path d="M18.0 22.8
@@ -147,35 +171,103 @@
                C45.2 17.0, 48.8 17.2, 52.0 17.3"
             fill="none" stroke="url(#plateauRim)" stroke-width="0.9" stroke-linecap="round"/>
 
-      <!-- One thin, open, low-contrast route entering from left below crest, swinging right, disappearing over the crest -->
-      <path d="M18.6 23.8
-               C24.5 22.4, 30.5 21.4, 35.4 20.2
-               C38.4 19.4, 40.0 17.8, 41.2 16.4"
-            fill="none" stroke="#BCC48E" stroke-width="0.38" stroke-linecap="round" opacity="0.38"/>
+      <!-- Road: TWO edges (0.3-0.35 wide, #D9CCA8 & #C6B58C, opacity 0.8/0.55) with downland between, plus cliff-edge branch -->
+      <g fill="none" stroke-linecap="round">
+        <!-- Main open road: upper-left edge & lower-right edge (with clean Y-fork gap at branch mouth) -->
+        <path d="M18.6 23.4 C24.6 21.8, 30.8 20.6, 35.6 19.4 C38.6 18.6, 40.2 17.4, 41.6 16.3"
+              stroke="#D9CCA8" stroke-width="0.33" opacity="0.80"/>
+        <path d="M18.9 24.3 C22.5 23.3, 25.6 22.6, 28.2 22.1"
+              stroke="#C6B58C" stroke-width="0.33" opacity="0.55"/>
+        <path d="M29.4 21.8 C31.8 21.3, 34.0 20.7, 36.0 20.2 C39.1 19.4, 40.9 18.0, 42.4 16.6"
+              stroke="#C6B58C" stroke-width="0.33" opacity="0.55"/>
+        <!-- Branch curving back toward the cliff edge -->
+        <path d="M29.4 21.8 C33.4 22.4, 35.8 24.4, 35.2 29.1"
+              stroke="#D9CCA8" stroke-width="0.31" opacity="0.76"/>
+        <path d="M28.2 22.1 C32.2 22.8, 34.8 24.8, 34.3 29.0"
+              stroke="#C6B58C" stroke-width="0.31" opacity="0.52"/>
+      </g>
 
       <!-- 4. Chalk face: largest single mass, warm white, unbroken outline with warm-grey inner notch plane -->
-      <path d="M18.0 22.8
-               C20.4 26.2, 26.4 27.8, 35.0 29.2
-               C37.2 29.6, 38.4 30.6, 37.8 32.0
-               C37.2 33.4, 37.4 35.0, 38.6 36.8
-               C41.6 40.6, 45.2 44.4, 48.6 48.0
-               H17.4
-               C17.2 39.2, 17.4 30.4, 18.0 22.8 Z"
-            fill="url(#chalkLit)"/>
+      <g clip-path="url(#chalkClip)">
+        <!-- Base warm-white chalk -->
+        <rect x="17" y="22" width="32" height="27" fill="url(#chalkLit)"/>
 
-      <!-- Inner plane of the cliff notch/fold turning away from upper-left light (distinctly darker warm grey) -->
-      <path d="M35.0 29.2
-               C37.2 29.6, 38.4 30.6, 37.8 32.0
-               C37.2 33.4, 37.4 35.0, 38.6 36.8
-               C41.6 40.6, 45.2 44.4, 48.6 48.0
-               H37.6
-               C36.4 42.4, 35.4 36.8, 34.8 33.2
-               C34.4 31.2, 34.6 29.8, 35.0 29.2 Z"
-            fill="url(#chalkFold)"/>
+        <!-- Inner plane of the cliff notch/fold turning away from upper-left light (warm grey) -->
+        <path d="M35.0 29.2
+                 C37.2 29.6, 38.4 30.6, 37.8 32.0
+                 C37.2 33.4, 37.4 35.0, 38.6 36.8
+                 C41.6 40.6, 45.2 44.4, 48.6 48.0
+                 H37.6
+                 C36.4 42.4, 35.4 36.8, 34.8 33.2
+                 C34.4 31.2, 34.6 29.8, 35.0 29.2 Z"
+              fill="url(#chalkFold)"/>
+
+        <!-- 1. Soil shadow hanging under the crest (4-6 units deep, warm brown, 0.3 at top fading to 0) -->
+        <g fill="none" stroke="#6B533B" stroke-linecap="round">
+          <path d="M18.0 22.8 C20.4 26.2, 26.4 27.8, 35.0 29.2 C37.2 29.6, 38.4 30.6, 37.8 32.0 C37.2 33.4, 37.4 35.0, 38.6 36.8 C41.6 40.6, 45.2 44.4, 48.6 48.0"
+                stroke-width="11.0" opacity="0.06"/>
+          <path d="M18.0 22.8 C20.4 26.2, 26.4 27.8, 35.0 29.2 C37.2 29.6, 38.4 30.6, 37.8 32.0 C37.2 33.4, 37.4 35.0, 38.6 36.8 C41.6 40.6, 45.2 44.4, 48.6 48.0"
+                stroke-width="7.4" opacity="0.07"/>
+          <path d="M18.0 22.8 C20.4 26.2, 26.4 27.8, 35.0 29.2 C37.2 29.6, 38.4 30.6, 37.8 32.0 C37.2 33.4, 37.4 35.0, 38.6 36.8 C41.6 40.6, 45.2 44.4, 48.6 48.0"
+                stroke-width="4.4" opacity="0.08"/>
+          <path d="M18.0 22.8 C20.4 26.2, 26.4 27.8, 35.0 29.2 C37.2 29.6, 38.4 30.6, 37.8 32.0 C37.2 33.4, 37.4 35.0, 38.6 36.8 C41.6 40.6, 45.2 44.4, 48.6 48.0"
+                stroke-width="2.0" opacity="0.12"/>
+        </g>
+
+        <!-- 2. Vertical run striations: 17 thin tapered water streaks (0.28-0.44 wide, 5.5-10.5 tall, scattered, #8C8880, 0.08-0.13) -->
+        <g fill="#8C8880">
+          <path d="M18.7 25.0 Q19.12 29.4 18.7 33.8 Q18.28 29.4 18.7 25.0 Z" opacity="0.12"/>
+          <path d="M19.8 32.0 Q20.18 37.2 19.8 42.4 Q19.42 37.2 19.8 32.0 Z" opacity="0.11"/>
+          <path d="M21.3 27.2 Q21.64 31.2 21.3 35.2 Q20.96 31.2 21.3 27.2 Z" opacity="0.12"/>
+          <path d="M22.2 36.2 Q22.62 41.4 22.2 46.6 Q21.78 41.4 22.2 36.2 Z" opacity="0.10"/>
+          <path d="M23.6 26.8 Q23.90 30.2 23.6 33.6 Q23.30 30.2 23.6 26.8 Z" opacity="0.09"/>
+          <path d="M24.4 30.4 Q24.80 35.6 24.4 40.8 Q24.00 35.6 24.4 30.4 Z" opacity="0.13"/>
+          <path d="M25.6 35.6 Q25.94 39.8 25.6 44.0 Q25.26 39.8 25.6 35.6 Z" opacity="0.09"/>
+          <path d="M27.1 28.8 Q27.50 33.4 27.1 38.0 Q26.70 33.4 27.1 28.8 Z" opacity="0.12"/>
+          <path d="M28.5 37.6 Q28.88 42.3 28.5 47.0 Q28.12 42.3 28.5 37.6 Z" opacity="0.11"/>
+          <path d="M30.3 30.0 Q30.72 35.0 30.3 40.0 Q29.88 35.0 30.3 30.0 Z" opacity="0.13"/>
+          <path d="M31.5 36.8 Q31.82 40.6 31.5 44.4 Q31.18 40.6 31.5 36.8 Z" opacity="0.10"/>
+          <path d="M33.1 30.8 Q33.50 35.8 33.1 40.8 Q32.70 35.8 33.1 30.8 Z" opacity="0.12"/>
+          <path d="M34.3 38.4 Q34.64 42.6 34.3 46.8 Q33.96 42.6 34.3 38.4 Z" opacity="0.10"/>
+          <path d="M36.3 34.4 Q36.68 39.2 36.3 44.0 Q35.92 39.2 36.3 34.4 Z" opacity="0.12"/>
+          <path d="M38.7 38.4 Q39.04 42.2 38.7 46.0 Q38.36 42.2 38.7 38.4 Z" opacity="0.11"/>
+          <path d="M40.3 39.6 Q40.62 43.0 40.3 46.4 Q39.98 43.0 40.3 39.6 Z" opacity="0.09"/>
+          <path d="M42.1 41.8 Q42.42 44.7 42.1 47.6 Q41.78 44.7 42.1 41.8 Z" opacity="0.09"/>
+        </g>
+
+        <!-- 3. Two flint bands: irregular broken horizontal strokes (0.45-0.55 wide, #9C948A, opacity 0.25) at ~45% and ~65% -->
+        <g fill="none" stroke="#9C948A" stroke-linecap="round" opacity="0.25">
+          <!-- Upper flint band (~45% face height) -->
+          <path d="M18.2 34.0 Q20.0 34.3 21.8 34.1" stroke-width="0.46"/>
+          <path d="M23.5 34.5 Q25.8 34.8 28.0 34.6" stroke-width="0.50"/>
+          <path d="M29.8 35.0 Q31.6 35.2 33.2 35.0" stroke-width="0.45"/>
+          <path d="M35.2 35.4 Q36.6 35.6 37.8 35.5" stroke-width="0.48"/>
+          <!-- Lower flint band (~65% face height) -->
+          <path d="M17.8 39.4 Q19.2 39.6 20.6 39.5" stroke-width="0.48"/>
+          <path d="M22.4 39.9 Q25.0 40.3 27.6 40.0" stroke-width="0.52"/>
+          <path d="M29.4 40.4 Q31.2 40.7 32.8 40.5" stroke-width="0.46"/>
+          <path d="M34.8 40.9 Q37.0 41.2 39.2 41.0" stroke-width="0.48"/>
+          <path d="M40.8 41.3 Q42.2 41.5 43.4 41.4" stroke-width="0.45"/>
+        </g>
+
+        <!-- 4. Warm staining low on the face: ochre wash (#B99A6B, opacity 0.12-0.15 over bottom fifth) -->
+        <rect x="17" y="42.0" width="33" height="6.0" fill="url(#ochreWash)"/>
+
+        <!-- 5. The foot: tight contact shadow (0.35) where chalk meets ground, + cool sea bounce light (#8FC4C6 at 0.18-0.22) just below -->
+        <rect x="17" y="45.8" width="33" height="1.5" fill="url(#footShadow)"/>
+        <rect x="17" y="47.3" width="33" height="0.7" fill="url(#seaBounce)"/>
+        <!-- Tight contact shadow + cool sea bounce along left chalk-to-cobble foot -->
+        <path d="M17.7 35.4 C17.5 39.6, 17.5 43.8, 17.6 48.0"
+              fill="none" stroke="#4A443B" stroke-width="0.65" opacity="0.35"/>
+      </g>
+
+      <!-- Cool sea bounce light just outside the chalk-to-cobble contact shadow -->
+      <path d="M17.0 35.8 C16.8 39.8, 16.8 43.8, 16.9 47.6"
+            fill="none" stroke="#8FC4C6" stroke-width="0.65" stroke-linecap="round" opacity="0.20"/>
 
       <!-- Single bright upper-left edge along the sheer chalk cliff -->
-      <path d="M17.4 48.0 C17.2 39.2, 17.4 30.4, 18.0 22.8"
-            fill="none" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" opacity="0.95"/>
+      <path d="M17.4 47.2 C17.2 39.0, 17.4 30.4, 18.0 22.8"
+            fill="none" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" opacity="0.92"/>
 
       <!-- 5. Lighthouse on the crest, slender white tower, dark cap, taller than life -->
       <g>
