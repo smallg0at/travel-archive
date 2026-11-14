@@ -17,7 +17,7 @@
       <stop offset="0" stop-color="#5CE4FF"/><stop offset="0.55" stop-color="#28B8F7"/><stop offset="1" stop-color="#108EE2"/>
     </linearGradient>
     <linearGradient id="hill" x1="24" y1="47.4" x2="76" y2="69" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0E8AB8"/><stop offset="1" stop-color="#05476E"/>
+      <stop offset="0" stop-color="#129C9B"/><stop offset="1" stop-color="#045057"/>
     </linearGradient>
     <linearGradient id="brick" x1="29.4" y1="37" x2="35.4" y2="58" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#C98A5E"/><stop offset="0.55" stop-color="#B2704A"/><stop offset="1" stop-color="#8A5334"/>
