@@ -43,6 +43,7 @@ frame_defs = '''
     <linearGradient id="aPin" x1="64" y1="10" x2="89" y2="45" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#FF6E38"/><stop offset="0.52" stop-color="#E8430A"/><stop offset="1" stop-color="#C82800"/>
     </linearGradient>
+    <clipPath id="aCardClip"><rect x="18" y="15" width="64" height="76" rx="8"/></clipPath>
 '''
 s = s.replace("  </defs>", frame_defs + "  </defs>", 1)
 
@@ -70,6 +71,7 @@ new_cards = '''  <!-- Back card, as in Argon's original: the amber photo shows a
 
   <!-- Front card -->
   <rect x="18" y="15" width="64" height="76" rx="8" fill="url(#aCard)" filter="url(#contact)"/>
+  <g clip-path="url(#aCardClip)"><rect x="18" y="88" width="64" height="3" fill="url(#aPaper)"/></g>
   <path d="M18 88 h64 v-3 a8 8 0 0 1 -8 8 h-48 a8 8 0 0 1 -8 -8 z" fill="url(#aPaper)"/>
 
   <!-- Photo window -->'''

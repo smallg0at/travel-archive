@@ -78,6 +78,7 @@ DOC = f'''<?xml version="1.0" encoding="UTF-8"?>
     <linearGradient id="pin" x1="64" y1="10" x2="89" y2="45" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#FF6E38"/><stop offset="0.52" stop-color="#E8430A"/><stop offset="1" stop-color="#C82800"/>
     </linearGradient>
+    <clipPath id="aCardClip"><rect x="18" y="15" width="64" height="76" rx="8"/></clipPath>
     <clipPath id="view"><rect x="24" y="21" width="52" height="48" rx="5"/></clipPath>
     <filter id="cardShadow" x="-30%" y="-20%" width="170%" height="160%">
       <feDropShadow dx="-1.5" dy="2.5" stdDeviation="4" flood-color="#061426" flood-opacity="0.35"/>
@@ -96,7 +97,9 @@ DOC = f'''<?xml version="1.0" encoding="UTF-8"?>
   </g>
 
   <rect x="18" y="15" width="64" height="76" rx="8" fill="url(#card)" filter="url(#cardShadow)"/>
-  <path d="M18 88 h64 v-3 a8 8 0 0 1 -8 8 h-48 a8 8 0 0 1 -8 -8 z" fill="url(#paper)"/>
+  <!-- Paper thickness: clipped to the card, so the strip can never misjudge the
+       corner radius the way a hand-built path does. -->
+  <g clip-path="url(#aCardClip)"><rect x="18" y="88" width="64" height="3" fill="url(#paper)"/></g>
 
   <g clip-path="url(#view)">
     <rect x="24" y="21" width="52" height="48" fill="url(#sky)"/>
