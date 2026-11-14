@@ -571,3 +571,21 @@ netsh advfirewall firewall delete rule name="TravelArchive Remote Reader"
 `data/index.json` with one empty month — with no index the app stops at the
 empty-archive screen and never builds the nav, so Settings is unreachable.
 Rebuild `app/dist` without the pointer afterwards (grep for the test port).
+
+## GitHub release downloads stall on this network (2026-11-15)
+
+`npm install electron` fetches a 158,318,730-byte zip from a GitHub release, and
+that download sat at **0 bytes for fifteen minutes** here (twice, killed by
+hand) while `github.com:443` answered and a `HEAD` to the release URL returned
+the right `Content-Length`. Node's `fetch` in this install ignores
+`HTTP(S)_PROXY`, so pointing the environment at a local proxy does not help —
+`@electron/get` still fails with `TypeError: fetch failed`.
+
+**The working route is the mirror**:
+`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` then
+`node node_modules/electron/install.js`. The mirror serves the identical
+archive (same `Content-Length`), the install exits 0 with no output, and
+`node_modules/electron/dist/electron.exe -p process.versions.node` reports what
+the release metadata says. Verify that line rather than trusting the exit code:
+a failed download leaves no `dist/` at all, which shows up later as an install
+that "worked" but cannot launch.

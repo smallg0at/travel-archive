@@ -1,5 +1,4 @@
 import type { DateSource, GeoPoint } from "@travel-archive/shared";
-import { assertNoBrotli } from "@travel-archive/shared/brotli";
 import { isNetworkError, parseDateFromFileName } from "./util.js";
 import { getAccessToken } from "./auth.js";
 import { BOX, renderImageThumbnail, renderVideoPoster } from "./localThumb.js";
@@ -145,9 +144,6 @@ async function graphFetchUrl(initialToken: string, url: string, init: RequestIni
       await sleep(DEFAULT_BACKOFF_MS * attempt);
       continue;
     }
-    // Before any body is read: see shared/src/brotli.ts. The decoder runs on
-    // read, so this is the only moment the guard can work.
-    assertNoBrotli(res, url);
     if (res.ok) return res;
 
     // A Graph token lasts about an hour. `analyze` acquires one at the start of
@@ -441,7 +437,6 @@ export async function downloadThumbnailBuffer(
     // The thumbnail URL is already pre-authenticated; sending our bearer token
     // to that host would leak it to a different origin.
     const res = await fetch(url, { headers: { "Accept-Encoding": "gzip" } });
-    assertNoBrotli(res, url);
     if (res.ok) {
       const bytes = Buffer.from(await res.arrayBuffer());
       if (bytes.length) return bytes;

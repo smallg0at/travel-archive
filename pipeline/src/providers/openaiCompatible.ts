@@ -1,4 +1,3 @@
-import { assertNoBrotli } from "@travel-archive/shared/brotli";
 import type {
   AiProvider,
   CallUsage,
@@ -164,16 +163,13 @@ async function chat(
         headers: {
           Authorization: `Bearer ${cfg.apiKey}`,
           "Content-Type": "application/json",
-          // Ask for gzip explicitly. DeepSeek answers `Content-Encoding: br` to
-          // the default `gzip, deflate` — measured 2026-10-27 with a real key —
-          // and the runtime's Brotli decoder is unpatched (CVE-2026-111497), so
-          // shared/src/brotli.ts would refuse it and every call would fail.
-          // With this header it answers gzip; the guard stays as the backstop.
+          // Ask for gzip explicitly: DeepSeek answers `Content-Encoding: br` to
+          // the default `gzip, deflate` (measured 2026-10-27 with a real key),
+          // and no caller here reads Brotli.
           "Accept-Encoding": "gzip",
         },
         body: JSON.stringify(payload),
       });
-      assertNoBrotli(res, url);
     } catch (err) {
       if (attempt < MAX_ATTEMPTS && RETRYABLE.test(String(err))) {
         await sleep(backoffMs(attempt, null));

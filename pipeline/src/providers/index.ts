@@ -1,4 +1,3 @@
-import { assertNoBrotli } from "@travel-archive/shared/brotli";
 import { env } from "../env.js";
 import { geminiProvider } from "./gemini.js";
 import { createOpenAiCompatProvider, type OpenAiCompatConfig } from "./openaiCompatible.js";
@@ -211,7 +210,6 @@ export async function validateProvider(
         signal: AbortSignal.timeout(10_000),
         headers: { "Accept-Encoding": "gzip" },
       });
-      assertNoBrotli(res, url);
       if (res.ok || res.status === 429) return { ok: true };
       if (res.status === 400 || res.status === 401 || res.status === 403)
         return fail("auth", `Gemini rejected the key (${res.status})`);
@@ -226,7 +224,6 @@ export async function validateProvider(
     const headers: Record<string, string> = { "Accept-Encoding": "gzip" };
     if (!(preset.scope === "local" || !key)) headers.authorization = `Bearer ${key}`;
     const res = await fetch(`${base}/${path}`, { headers, signal: AbortSignal.timeout(10_000) });
-    assertNoBrotli(res, `${base}/${path}`);
     if (res.ok || res.status === 429) return { ok: true };
     if (res.status === 401 || res.status === 403) return fail("auth", `key rejected (${res.status})`);
     if (res.status === 404) return fail("unreachable", `no /${path} at ${base} (404) — check the base URL`);

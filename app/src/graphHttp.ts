@@ -21,7 +21,6 @@
  * `TimeoutError`.
  */
 
-import { assertNoBrotli } from "@travel-archive/shared/brotli";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
 /** How long a small Graph call may take: lookups, listings, $batch. */
@@ -39,12 +38,11 @@ export async function graphFetch(
 ): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  // Ask for gzip explicitly; the runtime's Brotli decoder is unpatched (see
-  // shared/src/brotli.ts), and a service that compresses unasked can answer br.
+  // Ask for gzip explicitly: Graph answers `br` to a bare `gzip, deflate` and
+  // nothing here needs it.
   if (!headers.has("Accept-Encoding")) headers.set("Accept-Encoding", "gzip");
   try {
     const response = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
-    assertNoBrotli(response, url);
     return response;
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {

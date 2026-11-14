@@ -8,10 +8,6 @@
     ".": {
       "types": "./src/types.ts",
       "default": "./src/types.ts"
-    },
-    "./brotli": {
-      "types": "./src/brotli.ts",
-      "default": "./src/brotli.ts"
     }
   },
   "license": "AGPL-3.0-or-later"

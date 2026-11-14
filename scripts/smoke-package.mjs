@@ -328,17 +328,17 @@ async function checkShell({ exe }) {
     else if (!diag.build?.commit) fail("shell: launched", "its server answered without build-info");
     else pass("shell: launched and served /health", `in ${waiting}s, commit ${diag.build.commit.slice(0, 7)}`);
 
-    // The Brotli CVE (README, "Known issue") is fixed in Node 24.22.1. Electron
-    // embeds its own Node, so the only honest check is the version the packaged
-    // process reports. A warning, not a failure: the fix is the vendor's to ship,
-    // and this line is what tells us when it has.
+    // The Brotli CVE (CVE-2026-111497) is fixed in Node 24.22.1. Electron embeds
+    // its own Node, so the only honest check is the version the packaged process
+    // reports. Nothing in the app refuses a Brotli body any more, so this is a
+    // gate, not a warning: Electron 45.3.2 carries Node 24.22.2.
     const node = diag.runtime?.node ?? "unknown";
     if (compareVersions(node, "24.22.1") >= 0) {
       pass("shell: runtime Node carries the Brotli fix", `${node} (Electron ${diag.runtime?.electron ?? "?"})`);
     } else {
-      warn(
+      fail(
         "shell: runtime Node predates the Brotli fix",
-        `${node} < 24.22.1 — the gzip guard is the mitigation (see README)`,
+        `${node} < 24.22.1 — bump electron in desktop/package.json`,
       );
     }
   } catch (error) {

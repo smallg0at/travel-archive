@@ -2,6 +2,35 @@
 
 Records, not rules. Kept because the measurements are the reasoning a future change has to answer to.
 
+## The Brotli RCE, and the runtime that carried it (2026-11-15)
+
+Node's vendored Brotli decoder had an out-of-bounds write permitting remote code
+execution (CVE-2026-111497), fixed in Node **22.23.4**, **24.22.1** and
+**26.12.1** on 2026-10-21. The desktop app runs whatever Node Electron embeds,
+and Electron **45.0.0** — the newest stable when this was found — embedded
+**24.22.0**, one patch short. That shipped: 1.0.2 carries an unpatched decoder
+in its main and utility processes, which hold the Graph token and the archive
+path.
+
+**What was done while waiting.** Every HTTP request this code owns asked for
+`gzip` explicitly and refused a `Content-Encoding` listing `br` before reading
+the body, because `fetch` decompresses lazily and cancelling at the headers is
+the only moment the guard can work. Measured with a real key: DeepSeek answers
+`br` to a bare `gzip, deflate` and `gzip` when asked, so the guard never fired in
+normal use. The Gemini SDK's transport and the renderer's Chromium Brotli copy
+were outside it either way.
+
+**Resolved by the runtime, not by us.** Electron **45.3.2** (2026-11-12)
+carries Node **24.22.2**: measured in the installed binary,
+`electron.exe -p process.versions.node` → `24.22.2` with Chrome
+156.0.8078.100. With the decoder patched the guard had no job left, and keeping
+it would turn a provider that sends `br` unasked into a hard failure — so
+`shared/src/brotli.ts`, its six call sites and its test are gone, and the
+`Accept-Encoding: gzip` headers stay because they cost nothing. The version
+check moved from a warning to a gate: `scripts/smoke-package.mjs` now fails when
+`/diagnostics` reports `runtime.node` below 24.22.1, since nothing else protects
+a build that regresses the runtime.
+
 ## An archive that looked empty because a read failed (2026-11-13)
 
 OneDrive's content backend answered 401 to every binary read for most of a day
