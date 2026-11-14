@@ -1,0 +1,136 @@
+"""Concept D with a hand-built vector window, unmirrored, using the measured skyline."""
+
+CARD = '''
+  <rect x="18" y="15" width="64" height="76" rx="9" fill="#000" opacity="0.01" filter="url(#ambient)"/>
+  <rect x="18" y="15" width="64" height="76" rx="9" fill="url(#card)" filter="url(#contact)"/>
+  <g clip-path="url(#cardClip)">
+    <rect x="18" y="15" width="64" height="4" fill="url(#topLight)" opacity="0.75"/>
+    <path d="M18 85.5 h64 v-2.5 a9 9 0 0 1 -9 9 h-46 a9 9 0 0 1 -9 -9 z" fill="#BFCAD6" opacity="0.55"/>
+  </g>
+'''
+
+WINDOW = '''
+  <g clip-path="url(#view)">
+    <g transform="translate(24 21)">
+      <rect width="52" height="48" fill="url(#sky)"/>
+      <ellipse cx="6" cy="3" rx="26" ry="18" fill="url(#glare)"/>
+
+      <!-- scree behind the ridge foot, right of centre -->
+      <path d="M33 29 L40 26.6 L46 25.8 L52 26.2 V39 L44 35.6 L37 32 Z" fill="url(#scree)"/>
+
+      <!-- the ridge: measured skyline, unmirrored, peaking at the right edge -->
+      <path d="M25.4 27.2 L28 23.4 L29.6 24.2 L31.4 20.8 L33.2 21.6 L35.6 17.8 L37.4 18.6 L40 14.8 L41.6 15.6 L44.6 12.4 L46 13.2 L49 10.8 L50.4 11.6 L52 9.4 V34 H25.4 Z"
+            fill="url(#rock)"/>
+      <!-- the crest rim: the brightest line in the frame -->
+      <path d="M25.4 27.2 L28 23.4 L29.6 24.2 L31.4 20.8 L33.2 21.6 L35.6 17.8 L37.4 18.6 L40 14.8 L41.6 15.6 L44.6 12.4 L46 13.2 L49 10.8 L50.4 11.6 L52 9.4 L52 10.8 L50.4 13 L49 12.2 L46 14.6 L44.6 13.8 L41.6 17 L40 16.2 L37.4 20 L35.6 19.2 L33.2 23 L31.4 22.2 L29.6 25.6 L28 24.8 L25.4 28.6 Z"
+            fill="#A8ADB4" opacity="0.9"/>
+      <!-- green ledges -->
+      <path d="M30.4 21.6 L34 17.4 L35.6 18.2 L32 22.4 Z" fill="#5F6C38" opacity="0.8"/>
+      <path d="M38.4 16 L41.6 12.6 L43 13.4 L39.8 16.8 Z" fill="#5A6734" opacity="0.7"/>
+      <path d="M45.6 14.4 L48 12 L49.2 12.8 L46.8 15.2 Z" fill="#4E5A32" opacity="0.6"/>
+
+      <!-- mound, left of centre, crest at 25 -->
+      <path d="M0 25.8 C7 25 14 24.4 21 25 C25 25.4 28.6 26.4 31.4 28 L33 31 L33 37 L0 37 Z" fill="url(#mound)"/>
+      <path d="M0 25.8 C7 25 14 24.4 21 25 C25 25.4 28.6 26.4 31.4 28" fill="none" stroke="#A8AE60" stroke-width="0.8" opacity="0.8"/>
+
+      <!-- the stone wall: chunky segments along the mound's foot -->
+      <g fill="url(#wall)">
+        <rect x="-1" y="31.4" width="8.4" height="3.2" rx="1.5"/>
+        <rect x="7.6" y="31.2" width="8.4" height="3.2" rx="1.5"/>
+        <rect x="16.2" y="31.4" width="8.4" height="3.2" rx="1.5"/>
+        <rect x="24.8" y="32" width="7.6" height="3.2" rx="1.5"/>
+      </g>
+      <g fill="#9DA0A6" opacity="0.75">
+        <rect x="-0.4" y="31.4" width="7.2" height="0.7" rx="0.35"/>
+        <rect x="8.2" y="31.2" width="7.2" height="0.7" rx="0.35"/>
+        <rect x="16.8" y="31.4" width="7.2" height="0.7" rx="0.35"/>
+        <rect x="25.4" y="32" width="6.4" height="0.7" rx="0.35"/>
+      </g>
+
+      <!-- path -->
+      <path d="M31 40.6 C36 37.6 42 35.6 47 34.8 C49 34.5 50.6 34.4 52 34.4" fill="none" stroke="#D3CBB4" stroke-width="2.1" stroke-linecap="round" opacity="0.92"/>
+
+      <!-- foreground -->
+      <path d="M0 37 C8 36.4 17 36.2 25 36.6 C34 37 43 37.6 52 38.2 V48 H0 Z" fill="url(#fore)"/>
+      <path d="M0 37.2 C10 36.6 22 36.5 32 36.9 C40 37.2 47 37.6 52 38" fill="none" stroke="#8E9648" stroke-width="0.6" opacity="0.55"/>
+    </g>
+    <rect x="24" y="21" width="52" height="48" fill="url(#innerShade)"/>
+  </g>
+'''
+
+PIN = '''
+  <rect x="26" y="75.6" width="32" height="3.2" rx="1.6" fill="#63788C" opacity="0.9"/>
+  <rect x="26" y="81.2" width="20" height="2.8" rx="1.4" fill="#63788C" opacity="0.5"/>
+  <rect x="64.2" y="75.4" width="9.4" height="5.8" rx="2.2" fill="#F0A11E"/>
+  <rect x="64.2" y="75.4" width="9.4" height="2.4" rx="1.2" fill="#FFC049" opacity="0.75"/>
+  <ellipse cx="77.6" cy="41.5" rx="6.2" ry="1.5" fill="#122033" opacity="0.2"/>
+  <g filter="url(#pinShadow)" transform="rotate(12 77 21)">
+    <path d="M77 9.6 a11.2 11.2 0 0 1 11.2 11.2 c0 7.6 -8.3 14 -11.2 20.1 c-2.9 -6.1 -11.2 -12.5 -11.2 -20.1 A11.2 11.2 0 0 1 77 9.6 Z" fill="url(#pin)"/>
+  </g>
+  <path d="M77 11.4 a9.4 9.4 0 0 0 -9.1 7.2 c1.6 -3.4 5 -5.7 9.1 -5.7 c1.5 0 2.9 0.3 4.1 0.9 a9.4 9.4 0 0 0 -4.1 -2.4 Z" fill="#FFD9C7" opacity="0.5" transform="rotate(12 77 21)"/>
+  <circle cx="77" cy="20.8" r="4.1" fill="#FFFFFF"/>
+  <circle cx="77" cy="20.4" r="3.4" fill="#F4F7FA"/>
+'''
+
+DEFS = '''
+  <defs>
+    <linearGradient id="card" x1="0.15" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.62" stop-color="#F7FAFC"/><stop offset="1" stop-color="#E4EBF2"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0.9" y1="0" x2="0.15" y2="0.9">
+      <stop offset="0" stop-color="#3E73BE"/><stop offset="0.4" stop-color="#5E90CD"/>
+      <stop offset="0.75" stop-color="#9FB8DF"/><stop offset="1" stop-color="#CBD6EE"/>
+    </linearGradient>
+    <linearGradient id="rock" x1="0.2" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#7E7B76"/><stop offset="0.45" stop-color="#5D5A56"/><stop offset="1" stop-color="#3E3D45"/>
+    </linearGradient>
+    <linearGradient id="scree" x1="0.3" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#C3BCB2"/><stop offset="1" stop-color="#8E8883"/>
+    </linearGradient>
+    <linearGradient id="mound" x1="0.1" y1="0" x2="0.45" y2="1">
+      <stop offset="0" stop-color="#8D9448"/><stop offset="0.55" stop-color="#727B34"/><stop offset="1" stop-color="#5B6429"/>
+    </linearGradient>
+    <linearGradient id="fore" x1="0.15" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#7F8738"/><stop offset="0.6" stop-color="#697127"/><stop offset="1" stop-color="#555C1F"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0" stop-color="#8A8C95"/><stop offset="0.45" stop-color="#5A5E6A"/><stop offset="1" stop-color="#3E414E"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0.15" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#FF8B57"/><stop offset="0.35" stop-color="#F0521A"/>
+      <stop offset="0.75" stop-color="#D03104"/><stop offset="1" stop-color="#A81F00"/>
+    </linearGradient>
+    <radialGradient id="glare" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#F2F6FF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#E8EEFB" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="innerShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B2743" stop-opacity="0.22"/><stop offset="0.14" stop-color="#0B2743" stop-opacity="0"/>
+      <stop offset="0.88" stop-color="#0B2743" stop-opacity="0"/><stop offset="1" stop-color="#0B2743" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="topLight" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="view"><rect x="24" y="21" width="52" height="48" rx="5"/></clipPath>
+    <clipPath id="cardClip"><rect x="18" y="15" width="64" height="76" rx="9"/></clipPath>
+    <filter id="ambient" x="-40%" y="-30%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="3.6" stdDeviation="4.6" flood-color="#061426" flood-opacity="0.26"/>
+    </filter>
+    <filter id="contact" x="-30%" y="-25%" width="160%" height="160%">
+      <feDropShadow dx="-0.6" dy="1.3" stdDeviation="1.2" flood-color="#04101F" flood-opacity="0.34"/>
+    </filter>
+    <filter id="pinShadow" x="-70%" y="-50%" width="240%" height="230%">
+      <feDropShadow dx="-2" dy="3.2" stdDeviation="2.8" flood-color="#0B1220" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+'''
+
+doc = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Photo Archive">
+{DEFS}{CARD}{WINDOW}{PIN}</svg>
+'''
+
+with open(r"C:/Code/proj/docs/logo-drafts/logo-d-vector.svg", "w", encoding="utf-8") as fh:
+    fh.write(doc)
+print("written logo-d-vector.svg")
