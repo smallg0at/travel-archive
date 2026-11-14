@@ -26,8 +26,6 @@ interface ElectronAPI {
   onSystemAccentChanged?(cb: (color: string) => void): void;
   /** Shell-only: start the job server when it is not answering (desktop shell). */
   startPipeline?(): Promise<{ ok: boolean; error?: string }>;
-  /** Shell-only: the licence text, rendered in the pane. */
-  readNotice?(which: "notices" | "license"): Promise<{ ok: boolean; text?: string; error?: string }>;
   /** Shell-only: open an https link in the reader's browser. */
   openExternal?(url: string): Promise<{ ok: boolean }>;
   /** Shell-only: the passphrase store (safeStorage). Absent in a browser. */

@@ -36,6 +36,7 @@ import {
   type ScanMode,
 } from "./backend";
 import { el } from "./photoUi";
+import { legalText } from "./legalText";
 import { createFolderPanel } from "./photoFolder";
 import { renderDensityControl, getCachedIndex, formatMonthLabel } from "./album";
 import { resetSidebarWidth } from "./chrome";
@@ -842,7 +843,7 @@ function aboutSection(archive: ArchiveStatus | null): HTMLElement {
   const head = el<HTMLDivElement>(`<div class="set-about-head"></div>`);
   const mark = el<HTMLSpanElement>(`<span class="set-about-mark" aria-hidden="true"></span>`);
   // The window's own mark, inlined from index.html rather than redrawn.
-  mark.innerHTML = `<svg viewBox="0 0 108 108" width="44" height="44"><rect width="108" height="108" rx="24" fill="#0078d4"/><circle cx="38" cy="70" r="6.5" fill="none" stroke="#ffffff" stroke-width="3.6"/><circle cx="47.07" cy="60.93" r="2.1" fill="#ffffff"/><circle cx="51.76" cy="56.24" r="2.1" fill="#ffffff"/><circle cx="56.45" cy="51.55" r="2.1" fill="#ffffff"/><circle cx="61.14" cy="46.86" r="2.1" fill="#ffffff"/><circle cx="70" cy="38" r="8" fill="#ffffff"/></svg>`;
+  mark.innerHTML = `<svg viewBox="0 0 108 108" width="80" height="80"><rect width="108" height="108" rx="0" fill="#0078d4"/><circle cx="38" cy="70" r="10" fill="none" stroke="#ffffff" stroke-width="3.6"/><circle cx="47.07" cy="60.93" r="2.1" fill="#ffffff"/><circle cx="51.76" cy="56.24" r="2.1" fill="#ffffff"/><circle cx="56.45" cy="51.55" r="2.1" fill="#ffffff"/><circle cx="61.14" cy="46.86" r="2.1" fill="#ffffff"/><circle cx="70" cy="38" r="13" fill="#ffffff"/></svg>`;
   const text = el<HTMLDivElement>(`<div class="set-about-text"></div>`);
   text.appendChild(el(`<h3 class="set-about-name"></h3>`) as HTMLElement).textContent = "Photo Archive";
   const chips = el<HTMLDivElement>(`<div class="set-about-chips"></div>`);
@@ -916,16 +917,9 @@ function licenceBlock(which: "notices" | "license", title: string, hint: string)
     head.classList.toggle("open", open);
     if (!open || loaded) return;
     loaded = true;
-    const api = window.electronAPI;
-    const done = (result: { ok: boolean; text?: string; error?: string }) => {
-      pre.textContent = result.ok ? result.text ?? "" : result.error || ui.settings.noticesFailed;
-    };
-    if (api?.readNotice) void api.readNotice(which).then(done).catch(() => (pre.textContent = ui.settings.noticesFailed));
-    else
-      void fetch(which === "license" ? "/LICENSE" : "/THIRD-PARTY-NOTICES.md")
-        .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
-        .then((body) => (pre.textContent = body))
-        .catch(() => (pre.textContent = ui.settings.noticesFailed));
+    // Compiled in: no IPC, no fetch, and therefore no way to fall through to
+    // the SPA's index.html the way a runtime file read did.
+    pre.textContent = legalText[which];
   });
   return wrap;
 }

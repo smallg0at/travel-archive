@@ -1705,7 +1705,7 @@ body.m #toasts {
   margin: 0 0 18px;
   font-size: 14px;
   line-height: 1.7;
-  color: var(--text-primary);
+  color: var(--text);
 }
 .trip-narrative p { margin: 0 0 10px; }
 
@@ -2011,15 +2011,18 @@ body.setup-active #signin-banner {
   flex: none;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 80px;
+  height: 80px;
   /* A fixed radius on purpose: the corner must not grow with the mark. The
      artwork inside carries its own rounded rect, and this clips the edge. */
   border-radius: 10px;
   overflow: hidden;
 }
 
-.set-about-mark svg { display: block; }
+/* Fill whatever size the box is given (it is 80px now): the artwork carries its
+   own rounded rect, and pinning the SVG at 44px left it floating small inside
+   a larger box. */
+.set-about-mark svg { display: block; width: 100%; height: 100%; }
 .set-about-text { min-width: 0; }
 .set-about-name { margin: 0; font-size: 25px; line-height: 1.25; font-weight: 600; }
 .set-about-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -2031,7 +2034,7 @@ body.setup-active #signin-banner {
   padding: 1px 6px;
   border-radius: var(--radius-s);
   color: var(--text-secondary);
-  background: color-mix(in srgb, var(--text-primary) 25%, transparent);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .set-about-tagline { margin: 8px 0 0; }
@@ -2079,10 +2082,10 @@ body.setup-active #signin-banner {
 }
 
 .set-credit-line { margin: 4px 0 8px; }
-.set-about-links { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
+.set-about-links { display: flex; flex-wrap: wrap; gap: 12px; padding-bottom: 2px; padding-top: 6px; }
 
 .set-link-chip {
-  padding: 2px 9px;
+  padding: 4px 9px;
   border-radius: var(--radius-s);
   border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
   background: none;
@@ -2092,7 +2095,7 @@ body.setup-active #signin-banner {
   cursor: pointer;
 }
 
-.set-link-chip:hover { color: var(--text); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
+.set-link-chip:hover { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }
 
 .set-section .photo-folder .setup-ok { font-size: 12.5px; font-weight: 500; }
 .setup-input { flex: 1; min-width: 0; }

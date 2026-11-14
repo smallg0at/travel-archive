@@ -53,13 +53,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // server cannot be asked.
   startPipeline: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("start-pipeline"),
-  /**
-   * The licence text, rendered in the pane rather than opened in an editor.
-   * LGPL-3.0 requires the notices to travel with the app; it does not require
-   * the reader to leave it to read them.
-   */
-  readNotice: (which: "notices" | "license"): Promise<{ ok: true; text: string } | { ok: false; error?: string }> =>
-    ipcRenderer.invoke("read-notice", which),
   /** Attribution links belong in the reader's browser, not in this window. */
   openExternal: (url: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("open-external", url),
   /**
