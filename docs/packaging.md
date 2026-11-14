@@ -70,13 +70,34 @@ The check, in order:
 Options: `--staging` tests `desktop/staging` with the local node instead of the
 packed exe; `--self-check` copies the payload, deletes the gazetteer and proves
 the check rejects it (a test that cannot fail is decoration); `--require-clean`
-fails when the payload was built from a dirty tree; `--expect-version v1.0.3`
+fails when the payload was built from a dirty tree; `--expect-version v1.1.0`
 pins the version CI was asked to build; `--require-render` turns a missing
 `sharp`/HEIC capability into a failure.
 
 CI runs `node scripts/smoke-package.mjs --self-check --require-render` after
 `npm run package` and before attaching the installer, so a payload-less build
 cannot reach a release.
+
+## Updates
+
+The app updates itself from the GitHub release it was installed from
+(`electron-updater`, `build.publish` in `desktop/package.json`). Two things are
+load-bearing:
+
+- **`latest.yml` must be attached to every release**, next to the installer.
+  Without it the updater answers "no update information has been published yet",
+  which is why the release workflow uploads it explicitly.
+- **The asset name must match the one in `latest.yml`.** electron-builder writes
+  the safe name (spaces become dashes), so `artifactName` is dashed too;
+  producing `Photo Archive Setup 1.1.0.exe` while the file points at
+  `Photo-Archive-Setup-1.1.0.exe` would 404 forever.
+
+Installs whose `build-info.json` says `dirty: true` never update themselves: a
+version number over half a commit is how a regression gets shipped twice.
+
+Builds on this machine need `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`;
+the GitHub zip aborts mid-download.
+
 
 ## Request gates
 
