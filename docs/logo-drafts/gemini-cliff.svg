@@ -39,11 +39,15 @@
       <stop offset="0.50" stop-color="#247F95"/>
       <stop offset="1" stop-color="#175D73"/>
     </linearGradient>
-    <linearGradient id="surfBand" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0" stop-color="#AEE6EC" stop-opacity="0.82"/>
-      <stop offset="0.22" stop-color="#76C4CE" stop-opacity="0.78"/>
-      <stop offset="0.62" stop-color="#478B98" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="#2D626E" stop-opacity="0.96"/>
+    <linearGradient id="surfGlow" x1="0" y1="0.1" x2="0.85" y2="0.9">
+      <stop offset="0" stop-color="#5CB6C4" stop-opacity="0"/>
+      <stop offset="0.58" stop-color="#9BE0E7" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#DCF5F7" stop-opacity="0.68"/>
+    </linearGradient>
+    <linearGradient id="cobble" x1="0.1" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#938B7E"/>
+      <stop offset="0.55" stop-color="#766F63"/>
+      <stop offset="1" stop-color="#585249"/>
     </linearGradient>
     <linearGradient id="chalkLit" x1="0.05" y1="0" x2="0.65" y2="1">
       <stop offset="0" stop-color="#FFFFFF"/>
@@ -51,9 +55,9 @@
       <stop offset="1" stop-color="#E4DDD0"/>
     </linearGradient>
     <linearGradient id="chalkFold" x1="0" y1="0" x2="0.85" y2="1">
-      <stop offset="0" stop-color="#EFEADF" stop-opacity="0.22"/>
-      <stop offset="0.45" stop-color="#DCD5C6" stop-opacity="0.78"/>
-      <stop offset="1" stop-color="#C6BEB0" stop-opacity="0.92"/>
+      <stop offset="0" stop-color="#C6BFB3"/>
+      <stop offset="0.5" stop-color="#B4ADA0"/>
+      <stop offset="1" stop-color="#9E978B"/>
     </linearGradient>
     <linearGradient id="plateau" x1="0.1" y1="0" x2="0.8" y2="1">
       <stop offset="0" stop-color="#A6B46E"/>
@@ -63,11 +67,6 @@
     <linearGradient id="plateauRim" x1="0" y1="0" x2="1" y2="0.5">
       <stop offset="0" stop-color="#C4D08B"/>
       <stop offset="1" stop-color="#A6B46E" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="pathGrad" x1="0" y1="0" x2="1" y2="0.2">
-      <stop offset="0" stop-color="#F4EDE0" stop-opacity="0.84"/>
-      <stop offset="0.65" stop-color="#E7DEC9" stop-opacity="0.72"/>
-      <stop offset="1" stop-color="#D7CEB6" stop-opacity="0.42"/>
     </linearGradient>
     <linearGradient id="tower" x1="0" y1="0" x2="1" y2="0.15">
       <stop offset="0" stop-color="#FFFFFF"/>
@@ -118,10 +117,22 @@
       <rect x="0" y="17.5" width="52" height="30.5" fill="url(#sea)"/>
       <line x1="0" y1="17.6" x2="52" y2="17.6" stroke="#DCF2F8" stroke-width="0.45" opacity="0.72"/>
 
-      <!-- Pale surf band sweeping smoothly from bottom-left up to meet the cliff base -->
-      <path d="M0 43.0 C6.2 41.6, 12.0 36.8, 17.6 31.0 V48.0 H0 Z" fill="url(#surfBand)"/>
+      <!-- Pale aqua surf band sweeping down along the shore & cliff foot -->
+      <path d="M0 43.2 C6.8 42.4, 12.6 38.6, 17.6 31.8 V48.0 H0 Z" fill="url(#surfGlow)"/>
 
-      <!-- 3. Headland downland plateau: gentle flat-topped ochre-green plateau rising to crest -->
+      <!-- Cobble beach: narrow ~2-3 unit strip of grey-brown pebbles between surf and chalk, solid to bottom -->
+      <path d="M0 46.2
+               C7.0 45.4, 13.0 41.6, 17.6 34.0
+               V48.0 H0 Z"
+            fill="url(#cobble)"/>
+      <!-- Slightly darker waterline along the cobble-surf edge -->
+      <path d="M0 46.2 C7.0 45.4, 13.0 41.6, 17.6 34.0"
+            fill="none" stroke="#474B4A" stroke-width="0.5" stroke-linecap="round" opacity="0.65"/>
+      <!-- Soft pale surf edge right above the waterline -->
+      <path d="M0 45.5 C6.8 44.7, 12.8 40.9, 17.5 33.3"
+            fill="none" stroke="#DCF5F7" stroke-width="0.55" stroke-linecap="round" opacity="0.55"/>
+
+      <!-- 3. Headland downland plateau: gentle warm ochre-green plateau -->
       <path d="M18.0 22.8
                C21.8 20.0, 26.8 16.0, 30.2 15.0
                C32.4 14.4, 35.8 15.2, 41.0 16.4
@@ -136,27 +147,30 @@
                C45.2 17.0, 48.8 17.2, 52.0 17.3"
             fill="none" stroke="url(#plateauRim)" stroke-width="0.9" stroke-linecap="round"/>
 
-      <!-- Pale path threading the plateau from the cliff top toward the lighthouse & right edge -->
-      <path d="M20.2 22.4
-               C23.6 19.8, 27.6 17.2, 31.8 16.3
-               C37.0 15.3, 44.0 17.4, 52.0 19.2"
-            fill="none" stroke="url(#pathGrad)" stroke-width="0.82" stroke-linecap="round"/>
+      <!-- One thin, open, low-contrast route entering from left below crest, swinging right, disappearing over the crest -->
+      <path d="M18.6 23.8
+               C24.5 22.4, 30.5 21.4, 35.4 20.2
+               C38.4 19.4, 40.0 17.8, 41.2 16.4"
+            fill="none" stroke="#BCC48E" stroke-width="0.38" stroke-linecap="round" opacity="0.38"/>
 
-      <!-- 4. Chalk face: the largest single mass in the window, warm white, sheer left edge, smooth S-curve right side -->
+      <!-- 4. Chalk face: largest single mass, warm white, unbroken outline with warm-grey inner notch plane -->
       <path d="M18.0 22.8
-               C20.4 26.0, 26.2 27.6, 35.4 29.0
-               C40.4 29.8, 42.2 31.8, 43.2 34.8
-               C44.4 38.4, 46.8 43.4, 50.2 48.0
+               C20.4 26.2, 26.4 27.8, 35.0 29.2
+               C37.2 29.6, 38.4 30.6, 37.8 32.0
+               C37.2 33.4, 37.4 35.0, 38.6 36.8
+               C41.6 40.6, 45.2 44.4, 48.6 48.0
                H17.4
                C17.2 39.2, 17.4 30.4, 18.0 22.8 Z"
             fill="url(#chalkLit)"/>
 
-      <!-- One soft vertical fold where the chalk face turns away at the right -->
-      <path d="M36.8 29.3
-               C40.6 30.2, 42.2 32.0, 43.2 34.8
-               C44.4 38.4, 46.8 43.4, 50.2 48.0
-               H38.8
-               C37.4 42.0, 36.8 35.8, 36.8 29.3 Z"
+      <!-- Inner plane of the cliff notch/fold turning away from upper-left light (distinctly darker warm grey) -->
+      <path d="M35.0 29.2
+               C37.2 29.6, 38.4 30.6, 37.8 32.0
+               C37.2 33.4, 37.4 35.0, 38.6 36.8
+               C41.6 40.6, 45.2 44.4, 48.6 48.0
+               H37.6
+               C36.4 42.4, 35.4 36.8, 34.8 33.2
+               C34.4 31.2, 34.6 29.8, 35.0 29.2 Z"
             fill="url(#chalkFold)"/>
 
       <!-- Single bright upper-left edge along the sheer chalk cliff -->
