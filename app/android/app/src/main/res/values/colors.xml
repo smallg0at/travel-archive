@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppTheme's palette. The app itself uses AppTheme.NoActionBar plus the
+         web UI's own tokens; these exist because styles.xml names them. -->
+    <color name="colorPrimary">#0078D4</color>
+    <color name="colorPrimaryDark">#005A9E</color>
+    <color name="colorAccent">#0078D4</color>
+
+    <!-- Launch screen only. A deep blue: the mark's white card needs a dark
+         field, and the light surface made it read as a black shape on white. -->
+    <color name="launch_background">#0F3B5F</color>
+</resources>

@@ -16,13 +16,16 @@
     </style>
 
 
-    <!-- The launch screen: the app mark on its accent, not Capacitor's logo. On
-         Android 12 and later the system draws it from these two items; before
-         that, the background alone shows. -->
+    <!-- The launch screen.
+         The background is a deep blue, not the light surface: on a near-white
+         background the mark's white card disappears and only its shadow and
+         the tower read, which looks like a fault. The icon is the coloured
+         adaptive foreground (white card, teal land, coral pin) rather than the
+         monochrome silhouette, which is for themed icons only. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@color/ic_launcher_background</item>
-        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_mark</item>
+        <item name="android:background">@color/launch_background</item>
+        <item name="windowSplashScreenBackground">@color/launch_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
         <item name="windowSplashScreenAnimationDuration">200</item>
         <!-- Without this the activity kept the launch theme for its whole life:
              the system drew the splash, then had no theme to hand over to, and
