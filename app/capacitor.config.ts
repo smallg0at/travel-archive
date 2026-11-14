@@ -57,8 +57,17 @@ const config: CapacitorConfig = {
      * original died at the CORS check inside the WebView while the same URL
      * worked fine outside it. A native request is not subject to CORS, so the
      * bytes arrive; see graphHttp.ts for where it is used.
+     *
+     * The plugin's own patch of `window.fetch` stays OFF. With it on, MSAL's
+     * token request also went through the bridge, and Entra answered
+     * `AADSTS90023 invalid_request` — the request arrives without the page's
+     * Origin, and a SPA-registered redirect URI is only served on the strength
+     * of that header. Sign-in then failed a few seconds after the redirect, and
+     * the "session expired" banner came straight back. Requests we want native
+     * are made explicitly through CapacitorHttp in graphHttp.ts, which needs no
+     * global patch.
      */
-    CapacitorHttp: { enabled: true },
+    CapacitorHttp: { enabled: false },
   },
 };
 

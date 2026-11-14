@@ -62,15 +62,30 @@ const master = await sharp(base)
   .png()
   .toBuffer();
 
+// Windows draws the .ico inside a box that other taskbar icons fill edge to
+// edge; this mark leaves ~11% of its canvas as margin, so it looked a size
+// smaller than its neighbours. Scaling the artwork 1.12 within the same canvas
+// closes that gap without touching the master (Android keeps the full margin:
+// its launcher expects it, and the safe zone depends on it).
+const DESKTOP_ZOOM = 1.12;
+const zoomed = async (size) => {
+  const big = Math.round(size * DESKTOP_ZOOM);
+  const art = await sharp(master).resize(big, big, { kernel: "lanczos3" }).png().toBuffer();
+  return sharp(art)
+    .extract({ left: Math.round((big - size) / 2), top: Math.round((big - size) / 2), width: size, height: size })
+    .png()
+    .toBuffer();
+};
+
 mkdirSync(DESKTOP_BUILD, { recursive: true });
 mkdirSync(APP_BRAND, { recursive: true });
 
-await sharp(master).resize(512, 512, { kernel: "lanczos3" }).toFile(join(DESKTOP_BUILD, "icon.png"));
+await sharp(await zoomed(512)).toFile(join(DESKTOP_BUILD, "icon.png"));
 
 const sizes = [16, 24, 32, 48, 64, 128, 256];
 const pngs = [];
 for (const size of sizes) {
-  pngs.push({ size, data: await sharp(master).resize(size, size, { kernel: "lanczos3" }).png().toBuffer() });
+  pngs.push({ size, data: await zoomed(size) });
 }
 writeFileSync(join(DESKTOP_BUILD, "icon.ico"), ico(pngs));
 

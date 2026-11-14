@@ -1,4 +1,7 @@
-# Photo archive
+<div style="display:flex; justify-content: center; margin-bottom: 6px">
+<img src="https://raw.githubusercontent.com/smallg0at/travel-archive/refs/heads/main/docs/brand/app-icon.svg" width=120/>
+</div>
+<h1 style="text-align: center">Photo Archive</h1>
 
 A personal OneDrive photo library, indexed into a month-by-month album — and,
 separately and only when you ask, described by an AI provider that captions the
