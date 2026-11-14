@@ -59,30 +59,30 @@
     <rect x="24" y="21" width="52" height="48" fill="url(#sky)"/>
     <path d="M24.0 57.72 L26.0 57.61 L28.0 57.46 L30.0 57.25 L32.0 56.98 L34.0 56.64 L36.0 56.21 L38.0 55.68 L40.0 55.07 L42.0 54.35 L44.0 53.56 L46.0 52.69 L48.0 51.79 L50.0 50.87 L52.0 49.99 L54.0 49.18 L56.0 48.48 L58.0 47.93 L60.0 47.57 L62.0 47.41 L64.0 47.46 L66.0 47.73 L68.0 48.19 L70.0 48.82 L72.0 49.59 L74.0 50.44 L76.0 51.35 L76.0 69 L24.0 69 Z" fill="url(#hill)"/>
 
-      <ellipse cx="33.2" cy="58.4" rx="6.2" ry="1.3" fill="#043F63" opacity="0.45"/>
+      <ellipse cx="35.4" cy="58.6" rx="7.2" ry="1.5" fill="#043F63" opacity="0.45"/>
       <!-- body: lit left face and shaded right face meet at a soft fold -->
-      <path d="M29.4 58.4 L30.6 39.4 L35.8 39.4 L37 58.4 Z" fill="url(#brick)"/>
-      <path d="M33.2 39.4 L35.8 39.4 L37 58.4 L33.4 58.4 Z" fill="url(#brickSide)"/>
-      <!-- the fold between the two faces -->
-      <path d="M33.2 39.4 L33.4 58.4" stroke="#7B4A30" stroke-width="0.35" opacity="0.35"/>
-      <!-- crenellations: four merlons on a slightly wider band -->
-      <rect x="30.1" y="36.6" width="6.2" height="2.9" rx="0.35" fill="url(#brick)"/>
-      <rect x="30.1" y="36.6" width="3.1" height="2.9" fill="url(#brickSide)" opacity="0.55"/>
-      <g fill="#C98A5E">
-        <rect x="30.2" y="35.6" width="1.3" height="1.5"/>
-        <rect x="31.9" y="35.6" width="1.3" height="1.5"/>
-        <rect x="33.6" y="35.6" width="1.3" height="1.5"/>
-        <rect x="35.3" y="35.6" width="1.1" height="1.5"/>
+      <path d="M30.7 58.6 L32.2 37.6 L38.6 37.6 L40.1 58.6 Z" fill="url(#brick)"/>
+      <path d="M35.4 37.6 L38.6 37.6 L40.1 58.6 L35.6 58.6 Z" fill="url(#brickSide)"/>
+      <path d="M35.4 37.6 L35.6 58.6" stroke="#7B4A30" stroke-width="0.4" opacity="0.32"/>
+      <!-- crenellated top: a slightly wider band of four merlons -->
+      <rect x="31.9" y="34.4" width="7" height="3.4" rx="0.4" fill="url(#brick)"/>
+      <rect x="31.9" y="34.4" width="3.5" height="3.4" fill="url(#brickSide)" opacity="0.5"/>
+      <g fill="#D29467">
+        <rect x="32" y="32.9" width="1.55" height="1.9"/>
+        <rect x="34.05" y="32.9" width="1.55" height="1.9"/>
+        <rect x="36.1" y="32.9" width="1.55" height="1.9"/>
+        <rect x="38.15" y="32.9" width="0.9" height="1.9"/>
       </g>
-      <g fill="#7B4A30" opacity="0.75">
-        <rect x="31.5" y="36" width="1.2" height="1.2"/>
-        <rect x="33.2" y="36" width="1.2" height="1.2"/>
-        <rect x="34.9" y="36" width="1.2" height="1.2"/>
+      <g fill="#7B4A30" opacity="0.7">
+        <rect x="33.55" y="33.4" width="1.3" height="1.4"/>
+        <rect x="35.6" y="33.4" width="1.3" height="1.4"/>
+        <rect x="37.65" y="33.4" width="1.3" height="1.4"/>
       </g>
-      <!-- doorway and two slit windows -->
-      <path d="M32.1 58.4 L32.1 55.1 A1.1 1.1 0 0 1 34.3 55.1 L34.3 58.4 Z" fill="#5B3620" opacity="0.8"/>
-      <rect x="32.5" y="47.6" width="1.4" height="2.2" rx="0.5" fill="#5B3620" opacity="0.7"/>
-      <rect x="32.5" y="42.4" width="1.4" height="1.9" rx="0.5" fill="#5B3620" opacity="0.6"/>
+      <!-- doorway and three slit windows -->
+      <path d="M34.1 58.6 L34.1 54.9 A1.3 1.3 0 0 1 36.7 54.9 L36.7 58.6 Z" fill="#5B3620" opacity="0.8"/>
+      <rect x="34.7" y="49.4" width="1.6" height="2.6" rx="0.55" fill="#5B3620" opacity="0.7"/>
+      <rect x="34.7" y="43.6" width="1.6" height="2.3" rx="0.55" fill="#5B3620" opacity="0.62"/>
+      <rect x="34.7" y="39.6" width="1.6" height="1.8" rx="0.55" fill="#5B3620" opacity="0.5"/>
 
   </g>
 
