@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Photo Archive">
+  <defs>
+    <!-- Card & pin gradients (fixed structure) -->
+    <linearGradient id="backCard" x1="0.2" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#E9EEF4"/>
+      <stop offset="1" stop-color="#C6D1DC"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0.15" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.62" stop-color="#F7FAFC"/>
+      <stop offset="1" stop-color="#E4EBF2"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0.15" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#FF8B57"/>
+      <stop offset="0.35" stop-color="#F0521A"/>
+      <stop offset="0.75" stop-color="#D03104"/>
+      <stop offset="1" stop-color="#A81F00"/>
+    </linearGradient>
+    <linearGradient id="innerShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B2743" stop-opacity="0.20"/>
+      <stop offset="0.14" stop-color="#0B2743" stop-opacity="0"/>
+      <stop offset="0.88" stop-color="#0B2743" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0B2743" stop-opacity="0.14"/>
+    </linearGradient>
+    <linearGradient id="topLight" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Window scene gradients (Fluent: cool upper-left light, soft vertical gradients) -->
+    <linearGradient id="sky" x1="0.1" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#3C8FD9"/>
+      <stop offset="0.24" stop-color="#6CB2E6"/>
+      <stop offset="0.39" stop-color="#BBE0F3"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0.15" y1="0" x2="0.45" y2="1">
+      <stop offset="0" stop-color="#45A9BD"/>
+      <stop offset="0.50" stop-color="#247F95"/>
+      <stop offset="1" stop-color="#175D73"/>
+    </linearGradient>
+    <linearGradient id="surfBand" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#AEE6EC" stop-opacity="0.82"/>
+      <stop offset="0.22" stop-color="#76C4CE" stop-opacity="0.78"/>
+      <stop offset="0.62" stop-color="#478B98" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#2D626E" stop-opacity="0.96"/>
+    </linearGradient>
+    <linearGradient id="chalkLit" x1="0.05" y1="0" x2="0.65" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.58" stop-color="#F7F3EA"/>
+      <stop offset="1" stop-color="#E4DDD0"/>
+    </linearGradient>
+    <linearGradient id="chalkFold" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#EFEADF" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#DCD5C6" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#C6BEB0" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="plateau" x1="0.1" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#A6B46E"/>
+      <stop offset="0.50" stop-color="#889655"/>
+      <stop offset="1" stop-color="#66733D"/>
+    </linearGradient>
+    <linearGradient id="plateauRim" x1="0" y1="0" x2="1" y2="0.5">
+      <stop offset="0" stop-color="#C4D08B"/>
+      <stop offset="1" stop-color="#A6B46E" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="pathGrad" x1="0" y1="0" x2="1" y2="0.2">
+      <stop offset="0" stop-color="#F4EDE0" stop-opacity="0.84"/>
+      <stop offset="0.65" stop-color="#E7DEC9" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#D7CEB6" stop-opacity="0.42"/>
+    </linearGradient>
+    <linearGradient id="tower" x1="0" y1="0" x2="1" y2="0.15">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.58" stop-color="#F5F3EE"/>
+      <stop offset="1" stop-color="#CCC9C0"/>
+    </linearGradient>
+    <linearGradient id="capDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B4D5E"/>
+      <stop offset="1" stop-color="#1C2834"/>
+    </linearGradient>
+
+    <clipPath id="view">
+      <rect x="24" y="21" width="52" height="48" rx="5"/>
+    </clipPath>
+    <clipPath id="cardClip">
+      <rect x="18" y="15" width="64" height="76" rx="8"/>
+    </clipPath>
+
+    <filter id="backShadow" x="-40%" y="-30%" width="180%" height="170%">
+      <feDropShadow dx="0" dy="2.2" stdDeviation="3.2" flood-color="#061426" flood-opacity="0.24"/>
+    </filter>
+    <filter id="contact" x="-30%" y="-25%" width="160%" height="160%">
+      <feDropShadow dx="-1.2" dy="2.4" stdDeviation="2.6" flood-color="#04101F" flood-opacity="0.34"/>
+    </filter>
+    <filter id="pinShadow" x="-70%" y="-50%" width="240%" height="230%">
+      <feDropShadow dx="-1.8" dy="2.4" stdDeviation="3" flood-color="#0B1220" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Back card -->
+  <g transform="rotate(-8.5 42 46)" filter="url(#backShadow)">
+    <rect x="15" y="13" width="56" height="66" rx="7" fill="url(#backCard)"/>
+  </g>
+
+  <!-- Front card -->
+  <rect x="18" y="15" width="64" height="76" rx="8" fill="url(#card)" filter="url(#contact)"/>
+  <g clip-path="url(#cardClip)">
+    <rect x="18" y="15" width="64" height="4" fill="url(#topLight)" opacity="0.7"/>
+  </g>
+
+  <!-- Photo window -->
+  <g clip-path="url(#view)">
+    <g transform="translate(24 21)">
+      <!-- 1. Sky (top third) -->
+      <rect width="52" height="48" fill="url(#sky)"/>
+
+      <!-- 2. Teal sea coming in from the left, horizon about 1/3 down -->
+      <rect x="0" y="17.5" width="52" height="30.5" fill="url(#sea)"/>
+      <line x1="0" y1="17.6" x2="52" y2="17.6" stroke="#DCF2F8" stroke-width="0.45" opacity="0.72"/>
+
+      <!-- Pale surf band sweeping smoothly from bottom-left up to meet the cliff base -->
+      <path d="M0 43.0 C6.2 41.6, 12.0 36.8, 17.6 31.0 V48.0 H0 Z" fill="url(#surfBand)"/>
+
+      <!-- 3. Headland downland plateau: gentle flat-topped ochre-green plateau rising to crest -->
+      <path d="M18.0 22.8
+               C21.8 20.0, 26.8 16.0, 30.2 15.0
+               C32.4 14.4, 35.8 15.2, 41.0 16.4
+               C45.2 17.0, 48.8 17.2, 52.0 17.3
+               V48.0 H18.0 Z"
+            fill="url(#plateau)"/>
+
+      <!-- One bright upper-left edge along the plateau crest -->
+      <path d="M18.0 22.8
+               C21.8 20.0, 26.8 16.0, 30.2 15.0
+               C32.4 14.4, 35.8 15.2, 41.0 16.4
+               C45.2 17.0, 48.8 17.2, 52.0 17.3"
+            fill="none" stroke="url(#plateauRim)" stroke-width="0.9" stroke-linecap="round"/>
+
+      <!-- Pale path threading the plateau from the cliff top toward the lighthouse & right edge -->
+      <path d="M20.2 22.4
+               C23.6 19.8, 27.6 17.2, 31.8 16.3
+               C37.0 15.3, 44.0 17.4, 52.0 19.2"
+            fill="none" stroke="url(#pathGrad)" stroke-width="0.82" stroke-linecap="round"/>
+
+      <!-- 4. Chalk face: the largest single mass in the window, warm white, sheer left edge, smooth S-curve right side -->
+      <path d="M18.0 22.8
+               C20.4 26.0, 26.2 27.6, 35.4 29.0
+               C40.4 29.8, 42.2 31.8, 43.2 34.8
+               C44.4 38.4, 46.8 43.4, 50.2 48.0
+               H17.4
+               C17.2 39.2, 17.4 30.4, 18.0 22.8 Z"
+            fill="url(#chalkLit)"/>
+
+      <!-- One soft vertical fold where the chalk face turns away at the right -->
+      <path d="M36.8 29.3
+               C40.6 30.2, 42.2 32.0, 43.2 34.8
+               C44.4 38.4, 46.8 43.4, 50.2 48.0
+               H38.8
+               C37.4 42.0, 36.8 35.8, 36.8 29.3 Z"
+            fill="url(#chalkFold)"/>
+
+      <!-- Single bright upper-left edge along the sheer chalk cliff -->
+      <path d="M17.4 48.0 C17.2 39.2, 17.4 30.4, 18.0 22.8"
+            fill="none" stroke="#FFFFFF" stroke-width="0.7" stroke-linecap="round" opacity="0.95"/>
+
+      <!-- 5. Lighthouse on the crest, slender white tower, dark cap, taller than life -->
+      <g>
+        <ellipse cx="33.4" cy="14.9" rx="2.2" ry="0.5" fill="#465228" opacity="0.32"/>
+        <rect x="30.9" y="14.0" width="4.1" height="1.05" rx="0.45" fill="url(#tower)"/>
+        <path d="M31.35 14.2 L31.8 7.1 L34.2 7.1 L34.65 14.2 Z" fill="url(#tower)"/>
+        <line x1="31.55" y1="14.0" x2="31.95" y2="7.3" stroke="#FFFFFF" stroke-width="0.48" stroke-linecap="round"/>
+        <rect x="31.15" y="6.4" width="3.7" height="0.85" rx="0.38" fill="url(#capDark)"/>
+        <rect x="31.7" y="5.45" width="2.6" height="0.95" rx="0.25" fill="#EEF7FC"/>
+        <path d="M31.05 5.55 L33.0 3.75 L34.95 5.55 Z" fill="url(#capDark)"/>
+      </g>
+    </g>
+    <rect x="24" y="21" width="52" height="48" fill="url(#innerShade)"/>
+  </g>
+
+  <!-- Caption strip & amber tag (fixed structure) -->
+  <rect x="24" y="75.8" width="33" height="2" rx="1" fill="#6C8094" opacity="0.85"/>
+  <rect x="24" y="81.8" width="22" height="2" rx="1" fill="#6C8094" opacity="0.5"/>
+  <rect x="66" y="75.5" width="10" height="6" rx="2.5" fill="#F0A11E"/>
+
+  <!-- Coral map pin (fixed structure) -->
+  <g filter="url(#pinShadow)" transform="rotate(12 76.5 22.5)">
+    <path d="M76.5 10 a12.5 12.5 0 0 1 12.5 12.5 c0 8.4 -9.2 15.6 -12.5 22.5 c-3.3 -6.9 -12.5 -14.1 -12.5 -22.5 A12.5 12.5 0 0 1 76.5 10 Z" fill="url(#pin)"/>
+  </g>
+  <path d="M76.5 12 a10.4 10.4 0 0 0 -10 7.6 c1.8 -3.6 5.6 -6 10 -6 c1.6 0 3.2 0.35 4.5 1 a10.4 10.4 0 0 0 -4.5 -2.6 Z" fill="#FFD9C7" opacity="0.5" transform="rotate(12 76.5 22.5)"/>
+  <circle cx="76.5" cy="22.5" r="5" fill="#FFFFFF"/>
+</svg>
