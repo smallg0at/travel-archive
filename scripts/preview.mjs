@@ -67,8 +67,22 @@ const stop = () => {
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
+/**
+ * 18419 is fixed in the app's own code (backend.ts), so preview and the
+ * installed app contend for it. Starting here while the installed app is
+ * running silently took the port from it — and then the app's About pane
+ * reported the repo's version, because it was answering. Reuse it instead.
+ */
+const already = await fetch(`http://127.0.0.1:${process.env.SERVE_PORT}/health`)
+  .then((r) => r.ok)
+  .catch(() => false);
+
 console.log(`[preview] archive: ${process.env.ARCHIVE_HOME}`);
-run("server", process.execPath, [join(ROOT, "pipeline", "dist", "serve.js")], { cwd: join(ROOT, "pipeline") });
+if (already) {
+  console.log(`[preview] a server is already on ${process.env.SERVE_PORT} — using it, not starting another`);
+} else {
+  run("server", process.execPath, [join(ROOT, "pipeline", "dist", "serve.js")], { cwd: join(ROOT, "pipeline") });
+}
 run("vite", process.execPath, [
   // The app's own Vite (7.x), not whatever the repo root hoisted: the root has
   // 8.x and its config loader already warns about this config.
