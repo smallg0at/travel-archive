@@ -400,6 +400,7 @@ export const zhHans: Messages = {
     updateReady: (version: string) => `版本 ${version} 已就绪。`,
     updateInstall: "重启并安装",
     updateFailed: (message: string) => `检查失败：${message}`,
+    updateNoRelease: "还没有发布带更新信息的版本。",
     updateDevBuild: "当前是从源码运行的开发版，不会自动更新。",
     updateDirtyBuild: "当前版本包含未提交的改动，不会自动更新。",
     dataSources: "数据来源",

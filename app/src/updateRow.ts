@@ -28,7 +28,7 @@ interface UpdatesApi {
  * control nobody finds.
  */
 export function updateRow(api: UpdatesApi): HTMLElement {
-  const row = el<HTMLDivElement>(`<div class="set-row"><span>${ui.settings.updates}</span></div>`);
+  const row = el<HTMLDivElement>(`<div class="set-row is-update"><span>${ui.settings.updates}</span></div>`);
   const control = el<HTMLDivElement>(`<div class="set-about-update"></div>`);
   const note = el<HTMLSpanElement>(`<span class="set-note"></span>`);
   const button = el<HTMLButtonElement>(`<button type="button" class="set-link-chip"></button>`);
@@ -68,7 +68,11 @@ export function updateRow(api: UpdatesApi): HTMLElement {
         button.textContent = ui.settings.updateInstall;
         break;
       case "error":
-        note.textContent = ui.settings.updateFailed(next.message);
+        // "Cannot find latest.yml ... 404" is not a failure the reader can act
+        // on; it means this release simply has no update metadata yet.
+        note.textContent = /latest\.yml/i.test(next.message)
+          ? ui.settings.updateNoRelease
+          : ui.settings.updateFailed(next.message);
         button.textContent = ui.settings.updateCheck;
         break;
       case "unavailable":

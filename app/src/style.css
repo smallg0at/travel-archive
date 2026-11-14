@@ -2794,6 +2794,12 @@ html.desktop-shell #nav-tools {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 .set-row:last-child { border-bottom: none; }
+
+.set-row.is-update > span { white-space: nowrap; }
+/* The status sentence is the long half: it wraps, right-aligned, and the button
+   keeps its own width. */
+.set-about-update { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
+.set-about-update .set-note { text-align: right; overflow-wrap: anywhere; }
 .set-row > span { color: var(--text-secondary); }
 .set-row > b { font-weight: 500; }
 /* A path the server handed back is machine text, not the row's headline:

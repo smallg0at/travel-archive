@@ -417,6 +417,7 @@ export const en = {
     updateReady: (version: string) => `Version ${version} is ready.`,
     updateInstall: "Restart to install",
     updateFailed: (message: string) => `Could not check: ${message}`,
+    updateNoRelease: "No update information has been published yet.",
     updateDevBuild: "This build runs from source and does not update itself.",
     updateDirtyBuild: "This build was made from uncommitted changes, so it does not update itself.",
     dataSources: "Data",
