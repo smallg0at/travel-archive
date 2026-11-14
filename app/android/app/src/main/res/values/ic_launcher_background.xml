@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The app's accent colour, the accent token in style.css (Fluent's Communication Blue). -->
-    <color name="ic_launcher_background">#0078D4</color>
+    <!-- The app's light surface (the surface token in style.css), one step
+         deeper than the mark's white card so the card keeps its edge on a
+         launcher. -->
+    <color name="ic_launcher_background">#E3EAF2</color>
 </resources>
