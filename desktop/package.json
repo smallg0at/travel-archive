@@ -69,7 +69,8 @@
         "owner": "smallg0at",
         "repo": "travel-archive"
       }
-    ]
+    ],
+    "artifactName": "Photo-Archive-Setup-${version}.${ext}"
   },
   "author": "smallg0at",
   "license": "AGPL-3.0-or-later",

@@ -76,4 +76,5 @@ jobs:
             --draft `
             --title "${{ inputs.tag }}" `
             --generate-notes `
-            "$($exe.FullName)"
+            "$($exe.FullName)" `
+            "desktop/release/latest.yml"
