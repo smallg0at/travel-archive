@@ -19,11 +19,11 @@
     <linearGradient id="hill" x1="24" y1="47.4" x2="76" y2="69" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#0E8AB8"/><stop offset="1" stop-color="#05476E"/>
     </linearGradient>
-    <linearGradient id="tower" x1="29" y1="40" x2="37" y2="58" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.55" stop-color="#F1F6FA"/><stop offset="1" stop-color="#C3D0DC"/>
+    <linearGradient id="brick" x1="29.4" y1="37" x2="35.4" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C98A5E"/><stop offset="0.55" stop-color="#B2704A"/><stop offset="1" stop-color="#8A5334"/>
     </linearGradient>
-    <linearGradient id="towerSide" x1="35" y1="40" x2="38" y2="58" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#D6E2EC"/><stop offset="1" stop-color="#A9B9C8"/>
+    <linearGradient id="brickSide" x1="33.4" y1="37" x2="37" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A8683F"/><stop offset="1" stop-color="#6E4028"/>
     </linearGradient>
     <linearGradient id="caption" x1="24" y1="74" x2="60" y2="84" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#6C8094"/><stop offset="1" stop-color="#506478"/>
@@ -59,17 +59,31 @@
     <rect x="24" y="21" width="52" height="48" fill="url(#sky)"/>
     <path d="M24.0 57.72 L26.0 57.61 L28.0 57.46 L30.0 57.25 L32.0 56.98 L34.0 56.64 L36.0 56.21 L38.0 55.68 L40.0 55.07 L42.0 54.35 L44.0 53.56 L46.0 52.69 L48.0 51.79 L50.0 50.87 L52.0 49.99 L54.0 49.18 L56.0 48.48 L58.0 47.93 L60.0 47.57 L62.0 47.41 L64.0 47.46 L66.0 47.73 L68.0 48.19 L70.0 48.82 L72.0 49.59 L74.0 50.44 L76.0 51.35 L76.0 69 L24.0 69 Z" fill="url(#hill)"/>
 
-    <!-- Lighthouse on the left, where the sun used to sit: slender, white, dark cap -->
-    <g>
-      <ellipse cx="33" cy="58.2" rx="4.6" ry="1.2" fill="#043F63" opacity="0.45"/>
-      <path d="M31.4 58 L30.9 42.6 L35.1 42.6 L34.6 58 Z" fill="url(#tower)"/>
-      <path d="M33.4 42.6 L35.1 42.6 L34.6 58 L33.2 58 Z" fill="url(#towerSide)" opacity="0.85"/>
-      <rect x="30.4" y="40.8" width="5.2" height="1.9" rx="0.6" fill="#1F2A36"/>
-      <path d="M30.9 40.8 L33 38.9 L35.1 40.8 Z" fill="#2B3947"/>
-      <rect x="31.6" y="44.6" width="2.8" height="1.2" rx="0.4" fill="#1F2A36" opacity="0.75"/>
-      <rect x="31.2" y="52.6" width="3.6" height="1.4" rx="0.5" fill="#EAF1F6"/>
-      <rect x="31.4" y="56.4" width="3.2" height="1.4" rx="0.5" fill="#D9E3EC"/>
-    </g>
+      <ellipse cx="33.2" cy="58.4" rx="6.2" ry="1.3" fill="#043F63" opacity="0.45"/>
+      <!-- body: lit left face and shaded right face meet at a soft fold -->
+      <path d="M29.4 58.4 L30.6 39.4 L35.8 39.4 L37 58.4 Z" fill="url(#brick)"/>
+      <path d="M33.2 39.4 L35.8 39.4 L37 58.4 L33.4 58.4 Z" fill="url(#brickSide)"/>
+      <!-- the fold between the two faces -->
+      <path d="M33.2 39.4 L33.4 58.4" stroke="#7B4A30" stroke-width="0.35" opacity="0.35"/>
+      <!-- crenellations: four merlons on a slightly wider band -->
+      <rect x="30.1" y="36.6" width="6.2" height="2.9" rx="0.35" fill="url(#brick)"/>
+      <rect x="30.1" y="36.6" width="3.1" height="2.9" fill="url(#brickSide)" opacity="0.55"/>
+      <g fill="#C98A5E">
+        <rect x="30.2" y="35.6" width="1.3" height="1.5"/>
+        <rect x="31.9" y="35.6" width="1.3" height="1.5"/>
+        <rect x="33.6" y="35.6" width="1.3" height="1.5"/>
+        <rect x="35.3" y="35.6" width="1.1" height="1.5"/>
+      </g>
+      <g fill="#7B4A30" opacity="0.75">
+        <rect x="31.5" y="36" width="1.2" height="1.2"/>
+        <rect x="33.2" y="36" width="1.2" height="1.2"/>
+        <rect x="34.9" y="36" width="1.2" height="1.2"/>
+      </g>
+      <!-- doorway and two slit windows -->
+      <path d="M32.1 58.4 L32.1 55.1 A1.1 1.1 0 0 1 34.3 55.1 L34.3 58.4 Z" fill="#5B3620" opacity="0.8"/>
+      <rect x="32.5" y="47.6" width="1.4" height="2.2" rx="0.5" fill="#5B3620" opacity="0.7"/>
+      <rect x="32.5" y="42.4" width="1.4" height="1.9" rx="0.5" fill="#5B3620" opacity="0.6"/>
+
   </g>
 
   <rect x="25.5" y="73.8" width="33" height="4" rx="2" fill="url(#caption)"/>
@@ -77,7 +91,7 @@
   <rect x="64.8" y="75.5" width="10.4" height="6" rx="3" fill="url(#tag)"/>
 
   <g filter="url(#pinShadow)" transform="rotate(12 76.5 22.5)">
-    <path d="M66.11 29.44 A12.5 12.5 0 1 1 86.89 29.44 C85.69 34.2, 79.10 38.6, 78.50 43 A2 2 0 0 1 74.50 43 C73.90 38.6, 67.31 34.2, 66.11 29.44 Z" fill="url(#pin)"/>
+    <path d="M66.11 29.44 A12.5 12.5 0 1 1 86.89 29.44 C84.89 35.6, 78.70 40.0, 76.50 45.0 C74.30 40.0, 68.11 35.6, 66.11 29.44 Z" fill="url(#pin)"/>
   </g>
   <circle cx="76.5" cy="22.5" r="5" fill="#FFFFFF"/>
 </svg>

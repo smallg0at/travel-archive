@@ -1,10 +1,13 @@
-"""Argon's frame, landscape reduced to one hill plus a lighthouse on the left.
+"""Argon's frame; window carries the Naze Tower, pin ends in a point.
 
-His own window was a cyan sky, a golden sun, an emerald hill and a teal hill. For
-the desktop/Fluent icon the brief is: drop the light hill and the sun, keep the
-teal ridge, and put a lighthouse on the left where the sun used to balance the
-composition. The pin's taper is smoothed too — a straight-sided cone reads as a
-triangle glued to a circle once it is large.
+Two changes from argon-frame-light:
+
+  pin     the tapered cone with a rounded tip is replaced by one that closes to
+          a point at y=45: arcs leave the head at the tangent points, then bow
+          inward and meet at the tip.
+  tower   the slender white lighthouse becomes the Naze Tower - an octagonal
+          brick tower, thicker and taller, crenellated, no lantern room, no flag.
+          Brick #C08055 to #8A5334, with the lit face on the left.
 """
 
 import math
@@ -27,22 +30,47 @@ def hill_path(base, depth, peak, width):
 
 HILL_TEAL = hill_path(0.77, 0.22, 0.74, 0.38)
 
-# Pin: tangents from the tip touch the head at 56.25deg, so the sides leave the
-# circle there and bow into the tip instead of running straight to it.
 CX, CY, R, TIP_Y = 76.5, 22.5, 12.5, 45.0
-ALPHA = math.degrees(math.acos(R / (TIP_Y - CY)))  # 56.25
-TX = R * math.sin(math.radians(ALPHA))
-TY = R * math.cos(math.radians(ALPHA))
-LEFT_T = (CX - TX, CY + TY)
-RIGHT_T = (CX + TX, CY + TY)
+ALPHA = math.acos(R / (TIP_Y - CY))
+TX, TY = R * math.sin(ALPHA), R * math.cos(ALPHA)
+LEFT = (CX - TX, CY + TY)
+RIGHT = (CX + TX, CY + TY)
 
+# Sides bow in from the tangents and meet at a point.
 PIN = (
-    f"M{LEFT_T[0]:.2f} {LEFT_T[1]:.2f} "
-    f"A{R} {R} 0 1 1 {RIGHT_T[0]:.2f} {RIGHT_T[1]:.2f} "
-    f"C{RIGHT_T[0] - 1.2:.2f} 34.2, {CX + 2.6:.2f} 38.6, {CX + 2.0:.2f} 43 "
-    f"A2 2 0 0 1 {CX - 2.0:.2f} 43 "
-    f"C{CX - 2.6:.2f} 38.6, {LEFT_T[0] + 1.2:.2f} 34.2, {LEFT_T[0]:.2f} {LEFT_T[1]:.2f} Z"
+    f"M{LEFT[0]:.2f} {LEFT[1]:.2f} "
+    f"A{R} {R} 0 1 1 {RIGHT[0]:.2f} {RIGHT[1]:.2f} "
+    f"C{RIGHT[0] - 2.0:.2f} 35.6, {CX + 2.2:.2f} 40.0, {CX:.2f} {TIP_Y} "
+    f"C{CX - 2.2:.2f} 40.0, {LEFT[0] + 2.0:.2f} 35.6, {LEFT[0]:.2f} {LEFT[1]:.2f} Z"
 )
+
+# Naze Tower: octagonal, tapering, crenellated. Base y 58.4, top y 37.4.
+TOWER = '''
+      <ellipse cx="33.2" cy="58.4" rx="6.2" ry="1.3" fill="#043F63" opacity="0.45"/>
+      <!-- body: lit left face and shaded right face meet at a soft fold -->
+      <path d="M29.4 58.4 L30.6 39.4 L35.8 39.4 L37 58.4 Z" fill="url(#brick)"/>
+      <path d="M33.2 39.4 L35.8 39.4 L37 58.4 L33.4 58.4 Z" fill="url(#brickSide)"/>
+      <!-- the fold between the two faces -->
+      <path d="M33.2 39.4 L33.4 58.4" stroke="#7B4A30" stroke-width="0.35" opacity="0.35"/>
+      <!-- crenellations: four merlons on a slightly wider band -->
+      <rect x="30.1" y="36.6" width="6.2" height="2.9" rx="0.35" fill="url(#brick)"/>
+      <rect x="30.1" y="36.6" width="3.1" height="2.9" fill="url(#brickSide)" opacity="0.55"/>
+      <g fill="#C98A5E">
+        <rect x="30.2" y="35.6" width="1.3" height="1.5"/>
+        <rect x="31.9" y="35.6" width="1.3" height="1.5"/>
+        <rect x="33.6" y="35.6" width="1.3" height="1.5"/>
+        <rect x="35.3" y="35.6" width="1.1" height="1.5"/>
+      </g>
+      <g fill="#7B4A30" opacity="0.75">
+        <rect x="31.5" y="36" width="1.2" height="1.2"/>
+        <rect x="33.2" y="36" width="1.2" height="1.2"/>
+        <rect x="34.9" y="36" width="1.2" height="1.2"/>
+      </g>
+      <!-- doorway and two slit windows -->
+      <path d="M32.1 58.4 L32.1 55.1 A1.1 1.1 0 0 1 34.3 55.1 L34.3 58.4 Z" fill="#5B3620" opacity="0.8"/>
+      <rect x="32.5" y="47.6" width="1.4" height="2.2" rx="0.5" fill="#5B3620" opacity="0.7"/>
+      <rect x="32.5" y="42.4" width="1.4" height="1.9" rx="0.5" fill="#5B3620" opacity="0.6"/>
+'''
 
 DOC = f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Photo Archive">
@@ -65,11 +93,11 @@ DOC = f'''<?xml version="1.0" encoding="UTF-8"?>
     <linearGradient id="hill" x1="24" y1="47.4" x2="76" y2="69" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#0E8AB8"/><stop offset="1" stop-color="#05476E"/>
     </linearGradient>
-    <linearGradient id="tower" x1="29" y1="40" x2="37" y2="58" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.55" stop-color="#F1F6FA"/><stop offset="1" stop-color="#C3D0DC"/>
+    <linearGradient id="brick" x1="29.4" y1="37" x2="35.4" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C98A5E"/><stop offset="0.55" stop-color="#B2704A"/><stop offset="1" stop-color="#8A5334"/>
     </linearGradient>
-    <linearGradient id="towerSide" x1="35" y1="40" x2="38" y2="58" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#D6E2EC"/><stop offset="1" stop-color="#A9B9C8"/>
+    <linearGradient id="brickSide" x1="33.4" y1="37" x2="37" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A8683F"/><stop offset="1" stop-color="#6E4028"/>
     </linearGradient>
     <linearGradient id="caption" x1="24" y1="74" x2="60" y2="84" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#6C8094"/><stop offset="1" stop-color="#506478"/>
@@ -104,18 +132,7 @@ DOC = f'''<?xml version="1.0" encoding="UTF-8"?>
   <g clip-path="url(#view)">
     <rect x="24" y="21" width="52" height="48" fill="url(#sky)"/>
     <path d="{HILL_TEAL}" fill="url(#hill)"/>
-
-    <!-- Lighthouse on the left, where the sun used to sit: slender, white, dark cap -->
-    <g>
-      <ellipse cx="33" cy="58.2" rx="4.6" ry="1.2" fill="#043F63" opacity="0.45"/>
-      <path d="M31.4 58 L30.9 42.6 L35.1 42.6 L34.6 58 Z" fill="url(#tower)"/>
-      <path d="M33.4 42.6 L35.1 42.6 L34.6 58 L33.2 58 Z" fill="url(#towerSide)" opacity="0.85"/>
-      <rect x="30.4" y="40.8" width="5.2" height="1.9" rx="0.6" fill="#1F2A36"/>
-      <path d="M30.9 40.8 L33 38.9 L35.1 40.8 Z" fill="#2B3947"/>
-      <rect x="31.6" y="44.6" width="2.8" height="1.2" rx="0.4" fill="#1F2A36" opacity="0.75"/>
-      <rect x="31.2" y="52.6" width="3.6" height="1.4" rx="0.5" fill="#EAF1F6"/>
-      <rect x="31.4" y="56.4" width="3.2" height="1.4" rx="0.5" fill="#D9E3EC"/>
-    </g>
+{TOWER}
   </g>
 
   <rect x="25.5" y="73.8" width="33" height="4" rx="2" fill="url(#caption)"/>
@@ -131,4 +148,4 @@ DOC = f'''<?xml version="1.0" encoding="UTF-8"?>
 
 with open(r"C:/Code/proj/docs/logo-drafts/argon-frame-light.svg", "w", encoding="utf-8") as fh:
     fh.write(DOC)
-print("written argon-frame-light.svg; pin tangents", round(LEFT_T[0], 2), round(LEFT_T[1], 2))
+print("written: pointed pin, Naze Tower")
