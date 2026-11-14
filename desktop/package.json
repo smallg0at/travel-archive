@@ -11,7 +11,7 @@
     "icon": "node ../docs/brand/make-icons.mjs",
     "bundle": "node scripts/bundle-pipeline.mjs",
     "start": "electron .",
-    "dist": "npm run build && npm run bundle && electron-builder"
+    "dist": "npm run build && npm run bundle && electron-builder --publish never"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
