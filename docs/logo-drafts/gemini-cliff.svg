@@ -169,20 +169,21 @@
                C45.2 21.5, 48.8 21.7, 52.0 21.8"
             fill="none" stroke="url(#plateauRim)" stroke-width="0.9" stroke-linecap="round"/>
 
-      <!-- Purple-annotated road: thick, smooth continuous curve hugging clifftop, sweeping around, running out at right edge -->
-      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-        <!-- Slightly darker outer edges -->
-        <path d="M53.5 43.6
-                 C44.5 40.4, 34.0 37.2, 29.0 34.2
-                 C26.4 32.6, 26.8 30.4, 31.4 30.0
-                 C37.6 29.4, 45.5 29.6, 53.5 30.0"
-              stroke="#7A774F" stroke-width="2.15" opacity="0.58"/>
-        <!-- Soft paler road surface fill -->
-        <path d="M53.5 43.6
-                 C44.5 40.4, 34.0 37.2, 29.0 34.2
-                 C26.4 32.6, 26.8 30.4, 31.4 30.0
-                 C37.6 29.4, 45.5 29.6, 53.5 30.0"
-              stroke="#C9C39E" stroke-width="1.45" opacity="0.88"/>
+      <!-- Purple-annotated road: single open shallow-S ribbon across the downland, 3-4 units below crest, never touching chalk -->
+      <g>
+        <!-- Soft paler road surface fill, tapering gently in perspective toward the left shoulder -->
+        <path d="M20.2 27.1
+                 C25.5 25.3, 30.6 23.0, 35.6 22.8
+                 C40.8 22.6, 46.6 24.0, 53.5 24.6
+                 V26.2
+                 C46.6 25.6, 40.8 24.2, 35.6 24.4
+                 C30.6 24.6, 25.5 26.6, 20.4 27.8 Z"
+              fill="#C9C39E" opacity="0.88"/>
+        <!-- Slightly darker top and bottom road edges (open at both ends) -->
+        <path d="M20.2 27.1 C25.5 25.3, 30.6 23.0, 35.6 22.8 C40.8 22.6, 46.6 24.0, 53.5 24.6"
+              fill="none" stroke="#7A774F" stroke-width="0.35" opacity="0.58"/>
+        <path d="M20.4 27.8 C25.5 26.6, 30.6 24.6, 35.6 24.4 C40.8 24.2, 46.6 25.6, 53.5 26.2"
+              fill="none" stroke="#7A774F" stroke-width="0.35" opacity="0.58"/>
       </g>
 
       <!-- 4. Chalk face: one evenly lit warm-white mass, with subtle slightly darker N-notch inner plane -->
