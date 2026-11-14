@@ -842,8 +842,10 @@ function aboutSection(archive: ArchiveStatus | null): HTMLElement {
 
   const head = el<HTMLDivElement>(`<div class="set-about-head"></div>`);
   const mark = el<HTMLSpanElement>(`<span class="set-about-mark" aria-hidden="true"></span>`);
-  // The window's own mark, inlined from index.html rather than redrawn.
-  mark.innerHTML = `<svg viewBox="0 0 108 108" width="80" height="80"><rect width="108" height="108" rx="0" fill="#0078d4"/><circle cx="38" cy="70" r="10" fill="none" stroke="#ffffff" stroke-width="3.6"/><circle cx="47.07" cy="60.93" r="2.1" fill="#ffffff"/><circle cx="51.76" cy="56.24" r="2.1" fill="#ffffff"/><circle cx="56.45" cy="51.55" r="2.1" fill="#ffffff"/><circle cx="61.14" cy="46.86" r="2.1" fill="#ffffff"/><circle cx="70" cy="38" r="13" fill="#ffffff"/></svg>`;
+  // The About pane shows the coastal illustration. The app icon is the same
+  // card at icon scale, and repeating it here would duplicate the taskbar.
+
+  mark.innerHTML = `<img src="/brand/about-icon.svg" width="80" height="80" alt="" />`;
   const text = el<HTMLDivElement>(`<div class="set-about-text"></div>`);
   text.appendChild(el(`<h3 class="set-about-name"></h3>`) as HTMLElement).textContent = "Photo Archive";
   const chips = el<HTMLDivElement>(`<div class="set-about-chips"></div>`);

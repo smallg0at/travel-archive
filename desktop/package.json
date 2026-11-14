@@ -8,7 +8,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
-    "icon": "node scripts/make-icon.mjs",
+    "icon": "node ../docs/brand/make-icons.mjs",
     "bundle": "node scripts/bundle-pipeline.mjs",
     "start": "electron .",
     "dist": "npm run build && npm run bundle && electron-builder"
