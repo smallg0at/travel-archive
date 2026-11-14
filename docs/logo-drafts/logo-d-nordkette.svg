@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Concept D, large-size master. The photograph inside the Polaroid is redrawn
+  from a real frame in the archive: the Nordkette above Innsbruck, shot from the
+  meadow with the round stone wall.
+
+  Six flat layers, no photographic detail. At 64px what survives is the ridge
+  line, the green slope, the stone ring and the path; everything else is there
+  only to make the 256px version look like a photograph rather than a diagram.
+
+  Master is 100 units square; renders live beside this file at
+  512/256/128/64/48/32 (render_svg_d.mjs). 16/24 come from the pixel pass in
+  render_logo_d_pixel.py, which is drawn again rather than scaled.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Photo Archive">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E7EDF3"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0.2" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#7FD2FB"/>
+      <stop offset="0.62" stop-color="#3FA9E6"/>
+      <stop offset="1" stop-color="#1B7FCB"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#9FB6CB"/>
+      <stop offset="1" stop-color="#7E96AD"/>
+    </linearGradient>
+    <linearGradient id="near" x1="0.1" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#8C9A96"/>
+      <stop offset="1" stop-color="#6E7C78"/>
+    </linearGradient>
+    <linearGradient id="scree" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#C9C5B6"/>
+      <stop offset="1" stop-color="#A8A594"/>
+    </linearGradient>
+    <linearGradient id="meadow" x1="0.1" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#93C158"/>
+      <stop offset="1" stop-color="#4F7F2C"/>
+    </linearGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#BDB09A"/>
+      <stop offset="1" stop-color="#8B7F6B"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#FF6E38"/>
+      <stop offset="0.55" stop-color="#E8430A"/>
+      <stop offset="1" stop-color="#C82800"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFF7DA" stop-opacity="0.9"/>
+      <stop offset="0.4" stop-color="#FFEEB4" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FFEEB4" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="view">
+      <rect x="24" y="21" width="52" height="48" rx="5"/>
+    </clipPath>
+    <filter id="cardShadow" x="-30%" y="-20%" width="170%" height="160%">
+      <feDropShadow dx="-1.2" dy="2.4" stdDeviation="3" flood-color="#061426" flood-opacity="0.32"/>
+    </filter>
+    <filter id="pinShadow" x="-60%" y="-40%" width="230%" height="200%">
+      <feDropShadow dx="-1.2" dy="1.8" stdDeviation="2.6" flood-color="#0F141E" flood-opacity="0.36"/>
+    </filter>
+  </defs>
+
+  <rect x="18" y="15" width="64" height="76" rx="9" fill="url(#card)" filter="url(#cardShadow)"/>
+  <path d="M18 84 h64 v-3 a9 9 0 0 1 -9 9 h-46 a9 9 0 0 1 -9 -9 z" fill="#C4CED9" opacity="0.7"/>
+
+  <g clip-path="url(#view)">
+    <rect x="24" y="21" width="52" height="48" fill="url(#sky)"/>
+    <circle cx="36.5" cy="30.5" r="9.5" fill="url(#sun)"/>
+
+    <!-- Far ridge: a low line across the left, behind everything. -->
+    <path d="M24 49 L33 44.5 L42 47 L52 43.5 L62 46.5 L70 45 L76 47 V56 H24 Z" fill="url(#far)" opacity="0.75"/>
+
+    <!-- The Nordkette itself: one mass from the right edge, falling left. -->
+    <path d="M76 33 C70 35.5 65 38 60 41.5 C56 44.2 52.5 47.2 49 50.5 L49 58 H76 Z" fill="url(#near)"/>
+    <!-- its lit rim -->
+    <path d="M76 33 C70 35.5 65 38 60 41.5 L60 43.2 C65 39.8 70 37.4 76 35.2 Z" fill="#B4C0B8" opacity="0.85"/>
+    <!-- scree falling from its foot, right of centre -->
+    <path d="M56 52.5 C62 50.5 69 50 76 51.5 V60 H56 Z" fill="url(#scree)" opacity="0.92"/>
+
+    <!-- Meadow: the slope the stone ring stands on. -->
+    <path d="M24 53.5 C31 51.6 38 51.4 45 52.4 C53 53.6 64 54.2 76 53.6 V69 H24 Z" fill="url(#meadow)"/>
+    <!-- The mound the wall surrounds, then the wall itself: a ring seen at an
+         angle, which is what makes it read as a place rather than a hole. -->
+    <ellipse cx="38" cy="60.6" rx="10.4" ry="4.8" fill="#3F6B23" opacity="0.55"/>
+    <ellipse cx="38" cy="59.4" rx="7.6" ry="3.5" fill="#7C6E58" opacity="0.35"/>
+    <ellipse cx="38" cy="59.2" rx="7.2" ry="3.2" fill="url(#stone)"/>
+    <ellipse cx="38" cy="58.7" rx="5.3" ry="2" fill="#79AE43"/>
+    <path d="M30.8 59.2 C31.8 56.8 34.4 55.6 38 55.6 C41.6 55.6 44.2 56.8 45.2 59.2" fill="none" stroke="#DCD0B8" stroke-width="0.8" stroke-linecap="round" opacity="0.85"/>
+    <g fill="#6E6353" opacity="0.4">
+      <circle cx="33.4" cy="58.6" r="0.35"/><circle cx="35.8" cy="58" r="0.35"/>
+      <circle cx="38.4" cy="57.8" r="0.35"/><circle cx="41" cy="58.1" r="0.35"/>
+      <circle cx="43.2" cy="58.8" r="0.35"/>
+    </g>
+
+    <!-- One path, not three: parallel strokes read as stripes at 64px. -->
+    <path d="M24 67.6 C34 65.6 44 65.2 54 65.9 C62 66.4 69 67.2 76 68.2" fill="none" stroke="#E9E4CB" stroke-width="1.8" stroke-linecap="round" opacity="0.75"/>
+  </g>
+
+  <!-- Caption margin -->
+  <rect x="26" y="75.4" width="33" height="3.4" rx="1.7" fill="#6C8094" opacity="0.85"/>
+  <rect x="26" y="81.2" width="21" height="3" rx="1.5" fill="#6C8094" opacity="0.5"/>
+  <rect x="64.5" y="75.6" width="9" height="5.6" rx="2.2" fill="#F0A11E"/>
+
+  <!-- Pin: breaks out of the card's top-right corner, as in the reference mark -->
+  <g filter="url(#pinShadow)" transform="rotate(12 77 21)">
+    <path d="M77 9.2 a11.4 11.4 0 0 1 11.4 11.4 c0 7.7 -8.4 14.2 -11.4 20.4 c-3 -6.2 -11.4 -12.7 -11.4 -20.4 A11.4 11.4 0 0 1 77 9.2 Z" fill="url(#pin)"/>
+  </g>
+  <circle cx="77" cy="20.9" r="4.2" fill="#FFFFFF"/>
+</svg>
