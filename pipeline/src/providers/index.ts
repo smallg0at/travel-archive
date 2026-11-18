@@ -222,7 +222,12 @@ export async function validateProvider(
     // and reads like a misconfigured base URL, which is a lie.
     const path = (preset.probePath ?? "models").replace(/^\/+/, "");
     const headers: Record<string, string> = { "Accept-Encoding": "gzip" };
-    if (!(preset.scope === "local" || !key)) headers.authorization = `Bearer ${key}`;
+    // A key that is configured is always sent, local or not: LM Studio on this
+    // machine began requiring one for its own localhost server (401 without,
+    // 200 with it — measured 2026-11-18), and the old rule "local means no key"
+    // turned a correct key into "key rejected (401)". With no key nothing is
+    // sent, which is what a plain Ollama expects.
+    if (key) headers.authorization = `Bearer ${key}`;
     const res = await fetch(`${base}/${path}`, { headers, signal: AbortSignal.timeout(10_000) });
     if (res.ok || res.status === 429) return { ok: true };
     if (res.status === 401 || res.status === 403) return fail("auth", `key rejected (${res.status})`);
