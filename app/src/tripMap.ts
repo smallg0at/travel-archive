@@ -1,4 +1,5 @@
 import type { DayRecord, PhotoRecord, TripRecord } from "@travel-archive/shared";
+import { icon } from "./icons";
 import { loc } from "./contentLang";
 import { ui } from "./i18n";
 
@@ -54,11 +55,11 @@ const CLUSTER_GAP_PX = 3;
  * as one design, with plus and minus added.
  */
 const MAP_ICONS = {
-  plus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  minus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  expand: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  close: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  fit: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`,
+  plus: `${icon("plus", 0, "trip-map-ctl-icon")}`,
+  minus: `${icon("minus", 0, "trip-map-ctl-icon")}`,
+  expand: `${icon("expand", 0, "trip-map-ctl-icon")}`,
+  close: `${icon("close", 0, "trip-map-ctl-icon")}`,
+  fit: `${icon("fit", 0, "trip-map-ctl-icon")}`,
 };
 
 function setIcon(button: HTMLButtonElement, icon: string, label: string): void {
@@ -1354,9 +1355,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
   backBtn.setAttribute("aria-label", ui.common.back ?? "Back");
   backBtn.title = `${ui.common.back ?? "Back"} (Esc)`;
   backBtn.innerHTML = `
-    <svg class="trip-map-back-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-      <path fill="currentColor" d="M16.75 10a.75.75 0 0 1-.75.75H5.81l4.72 4.72a.75.75 0 1 1-1.06 1.06l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.06 1.06L5.81 9.25H16a.75.75 0 0 1 .75.75z"/>
-    </svg>
+    ${icon("back", 16, "trip-map-back-icon")}
     <span class="trip-map-back-text">${ui.common.back ?? "Back"}</span>
   `;
   backBtn.addEventListener("click", () => setExpanded(false));

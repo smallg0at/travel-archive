@@ -9,6 +9,7 @@
     "desktop"
   ],
   "devDependencies": {
+    "@fluentui/svg-icons": "^1.1.346",
     "shapefile": "^0.6.6"
   },
   "scripts": {

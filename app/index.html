@@ -43,18 +43,9 @@
         <!-- Top-left brand header for WCO titlebar area in desktop shell -->
         <div id="sidebar-header" class="sidebar-header">
           <button id="nav-toggle" class="nav-toggle-btn" type="button" aria-label="Toggle navigation" title="Toggle navigation (Ctrl+B)">
-            <svg class="nav-toggle-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-              <path fill="currentColor" d="M2.5 4.75a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75z"/>
-            </svg>
+            <svg class="nav-toggle-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.75 18h18.5a.75.75 0 0 1 .1 1.5H2.75a.75.75 0 0 1-.1-1.5zh18.5zm0-6.5h18.5a.75.75 0 0 1 .1 1.5H2.75a.75.75 0 0 1-.1-1.5zh18.5zm0-6.5h18.5a.75.75 0 0 1 .1 1.5H2.75a.75.75 0 0 1-.1-1.49zh18.5z"/></svg>
           </button>
-          <svg class="sidebar-header-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <rect width="24" height="24" rx="5" fill="var(--accent)"/>
-            <circle cx="7.5" cy="16.5" r="2.2" fill="none" stroke="#ffffff" stroke-width="1.3"/>
-            <circle cx="10.2" cy="13.8" r="0.85" fill="#ffffff"/>
-            <circle cx="12" cy="12" r="0.85" fill="#ffffff"/>
-            <circle cx="13.8" cy="10.2" r="0.85" fill="#ffffff"/>
-            <circle cx="16.5" cy="7.5" r="2.5" fill="#ffffff"/>
-          </svg>
+          <img class="sidebar-header-icon" src="/brand/app-icon.svg" alt="" />
           <span class="sidebar-header-title">Photo Archive</span>
         </div>
         <!-- Home, pinned above the nav: it is where the app starts, not one of
@@ -72,18 +63,9 @@
         <!-- Top titlebar & brand header for collapsed sidebar state / narrow screens -->
         <header id="main-header" class="main-header">
           <button id="nav-toggle-main" class="nav-toggle-btn" type="button" aria-label="Toggle navigation" title="Toggle navigation (Ctrl+B)">
-            <svg class="nav-toggle-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-              <path fill="currentColor" d="M2.5 4.75a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75zm0 5.25a.75.75 0 0 1 .75-.75h13.5a.75.75 0 0 1 0 1.5H3.25a.75.75 0 0 1-.75-.75z"/>
-            </svg>
+            <svg class="nav-toggle-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.75 18h18.5a.75.75 0 0 1 .1 1.5H2.75a.75.75 0 0 1-.1-1.5zh18.5zm0-6.5h18.5a.75.75 0 0 1 .1 1.5H2.75a.75.75 0 0 1-.1-1.5zh18.5zm0-6.5h18.5a.75.75 0 0 1 .1 1.5H2.75a.75.75 0 0 1-.1-1.49zh18.5z"/></svg>
           </button>
-          <svg class="sidebar-header-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <rect width="24" height="24" rx="5" fill="var(--accent)"/>
-            <circle cx="7.5" cy="16.5" r="2.2" fill="none" stroke="#ffffff" stroke-width="1.3"/>
-            <circle cx="10.2" cy="13.8" r="0.85" fill="#ffffff"/>
-            <circle cx="12" cy="12" r="0.85" fill="#ffffff"/>
-            <circle cx="13.8" cy="10.2" r="0.85" fill="#ffffff"/>
-            <circle cx="16.5" cy="7.5" r="2.5" fill="#ffffff"/>
-          </svg>
+          <img class="sidebar-header-icon" src="/brand/app-icon.svg" alt="" />
           <span class="main-header-title">Photo Archive</span>
         </header>
         <main id="content"></main>
@@ -99,20 +81,16 @@
       results in a panel over whatever is underneath.
     -->
     <div id="search-bar" class="search-bar" hidden>
-      <svg class="search-bar-icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
-        <path fill="currentColor" d="M8.5 3a5.5 5.5 0 1 0 3.36 9.85l3.4 3.4a.75.75 0 1 0 1.06-1.07l-3.4-3.39A5.5 5.5 0 0 0 8.5 3zm-4 5.5a4 4 0 1 1 8 0 4 4 0 0 1-8 0z"/>
-      </svg>
+      <svg class="search-bar-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M16.1 17.16a8 8 0 1 1 1.06-1.06l4.62 4.62a.75.75 0 1 1-1.06 1.06zM17.5 11a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0"/></svg>
       <input id="search-input" class="search-input" type="search" autocomplete="off" spellcheck="false" />
-      <button id="search-clear" class="search-bar-clear" type="button" aria-label="Clear">×</button>
+      <button id="search-clear" class="search-bar-clear" type="button" aria-label="Clear"><svg class="search-clear-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="m4.4 4.55.07-.08a.75.75 0 0 1 .98-.07l.08.07L12 10.94l6.47-6.47a.75.75 0 1 1 1.06 1.06L13.06 12l6.47 6.47c.27.27.3.68.07.98l-.07.08a.75.75 0 0 1-.98.07l-.08-.07L12 13.06l-6.47 6.47a.75.75 0 0 1-1.06-1.06L10.94 12 4.47 5.53a.75.75 0 0 1-.07-.98l.07-.08z"/></svg></button>
     </div>
     <div id="search-results" class="search-results" hidden></div>
 
     <div id="lightbox" class="lightbox" hidden>      <!-- Top header bar: Back button on top-left, drag region in desktop shell -->
       <header class="lightbox-header">
         <button id="lightbox-back" class="lightbox-back-btn" type="button" aria-label="Back" title="Back (Esc)">
-          <svg class="lightbox-back-icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-            <path fill="currentColor" d="M16.75 10a.75.75 0 0 1-.75.75H5.81l4.72 4.72a.75.75 0 1 1-1.06 1.06l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.06 1.06L5.81 9.25H16a.75.75 0 0 1 .75.75z"/>
-          </svg>
+          <svg class="lightbox-back-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.73 19.8a.75.75 0 0 0 1.04-1.1l-6.25-5.95h14.73a.75.75 0 0 0 0-1.5H5.52l6.25-5.95a.75.75 0 0 0-1.04-1.1l-7.42 7.08a1 1 0 0 0 0 1.44z"/></svg>
           <span class="lightbox-back-text">Back</span>
         </button>
         <div class="lightbox-header-drag"></div>
@@ -131,10 +109,7 @@
           -->
           <div id="lightbox-zoom">
             <button id="lightbox-copy" class="lightbox-copy" type="button" data-copy="1" title="Copy this photo to the clipboard">
-              <svg class="lightbox-copy-icon" viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M7.5 2A2.5 2.5 0 0 0 5 4.5v9A2.5 2.5 0 0 0 7.5 16h6a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 13.5 2h-6zM6.5 4.5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-9z"/>
-                <path d="M3.5 6.75a.75.75 0 0 0-1.5 0v9A3.75 3.75 0 0 0 5.75 19.5h6a.75.75 0 0 0 0-1.5h-6A2.25 2.25 0 0 1 3.5 15.75v-9z"/>
-              </svg>
+              <svg class="lightbox-copy-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8.5 8.5H5.25c-.97 0-1.75.78-1.75 1.75v8.5c0 .97.78 1.75 1.75 1.75h6c.97 0 1.75-.78 1.75-1.75V18h1.5v.75c0 1.8-1.46 3.25-3.25 3.25h-6A3.25 3.25 0 0 1 2 18.75v-8.5C2 8.45 3.46 7 5.25 7H8.5zM18.75 2C20.55 2 22 3.46 22 5.25v8.5c0 1.8-1.46 3.25-3.25 3.25h-6a3.25 3.25 0 0 1-3.25-3.25v-8.5C9.5 3.45 10.96 2 12.75 2zm-6 1.5c-.97 0-1.75.78-1.75 1.75v8.5c0 .97.78 1.75 1.75 1.75h6c.97 0 1.75-.78 1.75-1.75v-8.5c0-.97-.78-1.75-1.75-1.75z"/></svg>
               <span class="lightbox-copy-label" aria-live="polite">Copy</span>
             </button>
             <span class="lightbox-zoom-sep" aria-hidden="true"></span>

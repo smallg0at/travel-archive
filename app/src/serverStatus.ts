@@ -1,4 +1,5 @@
 import { healthResult, type HealthFailure } from "./backend";
+import { icon } from "./icons";
 import { ui } from "./i18n";
 
 /**
@@ -53,7 +54,7 @@ function ensureBanner(): HTMLElement {
   banner.setAttribute("role", "status");
   banner.hidden = true;
   banner.innerHTML = `<span class="server-banner-text"></span><button type="button" class="server-banner-action"></button><button type="button" class="server-banner-close"></button>`;
-  banner.querySelector<HTMLButtonElement>(".server-banner-close")!.textContent = "×";
+  banner.querySelector<HTMLButtonElement>(".server-banner-close")!.innerHTML = icon("close", 14);
   banner.querySelector<HTMLButtonElement>(".server-banner-close")!.title = ui.common.close;
   banner.querySelector(".server-banner-close")!.addEventListener("click", () => {
     banner!.hidden = true;

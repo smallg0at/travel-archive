@@ -10,6 +10,7 @@
  * implementation, two instances, and only the list of candidates differs.
  */
 import type { ConfigStatus, ProviderOption } from "@travel-archive/shared";
+import { icon } from "./icons";
 import { ui } from "./i18n";
 import { getConfig, saveConfig, validateGeneration } from "./backend";
 import { el } from "./photoUi";
@@ -161,7 +162,7 @@ export function providerChoice(opts: ProviderChoiceOptions): ProviderChoice {
     const name = el<HTMLSpanElement>(`<span class="set-provider-name"></span>`);
     const badge = el<HTMLSpanElement>(`<span class="set-provider-badge"></span>`);
     const summary = el<HTMLSpanElement>(`<span class="set-provider-summary"></span>`);
-    const chevron = el<HTMLSpanElement>(`<span class="set-provider-chevron" aria-hidden="true">›</span>`);
+    const chevron = el<HTMLSpanElement>(`<span class="set-provider-chevron" aria-hidden="true">${icon("chevron", 13)}</span>`);
     head.append(name, badge, summary, chevron);
 
     const panel = el<HTMLDivElement>(`<div class="set-provider-panel" hidden></div>`);

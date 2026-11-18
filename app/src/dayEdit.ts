@@ -1,4 +1,5 @@
 import type { DayRecord, DaySegment, PhotoRecord, TripRecord } from "@travel-archive/shared";
+import { icon } from "./icons";
 import { deleteTrip, editDay, editTrip, getJob, renameTrip, setPhotoTakenAt, startOrganize, startTrip, type DayPatch } from "./backend";
 import { el } from "./photoUi";
 import { forgetMonths } from "./archiveData";
@@ -98,18 +99,14 @@ export function addTripControls(header: HTMLElement, actions: HTMLElement, trip:
 
   const rename = el<HTMLButtonElement>(`
     <button class="btn-action trip-rename-btn" type="button" title="${ui.edit.renameTrip}">
-      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
-        <path fill="currentColor" d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793 3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
-      </svg>
+      ${icon("rename", 13)}
       <span>${ui.edit.rename}</span>
     </button>
   `);
 
   const remove = el<HTMLButtonElement>(`
     <button class="btn-action btn-danger trip-delete-btn" type="button" title="${ui.edit.deleteTrip}">
-      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
-        <path fill="currentColor" fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 0 0-1.5.12l.5 7.5a.75.75 0 0 0 1.5-.12l-.5-7.5zm4.34.12a.75.75 0 1 0-1.5-.12l-.5 7.5a.75.75 0 0 0 1.5-.12l.5-7.5z" clip-rule="evenodd"/>
-      </svg>
+      ${icon("remove", 13)}
       <span>${ui.edit.deleteTrip ?? "删除"}</span>
     </button>
   `);
@@ -159,9 +156,7 @@ export function addTripControls(header: HTMLElement, actions: HTMLElement, trip:
   const current = contentLanguage();
   const editStory = el<HTMLButtonElement>(`
     <button class="btn-action trip-story-btn" type="button" title="${ui.edit.editTripStory}">
-      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
-        <path fill="currentColor" d="M3 4.75A1.75 1.75 0 0 1 4.75 3h10.5A1.75 1.75 0 0 1 17 4.75v7.5A1.75 1.75 0 0 1 15.25 14H9.56l-3.2 2.56A.75.75 0 0 1 5.13 16v-2H4.75A1.75 1.75 0 0 1 3 12.25v-7.5zm3 2.5a.75.75 0 0 0 0 1.5h8a.75.75 0 0 0 0-1.5H6zm0 3a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5H6z"/>
-      </svg>
+      ${icon("story", 13)}
       <span>${ui.edit.editTripStory}</span>
     </button>
   `);
@@ -218,10 +213,7 @@ export function addTripControls(header: HTMLElement, actions: HTMLElement, trip:
    */
   const again = el<HTMLButtonElement>(`
     <button class="btn-action trip-regenerate-btn" type="button" title="${ui.edit.regenerate}">
-      <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
-        <path fill="currentColor" d="M10 3a7 7 0 1 0 6.32 3.98.75.75 0 1 1 1.36-.63A8.5 8.5 0 1 1 10 1.5V3z"/>
-        <path fill="currentColor" d="M10 1.5 7.5 3.75 10 6V1.5z"/>
-      </svg>
+      ${icon("regenerate", 13)}
       <span>${ui.edit.regenerate}</span>
     </button>
   `);

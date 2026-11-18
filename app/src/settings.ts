@@ -36,6 +36,7 @@ import {
   type ScanMode,
 } from "./backend";
 import { el } from "./photoUi";
+import { icon } from "./icons";
 import { legalText } from "./legalText";
 import { updateRow } from "./updateRow";
 import { createFolderPanel } from "./photoFolder";
@@ -889,7 +890,7 @@ function aboutSection(archive: ArchiveStatus | null): HTMLElement {
     ["GeoNames", "https://www.geonames.org/"],
     ["Natural Earth", "https://www.naturalearthdata.com/"],
   ] as const) {
-    const link = el<HTMLButtonElement>(`<button type="button" class="set-link-chip">${label} ↗</button>`);
+    const link = el<HTMLButtonElement>(`<button type="button" class="set-link-chip">${label} ${icon("external", 12)}</button>`);
     link.addEventListener("click", () => {
       const api = window.electronAPI;
       if (api?.openExternal) void api.openExternal(href);
@@ -905,7 +906,7 @@ function aboutSection(archive: ArchiveStatus | null): HTMLElement {
 function licenceBlock(which: "notices" | "license", title: string, hint: string): HTMLElement {
   const wrap = el<HTMLDivElement>(`<div class="set-acc"></div>`);
   const head = el<HTMLButtonElement>(
-    `<button type="button" class="set-acc-head" aria-expanded="false"><span class="set-acc-caret">›</span><span class="set-acc-title"></span><span class="set-acc-hint"></span></button>`,
+    `<button type="button" class="set-acc-head" aria-expanded="false"><span class="set-acc-caret">${icon("chevron", 12)}</span><span class="set-acc-title"></span><span class="set-acc-hint"></span></button>`,
   );
   head.querySelector(".set-acc-title")!.textContent = title;
   head.querySelector(".set-acc-hint")!.textContent = hint;
@@ -1118,10 +1119,10 @@ function qrSvg(url: string): string {
 }
 
 /** Four squares and a corner: reads as "QR" at 16px without a label. */
-const QR_ICON = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4zM9.5 9.5h1.6v1.6H9.5zM12.4 9.5h1.1v1.1h-1.1zM9.5 12.4h1.1v1.1H9.5zM12 12h1.5v1.5H12z"/></svg>`;
+const QR_ICON = icon("qr", 15);
 
 /** The shield Windows puts on anything that will ask for administrator consent. */
-const UAC_SHIELD = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 1.5 13 3.3v4.1c0 3.1-2 5.4-5 6.6-3-1.2-5-3.5-5-6.6V3.3L8 1.5Z"/><circle cx="8" cy="6.9" r="1.25"/><path d="M8 8.1v2.1"/></svg>`;
+const UAC_SHIELD = icon("shield", 13);
 
 /**
  * The QR code, on request.
