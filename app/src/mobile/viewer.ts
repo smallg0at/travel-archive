@@ -84,7 +84,7 @@ export function openViewer(photos: PhotoRecord[], start: number, context?: CardC
       <header class="m-viewer-top">
         <button type="button" class="m-icon-btn m-viewer-close">${ICONS.close}</button>
         <span class="m-viewer-count"></span>
-        <button type="button" class="m-icon-btn m-viewer-hd" hidden>${ICONS.download}</button>
+        <button type="button" class="m-icon-btn m-viewer-hd" hidden>${ICONS.hd}</button>
         <button type="button" class="m-icon-btn m-viewer-share-btn">${ICONS.share}</button>
         <button type="button" class="m-icon-btn m-viewer-info-btn">${ICONS.info}</button>
       </header>

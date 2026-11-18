@@ -59,7 +59,7 @@ const MAP_ICONS = {
   minus: `${icon("minus", 0, "trip-map-ctl-icon")}`,
   expand: `${icon("expand", 0, "trip-map-ctl-icon")}`,
   close: `${icon("close", 0, "trip-map-ctl-icon")}`,
-  fit: `${icon("fit", 0, "trip-map-ctl-icon")}`,
+  fit: `${icon("fit", 0, "trip-map-ctl-icon")}`, collapse: `${icon("collapse", 0, "trip-map-ctl-icon")}`,
 };
 
 function setIcon(button: HTMLButtonElement, icon: string, label: string): void {
@@ -1229,7 +1229,7 @@ export function drawPlaceMap(root: HTMLElement, basemap: Basemap, cities: MapPoi
     if (on) beforeExpand = { ...view };
     root.classList.toggle("is-expanded", on);
     document.body.classList.toggle("map-expanded", on);
-    setIcon(expand, on ? MAP_ICONS.close : MAP_ICONS.expand, on ? ui.common.close : ui.map.expand);
+    setIcon(expand, on ? MAP_ICONS.collapse : MAP_ICONS.expand, on ? ui.common.close : ui.map.expand);
     // The container changes shape, so the fitted view has to be recomputed or
     // the map sits letterboxed inside its old aspect ratio.
     //

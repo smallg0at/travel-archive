@@ -187,6 +187,7 @@ export const ICONS = {
   minus: icon("minus", 0),
   share: icon("share", 0),
   download: icon("download", 0),
+  hd: icon("hd", 0),
 };
 
 /**
