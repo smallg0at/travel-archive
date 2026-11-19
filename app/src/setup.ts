@@ -14,6 +14,7 @@
  * "skipping records nothing" — so a reload re-enters it.
  */
 import { el } from "./photoUi";
+import { icon } from "./icons";
 import type { ConfigStatus, JobRecord } from "@travel-archive/shared";
 import { contentLanguage, setContentLanguage } from "./contentLang";
 import { jobPhase, ui } from "./i18n";
@@ -529,7 +530,7 @@ export function showSetup(opts: { onDone: () => void }): void {
         !Boolean(picked?.hasKey) &&
         state.keyDraft.trim() === "";
       const keyStateNode = (): HTMLElement => {
-        if (picked?.hasKey) return el(`<p class="set-note">${ui.setup.keySet}</p>`);
+        if (picked?.hasKey) return el(`<p class="set-note">${icon("check", 14)} ${ui.setup.keySet}</p>`);
         if (state.keyDraft.trim()) return el(`<p class="set-note">${ui.setup.keyTyped}</p>`);
         return el(`<p class="set-note tone-warn">${ui.setup.keyMissing}</p>`);
       };
@@ -557,6 +558,7 @@ export function showSetup(opts: { onDone: () => void }): void {
           const link = el<HTMLAnchorElement>(`<a class="setup-link" target="_blank" rel="noreferrer"></a>`);
           link.href = picked.platformUrl;
           link.textContent = ui.setup.platformLink;
+          link.insertAdjacentHTML("beforeend", icon("external", 12));
           card.appendChild(link);
         }
       }

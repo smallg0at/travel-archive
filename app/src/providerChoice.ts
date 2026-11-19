@@ -44,11 +44,14 @@ export function localOptions(providers: ProviderOption[]): ProviderOption[] {
  * Ask a service whether it answers, as one line ready to show. Never a gate: a
  * service that happens to be down should still be saveable.
  */
-export async function checkProvider(id: string, typedKey?: string): Promise<{ text: string; warn: boolean }> {
+export async function checkProvider(
+  id: string,
+  typedKey?: string,
+): Promise<{ text: string; warn: boolean; ok: boolean }> {
   const result = await validateGeneration(id, typedKey);
-  if (result.ok) return { text: ui.settings.providerCheckOk, warn: false };
-  if (result.kind === "auth") return { text: ui.setup.keyRejected(result.detail), warn: true };
-  return { text: ui.settings.providerCheckUnreachable(result.detail), warn: true };
+  if (result.ok) return { text: ui.settings.providerCheckOk, warn: false, ok: true };
+  if (result.kind === "auth") return { text: ui.setup.keyRejected(result.detail), warn: true, ok: false };
+  return { text: ui.settings.providerCheckUnreachable(result.detail), warn: true, ok: false };
 }
 
 /** A group of services, under the heading that names where they run. */
@@ -180,6 +183,7 @@ export function providerChoice(opts: ProviderChoiceOptions): ProviderChoice {
     // row asking for a key without saying where to get one is half a row.
     const getKey = el<HTMLAnchorElement>(`<a class="setup-link" target="_blank" rel="noreferrer" hidden></a>`);
     getKey.textContent = ui.setup.platformLink;
+    getKey.insertAdjacentHTML("beforeend", icon("external", 12));
     const status = el<HTMLDivElement>(`<div class="set-progress" hidden></div>`);
     const actions = el<HTMLDivElement>(`<div class="set-provider-actions"></div>`);
     const checkButton = button(ui.settings.providerCheck, () => void check());
@@ -248,6 +252,7 @@ export function providerChoice(opts: ProviderChoiceOptions): ProviderChoice {
       status.textContent = ui.settings.providerCheckBusy;
       const result = await checkProvider(row.id, typed || undefined);
       status.textContent = result.text;
+      if (result.ok) status.insertAdjacentHTML("afterbegin", icon("check", 14));
       status.classList.toggle("tone-warn", result.warn);
     };
 
