@@ -64,6 +64,11 @@ Three workspaces plus a shell:
 - **`app/`** — a reader. It never writes the archive; it asks the server to.
 - **`desktop/`** — Electron. Serves `app/dist` on **17923** and spawns the job
   server.
+- **`integrations/dsh/`** — the DeepSeek Harness bundle: five read-only tools
+  (`archive_status`, `archive_search`, `archive_trip`, `archive_photo`,
+  `archive_jobs`) over the same local HTTP surface the app uses, falling back to
+  `pipeline/data` with a banner when the server is down. Not a workspace — it has
+  no build step and no dependencies. Install and the smoke run: its `README.md`.
 - **`app/src/mobile/`** + **`app/android/`** — the phone app: its own page and
   layout over the same data layer, packaged with Capacitor. README "The phone
   app". Work on it at `http://localhost:17923/mobile/` with a phone viewport.

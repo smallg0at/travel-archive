@@ -1,0 +1,17 @@
+# travel-archive — bundle patch.
+#
+# One Host row, five read-only tools. They talk to the local job server in
+# `pipeline/` (loopback only, no auth of its own — that is why this plugin is a
+# client of it and not a second reader of the archive) and fall back to the
+# `pipeline/data` mirror when that server is not running.
+#
+# `baseUrl` is the only setting that normally needs touching. `dataDir` exists for
+# the one case the default cannot cover: a copy of this package installed outside
+# the repo, where `../../pipeline/data` no longer points at the archive.
+- insert:
+    - id: travel-archive
+      name: '@local/travel-archive'
+      config:
+        baseUrl: 'http://127.0.0.1:18419'
+        cacheTtlMs: 300000
+        timeoutMs: 8000

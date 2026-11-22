@@ -1,0 +1,20 @@
+{
+  "name": "@local/travel-archive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only DeepSeek Harness tools for the travel-archive photo archive: search, trips, photos, and the pipeline job table.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "smoke.mjs", "README.md"],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

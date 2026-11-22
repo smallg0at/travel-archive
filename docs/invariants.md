@@ -208,6 +208,18 @@ server-first path is the rule; Graph is the fallback for the installed app
 at the kept copy when **no** server answers; forcing the kept copy
 unconditionally left remote search with nothing to read.
 
+**`search.json` is a search index, not display data — and its text is lowercased.**
+A reader that wants to *show* a caption, or translate it, must go to
+`photos/<yyyy-mm>.json`. `search.json` stores `[idSuffix, date, blob, tags]`,
+where the blob is the caption with place names appended, `tags` is one
+space-separated string, and every caption was lowercased at build time — so
+`textKey()` of a search caption matches **no** translation (measured 0/1268 for
+2024-11, against 4/4 from the shard), and a translation lookup quietly degrades
+to English. `days[]` rows are the same trap one level up: `[date, blob]` where the
+blob is the whole day's text pasted together — fine to match, useless to display.
+The Harness bundle (`integrations/dsh/index.js`) hit both; ask it for a language
+and it reads shards instead.
+
 **`ui` is live; never snapshot it at module load.** `i18n` swaps its table
 when `restorePrefs` learns the archive's language after the modules have
 loaded, and ES imports see the new object only when the property is read at
